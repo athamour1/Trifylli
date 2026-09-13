@@ -1,0 +1,29 @@
+node_modules/
+dist/
+build/
+.output/
+.quasar/
+coverage/
+*.log
+npm-debug.log*
+.pnpm-debug.log*
+.env
+/.env
+.env.local
+.env.*.local
+!.env.example
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.tsbuildinfo
+.pgdata/
+.volumes/
+apps/api/prisma/*.db
+
+# e-SEO secrets (local only)
+apps/api/.eseo-offline-token
+apps/api/scripts/.eseo-creds
+
+# Παραγωγικά μυστικά (το .example μένει στο git)
+.env.prod
