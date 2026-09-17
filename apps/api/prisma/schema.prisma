@@ -1,0 +1,978 @@
+// Trifylli — μοντέλο δεδομένων Τοπικού Τμήματος Σ.Ε.Ο.
+//
+// Συμβάσεις:
+//  * Τα enums ταυτίζονται 1:1 με το `@trifylli/shared/domain.ts`.
+//  * Κάθε εγγραφή που μπορεί να έρθει από εξωτερικό σύστημα κρατά `source` και
+//    `externalId`, ώστε ο συγχρονισμός (e-SEO / Ouchtracker) να είναι idempotent.
+//  * Τα soft deletes γίνονται με `archivedAt` — τα ιστορικά παρουσιολόγια και
+//    πρακτικά δεν διαγράφονται ποτέ σκληρά.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────── Enums ────────────────────────────────
+
+enum KladosType {
+  ASTERIA
+  POULIA
+  ODIGOI
+  MEGALOI_ODIGOI
+}
+
+/// Τύπος λογαριασμού — μόνο για όσους μπαίνουν στην εφαρμογή.
+/// Το Τοπικό λειτουργεί με πέντε λογαριασμούς: έναν υπερδιαχειριστή και έναν
+/// διαχειριστή ανά κλάδο (η εμβέλεια ζει στο `User.adminKladosId`).
+enum AccountRole {
+  SUPER_ADMIN
+  KLADOS_ADMIN
+}
+
+/// Τι είναι ένα άτομο μέσα στο μητρώο. Ανεξάρτητο από το αν έχει λογαριασμό:
+/// τα παιδιά και τα περισσότερα στελέχη δεν κάνουν ποτέ login.
+enum MemberKind {
+  MELOS
+  STELEXOS
+}
+
+enum MemberStatus {
+  ENERGO
+  ANENERGO
+  APOCHOROISE
+}
+
+enum YlikoCategory {
+  LEITOURGIKO
+  PROGRAMMATIKO
+  FARMAKEIO
+}
+
+enum DrasiType {
+  MONOIMERI
+  POLYIMERI
+  KATASKINOSI
+}
+
+enum SymvoulioType {
+  KLADOU
+  TOPIKOU
+  STELEXON
+}
+
+enum ParousiaStatus {
+  PAROUSIA
+  APOUSIA
+  DIKAIOLOGIMENI
+  ARGOPORIA
+}
+
+enum TimelineSection {
+  ANOIGMA
+  KYRIO_MEROS
+  KLEISIMO
+}
+
+enum CheckoutStatus {
+  DESMEFSI
+  PARALAVI
+  EPISTROFI
+  AKYROSI
+}
+
+enum SyndromiStatus {
+  PLIROMENI
+  MERIKI
+  EKKREMI
+  APALLAGI
+}
+
+enum ProodosStatus {
+  DEN_XEKINISE
+  SE_EXELIXI
+  OLOKLIROMENO
+}
+
+enum DataSource {
+  LOCAL
+  ESEO
+  OUCHTRACKER
+}
+
+enum TreasuryEntryKind {
+  INCOME
+  EXPENSE
+}
+
+/// Πορεία μετρητών συνδρομής: εισπράχθηκε → παραδόθηκε στον Τοπικό Έφορο →
+/// κατατέθηκε στην τράπεζα → τακτοποιήθηκε.
+enum PaymentHandlingStatus {
+  EISPRAXTHIKE
+  PARADOTHIKE
+  KATATETHIKE
+  TAKTOPOIITHIKE
+}
+
+// ───────────────────────── Οργανωτική δομή ─────────────────────────
+
+model Topiko {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  location  String?
+  /// Κωδικός Τοπικού στο e-SEO — κλειδί για τον συγχρονισμό μητρώου.
+  eseoCode  String?  @unique
+  timezone  String   @default("Europe/Athens")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  kladoi     Klados[]
+  users      User[]
+  periods    Period[]
+  yliko      Yliko[]
+  storagePoints StoragePoint[]
+  draseis    Drasi[]
+  symvoulia  Symvoulio[]
+  incidents  Incident[]
+  syncRuns   SyncRun[]
+  storedFiles StoredFile[]
+  treasuryEntries TreasuryEntry[]
+  auditLogs  AuditLog[]
+  pharmacyKits PharmacyKit[]
+
+  @@map("topiko")
+}
+
+model Klados {
+  id       String     @id @default(uuid()) @db.Uuid
+  topikoId String     @db.Uuid
+  type     KladosType
+  /// Προαιρετικό τοπικό όνομα (π.χ. «Πουλιά Τριφυλλιού»).
+  name     String?
+  /// Ηλικιακά όρια — προεπιλογές από `KLADOS_META`, επεξεργάσιμα ανά Τοπικό.
+  minAge   Int
+  maxAge   Int
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  topiko      Topiko        @relation(fields: [topikoId], references: [id], onDelete: Cascade)
+  memberships Membership[]
+  yliko       Yliko[]
+  storagePoints StoragePoint[]
+  draseis     Drasi[]
+  symvoulia   Symvoulio[]
+  syggentrwseis Syggentrwsh[]
+  proodosGoals ProodosGoal[]
+  checkouts    YlikoCheckout[]
+  storedFiles  StoredFile[]
+  treasuryEntries TreasuryEntry[]
+  admins       User[]        @relation("KladosAdmin")
+  pharmacyKits PharmacyKit[]
+  kitLoansReceived KitLoan[]  @relation("KitLoanToKlados")
+
+  @@unique([topikoId, type])
+  @@map("klados")
+}
+
+// ─────────────────────────── Μέλη & ρόλοι ───────────────────────────
+
+model User {
+  id        String       @id @default(uuid()) @db.Uuid
+  topikoId  String       @db.Uuid
+  /// `sub` του Authentik, μόλις συνδεθεί για πρώτη φορά. Κενό για τα μέλη του
+  /// μητρώου και για λογαριασμούς που δεν έχουν πατήσει ακόμη login.
+  ssoId     String?      @unique
+  /// Μοναδικός κωδικός μέλους στο e-SEO.
+  eseoId    String?      @unique
+  /// Υποχρεωτικό για λογαριασμούς: είναι το κλειδί που δένει την ταυτότητα του
+  /// Authentik με την εγγραφή που έφτιαξε ο υπερδιαχειριστής.
+  email     String?
+  firstName String
+  lastName  String
+  phone     String?
+  birthDate DateTime?    @db.Date
+  /// Φύλο από e-SEO: `MALE` / `FEMALE`.
+  sex       String?
+  /// Διεύθυνση κατοικίας από e-SEO.
+  street     String?
+  postalCode String?
+  city       String?
+  area       String?
+  /// Τι είναι το άτομο στο μητρώο (παιδί ή στέλεχος).
+  kind      MemberKind   @default(MELOS)
+  /// Η ιδιότητα από το e-SEO (κλάδος / στέλεχος / Τοπ. Συμβούλιο / …). Κρατιέται
+  /// ως string από το `Idiotita` του shared, ώστε νέες τιμές να μη θέλουν migration.
+  idiotita  String?
+  /// `null` ⇒ δεν έχει πρόσβαση στην εφαρμογή· είναι απλώς εγγραφή μητρώου.
+  accountRole AccountRole?
+  /// Ο κλάδος που διαχειρίζεται, όταν είναι `KLADOS_ADMIN`.
+  adminKladosId String?    @db.Uuid
+  lastLoginAt DateTime?
+  status    MemberStatus @default(ENERGO)
+  source    DataSource   @default(LOCAL)
+  /// Ελεύθερα πεδία από e-SEO που δεν έχουν δική τους κολόνα (ΑΜΚΑ, ΑΔΤ, συναινέσεις).
+  eseoPayload Json?
+  lastSyncedAt DateTime?
+  archivedAt DateTime?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  topiko          Topiko                 @relation(fields: [topikoId], references: [id], onDelete: Cascade)
+  adminKlados     Klados?                @relation("KladosAdmin", fields: [adminKladosId], references: [id], onDelete: SetNull)
+  memberships     Membership[]
+  guardians       Guardian[]
+  licenses        License[]
+  proodosEntries  ProodosEntry[]
+  parousies       Parousia[]
+  syggentrwseisAsStelexos SyggentrwshStelexos[]
+  proodos         ProodosRecord[]
+  syndromes       Syndromi[]
+  participations  DrasiParticipant[]
+  responsibleFor  TimelineBlock[]        @relation("TimelineResponsible")
+  symvouliaAttended SymvoulioParticipant[]
+  checkoutsTaken  YlikoCheckout[]        @relation("CheckoutRequestedBy")
+  ylikoMaintenance YlikoMaintenance[]    @relation("MaintenanceAuthor")
+  symvouliaChaired Symvoulio[]           @relation("SymvoulioChair")
+  incidentsAsPatient Incident[]          @relation("IncidentPatient")
+  storedFiles     StoredFile[]           @relation("StoredFileAuthor")
+  treasuryEntries TreasuryEntry[]        @relation("TreasuryAuthor")
+  collectedPayments Payment[]            @relation("PaymentCollector")
+  auditLogs       AuditLog[]
+
+  @@index([topikoId, status])
+  @@index([topikoId, lastName, firstName])
+  /// Το email είναι το κλειδί σύνδεσης με το Authentik, οπότε δεν επιτρέπεται
+  /// δεύτερος λογαριασμός με το ίδιο — τα μέλη χωρίς email δεν επηρεάζονται.
+  @@unique([topikoId, email])
+  @@index([accountRole])
+  @@map("user")
+}
+
+/// Σύνδεση μέλους με κλάδο. Ξεχωριστό model γιατί ένα στέλεχος μπορεί να
+/// υπηρετεί σε δύο κλάδους ταυτόχρονα, και τα παιδιά αλλάζουν κλάδο με την ηλικία.
+model Membership {
+  id       String  @id @default(uuid()) @db.Uuid
+  userId   String  @db.Uuid
+  kladosId String  @db.Uuid
+  /// Εξάδα / ενωμοτία / πλήρωμα — η ονομασία εξαρτάται από τον κλάδο.
+  subUnit  String?
+  /// Τι είναι το άτομο μέσα σε αυτόν τον κλάδο. Ξεχωριστό από το `User.kind`
+  /// γιατί ένας ενήλικος μπορεί να είναι στέλεχος σε έναν κλάδο και βοηθός
+  /// σε άλλον.
+  kind     MemberKind @default(MELOS)
+  joinedAt DateTime @default(now())
+  leftAt   DateTime?
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  klados Klados @relation(fields: [kladosId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, kladosId])
+  @@index([kladosId, leftAt])
+  @@map("membership")
+}
+
+/// Κηδεμόνες μέλους — από το `contactInfoList` του e-SEO. Χρήσιμο κυρίως για τα
+/// παιδιά (επικοινωνία έκτακτης ανάγκης). Το `kind` είναι `FATHER`/`MOTHER`/`GUARDIAN`.
+model Guardian {
+  id       String  @id @default(uuid()) @db.Uuid
+  userId   String  @db.Uuid
+  /// id της επαφής στο e-SEO — κλειδί idempotency.
+  eseoId   String  @unique
+  kind     String
+  fullName String?
+  phone    String?
+  email    String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("guardian")
+}
+
+/// Πτυχίο/άδεια στελέχους από e-SEO (ρόλος, διάρκεια, κατάσταση).
+model License {
+  id             String     @id @default(uuid()) @db.Uuid
+  userId         String     @db.Uuid
+  /// id του πτυχίου στο e-SEO — κλειδί idempotency.
+  eseoId         String     @unique
+  title          String
+  /// `ACTIVE` / `EXPIRED` / `PENDING`, όπως το e-SEO.
+  status         String
+  startDate      DateTime?  @db.Date
+  expirationDate DateTime?  @db.Date
+  source         DataSource @default(ESEO)
+  lastSyncedAt   DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@map("license")
+}
+
+/// Οδηγική χρονιά (π.χ. 2025–2026). Πλαισιώνει συνδρομές και πρόοδο.
+model Period {
+  id        String   @id @default(uuid()) @db.Uuid
+  topikoId  String   @db.Uuid
+  label     String
+  startDate DateTime @db.Date
+  endDate   DateTime @db.Date
+  /// Το ετήσιο ποσό συνδρομής σε ευρώ, όπως ορίστηκε για τη χρονιά.
+  syndromiAmount Decimal @default(0) @db.Decimal(10, 2)
+  isCurrent Boolean  @default(false)
+
+  topiko    Topiko     @relation(fields: [topikoId], references: [id], onDelete: Cascade)
+  syndromes Syndromi[]
+  proodos   ProodosRecord[]
+
+  @@unique([topikoId, label])
+  @@index([topikoId, isCurrent])
+  @@map("period")
+}
+
+// ─────────────────────────── Οικονομικά ───────────────────────────
+
+model Syndromi {
+  id       String         @id @default(uuid()) @db.Uuid
+  userId   String         @db.Uuid
+  periodId String         @db.Uuid
+  /// Οφειλόμενο ποσό — αντιγράφεται από το `Period` και μπορεί να μειωθεί (έκπτωση αδελφού).
+  amountDue  Decimal      @db.Decimal(10, 2)
+  amountPaid Decimal      @default(0) @db.Decimal(10, 2)
+  status     SyndromiStatus @default(EKKREMI)
+  note       String?
+  source     DataSource   @default(LOCAL)
+  updatedAt  DateTime     @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  period   Period    @relation(fields: [periodId], references: [id], onDelete: Cascade)
+  payments Payment[]
+
+  @@unique([userId, periodId])
+  @@index([periodId, status])
+  @@map("syndromi")
+}
+
+model Payment {
+  id         String   @id @default(uuid()) @db.Uuid
+  syndromiId String   @db.Uuid
+  amount     Decimal  @db.Decimal(10, 2)
+  paidAt     DateTime @default(now())
+  /// `CASH` / `BANK` / `ESEO` — τα μετρητά ακολουθούν την πορεία `handlingStatus`.
+  method     String?
+  receiptNo  String?
+  note       String?
+  /// Στάδιο διαχείρισης μετρητών· `null` για πληρωμές που δεν είναι μετρητά.
+  handlingStatus PaymentHandlingStatus?
+  /// Ποιο στέλεχος εισέπραξε τα μετρητά.
+  collectedById  String?               @db.Uuid
+
+  syndromi    Syndromi @relation(fields: [syndromiId], references: [id], onDelete: Cascade)
+  collectedBy User?    @relation("PaymentCollector", fields: [collectedById], references: [id], onDelete: SetNull)
+
+  @@index([syndromiId, paidAt])
+  @@map("payment")
+}
+
+// ──────────────────────── Δράσεις & πρόγραμμα ────────────────────────
+
+model Drasi {
+  id        String    @id @default(uuid()) @db.Uuid
+  topikoId  String    @db.Uuid
+  /// `null` ⇒ δράση Τοπικού με συμμετοχή πολλών κλάδων.
+  kladosId  String?   @db.Uuid
+  title     String
+  type      DrasiType
+  location  String?
+  dateStart DateTime
+  dateEnd   DateTime
+  description String?
+  /// Κόστος συμμετοχής ανά άτομο, όταν υπάρχει.
+  costPerPerson Decimal? @db.Decimal(10, 2)
+  archivedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  topiko       Topiko             @relation(fields: [topikoId], references: [id], onDelete: Cascade)
+  klados       Klados?            @relation(fields: [kladosId], references: [id], onDelete: SetNull)
+  participants DrasiParticipant[]
+  syggentrwseis Syggentrwsh[]
+  checkouts    YlikoCheckout[]
+  incidents    Incident[]
+
+  @@index([topikoId, dateStart])
+  @@index([kladosId, dateStart])
+  @@map("drasi")
+}
+
+model DrasiParticipant {
+  id      String @id @default(uuid()) @db.Uuid
+  drasiId String @db.Uuid
+  userId  String @db.Uuid
+  /// Ο ρόλος στη συγκεκριμένη δράση — ένα μεγάλο μέλος μπορεί να πάει ως βοηθός.
+  kind    MemberKind @default(MELOS)
+  /// Έχει δηλωθεί/επιβεβαιωθεί η συμμετοχή;
+  confirmed Boolean @default(false)
+  /// Παρουσία στη δράση (χρήσιμο για πολυήμερες/κατασκηνώσεις).
+  attended  Boolean?
+  note      String?
+
+  drasi Drasi @relation(fields: [drasiId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([drasiId, userId])
+  @@index([drasiId, kind])
+  @@map("drasi_participant")
+}
+
+/// Συγκέντρωση: είτε αυτοτελής εβδομαδιαία, είτε κομμάτι προγράμματος δράσης
+/// (`drasiId`) — π.χ. η κάθε μέρα μιας κατασκήνωσης.
+model Syggentrwsh {
+  id       String    @id @default(uuid()) @db.Uuid
+  kladosId String    @db.Uuid
+  drasiId  String?   @db.Uuid
+  title    String?
+  date     DateTime
+  startTime DateTime?
+  endTime   DateTime?
+  location  String?
+  /// Η κεντρική ιδέα γύρω από την οποία χτίζεται η συγκέντρωση.
+  goal      String?
+  /// Σύντομος απολογισμός μετά τη συγκέντρωση.
+  review    String?
+  archivedAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  klados         Klados                 @relation(fields: [kladosId], references: [id], onDelete: Cascade)
+  drasi          Drasi?                 @relation(fields: [drasiId], references: [id], onDelete: SetNull)
+  timeline       TimelineBlock[]
+  parts          SyggentrwshSection[]
+  ylikoItems     SyggentrwshYlikoItem[]
+  parousies      Parousia[]
+  stelexi        SyggentrwshStelexos[]
+  checkouts      YlikoCheckout[]
+
+  @@index([kladosId, date])
+  @@index([drasiId])
+  @@map("syggentrwsh")
+}
+
+/// Κομμάτι του χρονοδιαγράμματος μιας συγκέντρωσης.
+model TimelineBlock {
+  id            String          @id @default(uuid()) @db.Uuid
+  syggentrwshId String          @db.Uuid
+  section       TimelineSection
+  /// Σειρά μέσα στο section.
+  order         Int
+  title         String
+  description   String?
+  durationMin   Int             @default(15)
+  responsibleId String?         @db.Uuid
+
+  syggentrwsh Syggentrwsh          @relation(fields: [syggentrwshId], references: [id], onDelete: Cascade)
+  responsible User?                @relation("TimelineResponsible", fields: [responsibleId], references: [id], onDelete: SetNull)
+  yliko       TimelineBlockYliko[]
+
+  @@unique([syggentrwshId, section, order])
+  @@map("timeline_block")
+}
+
+/// Απαιτούμενο υλικό ανά κομμάτι προγράμματος (πρόθεση, όχι δέσμευση).
+model TimelineBlockYliko {
+  blockId String @db.Uuid
+  ylikoId String @db.Uuid
+  qty     Int    @default(1)
+
+  block TimelineBlock @relation(fields: [blockId], references: [id], onDelete: Cascade)
+  yliko Yliko         @relation(fields: [ylikoId], references: [id], onDelete: Cascade)
+
+  @@id([blockId, ylikoId])
+  @@map("timeline_block_yliko")
+}
+
+/// Ένα μέρος της συγκέντρωσης: το ελεύθερο κείμενό του και η διάρκειά του.
+///
+/// Ξεχωριστός πίνακας και όχι στήλες στο `syggentrwsh`: τα μέρη είναι enum και
+/// η εγγραφή ακολουθεί το μέρος, οπότε μια νέα φάση στο `TimelineSection` δεν
+/// απαιτεί migration στηλών.
+model SyggentrwshSection {
+  syggentrwshId String          @db.Uuid
+  section       TimelineSection
+  /// Markdown όπως το έγραψε το στέλεχος — αποθηκεύεται ακατέργαστο.
+  notes         String          @default("")
+  /// Η διάρκεια του μέρους όταν δεν σπάει σε κομμάτια. Όταν υπάρχουν κομμάτια
+  /// αγνοείται: η διάρκεια είναι το άθροισμά τους και δεν θέλουμε δύο αλήθειες.
+  durationMin   Int             @default(0)
+  updatedAt     DateTime        @updatedAt
+
+  syggentrwsh Syggentrwsh @relation(fields: [syggentrwshId], references: [id], onDelete: Cascade)
+
+  @@id([syggentrwshId, section])
+  @@map("syggentrwsh_section")
+}
+
+/// Λίστα υλικού μιας συγκέντρωσης, γραμμένη ελεύθερα.
+///
+/// Επίτηδες **ασύνδετη** από το `Yliko` της αποθήκης: εδώ σημειώνεις «ό,τι
+/// μπορεί να χρειαστούμε» όσο σχεδιάζεις, συμπεριλαμβανομένων πραγμάτων που
+/// δεν είναι καταγεγραμμένα. Η δέσμευση αποθήκης παραμένει το `YlikoCheckout`.
+model SyggentrwshYlikoItem {
+  id            String  @id @default(uuid()) @db.Uuid
+  syggentrwshId String  @db.Uuid
+  /// Σειρά εμφάνισης· χωρίς unique, γιατί η λίστα γράφεται ολόκληρη κάθε φορά.
+  order         Int
+  label         String
+  qty           Int     @default(1)
+  /// Τσεκαρισμένο όταν μπήκε στο σακίδιο.
+  packed        Boolean @default(false)
+
+  syggentrwsh Syggentrwsh @relation(fields: [syggentrwshId], references: [id], onDelete: Cascade)
+
+  @@index([syggentrwshId, order])
+  @@map("syggentrwsh_yliko_item")
+}
+
+/// Ποια στελέχη αναλαμβάνουν μια συγκέντρωση.
+///
+/// Απλή σχέση και όχι δήλωση διαθεσιμότητας: τα στελέχη ενός κλάδου είναι
+/// λίγα και συνεννοούνται ούτως ή άλλως· ο σχεδιαστής της συγκέντρωσης τα
+/// επιλέγει από λίστα αντί να περιμένει απαντήσεις που δεν θα έρθουν.
+model SyggentrwshStelexos {
+  syggentrwshId String @db.Uuid
+  userId        String @db.Uuid
+
+  syggentrwsh Syggentrwsh @relation(fields: [syggentrwshId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([syggentrwshId, userId])
+  @@map("syggentrwsh_stelexos")
+}
+
+// ───────────────────────── Παρουσιολόγιο ─────────────────────────
+
+model Parousia {
+  id            String         @id @default(uuid()) @db.Uuid
+  syggentrwshId String         @db.Uuid
+  userId        String         @db.Uuid
+  status        ParousiaStatus
+  note          String?
+  /// Πότε καταγράφηκε **στη συσκευή**. Διαφέρει από `updatedAt` όταν η εγγραφή
+  /// ήρθε από την offline ουρά· καθορίζει ποια εκδοχή κερδίζει στο merge.
+  recordedAt    DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  syggentrwsh Syggentrwsh @relation(fields: [syggentrwshId], references: [id], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([syggentrwshId, userId])
+  @@index([userId, recordedAt])
+  @@map("parousia")
+}
+
+// ────────────────────────── Ατομική πρόοδος ──────────────────────────
+
+/// Κατάλογος στόχων προόδου ανά κλάδο (τα «στάδια» του Οδηγισμού).
+model ProodosGoal {
+  id       String  @id @default(uuid()) @db.Uuid
+  kladosId String  @db.Uuid
+  code     String
+  title    String
+  description String?
+  /// Ομαδοποίηση (π.χ. «Σώμα & Υγεία», «Φύση»).
+  category String?
+  order    Int     @default(0)
+  archivedAt DateTime?
+
+  klados  Klados          @relation(fields: [kladosId], references: [id], onDelete: Cascade)
+  records ProodosRecord[]
+
+  @@unique([kladosId, code])
+  @@map("proodos_goal")
+}
+
+model ProodosRecord {
+  id          String        @id @default(uuid()) @db.Uuid
+  userId      String        @db.Uuid
+  goalId      String        @db.Uuid
+  periodId    String?       @db.Uuid
+  status      ProodosStatus @default(DEN_XEKINISE)
+  completedAt DateTime?
+  note        String?
+  updatedAt   DateTime      @updatedAt
+
+  user   User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  goal   ProodosGoal @relation(fields: [goalId], references: [id], onDelete: Cascade)
+  period Period?     @relation(fields: [periodId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, goalId])
+  @@index([goalId, status])
+  @@map("proodos_record")
+}
+
+/// Εγγραφή στην Καρτέλα Ατομικής Προόδου Οδηγών.
+///
+/// Ελεύθερη καταγραφή ανά παιδί (όχι σταθερές στήλες σαν το `ProodosGoal`):
+/// κάθε Οδηγός «περνάει» τα δικά του Μονοπάτια/Πτυχία. Οι Κορυφές (Α΄/Β΄/Γ΄)
+/// υπολογίζονται από τα πλήθη (4 Μονοπάτια + 1 Πτυχίο Οδηγισμού + 1 Πτυχίο).
+model ProodosEntry {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  /// `YPOSCHESI` | `MONOPATI` | `PTYCHIO` | `PTYCHIO_ODIGISMOU` (βλ. shared).
+  kind      String
+  /// Για τα Μονοπάτια: μία από τις 4 θεματικές ενότητες. Αλλιώς `null`.
+  category  String?
+  /// Ελεύθερο κείμενο — το όνομα του Μονοπατιού/Πτυχίου (ή «Υπόσχεση»).
+  title     String
+  /// Πότε περάστηκε/δόθηκε.
+  passedAt  DateTime? @db.Date
+  note      String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, kind])
+  @@map("proodos_entry")
+}
+
+// ──────────────────────────── Συμβούλια ────────────────────────────
+
+model Symvoulio {
+  id       String        @id @default(uuid()) @db.Uuid
+  topikoId String        @db.Uuid
+  /// `null` για συμβούλια Τοπικού/Στελεχών.
+  kladosId String?       @db.Uuid
+  type     SymvoulioType
+  title    String?
+  date     DateTime
+  location String?
+  chairId  String?       @db.Uuid
+  /// Τι θα συζητηθεί — γράφεται **πριν** το συμβούλιο. Markdown.
+  agenda   String?
+  /// Τι ειπώθηκε και τι αποφασίστηκε — γράφεται **κατά τη διάρκεια**. Markdown.
+  minutes  String?
+  /// Κλειδώνει τα πρακτικά μετά την έγκριση.
+  finalizedAt DateTime?
+  archivedAt  DateTime?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  topiko Topiko       @relation(fields: [topikoId], references: [id], onDelete: Cascade)
+  klados Klados?      @relation(fields: [kladosId], references: [id], onDelete: SetNull)
+  chair  User?        @relation("SymvoulioChair", fields: [chairId], references: [id], onDelete: SetNull)
+  participants SymvoulioParticipant[]
+
+  @@index([topikoId, date])
+  @@index([kladosId, date])
+  @@map("symvoulio")
+}
+
+/// Ποια στελέχη συμμετείχαν σε ένα συμβούλιο.
+model SymvoulioParticipant {
+  symvoulioId String @db.Uuid
+  userId      String @db.Uuid
+
+  symvoulio Symvoulio @relation(fields: [symvoulioId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([symvoulioId, userId])
+  @@map("symvoulio_participant")
+}
+// ──────────────────────── Υλικό & δεσμεύσεις ────────────────────────
+
+model Yliko {
+  id       String        @id @default(uuid()) @db.Uuid
+  topikoId String        @db.Uuid
+  /// `null` ⇒ υλικό κεντρικής αποθήκης, διαθέσιμο σε όλους τους κλάδους.
+  kladosId String?       @db.Uuid
+  name     String
+  category YlikoCategory
+  /// Συνολική ποσότητα που κατέχει το Τοπικό.
+  totalQty Int           @default(1)
+  unit     String?
+  /// Ελεύθερο κείμενο (παλαιό). Προτιμάται το `storagePointId`.
+  storageLocation String?
+  /// Σημείο αποθήκευσης από τη ρυθμιζόμενη λίστα του κλάδου/Τοπικού.
+  storagePointId String? @db.Uuid
+  /// Αναλώσιμα δεν επιστρέφονται — η δέσμευση μειώνει μόνιμα το `totalQty`.
+  consumable Boolean     @default(false)
+  /// Κατώφλι για ειδοποίηση επαναπαραγγελίας (κυρίως φαρμακείο/αναλώσιμα).
+  minQty   Int?
+  expiresAt DateTime?    @db.Date
+  notes    String?
+  source   DataSource    @default(LOCAL)
+  /// Ταυτότητα στο Ouchtracker, για τα είδη φαρμακείου.
+  externalId String?
+  lastSyncedAt DateTime?
+  archivedAt DateTime?
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  topiko    Topiko               @relation(fields: [topikoId], references: [id], onDelete: Cascade)
+  klados    Klados?              @relation(fields: [kladosId], references: [id], onDelete: SetNull)
+  storagePoint StoragePoint?     @relation(fields: [storagePointId], references: [id], onDelete: SetNull)
+  checkouts YlikoCheckout[]
+  maintenance YlikoMaintenance[]
+  timelineUses TimelineBlockYliko[]
+
+  @@unique([topikoId, externalId])
+  @@index([topikoId, category])
+  @@index([kladosId, category])
+  @@map("yliko")
+}
+
+/// Σημείωση βλάβης ή επιδιόρθωσης υλικού — ιστορικό συντήρησης ανά είδος.
+model YlikoMaintenance {
+  id         String   @id @default(uuid()) @db.Uuid
+  ylikoId    String   @db.Uuid
+  /// `DAMAGE` (βλάβη/φθορά) ή `REPAIR` (επιδιόρθωση).
+  kind       String
+  note       String
+  cost       Decimal? @db.Decimal(10, 2)
+  date       DateTime @db.Date
+  createdById String? @db.Uuid
+  createdAt  DateTime @default(now())
+
+  yliko     Yliko @relation(fields: [ylikoId], references: [id], onDelete: Cascade)
+  createdBy User? @relation("MaintenanceAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([ylikoId, date])
+  @@map("yliko_maintenance")
+}
+
+/// Σημείο αποθήκευσης υλικού — ρυθμιζόμενη λίστα ανά κλάδο (ή κεντρικά).
+///
+/// `kladosId = null` ⇒ σημείο της κεντρικής αποθήκης (Τοπικό). Κάθε κλάδος
+/// ορίζει τα δικά του σημεία και τα επιλέγει όταν καταχωρεί υλικό.
+model StoragePoint {
+  id       String  @id @default(uuid()) @db.Uuid
+  topikoId String  @db.Uuid
+  kladosId String? @db.Uuid
+  name     String
+  archivedAt DateTime?
+  createdAt DateTime @default(now())
+
+  topiko Topiko  @relation(fields: [topikoId], references: [id], onDelete: Cascade)
+  klados Klados? @relation(fields: [kladosId], references: [id], onDelete: Cascade)
+  yliko  Yliko[]
+
+  @@index([topikoId, kladosId])
+  @@map("storage_point")
+}
+
+/// Φαρμακείο — ένα Kit του OuchTracker που «ανήκει» σε κλάδο ή στο Τοπικό.
+///
+/// Το OuchTracker παραμένει η πηγή αλήθειας για το περιεχόμενο· εδώ κρατάμε
+/// μόνο την ιδιοκτησία (ποιος κλάδος) και τα quick-action deep-links. Το
+/// `kladosId = null` σημαίνει φαρμακείο Τοπικού — όπως στα σημεία αποθήκευσης,
+/// δεν είναι διαθέσιμο στους κλάδους παρά μόνο με δανεισμό.
+model PharmacyKit {
+  id               String   @id @default(uuid()) @db.Uuid
+  topikoId         String   @db.Uuid
+  kladosId         String?  @db.Uuid
+  name             String
+  /// Ταυτότητα του Kit στο OuchTracker.
+  ouchtrackerKitId String
+  archivedAt       DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  topiko Topiko  @relation(fields: [topikoId], references: [id], onDelete: Cascade)
+  klados Klados? @relation(fields: [kladosId], references: [id], onDelete: SetNull)
+  loans  KitLoan[]
+
+  @@unique([topikoId, ouchtrackerKitId])
+  @@index([topikoId, kladosId])
+  @@map("pharmacy_kit")
+}
+
+/// Δανεισμός φαρμακείου σε άλλον κλάδο ή στο Τοπικό (για δράσεις Τοπικού).
+///
+/// Ο δανεισμός κάνει και **φυσική ανάθεση** στο OuchTracker: το Kit ανατίθεται
+/// στους χρήστες του κλάδου που δανείζεται. Το `previousAssigneeIds` κρατά τους
+/// προηγούμενους assignees ώστε η επιστροφή (χειροκίνητη ή αυτόματη στη λήξη) να
+/// τους επαναφέρει ακριβώς.
+model KitLoan {
+  id                  String    @id @default(uuid()) @db.Uuid
+  pharmacyKitId       String    @db.Uuid
+  /// Σε ποιον δανείζεται — `null` ⇒ στο Τοπικό.
+  toKladosId          String?   @db.Uuid
+  borrowedAt          DateTime  @default(now())
+  dueAt               DateTime?
+  returnedAt          DateTime?
+  note                String?
+  previousAssigneeIds String[]
+  createdById         String?   @db.Uuid
+  createdAt           DateTime  @default(now())
+
+  kit      PharmacyKit @relation(fields: [pharmacyKitId], references: [id], onDelete: Cascade)
+  toKlados Klados?     @relation("KitLoanToKlados", fields: [toKladosId], references: [id], onDelete: SetNull)
+
+  @@index([pharmacyKitId, returnedAt])
+  @@index([returnedAt, dueAt])
+  @@map("kit_loan")
+}
+
+/// Δέσμευση/παραλαβή υλικού για ένα χρονικό διάστημα.
+///
+/// Η αποφυγή διπλοκρατήσεων γίνεται με έλεγχο επικάλυψης διαστημάτων στο
+/// service layer (`[from, to)` ημι-ανοιχτό), μετρώντας μόνο τις καταστάσεις
+/// `DESMEFSI` και `PARALAVI`.
+model YlikoCheckout {
+  id            String         @id @default(uuid()) @db.Uuid
+  ylikoId       String         @db.Uuid
+  /// Ποιος κλάδος δεσμεύει — για να ξέρει ο επόμενος σε ποιον να μιλήσει.
+  kladosId      String?        @db.Uuid
+  drasiId       String?        @db.Uuid
+  syggentrwshId String?        @db.Uuid
+  requestedById String?        @db.Uuid
+  qty           Int
+  status        CheckoutStatus @default(DESMEFSI)
+  from          DateTime
+  to            DateTime
+  /// Πόσα επιστράφηκαν — διαφορά από `qty` σημαίνει απώλεια/φθορά.
+  returnedQty   Int?
+  /// Σύντομη απογραφή κατάστασης κατά την επιστροφή (KALI/FTHORA/VLAVI/APOLEIA).
+  returnCondition String?
+  note          String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  yliko       Yliko        @relation(fields: [ylikoId], references: [id], onDelete: Cascade)
+  klados      Klados?      @relation(fields: [kladosId], references: [id], onDelete: SetNull)
+  drasi       Drasi?       @relation(fields: [drasiId], references: [id], onDelete: Cascade)
+  syggentrwsh Syggentrwsh? @relation(fields: [syggentrwshId], references: [id], onDelete: Cascade)
+  requestedBy User?        @relation("CheckoutRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
+
+  @@index([ylikoId, status, from, to])
+  @@index([drasiId])
+  @@index([syggentrwshId])
+  @@map("yliko_checkout")
+}
+
+// ──────────────────── Φαρμακείο / Ouchtracker ────────────────────
+
+/// Ιατρικό περιστατικό. Καθρέφτης του Ouchtracker: το εξωτερικό σύστημα είναι η
+/// πηγή αλήθειας, εδώ κρατάμε αντίγραφο για offline προβολή και αναφορές.
+model Incident {
+  id         String   @id @default(uuid()) @db.Uuid
+  topikoId   String   @db.Uuid
+  drasiId    String?  @db.Uuid
+  patientId  String?  @db.Uuid
+  /// `id` στο Ouchtracker — κλειδί idempotency του συγχρονισμού.
+  externalId String?
+  occurredAt DateTime
+  /// Σύντομη περιγραφή· λεπτομερή ιατρικά δεδομένα μένουν στο Ouchtracker.
+  summary    String
+  treatment  String?
+  severity   String?
+  resolvedAt DateTime?
+  source     DataSource @default(OUCHTRACKER)
+  lastSyncedAt DateTime?
+  createdAt  DateTime @default(now())
+
+  topiko  Topiko @relation(fields: [topikoId], references: [id], onDelete: Cascade)
+  drasi   Drasi? @relation(fields: [drasiId], references: [id], onDelete: SetNull)
+  patient User?  @relation("IncidentPatient", fields: [patientId], references: [id], onDelete: SetNull)
+
+  @@unique([topikoId, externalId])
+  @@index([topikoId, occurredAt])
+  @@map("incident")
+}
+
+// ──────────────────────── Λειτουργικά logs ────────────────────────
+
+/// Εκτέλεση συγχρονισμού με εξωτερικό σύστημα — ό,τι χρειάζεται για διάγνωση.
+model SyncRun {
+  id         String     @id @default(uuid()) @db.Uuid
+  topikoId   String     @db.Uuid
+  source     DataSource
+  startedAt  DateTime   @default(now())
+  finishedAt DateTime?
+  ok         Boolean?
+  created    Int        @default(0)
+  updated    Int        @default(0)
+  skipped    Int        @default(0)
+  error      String?
+  /// Cursor/ETag για incremental sync στην επόμενη εκτέλεση.
+  cursor     String?
+
+  topiko Topiko @relation(fields: [topikoId], references: [id], onDelete: Cascade)
+
+  @@index([topikoId, source, startedAt])
+  @@map("sync_run")
+}
+
+model AuditLog {
+  id        String   @id @default(uuid()) @db.Uuid
+  topikoId  String   @db.Uuid
+  actorId   String?  @db.Uuid
+  action    String
+  entity    String
+  entityId  String?
+  diff      Json?
+  createdAt DateTime @default(now())
+
+  topiko Topiko @relation(fields: [topikoId], references: [id], onDelete: Cascade)
+  actor  User?  @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([topikoId, createdAt])
+  @@index([entity, entityId])
+  @@map("audit_log")
+}
+
+/// Αποθηκευμένο αρχείο σε object storage (S3/Garage). Το περιεχόμενο ζει στο
+/// bucket· εδώ μένουν μόνο μεταδεδομένα και εμβέλεια (κλάδος ή Τοπικό).
+model StoredFile {
+  id          String   @id @default(uuid()) @db.Uuid
+  topikoId    String   @db.Uuid
+  /// `null` ⇒ αρχείο επιπέδου Τοπικού.
+  kladosId    String?  @db.Uuid
+  /// Σκοπός (π.χ. `RECEIPT`) — καθορίζει το δικαίωμα πρόσβασης.
+  purpose     String
+  /// Το key του αντικειμένου στο bucket.
+  objectKey   String   @unique
+  filename    String
+  contentType String
+  size        Int
+  createdById String?  @db.Uuid
+  createdAt   DateTime @default(now())
+
+  topiko        Topiko         @relation(fields: [topikoId], references: [id], onDelete: Cascade)
+  klados        Klados?        @relation(fields: [kladosId], references: [id], onDelete: Cascade)
+  createdBy     User?          @relation("StoredFileAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  treasuryEntry TreasuryEntry?
+
+  @@index([topikoId, kladosId, purpose])
+  @@map("stored_file")
+}
+
+/// Κίνηση ταμείου. Εμβέλεια: κλάδος (`kladosId`) ή Τοπικό (`kladosId = null`).
+model TreasuryEntry {
+  id            String            @id @default(uuid()) @db.Uuid
+  topikoId      String            @db.Uuid
+  kladosId      String?           @db.Uuid
+  kind          TreasuryEntryKind
+  category      String
+  amount        Decimal           @db.Decimal(10, 2)
+  occurredAt    DateTime          @db.Date
+  description   String?
+  /// Για δωρεές: από ποιον (γονέας/στέλεχος/άλλο).
+  donorType     String?
+  /// Απόδειξη (εικόνα/PDF) — κυρίως για έξοδα.
+  receiptFileId String?           @unique @db.Uuid
+  createdById   String?           @db.Uuid
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  topiko      Topiko      @relation(fields: [topikoId], references: [id], onDelete: Cascade)
+  klados      Klados?     @relation(fields: [kladosId], references: [id], onDelete: Cascade)
+  receiptFile StoredFile? @relation(fields: [receiptFileId], references: [id], onDelete: SetNull)
+  createdBy   User?       @relation("TreasuryAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([topikoId, kladosId, occurredAt])
+  @@map("treasury_entry")
+}
