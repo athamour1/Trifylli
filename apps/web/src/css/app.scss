@@ -1,0 +1,269 @@
+// Καθολικά στυλ.
+
+/**
+ * Χρώμα κλάδου.
+ *
+ * Το `--klados-color` το ορίζει όποιος ξέρει σε ποιον κλάδο βρισκόμαστε (το
+ * layout από τη διαδρομή, οι σελίδες λεπτομέρειας από τα δεδομένα τους). Εδώ
+ * μένει μόνο η εφεδρεία, ώστε ένα `color="klados"` σε σελίδα Τοπικού να μη
+ * μείνει άχρωμο.
+ */
+body {
+  --klados-color: var(--q-primary);
+  --klados-on: #fff;
+  --klados-on-bar: #fff;
+  --klados-ink: var(--q-primary);
+  --klados-ink-lg: var(--q-primary);
+}
+
+// Τα ονόματα ακολουθούν τη σύμβαση της Quasar: ένα `color="klados"` παράγει
+// `bg-klados`, ένα `text-color="klados-on"` παράγει `text-klados-on`.
+.bg-klados {
+  background: var(--klados-color) !important;
+}
+
+// Κείμενο: η σκουρότερη απόχρωση, για να διαβάζεται πάνω στο λευκό.
+.text-klados {
+  color: var(--klados-ink) !important;
+}
+
+.text-klados-on {
+  color: var(--klados-on) !important;
+}
+
+.text-klados-bar {
+  color: var(--klados-on-bar) !important;
+}
+
+// Η μπάρα αλλάζει χρώμα καθώς περνάς από κλάδο σε κλάδο· χωρίς μετάβαση το
+// πήδημα τραβά το μάτι περισσότερο από την ίδια την αλλαγή σελίδας.
+.q-header {
+  transition: background-color 200ms ease;
+}
+
+// Το ενεργό στοιχείο του μενού παίρνει το χρώμα του κλάδου στον οποίο ανήκει.
+// `box-shadow` και όχι `border-left`: δεν μετακινεί το περιεχόμενο.
+.klados-active {
+  color: var(--klados-ink-lg, var(--klados-ink)) !important;
+  font-weight: 600;
+  box-shadow: inset 3px 0 0 currentColor;
+}
+
+.page-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+// Κάρτα κλάδου: η αριστερή λωρίδα παίρνει το χρώμα του κλάδου.
+.klados-stripe {
+  border-left: 6px solid currentColor;
+}
+
+// Το timeline συγκέντρωσης πρέπει να διαβάζεται με μια ματιά στο κινητό.
+.timeline-block {
+  border-left: 3px solid var(--klados-color);
+  padding-left: 12px;
+}
+
+// Γραμμή παρουσιολογίου: μεγάλοι στόχοι αφής για χρήση στο ύπαιθρο.
+.parousia-row .q-btn {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.offline-banner {
+  position: sticky;
+  top: 0;
+  z-index: 2000;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Design tokens & καθολική στιλιστική βελτίωση (UI polish pass)
+   Στόχος: πιο ζεστή, σύγχρονη, «καθαρή» αίσθηση — χωρίς αλλαγή στη δομή.
+   ════════════════════════════════════════════════════════════════════════ */
+:root {
+  --surface: #ffffff;
+  --app-bg: #f4f6f3;            /* απαλό πρασινωπό off-white, όχι κατάλευκο */
+  --border-soft: #e4e8e2;
+  --muted: #5c6b5c;
+  --ink: #1f2a21;              /* σκούρο πρασινο-γκρι αντί για καθαρό μαύρο */
+  --radius-card: 14px;
+  --shadow-1: 0 1px 2px rgba(16, 24, 20, 0.04), 0 1px 3px rgba(16, 24, 20, 0.06);
+  --shadow-2: 0 6px 16px rgba(16, 24, 20, 0.09), 0 2px 6px rgba(16, 24, 20, 0.05);
+}
+
+body {
+  background: var(--app-bg);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: -0.006em;
+}
+
+/* ── Τυπογραφία ── */
+.page-title {
+  font-size: 1.6rem;
+  font-weight: 800;
+  letter-spacing: -0.021em;
+  color: var(--ink);
+}
+.section-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+}
+
+/* ── Κάρτες: απαλό περίγραμμα + διακριτική σκιά + μαλακές γωνίες ── */
+.q-card {
+  border-radius: var(--radius-card);
+}
+.q-card--bordered {
+  border-color: var(--border-soft);
+}
+.q-card--flat.q-card--bordered {
+  box-shadow: var(--shadow-1);
+}
+/* Κάρτες που είναι σύνδεσμοι/κλικ: ανασηκώνονται ελαφρά. */
+.q-card.cursor-pointer,
+a.q-card {
+  transition: box-shadow 180ms ease, transform 180ms ease;
+}
+.q-card.cursor-pointer:hover,
+a.q-card:hover {
+  box-shadow: var(--shadow-2);
+  transform: translateY(-2px);
+}
+
+/* ── Λίστες ── */
+.q-list--bordered {
+  border-color: var(--border-soft);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+}
+
+/* ── Κουμπιά: πεζά (όχι ΚΕΦΑΛΑΙΑ), πιο σύγχρονη/φιλική αίσθηση ── */
+.q-btn {
+  text-transform: none;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+/* ── Header & drawer ── */
+.q-header {
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04), 0 3px 10px rgba(16, 24, 20, 0.07);
+}
+.q-drawer {
+  background: #fbfcfa;
+}
+.q-drawer--bordered {
+  border-right-color: var(--border-soft) !important;
+}
+
+/* ── Chips & badges: λίγο πιο «στρογγυλά» και ευανάγνωστα ── */
+.q-chip {
+  font-weight: 600;
+}
+.q-badge {
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+/* ── Στατιστικές κάρτες (dashboard) ── */
+.stat-card {
+  position: relative;
+  overflow: hidden;
+}
+.stat-card .stat-label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--muted);
+}
+.stat-card .stat-value {
+  font-size: 2.1rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+.stat-card .stat-icon {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  opacity: 0.14;
+  font-size: 2.4rem;
+}
+
+/* ── Προσβασιμότητα: ορατό focus για πληκτρολόγιο + σεβασμός reduced-motion ── */
+:focus-visible {
+  outline: 2px solid var(--q-primary);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Full-bleed header + κύλιση ΚΑΤΩ από το top bar
+   Το layout γίνεται στήλη ύψους οθόνης· κυλάει μόνο το περιεχόμενο, οπότε η
+   μπάρα κύλισης εμφανίζεται κάτω από την μπάρα, όχι δίπλα της.
+   ════════════════════════════════════════════════════════════════════════ */
+html,
+body,
+#q-app {
+  height: 100%;
+}
+.q-layout {
+  height: 100svh;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.q-layout > .q-header {
+  position: static !important;
+  flex: 0 0 auto;
+}
+.q-page-container {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-top: 0 !important;
+}
+
+/* ── Μπάρα κύλισης στο χρώμα του ενεργού κλάδου (ή του Τοπικού = πράσινο) ──
+   Χρησιμοποιεί το `--klados-ink` (ευανάγνωστη απόχρωση πάνω στο λευκό) που
+   αλλάζει ανά διαδρομή, ώστε να ακολουθεί τη μπάρα — ακόμη και για το ανοιχτό
+   κίτρινο των Πουλιών μένει ορατή. */
+.q-page-container,
+.q-drawer__content {
+  scrollbar-width: thin;
+  scrollbar-color: var(--klados-ink) transparent;
+}
+.q-page-container::-webkit-scrollbar,
+.q-drawer__content::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.q-page-container::-webkit-scrollbar-track,
+.q-drawer__content::-webkit-scrollbar-track {
+  background: transparent;
+}
+.q-page-container::-webkit-scrollbar-thumb,
+.q-drawer__content::-webkit-scrollbar-thumb {
+  background: var(--klados-ink);
+  border-radius: 999px;
+  border: 2px solid var(--app-bg);
+}
+.q-page-container::-webkit-scrollbar-thumb:hover,
+.q-drawer__content::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--klados-ink), #000 18%);
+}

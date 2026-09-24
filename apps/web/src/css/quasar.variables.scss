@@ -1,0 +1,19 @@
+// Παλέτα Trifylli — πράσινο του Οδηγισμού με γήινους τόνους.
+$primary:   #2e7d32;
+$secondary: #6d4c41;
+$accent:    #f9a825;
+
+$dark:      #1d1d1d;
+$dark-page: #121212;
+
+$positive:  #2e7d32;
+$negative:  #c62828;
+$info:      #0277bd;
+$warning:   #ef6c00;
+
+// Inter για όλη τη διεπαφή (πλήρη ελληνικά), με Roboto/system ως εφεδρεία offline.
+$typography-font-family: 'Inter', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+// Πιο μαλακές γωνίες — σύγχρονη, φιλική αίσθηση χωρίς να χάνεται η πυκνότητα.
+$generic-border-radius: 10px;
+$button-border-radius: 10px;
