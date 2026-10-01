@@ -1,0 +1,123 @@
+# Authentik blueprint για το OuchTracker (διαχείριση φαρμακείων).
+#
+# Το OuchTracker μπαίνει από το **ίδιο** single sign-on με το Trifylli: ένας
+# χρήστης που έχει ήδη συνεδρία στο Authentik περνά στο διαχειριστικό του
+# OuchTracker χωρίς δεύτερη σύνδεση. Γι' αυτό ορίζουμε εδώ μια δεύτερη
+# εφαρμογή/provider — ξεχωριστό `client_id` και δικό του `aud`, ώστε το token
+# του OuchTracker να μην γίνεται δεκτό από το Trifylli και αντίστροφα.
+#
+# Όπως και στο [trifylli-oidc.yaml], το Authentik απαντά μόνο στο «ποιος είσαι».
+# Τον ρόλο (ADMIN/CHECKER) τον αποφασίζει το OuchTracker στο provisioning
+# (λίστα OIDC_ADMIN_EMAILS), όχι κάποιο group εδώ.
+#
+# Εφαρμόζεται αυτόματα από τον worker (mount στο /blueprints/custom), ή:
+#   docker compose exec authentik-worker ak apply_blueprint /blueprints/custom/ouchtracker-oidc.yaml
+version: 1
+metadata:
+  name: OuchTracker — OIDC provider & application
+  labels:
+    blueprints.goauthentik.io/instantiate: 'true'
+
+context:
+  # Πού επιστρέφει ο χρήστης μετά την αποσύνδεση — βάλε το πραγματικό URL του
+  # OuchTracker (ή πέρασέ το ως context στο `ak apply_blueprint`).
+  OUCHTRACKER_APP_URL: http://localhost:9100/
+
+entries:
+  # ── Ροή εξουσιοδότησης χωρίς κανένα βήμα (ίδια λογική με το Trifylli) ──
+  - model: authentik_flows.flow
+    id: ouchtracker-authorization-flow
+    identifiers:
+      slug: ouchtracker-authorization
+    attrs:
+      name: OuchTracker — εξουσιοδότηση
+      title: Σύνδεση στο OuchTracker
+      designation: authorization
+      authentication: require_authenticated
+
+  # ── Ροή αποσύνδεσης που πραγματικά αποσυνδέει ──
+  - model: authentik_flows.flow
+    id: ouchtracker-invalidation-flow
+    identifiers:
+      slug: ouchtracker-invalidation
+    attrs:
+      name: OuchTracker — αποσύνδεση
+      title: Αποσύνδεση από το OuchTracker
+      designation: invalidation
+      authentication: none
+
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf ouchtracker-invalidation-flow
+      stage: !Find [authentik_stages_user_logout.userlogoutstage, [name, default-invalidation-logout]]
+      order: 0
+
+  - model: authentik_stages_redirect.redirectstage
+    id: ouchtracker-post-logout-redirect
+    identifiers:
+      name: ouchtracker-post-logout
+    attrs:
+      mode: static
+      target_static: !Context OUCHTRACKER_APP_URL
+      keep_context: false
+
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf ouchtracker-invalidation-flow
+      stage: !KeyOf ouchtracker-post-logout-redirect
+      order: 10
+
+  - model: authentik_providers_oauth2.oauth2provider
+    id: ouchtracker-provider
+    identifiers:
+      name: OuchTracker
+    attrs:
+      # Δημόσιος client (η PWA δεν κρύβει secret) — ασφάλεια μέσω PKCE + αυστηρών
+      # redirect URIs. Το `aud` του token γίνεται ο client_id, που το backend
+      # του OuchTracker επικυρώνει ως OIDC_AUDIENCE=ouchtracker.
+      client_type: public
+      client_id: ouchtracker
+      sub_mode: hashed_user_id
+
+      authorization_flow: !KeyOf ouchtracker-authorization-flow
+      invalidation_flow: !KeyOf ouchtracker-invalidation-flow
+
+      # Ίδιο signing key με το Trifylli: το JWKS endpoint είναι κοινό, οπότε το
+      # backend επικυρώνει τα tokens με RS256 μέσω JWKS.
+      signing_key:
+        !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
+
+      property_mappings:
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, 'goauthentik.io/providers/oauth2/scope-openid']]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, 'goauthentik.io/providers/oauth2/scope-profile']]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, 'goauthentik.io/providers/oauth2/scope-email']]
+
+      redirect_uris:
+        # OuchTracker frontend (dev: Quasar σε 9100 για να μη συγκρούεται με το
+        # Trifylli PWA στο 9000).
+        - matching_mode: strict
+          url: http://localhost:9100/auth/callback
+        - matching_mode: strict
+          url: http://localhost:9100/auth/silent
+        - matching_mode: strict
+          url: http://localhost:9100/
+        # Πραγματικό στήσιμο (subdomain) — από το context.
+        - matching_mode: strict
+          url: !Format ['%sauth/callback', !Context OUCHTRACKER_APP_URL]
+        - matching_mode: strict
+          url: !Format ['%sauth/silent', !Context OUCHTRACKER_APP_URL]
+        - matching_mode: strict
+          url: !Context OUCHTRACKER_APP_URL
+
+      access_token_validity: minutes=30
+
+  - model: authentik_core.application
+    id: ouchtracker-app
+    identifiers:
+      slug: ouchtracker
+    attrs:
+      name: OuchTracker
+      provider: !KeyOf ouchtracker-provider
+      meta_description: Διαχείριση φαρμακείων Τοπικού Τμήματος
+      meta_publisher: Σ.Ε.Ο.
+      open_in_new_tab: false

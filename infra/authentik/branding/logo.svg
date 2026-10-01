@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 120" width="180" height="120" role="img" aria-label="Trifylli">
+  <g transform="translate(58,4)">
+    <rect width="64" height="64" rx="14" fill="#2e7d32"/>
+    <g fill="#ffffff">
+      <circle cx="32" cy="20" r="9"/>
+      <circle cx="21" cy="34" r="9"/>
+      <circle cx="43" cy="34" r="9"/>
+      <rect x="30" y="38" width="4" height="16" rx="2"/>
+    </g>
+  </g>
+  <text x="90" y="104" text-anchor="middle"
+        font-family="Roboto, 'Helvetica Neue', Arial, sans-serif"
+        font-size="30" font-weight="700" fill="#1b5e20">Trifylli</text>
+</svg>

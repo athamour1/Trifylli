@@ -1,0 +1,158 @@
+# Authentik blueprint για το Trifylli.
+#
+# Το Authentik απαντά **μόνο** στο «ποιος είσαι». Το «τι μπορείς» το ορίζει ο
+# υπερδιαχειριστής μέσα στην εφαρμογή (`user.accountRole`), οπότε δεν υπάρχουν
+# groups ανά κλάδο εδώ — θα ήταν δεύτερη, αναξιόπιστη πηγή αλήθειας.
+#
+# Το μόνο που πρέπει οπωσδήποτε να φτάνει στο token είναι το **email**: είναι το
+# κλειδί που δένει την ταυτότητα με τον λογαριασμό της εφαρμογής. Γι' αυτό
+# χρησιμοποιούμε τα προεπιλεγμένα scope mappings του Authentik αντί για δικά μας.
+#
+# Εφαρμόζεται αυτόματα από τον worker (mount στο /blueprints/custom), ή χειροκίνητα:
+#   docker compose exec authentik-worker ak apply_blueprint /blueprints/custom/trifylli-oidc.yaml
+version: 1
+metadata:
+  name: Trifylli — OIDC provider & application
+  labels:
+    blueprints.goauthentik.io/instantiate: 'true'
+
+context:
+  # Πού επιστρέφει ο χρήστης μετά την αποσύνδεση. Άλλαξέ το σε πραγματικό
+  # στήσιμο (ή πέρασέ το ως context στο `ak apply_blueprint`).
+  TRIFYLLI_APP_URL: http://localhost:8080/
+
+entries:
+  # ── Ροή εξουσιοδότησης χωρίς κανένα βήμα ──
+  #
+  # Δική μας ροή και όχι η προεπιλεγμένη, για δύο λόγους: η default είναι κοινή
+  # για κάθε εφαρμογή του Authentik και δεν πρέπει να την αλλάζουμε, και έτσι
+  # μπορούμε να της δώσουμε ελληνικό τίτλο και το δικό μας φόντο.
+  #
+  # Η ροή είναι σκόπιμα **κενή**: καμία συγκατάθεση, καμία ενδιάμεση οθόνη. Ο
+  # χρήστης που έχει ήδη συνεδρία στο Authentik επιστρέφει στην εφαρμογή χωρίς
+  # να δει τίποτα. Αυτό δουλεύει μόνο επειδή δεν ζητάμε `offline_access` — βλ.
+  # `apps/web/src/lib/oidc.ts`.
+  - model: authentik_flows.flow
+    id: trifylli-authorization-flow
+    identifiers:
+      slug: trifylli-authorization
+    attrs:
+      name: Trifylli — εξουσιοδότηση
+      title: Σύνδεση στο Trifylli
+      designation: authorization
+      authentication: require_authenticated
+
+  # ── Ροή αποσύνδεσης που πραγματικά αποσυνδέει ──
+  #
+  # Η προεπιλεγμένη ροή αποσύνδεσης του provider δεν έχει κανένα στάδιο: το
+  # Authentik δείχνει μια δική του οθόνη («You've logged out of…» με κουμπιά)
+  # και **δεν** τερματίζει τη συνεδρία του. Σε κοινόχρηστο υπολογιστή Εστίας
+  # αυτό σημαίνει ότι ο επόμενος χρήστης μπαίνει αυτόματα ως ο προηγούμενος —
+  # η αποσύνδεση θα ήταν διακοσμητική.
+  #
+  # Δική μας ροή με στάδιο `user_logout` και τίποτε άλλο: η συνεδρία κλείνει και
+  # ο χρήστης επιστρέφει κατευθείαν στην εφαρμογή, που τον στέλνει σε καθαρή
+  # οθόνη σύνδεσης.
+  - model: authentik_flows.flow
+    id: trifylli-invalidation-flow
+    identifiers:
+      slug: trifylli-invalidation
+    attrs:
+      name: Trifylli — αποσύνδεση
+      title: Αποσύνδεση από το Trifylli
+      designation: invalidation
+      # `none` και όχι `require_authenticated`: το πρώτο στάδιο τερματίζει τη
+      # συνεδρία, οπότε στο δεύτερο δεν υπάρχει πια χρήστης. Με απαίτηση
+      # ταυτοποίησης η ροή κοβόταν στη μέση με «Flow does not apply to current
+      # user» και το redirect δεν έτρεχε ποτέ.
+      authentication: none
+
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf trifylli-invalidation-flow
+      stage: !Find [authentik_stages_user_logout.userlogoutstage, [name, default-invalidation-logout]]
+      order: 0
+
+  # Μετά την αποσύνδεση, πίσω στην εφαρμογή χωρίς ενδιάμεση οθόνη.
+  #
+  # Το `?next=` του executor απορρίπτει absolute URLs (προστασία open-redirect),
+  # οπότε δεν μπορεί να μας γυρίσει σε άλλο origin. Το Redirect Stage είναι ο
+  # σωστός μηχανισμός: ορίζει `PLAN_CONTEXT_REDIRECT`, που το Authentik δέχεται
+  # και ως απόλυτο URL γιατί το έβαλε δική του ρύθμιση, όχι ο χρήστης.
+  - model: authentik_stages_redirect.redirectstage
+    id: trifylli-post-logout-redirect
+    identifiers:
+      name: trifylli-post-logout
+    attrs:
+      mode: static
+      target_static: !Context TRIFYLLI_APP_URL
+      keep_context: false
+
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf trifylli-invalidation-flow
+      stage: !KeyOf trifylli-post-logout-redirect
+      order: 10
+
+  - model: authentik_providers_oauth2.oauth2provider
+    id: trifylli-provider
+    identifiers:
+      name: Trifylli PWA
+    attrs:
+      # Δημόσιος client: η PWA δεν μπορεί να κρύψει secret, οπότε η ασφάλεια
+      # στηρίζεται στο PKCE και στα αυστηρά redirect URIs.
+      client_type: public
+      client_id: trifylli-pwa
+      # Σταθερό, αδιαφανές `sub`: το email είναι το κλειδί **πρώτης**
+      # αντιστοίχισης, αλλά μετά τη σύνδεση ο χρήστης εντοπίζεται από το `sub`.
+      # Έτσι μια αλλαγή email στο Authentik δεν κλειδώνει κανέναν έξω.
+      sub_mode: hashed_user_id
+
+      authorization_flow: !KeyOf trifylli-authorization-flow
+      invalidation_flow: !KeyOf trifylli-invalidation-flow
+
+      # Χωρίς signing key το access token δεν είναι υπογεγραμμένο JWT και το API
+      # δεν μπορεί να το επικυρώσει μέσω JWKS.
+      signing_key:
+        !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
+
+      property_mappings:
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, 'goauthentik.io/providers/oauth2/scope-openid']]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, 'goauthentik.io/providers/oauth2/scope-profile']]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, 'goauthentik.io/providers/oauth2/scope-email']]
+
+      redirect_uris:
+        # Η θύρα 8080 είναι της PWA σε container (η ΚΥΡΙΑ — profile: full). Πρώτη
+        # στη λίστα γιατί το Authentik τη χρησιμοποιεί ως launch URL όταν αυτό
+        # δεν οριστεί ρητά.
+        - matching_mode: strict
+          url: http://localhost:8080/auth/callback
+        - matching_mode: strict
+          url: http://localhost:8080/auth/silent
+        - matching_mode: strict
+          url: http://localhost:8080/
+        # Η θύρα 9000 είναι του `quasar dev` (τοπικό hot-reload, εκτός container).
+        - matching_mode: strict
+          url: http://localhost:9000/auth/callback
+        - matching_mode: strict
+          url: http://localhost:9000/auth/silent
+        - matching_mode: strict
+          url: http://localhost:9000/
+
+      # Ούτε πολύ σύντομο (κάθε λήξη είναι ένα round trip στο Authentik) ούτε
+      # πολύ μακρύ: σε κοινόχρηστο υπολογιστή Εστίας δεν θέλουμε token που ζει
+      # ώρες μετά την αποχώρηση του χρήστη.
+      access_token_validity: minutes=30
+
+  - model: authentik_core.application
+    id: trifylli-app
+    identifiers:
+      slug: trifylli
+    attrs:
+      name: Trifylli
+      provider: !KeyOf trifylli-provider
+      meta_description: Διαχείριση Τοπικού Τμήματος Σ.Ε.Ο.
+      meta_publisher: Σ.Ε.Ο.
+      # Ρητό launch URL: αλλιώς το Authentik πέφτει στο πρώτο redirect_uri.
+      meta_launch_url: http://localhost:8080/
+      open_in_new_tab: false
