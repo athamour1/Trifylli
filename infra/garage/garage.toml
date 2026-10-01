@@ -1,0 +1,21 @@
+# Garage single-node — dev stack του Trifylli.
+# Τα μυστικά (rpc_secret, admin_token) έρχονται από env (GARAGE_RPC_SECRET,
+# GARAGE_ADMIN_TOKEN) ώστε το αρχείο να μένει χωρίς credentials.
+
+metadata_dir = "/var/lib/garage/meta"
+data_dir = "/var/lib/garage/data"
+db_engine = "sqlite"
+replication_factor = 1
+
+rpc_bind_addr = "0.0.0.0:3901"
+# Διεύθυνση που διαφημίζει ο κόμβος — το όνομα υπηρεσίας στο δίκτυο του compose,
+# ώστε και το garage-init (ίδιο config) να συνδέεται μέσω RPC.
+rpc_public_addr = "garage:3901"
+
+[s3_api]
+s3_region = "garage"
+api_bind_addr = "0.0.0.0:3900"
+root_domain = ".s3.garage.localhost"
+
+[admin]
+api_bind_addr = "0.0.0.0:3903"
