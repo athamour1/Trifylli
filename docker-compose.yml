@@ -1,0 +1,239 @@
+# Περιβάλλον ανάπτυξης Trifylli.
+#
+# Το `pnpm infra:up` σηκώνει μόνο τις υποδομές (Postgres, Redis, Authentik) και
+# αφήνει API/PWA να τρέχουν τοπικά με hot reload. Για πλήρη στοίβα σε container:
+#   docker compose --profile full up -d
+
+name: trifylli
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-trifylli}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-trifylli}
+      POSTGRES_DB: ${POSTGRES_DB:-trifylli}
+      AUTHENTIK_DB: ${AUTHENTIK_DB:-authentik}
+      OUCHTRACKER_DB: ${OUCHTRACKER_DB:-ouchtracker}
+    ports:
+      - '${POSTGRES_PORT:-5432}:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-trifylli} -d ${POSTGRES_DB:-trifylli}']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ─────────────────────── Authentik (SSO) ───────────────────────
+  # Η βάση του Authentik ζει στο ίδιο Postgres, σε ξεχωριστό database που
+  # δημιουργείται από το init script.
+  authentik-server:
+    image: ghcr.io/goauthentik/server:2025.2
+    restart: unless-stopped
+    command: server
+    environment: &authentik-env
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY:-change-me-in-production}
+      AUTHENTIK_REDIS__HOST: redis
+      AUTHENTIK_POSTGRESQL__HOST: postgres
+      AUTHENTIK_POSTGRESQL__USER: ${POSTGRES_USER:-trifylli}
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${POSTGRES_PASSWORD:-trifylli}
+      AUTHENTIK_POSTGRESQL__NAME: ${AUTHENTIK_DB:-authentik}
+      AUTHENTIK_BOOTSTRAP_PASSWORD: ${AUTHENTIK_BOOTSTRAP_PASSWORD:-}
+      AUTHENTIK_BOOTSTRAP_EMAIL: ${AUTHENTIK_BOOTSTRAP_EMAIL:-}
+      # Σταθερό token διαχειριστή, ώστε η ρύθμιση να γίνεται από script αντί για
+      # κλικ στο UI. Μόνο για development.
+      AUTHENTIK_BOOTSTRAP_TOKEN: ${AUTHENTIK_BOOTSTRAP_TOKEN:-}
+    volumes:
+      - authentik-media:/media
+      - ./infra/authentik:/blueprints/custom:ro
+      # Εμφάνιση στα χρώματα του Trifylli: η οθόνη σύνδεσης είναι μέρος της
+      # ίδιας διαδρομής, δεν πρέπει να μοιάζει με ξένο προϊόν.
+      - ./infra/authentik/branding:/media/public:ro
+      - ./infra/authentik/branding/custom.css:/web/dist/custom.css:ro
+    ports:
+      - '${AUTHENTIK_PORT:-9010}:9000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  authentik-worker:
+    image: ghcr.io/goauthentik/server:2025.2
+    restart: unless-stopped
+    command: worker
+    environment: *authentik-env
+    volumes:
+      - authentik-media:/media
+      - ./infra/authentik:/blueprints/custom:ro
+      - ./infra/authentik/branding:/media/public:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ─────────────────────── Object storage (Garage) ───────────────────────
+  # S3-compatible αποθήκευση αρχείων (αποδείξεις κ.ά.). Υποδομή, όχι profile:
+  # χρειάζεται και όταν το API τρέχει τοπικά.
+  garage:
+    image: dxflrs/garage:v1.1.0
+    restart: unless-stopped
+    environment:
+      GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:?GARAGE_RPC_SECRET is required}
+      GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN:-}
+    volumes:
+      - ./infra/garage/garage.toml:/etc/garage.toml:ro
+      - garage-data:/var/lib/garage
+    ports:
+      - '${GARAGE_S3_PORT:-3900}:3900'
+      - '${GARAGE_ADMIN_PORT:-3903}:3903'
+
+  # One-shot: αναθέτει layout, φτιάχνει bucket + σταθερό key (idempotent).
+  garage-init:
+    build:
+      context: ./infra/garage
+      dockerfile: Dockerfile
+    environment:
+      GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:?GARAGE_RPC_SECRET is required}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?S3_ACCESS_KEY_ID is required}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?S3_SECRET_ACCESS_KEY is required}
+    volumes:
+      - ./infra/garage/garage.toml:/etc/garage.toml:ro
+      # Το admin CLI χρειάζεται το node key του κόμβου για το RPC handshake.
+      - garage-data:/var/lib/garage
+    depends_on:
+      - garage
+    restart: on-failure
+
+  # ─────────────────── Πλήρης στοίβα (profile: full) ───────────────────
+  api:
+    profiles: ['full']
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-trifylli}:${POSTGRES_PASSWORD:-trifylli}@postgres:5432/${POSTGRES_DB:-trifylli}?schema=public
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
+      # Ο issuer πρέπει να ταιριάζει **ακριβώς** με αυτόν που βάζει το Authentik
+      # στο token — δηλαδή το URL που βλέπει ο browser, όχι το εσωτερικό DNS.
+      OIDC_ISSUER: ${OIDC_ISSUER:-http://localhost:9010/application/o/trifylli/}
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE:-trifylli-pwa}
+      # Το JWKS το κατεβάζει ο server, οπότε εδώ το εσωτερικό όνομα είναι εντάξει.
+      OIDC_JWKS_URI: ${OIDC_JWKS_URI:-http://authentik-server:9000/application/o/trifylli/jwks/}
+      SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL:-}
+      OUCHTRACKER_BASE_URL: ${OUCHTRACKER_BASE_URL:-http://ouchtracker-backend:3000}
+      OUCHTRACKER_EMAIL: ${OUCHTRACKER_EMAIL:-}
+      OUCHTRACKER_PASSWORD: ${OUCHTRACKER_PASSWORD:-}
+      ESEO_BASE_URL: ${ESEO_BASE_URL:-}
+      ESEO_REALM: ${ESEO_REALM:-eseo}
+      ESEO_CLIENT_ID: ${ESEO_CLIENT_ID:-ssoClient}
+      ESEO_REFRESH_TOKEN: ${ESEO_REFRESH_TOKEN:-}
+      ESEO_WEBHOOK_SECRET: ${ESEO_WEBHOOK_SECRET:-}
+      SYNC_ENABLED: ${SYNC_ENABLED:-true}
+      # Object storage — εσωτερικό όνομα υπηρεσίας (όχι localhost).
+      S3_ENDPOINT: http://garage:3900
+      S3_REGION: ${S3_REGION:-garage}
+      S3_BUCKET: ${S3_BUCKET:-trifylli}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?S3_ACCESS_KEY_ID is required}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?S3_SECRET_ACCESS_KEY is required}
+      S3_FORCE_PATH_STYLE: 'true'
+    ports:
+      - '${API_PORT:-3000}:3000'
+    # Για να φτάνει το API σε υπηρεσίες του host (π.χ. Ouchtracker στο :80).
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      garage-init:
+        condition: service_completed_successfully
+
+  web:
+    profiles: ['full']
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    # Ρυθμίσεις runtime (ο entrypoint γράφει το /config.js) — όχι build args.
+    environment:
+      API_URL: ${VITE_API_URL:-http://localhost:3000/api}
+      OIDC_AUTHORITY: ${VITE_OIDC_AUTHORITY:-http://localhost:9010/application/o/trifylli/}
+      OIDC_CLIENT_ID: ${VITE_OIDC_CLIENT_ID:-trifylli-pwa}
+      OIDC_LOGOUT_FLOW: ${VITE_OIDC_LOGOUT_FLOW:-trifylli-invalidation}
+      OUCHTRACKER_URL: ${VITE_OUCHTRACKER_URL:-http://localhost:9100}
+    ports:
+      - '${WEB_PORT:-8080}:80'
+    depends_on:
+      - api
+
+  # ─────────────────── OuchTracker (φαρμακεία) — profile: full ───────────────────
+  # Μέρος της ίδιας στοίβας: κοινό Postgres (βάση `ouchtracker`), κοινό Authentik
+  # (SSO), ίδιο δίκτυο. Χτίζεται από το γειτονικό repo `../OuchTracker`.
+  ouchtracker-backend:
+    profiles: ['full']
+    build:
+      context: ../OuchTracker/backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    # Το nginx του frontend κάνει proxy στο `http://backend:3000`.
+    networks:
+      default:
+        aliases:
+          - backend
+    environment:
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-trifylli}:${POSTGRES_PASSWORD:-trifylli}@postgres:5432/${OUCHTRACKER_DB:-ouchtracker}?schema=public
+      CORS_ORIGIN: ${VITE_OUCHTRACKER_URL:-http://localhost:9100}
+      JWT_SECRET: ${OUCHTRACKER_JWT_SECRET:-dev-ouchtracker-jwt-secret}
+      JWT_EXPIRES_IN: 8h
+      SEED_ADMIN_EMAIL: ${OUCHTRACKER_EMAIL:-admin@ouchtracker.local}
+      SEED_ADMIN_PASSWORD: ${OUCHTRACKER_PASSWORD:-admin}
+      SEED_ADMIN_NAME: System Admin
+      # SSO — ίδιο Authentik (2ο OIDC app `ouchtracker`).
+      OIDC_ISSUER: ${OUCHTRACKER_OIDC_ISSUER:-http://localhost:9010/application/o/ouchtracker/}
+      OIDC_AUDIENCE: ${OUCHTRACKER_OIDC_AUDIENCE:-ouchtracker}
+      OIDC_JWKS_URI: ${OUCHTRACKER_OIDC_JWKS_URI:-http://authentik-server:9000/application/o/ouchtracker/jwks/}
+      OIDC_ADMIN_EMAILS: ${OUCHTRACKER_OIDC_ADMIN_EMAILS:-admin@trifylli.local,akadmin@trifylli.local}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  ouchtracker-frontend:
+    profiles: ['full']
+    build:
+      context: ../OuchTracker/frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      API_URL: /api
+      OIDC_AUTHORITY: ${OUCHTRACKER_OIDC_ISSUER:-http://localhost:9010/application/o/ouchtracker/}
+      OIDC_CLIENT_ID: ${OUCHTRACKER_OIDC_CLIENT_ID:-ouchtracker}
+    ports:
+      - '${OUCHTRACKER_WEB_PORT:-9100}:80'
+    depends_on:
+      - ouchtracker-backend
+
+volumes:
+  postgres-data:
+  redis-data:
+  authentik-media:
+  garage-data:
