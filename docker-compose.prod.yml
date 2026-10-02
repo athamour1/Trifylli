@@ -1,0 +1,284 @@
+# Παραγωγική στοίβα Trifylli.
+#
+# ΔΕΝ περιλαμβάνει TLS/reverse proxy — αυτά τα βάζει ο διαχειριστής ΜΠΡΟΣΤΑ από
+# τη στοίβα (nginx/Traefik/Caddy στον host). Οι υπηρεσίες δένονται στο
+# `BIND_ADDR` (default 127.0.0.1), ώστε να τις φτάνει μόνο ο τοπικός proxy και
+# ποτέ απευθείας το internet. Postgres/Redis δεν εκτίθενται καθόλου.
+#
+# Χρήση:
+#   cp .env.prod.example .env.prod   # και συμπλήρωσέ το με πραγματικά μυστικά
+#   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+#
+# Όλα τα μυστικά είναι ΥΠΟΧΡΕΩΤΙΚΑ (`${VAR:?...}`): αν λείπουν, το compose
+# σταματά αντί να σηκώσει στοίβα με αδύναμα defaults.
+
+name: trifylli-prod
+
+# Περιστροφή logs — χωρίς αυτό ένα json-file μεγαλώνει ανεξέλεγκτα.
+x-logging: &logging
+  logging:
+    driver: json-file
+    options:
+      max-size: '10m'
+      max-file: '3'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: always
+    <<: *logging
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-trifylli}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-trifylli}
+      AUTHENTIK_DB: ${AUTHENTIK_DB:-authentik}
+      OUCHTRACKER_DB: ${OUCHTRACKER_DB:-ouchtracker}
+    # Καμία θύρα προς τον host — η βάση μένει στο εσωτερικό δίκτυο.
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-trifylli} -d ${POSTGRES_DB:-trifylli}']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    <<: *logging
+    command: redis-server --save 60 1 --loglevel warning --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD-SHELL', 'redis-cli -a "$$REDIS_PASSWORD" ping | grep -q PONG']
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+
+  # ─────────────────────── Authentik (SSO) ───────────────────────
+  authentik-server:
+    image: ghcr.io/goauthentik/server:2025.2
+    restart: always
+    <<: *logging
+    command: server
+    environment: &authentik-env
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY:?AUTHENTIK_SECRET_KEY is required (openssl rand -base64 48)}
+      AUTHENTIK_REDIS__HOST: redis
+      AUTHENTIK_REDIS__PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+      AUTHENTIK_POSTGRESQL__HOST: postgres
+      AUTHENTIK_POSTGRESQL__USER: ${POSTGRES_USER:-trifylli}
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      AUTHENTIK_POSTGRESQL__NAME: ${AUTHENTIK_DB:-authentik}
+      # Μόνο για το πρώτο boot (δημιουργία αρχικού διαχειριστή Authentik).
+      AUTHENTIK_BOOTSTRAP_EMAIL: ${AUTHENTIK_BOOTSTRAP_EMAIL:-}
+      AUTHENTIK_BOOTSTRAP_PASSWORD: ${AUTHENTIK_BOOTSTRAP_PASSWORD:-}
+    volumes:
+      - authentik-media:/media
+      # Το blueprint ορίζει τον OIDC provider. ΠΡΟΣΟΧΗ: τα redirect URIs μέσα
+      # στο trifylli-oidc.yaml είναι localhost — για production άλλαξέ τα στο
+      # πραγματικό domain (TRIFYLLI_APP_URL + redirect_uris).
+      - ./infra/authentik:/blueprints/custom:ro
+      - ./infra/authentik/branding:/media/public:ro
+      - ./infra/authentik/branding/custom.css:/web/dist/custom.css:ro
+    ports:
+      - '${BIND_ADDR:-127.0.0.1}:${AUTHENTIK_PORT:-9010}:9000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  authentik-worker:
+    image: ghcr.io/goauthentik/server:2025.2
+    restart: always
+    <<: *logging
+    command: worker
+    environment: *authentik-env
+    volumes:
+      - authentik-media:/media
+      - ./infra/authentik:/blueprints/custom:ro
+      - ./infra/authentik/branding:/media/public:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ─────────────────────── Object storage (Garage) ───────────────────────
+  # S3-compatible αποθήκευση αρχείων (αποδείξεις, εικόνες markdown).
+  garage:
+    image: dxflrs/garage:v1.1.0
+    restart: always
+    <<: *logging
+    environment:
+      GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:?GARAGE_RPC_SECRET is required}
+      GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN:-}
+    volumes:
+      - ./infra/garage/garage.toml:/etc/garage.toml:ro
+      - garage-data:/var/lib/garage
+    # Καμία θύρα προς τον host — το API το φτάνει μέσα από το δίκτυο.
+
+  # One-shot: layout + bucket + σταθερό key (idempotent).
+  garage-init:
+    build:
+      context: ./infra/garage
+      dockerfile: Dockerfile
+    restart: on-failure
+    <<: *logging
+    environment:
+      GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:?GARAGE_RPC_SECRET is required}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?S3_ACCESS_KEY_ID is required}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?S3_SECRET_ACCESS_KEY is required}
+    volumes:
+      - ./infra/garage/garage.toml:/etc/garage.toml:ro
+      - garage-data:/var/lib/garage
+    depends_on:
+      - garage
+
+  # ─────────────────── Migrations (one-shot) ───────────────────
+  # Τρέχει `prisma migrate deploy` και τερματίζει. Το API ΔΕΝ ξεκινά πριν
+  # ολοκληρωθεί, ώστε κάθε deploy να φέρνει τη βάση στο σωστό σχήμα πρώτα.
+  migrate:
+    image: trifylli-api:${TAG:-latest}
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: 'no'
+    <<: *logging
+    working_dir: /repo/apps/api
+    command: ['node_modules/.bin/prisma', 'migrate', 'deploy']
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-trifylli}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-trifylli}?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ─────────────────────────── API ────────────────────────────
+  api:
+    image: trifylli-api:${TAG:-latest}
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: always
+    <<: *logging
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-trifylli}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-trifylli}?schema=public
+      # Το origin του browser (του reverse proxy), π.χ. https://app.trifylli.gr
+      CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS is required}
+      # Πρέπει να ταιριάζει ΑΚΡΙΒΩΣ με τον issuer του token (δημόσιο URL Authentik).
+      OIDC_ISSUER: ${OIDC_ISSUER:?OIDC_ISSUER is required}
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE:-trifylli-pwa}
+      OIDC_JWKS_URI: ${OIDC_JWKS_URI:?OIDC_JWKS_URI is required}
+      SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL:?SUPER_ADMIN_EMAIL is required}
+      # ── Αποθήκευση αρχείων (Garage S3) ──
+      S3_ENDPOINT: http://garage:3900
+      S3_REGION: ${S3_REGION:-garage}
+      S3_BUCKET: ${S3_BUCKET:-trifylli}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?S3_ACCESS_KEY_ID is required}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?S3_SECRET_ACCESS_KEY is required}
+      S3_FORCE_PATH_STYLE: 'true'
+      # ── Προαιρετικές ενσωματώσεις ──
+      # Το OuchTracker ζει στην ίδια στοίβα — εσωτερικό όνομα υπηρεσίας.
+      OUCHTRACKER_BASE_URL: ${OUCHTRACKER_BASE_URL:-http://ouchtracker-backend:3000}
+      OUCHTRACKER_EMAIL: ${OUCHTRACKER_EMAIL:-}
+      OUCHTRACKER_PASSWORD: ${OUCHTRACKER_PASSWORD:-}
+      ESEO_BASE_URL: ${ESEO_BASE_URL:-}
+      ESEO_REALM: ${ESEO_REALM:-eseo}
+      ESEO_CLIENT_ID: ${ESEO_CLIENT_ID:-ssoClient}
+      ESEO_REFRESH_TOKEN: ${ESEO_REFRESH_TOKEN:-}
+      ESEO_WEBHOOK_SECRET: ${ESEO_WEBHOOK_SECRET:-}
+      SYNC_ENABLED: ${SYNC_ENABLED:-true}
+    ports:
+      - '${BIND_ADDR:-127.0.0.1}:${API_PORT:-3000}:3000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      garage-init:
+        condition: service_completed_successfully
+
+  # ─────────────────────────── Web (PWA) ──────────────────────
+  web:
+    image: trifylli-web:${TAG:-latest}
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: always
+    # Ρυθμίσεις runtime (ο entrypoint γράφει το /config.js) — ίδια image για κάθε
+    # περιβάλλον, καμία ανάγκη rebuild όταν αλλάζει ένα URL.
+    environment:
+      API_URL: ${VITE_API_URL:?VITE_API_URL is required (π.χ. https://api.trifylli.gr/api)}
+      OIDC_AUTHORITY: ${VITE_OIDC_AUTHORITY:?VITE_OIDC_AUTHORITY is required}
+      OIDC_CLIENT_ID: ${VITE_OIDC_CLIENT_ID:-trifylli-pwa}
+      OIDC_LOGOUT_FLOW: ${VITE_OIDC_LOGOUT_FLOW:-trifylli-invalidation}
+      # URL του OuchTracker — στόχος των deep-links των φαρμακείων.
+      OUCHTRACKER_URL: ${VITE_OUCHTRACKER_URL:-}
+    <<: *logging
+    ports:
+      - '${BIND_ADDR:-127.0.0.1}:${WEB_PORT:-8080}:80'
+    depends_on:
+      - api
+
+  # ─────────────────── OuchTracker (φαρμακεία) ───────────────────
+  # Μοιράζεται Postgres (δική του βάση), Authentik (SSO) και το ίδιο domain
+  # (υποτομέας) με το Trifylli. Το backend κάνει μόνο του migrate+seed στην
+  # εκκίνηση (βλ. Dockerfile CMD). Χτίζεται από το γειτονικό repo `../OuchTracker`.
+  ouchtracker-backend:
+    image: ouchtracker-backend:${TAG:-latest}
+    build:
+      context: ../OuchTracker/backend
+      dockerfile: Dockerfile
+    restart: always
+    <<: *logging
+    # Το nginx του frontend κάνει proxy στο `http://backend:3000` — δίνουμε
+    # alias ώστε να μη χρειάζεται αλλαγή στο OuchTracker.
+    networks:
+      default:
+        aliases:
+          - backend
+    environment:
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-trifylli}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${OUCHTRACKER_DB:-ouchtracker}?schema=public
+      CORS_ORIGIN: ${OUCHTRACKER_CORS_ORIGIN:?OUCHTRACKER_CORS_ORIGIN is required (π.χ. https://ouch.trifylli.gr)}
+      JWT_SECRET: ${OUCHTRACKER_JWT_SECRET:?OUCHTRACKER_JWT_SECRET is required}
+      JWT_EXPIRES_IN: ${OUCHTRACKER_JWT_EXPIRES_IN:-8h}
+      SEED_ADMIN_EMAIL: ${OUCHTRACKER_SEED_ADMIN_EMAIL:-admin@ouchtracker.local}
+      SEED_ADMIN_PASSWORD: ${OUCHTRACKER_SEED_ADMIN_PASSWORD:?OUCHTRACKER_SEED_ADMIN_PASSWORD is required}
+      SEED_ADMIN_NAME: ${OUCHTRACKER_SEED_ADMIN_NAME:-System Admin}
+      # ── Single sign-on (ίδιο Authentik με το Trifylli) ──
+      OIDC_ISSUER: ${OUCHTRACKER_OIDC_ISSUER:?OUCHTRACKER_OIDC_ISSUER is required (π.χ. https://id.trifylli.gr/application/o/ouchtracker/)}
+      OIDC_AUDIENCE: ${OUCHTRACKER_OIDC_AUDIENCE:-ouchtracker}
+      OIDC_JWKS_URI: ${OUCHTRACKER_OIDC_JWKS_URI:-http://authentik-server:9000/application/o/ouchtracker/jwks/}
+      OIDC_ADMIN_EMAILS: ${OUCHTRACKER_OIDC_ADMIN_EMAILS:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  ouchtracker-frontend:
+    image: ouchtracker-frontend:${TAG:-latest}
+    build:
+      context: ../OuchTracker/frontend
+      dockerfile: Dockerfile
+    restart: always
+    <<: *logging
+    environment:
+      # Το nginx κάνει proxy /api → backend· σχετικό URL στο ίδιο origin.
+      API_URL: ${OUCHTRACKER_API_URL:-/api}
+      OIDC_AUTHORITY: ${OUCHTRACKER_OIDC_ISSUER:?OUCHTRACKER_OIDC_ISSUER is required}
+      OIDC_CLIENT_ID: ${OUCHTRACKER_OIDC_CLIENT_ID:-ouchtracker}
+    ports:
+      - '${BIND_ADDR:-127.0.0.1}:${OUCHTRACKER_WEB_PORT:-8081}:80'
+    depends_on:
+      - ouchtracker-backend
+
+volumes:
+  postgres-data:
+  redis-data:
+  authentik-media:
+  garage-data:
