@@ -7,7 +7,12 @@
 #
 # Χρήση:
 #   cp .env.prod.example .env.prod   # και συμπλήρωσέ το με πραγματικά μυστικά
-#   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+#   docker compose -f docker-compose.prod.yml --env-file .env.prod pull
+#   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
+#
+# Τα images έρχονται ΕΤΟΙΜΑ από το GHCR (κανένα τοπικό build):
+#   trifylli:  ./release.sh  →  ghcr.io/athamour1/trifylli/{api,web}
+#   ouchtracker: (στο repo του) ./release.sh  →  ghcr.io/athamour1/ouchtracker/{backend,frontend}
 #
 # Όλα τα μυστικά είναι ΥΠΟΧΡΕΩΤΙΚΑ (`${VAR:?...}`): αν λείπουν, το compose
 # σταματά αντί να σηκώσει στοίβα με αδύναμα defaults.
@@ -123,17 +128,33 @@ services:
 
   # One-shot: layout + bucket + σταθερό key (idempotent).
   garage-init:
-    build:
-      context: ./infra/garage
-      dockerfile: Dockerfile
+    # Το dxflrs/garage δεν έχει shell· αντί για τοπικό build, κατεβάζουμε το
+    # στατικό binary πάνω σε stock alpine και τρέχουμε το (idempotent) bootstrap.
+    image: alpine:3.20
     restart: on-failure
     <<: *logging
+    entrypoint:
+      - sh
+      - -c
+      - |
+        set -e
+        apk add --no-cache ca-certificates wget >/dev/null
+        case "$$(uname -m)" in
+          x86_64) T=x86_64-unknown-linux-musl ;;
+          aarch64) T=aarch64-unknown-linux-musl ;;
+          *) echo "unsupported arch: $$(uname -m)"; exit 1 ;;
+        esac
+        echo "[garage-init] fetching garage v1.1.0 ($$T)..."
+        wget -qO /usr/local/bin/garage "https://garagehq.deuxfleurs.fr/_releases/v1.1.0/$$T/garage"
+        chmod +x /usr/local/bin/garage
+        exec sh /bootstrap.sh
     environment:
       GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:?GARAGE_RPC_SECRET is required}
       S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?S3_ACCESS_KEY_ID is required}
       S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?S3_SECRET_ACCESS_KEY is required}
     volumes:
       - ./infra/garage/garage.toml:/etc/garage.toml:ro
+      - ./infra/garage/bootstrap.sh:/bootstrap.sh:ro
       - garage-data:/var/lib/garage
     depends_on:
       - garage
@@ -142,10 +163,7 @@ services:
   # Τρέχει `prisma migrate deploy` και τερματίζει. Το API ΔΕΝ ξεκινά πριν
   # ολοκληρωθεί, ώστε κάθε deploy να φέρνει τη βάση στο σωστό σχήμα πρώτα.
   migrate:
-    image: trifylli-api:${TAG:-latest}
-    build:
-      context: .
-      dockerfile: apps/api/Dockerfile
+    image: ghcr.io/athamour1/trifylli/api:${TAG:-latest}
     restart: 'no'
     <<: *logging
     working_dir: /repo/apps/api
@@ -158,10 +176,7 @@ services:
 
   # ─────────────────────────── API ────────────────────────────
   api:
-    image: trifylli-api:${TAG:-latest}
-    build:
-      context: .
-      dockerfile: apps/api/Dockerfile
+    image: ghcr.io/athamour1/trifylli/api:${TAG:-latest}
     restart: always
     <<: *logging
     environment:
@@ -205,10 +220,7 @@ services:
 
   # ─────────────────────────── Web (PWA) ──────────────────────
   web:
-    image: trifylli-web:${TAG:-latest}
-    build:
-      context: .
-      dockerfile: apps/web/Dockerfile
+    image: ghcr.io/athamour1/trifylli/web:${TAG:-latest}
     restart: always
     # Ρυθμίσεις runtime (ο entrypoint γράφει το /config.js) — ίδια image για κάθε
     # περιβάλλον, καμία ανάγκη rebuild όταν αλλάζει ένα URL.
@@ -230,10 +242,7 @@ services:
   # (υποτομέας) με το Trifylli. Το backend κάνει μόνο του migrate+seed στην
   # εκκίνηση (βλ. Dockerfile CMD). Χτίζεται από το γειτονικό repo `../OuchTracker`.
   ouchtracker-backend:
-    image: ouchtracker-backend:${TAG:-latest}
-    build:
-      context: ../OuchTracker/backend
-      dockerfile: Dockerfile
+    image: ghcr.io/athamour1/ouchtracker/backend:${OUCHTRACKER_TAG:-latest}
     restart: always
     <<: *logging
     # Το nginx του frontend κάνει proxy στο `http://backend:3000` — δίνουμε
@@ -261,10 +270,7 @@ services:
         condition: service_healthy
 
   ouchtracker-frontend:
-    image: ouchtracker-frontend:${TAG:-latest}
-    build:
-      context: ../OuchTracker/frontend
-      dockerfile: Dockerfile
+    image: ghcr.io/athamour1/ouchtracker/frontend:${OUCHTRACKER_TAG:-latest}
     restart: always
     <<: *logging
     environment:
