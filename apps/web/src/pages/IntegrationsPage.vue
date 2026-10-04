@@ -93,6 +93,22 @@
             :icon="data?.ouchtracker.configured ? 'check' : 'block'"
             :label="data?.ouchtracker.configured ? 'Ρυθμισμένο' : 'Δεν έχει ρυθμιστεί'"
           />
+          <!-- Απευθείας άνοιγμα του διαχειριστικού OuchTracker (SSO: μπαίνει με
+               τον ίδιο λογαριασμό, χωρίς δεύτερη σύνδεση). Χρήσιμο όταν δεν
+               υπάρχει ακόμη συνδεδεμένο φαρμακείο για deep-link. -->
+          <q-btn
+            color="primary"
+            icon="open_in_new"
+            label="Άνοιγμα"
+            class="q-ml-sm"
+            :disable="!ouchBase"
+            @click="openOuchtracker"
+          />
+        </q-card-section>
+
+        <q-card-section v-if="!ouchBase" class="text-caption text-grey-7 q-pt-none">
+          Για το κουμπί «Άνοιγμα» όρισε τη διεύθυνση του OuchTracker
+          (<code>OUCHTRACKER_URL</code>) στις ρυθμίσεις του web container.
         </q-card-section>
       </q-card>
 
@@ -134,6 +150,7 @@ import PageState from '../components/PageState.vue';
 import { useAsyncData } from '../composables/useAsyncData';
 import { ApiError, post, get } from '../lib/api';
 import { formatDateTime } from '../lib/format';
+import { OUCHTRACKER_URL } from '../lib/runtime-config';
 import { useOfflineStore } from '../stores/offline';
 
 interface SyncRun {
@@ -165,6 +182,15 @@ interface SyncSummary {
 
 const $q = useQuasar();
 const offline = useOfflineStore();
+
+/** Βάση URL του OuchTracker (runtime config· χωρίς τελικό «/»). */
+const ouchBase = OUCHTRACKER_URL.replace(/\/$/, '');
+
+/** Ανοίγει το διαχειριστικό OuchTracker σε νέα καρτέλα (SSO auto-login). */
+function openOuchtracker(): void {
+  if (!ouchBase) return;
+  window.open(ouchBase, '_blank', 'noopener');
+}
 
 const { data, loading, error, stale, reload } = useAsyncData(
   () => get<IntegrationsStatus>('/integrations/status'),
