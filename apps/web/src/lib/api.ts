@@ -51,6 +51,11 @@ export function setAccessToken(token: string | null): void {
 
 http.interceptors.request.use((config) => {
   if (accessToken) config.headers.Authorization = `Bearer ${accessToken}`;
+  // Δυναμικά δεδομένα — ποτέ από το HTTP cache του browser. Χωρίς αυτό, μια
+  // παλιά απάντηση (που είχε cached ο browser) εξυπηρετείται ξανά και οι λίστες
+  // «κολλάνε» μετά από αλλαγές. Η offline λειτουργία καλύπτεται από τον service
+  // worker και το cache του `useAsyncData`, όχι από το HTTP cache.
+  config.headers['Cache-Control'] = 'no-cache';
   return config;
 });
 

@@ -34,6 +34,16 @@ async function bootstrap(): Promise<void> {
   app.use(helmet());
   app.enableCors({ origin: corsOrigins(config), credentials: true });
 
+  // Το API σερβίρει δυναμικά δεδομένα — όχι HTTP caching. Χωρίς αυτό, ο browser
+  // κρατά παλιές απαντήσεις (ETag → 304) και οι λίστες «κολλάνε» μετά από
+  // αλλαγές (π.χ. νέο/διαγραμμένο μέλος). Η offline λειτουργία καλύπτεται από
+  // τον service worker + το cache του `useAsyncData`, όχι από το HTTP cache.
+  app.getHttpAdapter().getInstance().set('etag', false);
+  app.use((_req: unknown, res: { setHeader(name: string, value: string): void }, next: () => void) => {
+    res.setHeader('Cache-Control', 'no-store');
+    next();
+  });
+
   app.useGlobalPipes(
     new ValidationPipe({
       transform: true,
