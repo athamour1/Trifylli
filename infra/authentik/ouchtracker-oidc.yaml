@@ -19,9 +19,12 @@ metadata:
     blueprints.goauthentik.io/instantiate: 'true'
 
 context:
-  # Πού επιστρέφει ο χρήστης μετά την αποσύνδεση — βάλε το πραγματικό URL του
-  # OuchTracker (ή πέρασέ το ως context στο `ak apply_blueprint`).
-  OUCHTRACKER_APP_URL: http://localhost:9100/
+  # Το δημόσιο URL του OuchTracker (με τελικό «/»). Οδηγεί redirect URIs,
+  # post-logout redirect και front-channel logout URI. Από το περιβάλλον του
+  # Authentik (`!Env`) ώστε **το ίδιο blueprint να δουλεύει dev και prod**: στο
+  # prod όρισε `OUCHTRACKER_APP_URL` στο authentik-server/worker (π.χ.
+  # https://ouch.trifylli.gr/)· αλλιώς localhost.
+  OUCHTRACKER_APP_URL: !Env [OUCHTRACKER_APP_URL, 'http://localhost:9100/']
 
 entries:
   # ── Ροή εξουσιοδότησης χωρίς κανένα βήμα (ίδια λογική με το Trifylli) ──
@@ -79,6 +82,12 @@ entries:
       client_id: ouchtracker
       sub_mode: hashed_user_id
 
+      # Το Authentik 2026.x απαιτεί ρητή δήλωση grant types (κενή λίστα =
+      # απόρριψη). Authorization Code + PKCE (+ refresh_token ως default).
+      grant_types:
+        - authorization_code
+        - refresh_token
+
       authorization_flow: !KeyOf ouchtracker-authorization-flow
       invalidation_flow: !KeyOf ouchtracker-invalidation-flow
 
@@ -110,6 +119,15 @@ entries:
           url: !Context OUCHTRACKER_APP_URL
 
       access_token_validity: minutes=30
+
+      # ── Single Logout (native front-channel — Authentik 2025.10+) ──
+      #
+      # Ίδια λογική με το Trifylli: στην αποσύνδεση από οποιαδήποτε εφαρμογή του
+      # SSO, το Authentik φορτώνει αυτό το URL σε κρυφό iframe (`?iss=&sid=`). Η
+      # σελίδα καθαρίζει το τοπικό session (localStorage) και σηκώνει σήμα, που οι
+      # ανοιχτές καρτέλες ακούν κι αποσυνδέονται άμεσα.
+      logout_uri: !Format ['%sauth/frontchannel-logout', !Context OUCHTRACKER_APP_URL]
+      logout_method: frontchannel
 
   - model: authentik_core.application
     id: ouchtracker-app

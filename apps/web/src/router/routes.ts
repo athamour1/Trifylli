@@ -146,6 +146,14 @@ const routes: RouteRecordRaw[] = [
         component: () => import('../pages/AuthSilentPage.vue'),
         meta: { public: true },
       },
+      {
+        // Front-channel Single Logout: το Authentik τη φορτώνει σε κρυφό iframe.
+        // Δημόσια (χωρίς guard): ο χρήστης αποσυνδέεται, δεν έχει πια συνεδρία.
+        path: 'frontchannel-logout',
+        name: 'auth-frontchannel-logout',
+        component: () => import('../pages/AuthFrontchannelLogoutPage.vue'),
+        meta: { public: true },
+      },
     ],
   },
 

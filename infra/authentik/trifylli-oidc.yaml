@@ -17,9 +17,12 @@ metadata:
     blueprints.goauthentik.io/instantiate: 'true'
 
 context:
-  # Πού επιστρέφει ο χρήστης μετά την αποσύνδεση. Άλλαξέ το σε πραγματικό
-  # στήσιμο (ή πέρασέ το ως context στο `ak apply_blueprint`).
-  TRIFYLLI_APP_URL: http://localhost:8080/
+  # Το δημόσιο URL της εφαρμογής (με τελικό «/»). Οδηγεί redirect URIs, launch
+  # URL, post-logout redirect και front-channel logout URI. Έρχεται από το
+  # περιβάλλον του Authentik (`!Env`) ώστε **το ίδιο blueprint να δουλεύει dev
+  # και prod** χωρίς χειροκίνητη αλλαγή: στο prod όρισε `TRIFYLLI_APP_URL` στο
+  # authentik-server/worker (π.χ. https://app.trifylli.gr/)· αλλιώς localhost.
+  TRIFYLLI_APP_URL: !Env [TRIFYLLI_APP_URL, 'http://localhost:8080/']
 
 entries:
   # ── Ροή εξουσιοδότησης χωρίς κανένα βήμα ──
@@ -108,6 +111,15 @@ entries:
       # Έτσι μια αλλαγή email στο Authentik δεν κλειδώνει κανέναν έξω.
       sub_mode: hashed_user_id
 
+      # Το Authentik 2026.x απαιτεί ρητή δήλωση των επιτρεπτών grant types (νέο
+      # πεδίο· κενή λίστα = κανένα, οπότε το authorize απορρίπτεται ως
+      # «malformed»). Η PWA χρησιμοποιεί Authorization Code + PKCE· το
+      # refresh_token μπαίνει ως standard default (δεν εκδίδεται χωρίς
+      # offline_access, αλλά δεν βλάπτει).
+      grant_types:
+        - authorization_code
+        - refresh_token
+
       authorization_flow: !KeyOf trifylli-authorization-flow
       invalidation_flow: !KeyOf trifylli-invalidation-flow
 
@@ -122,16 +134,15 @@ entries:
         - !Find [authentik_providers_oauth2.scopemapping, [managed, 'goauthentik.io/providers/oauth2/scope-email']]
 
       redirect_uris:
-        # Η θύρα 8080 είναι της PWA σε container (η ΚΥΡΙΑ — profile: full). Πρώτη
-        # στη λίστα γιατί το Authentik τη χρησιμοποιεί ως launch URL όταν αυτό
-        # δεν οριστεί ρητά.
+        # Κύριο URL εφαρμογής (από TRIFYLLI_APP_URL· dev→localhost:8080, prod→domain).
         - matching_mode: strict
-          url: http://localhost:8080/auth/callback
+          url: !Format ['%sauth/callback', !Context TRIFYLLI_APP_URL]
         - matching_mode: strict
-          url: http://localhost:8080/auth/silent
+          url: !Format ['%sauth/silent', !Context TRIFYLLI_APP_URL]
         - matching_mode: strict
-          url: http://localhost:8080/
-        # Η θύρα 9000 είναι του `quasar dev` (τοπικό hot-reload, εκτός container).
+          url: !Context TRIFYLLI_APP_URL
+        # Η θύρα 9000 είναι του `quasar dev` (τοπικό hot-reload, εκτός container) —
+        # μόνο development· στο prod απλώς δεν ταιριάζει ποτέ, ακίνδυνο.
         - matching_mode: strict
           url: http://localhost:9000/auth/callback
         - matching_mode: strict
@@ -144,6 +155,18 @@ entries:
       # ώρες μετά την αποχώρηση του χρήστη.
       access_token_validity: minutes=30
 
+      # ── Single Logout (native front-channel — Authentik 2025.10+) ──
+      #
+      # Όταν ο χρήστης αποσυνδεθεί από ΟΠΟΙΑΔΗΠΟΤΕ εφαρμογή του ίδιου SSO, το
+      # στάδιο `user_logout` της ροής αποσύνδεσης κάνει το Authentik να φορτώσει
+      # αυτό το URL σε κρυφό iframe, με `?iss=&sid=`. Η σελίδα καθαρίζει την
+      # τοπική συνεδρία και σηκώνει ένα σήμα στο localStorage· οι ανοιχτές
+      # καρτέλες το ακούν (storage event) κι αποσυνδέονται αμέσως. Έτσι το logout
+      # γίνεται παντού, άμεσα — χωρίς τα παλιά τεχνάσματα (σύντομο token,
+      # flag-based logout στην εκκίνηση).
+      logout_uri: !Format ['%sauth/frontchannel-logout', !Context TRIFYLLI_APP_URL]
+      logout_method: frontchannel
+
   - model: authentik_core.application
     id: trifylli-app
     identifiers:
@@ -154,5 +177,5 @@ entries:
       meta_description: Διαχείριση Τοπικού Τμήματος Σ.Ε.Ο.
       meta_publisher: Σ.Ε.Ο.
       # Ρητό launch URL: αλλιώς το Authentik πέφτει στο πρώτο redirect_uri.
-      meta_launch_url: http://localhost:8080/
+      meta_launch_url: !Context TRIFYLLI_APP_URL
       open_in_new_tab: false

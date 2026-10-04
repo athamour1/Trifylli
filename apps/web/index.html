@@ -18,6 +18,25 @@
     />
     <!-- Ρυθμίσεις χρόνου εκτέλεσης — πριν φορτώσει η εφαρμογή. -->
     <script src="/config.js"></script>
+    <!--
+      Front-channel Single Logout — τρέχει ΑΜΕΣΩΣ, πριν φορτώσει η εφαρμογή.
+
+      Το Authentik φορτώνει το /auth/frontchannel-logout σε κρυφό iframe με πολύ
+      σύντομη ζωή· το βαρύ boot της PWA (lazy route chunk, mount) δεν προλαβαίνει.
+      Γι' αυτό σηκώνουμε εδώ, inline, το σήμα στο localStorage (κοινό σε όλες τις
+      καρτέλες): η κύρια καρτέλα το ακούει (storage event) κι αποσυνδέεται.
+    -->
+    <script>
+      (function () {
+        try {
+          if (location.pathname === '/auth/frontchannel-logout') {
+            localStorage.setItem('trifylli:slo', String(Date.now()));
+          }
+        } catch (e) {
+          /* ιδιωτική περιήγηση — η κύρια καρτέλα αποσυνδέεται στην επόμενη ανανέωση */
+        }
+      })();
+    </script>
   </head>
   <body>
     <!-- quasar:entry-point -->
