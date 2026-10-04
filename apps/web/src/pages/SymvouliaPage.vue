@@ -74,6 +74,7 @@
               <q-badge
                 v-if="s._count.participants"
                 outline
+                color="klados"
                 class="q-mr-sm"
                 :label="`${s._count.participants} στελέχη`"
               />

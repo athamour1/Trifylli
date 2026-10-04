@@ -1,7 +1,7 @@
 <template>
   <q-page padding>
     <div class="row items-center justify-between q-mb-md">
-      <div class="page-title">{{ inKlados ? `Ημερολόγιο ${kladosLabel}` : 'Κεντρικό ημερολόγιο' }}</div>
+      <div class="page-title">{{ inKlados ? `Ημερολόγιο — ${kladosLabel}` : 'Κεντρικό ημερολόγιο' }}</div>
       <q-btn-toggle
         v-model="view"
         dense
