@@ -10,12 +10,12 @@ export class PaginationDto {
   @Min(1)
   page = 1;
 
-  @ApiPropertyOptional({ minimum: 1, maximum: 200, default: 25 })
+  @ApiPropertyOptional({ minimum: 1, maximum: 1000, default: 25 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  @Max(200)
+  @Max(1000)
   pageSize = 25;
 
   get skip(): number {

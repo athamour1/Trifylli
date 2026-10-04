@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { MemberKind, MemberStatus, Prisma } from '@prisma/client';
+import { MemberKind, MemberStatus, Prisma, SyndromiStatus } from '@prisma/client';
 import {
   deriveLeaderProfile,
   KLADOS_META,
@@ -217,6 +217,23 @@ type MemberRow = Prisma.UserGetPayload<{
   };
 }>;
 
+/** Διαβάζει τις συναινέσεις από το ελεύθερο `eseoPayload` (κλειδιά του e-SEO). */
+function consentsFromPayload(payload: Prisma.JsonValue | null | undefined): {
+  gdpr: boolean;
+  photo: boolean;
+} {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return { gdpr: false, photo: false };
+  }
+  const p = payload as Record<string, unknown>;
+  // Για ανήλικα η άδεια δίνεται από τον γονέα (`parentPhotoPermission`), για
+  // ενήλικες από το ίδιο το μέλος (`photoPermission`) — αρκεί ένα από τα δύο.
+  return {
+    gdpr: p.gdprConsent === true,
+    photo: p.photoPermission === true || p.parentPhotoPermission === true,
+  };
+}
+
 function toSummary(row: MemberRow | (Omit<MemberRow, 'syndromes'> & { syndromes?: false })): MemberSummary {
   const membership = row.memberships.find((m) => !m.leftAt) ?? row.memberships[0];
   const syndromes = Array.isArray(row.syndromes) ? row.syndromes : [];
@@ -224,6 +241,7 @@ function toSummary(row: MemberRow | (Omit<MemberRow, 'syndromes'> & { syndromes?
     (sum, s) => sum + Math.max(0, Number(s.amountDue) - Number(s.amountPaid)),
     0,
   );
+  const consents = consentsFromPayload(row.eseoPayload);
 
   // Θέση στελέχους από τα ενεργά πτυχία (κλάδος+ρόλος / θέση Τοπικού / ΣΟΣ).
   const leader = deriveLeaderProfile(row.licenses);
@@ -241,6 +259,10 @@ function toSummary(row: MemberRow | (Omit<MemberRow, 'syndromes'> & { syndromes?
     leaderTitle: primary?.title ?? leader.topikoTitles[0] ?? null,
     isSOS: leader.isSOS,
     birthDate: row.birthDate ? row.birthDate.toISOString().slice(0, 10) : null,
+    age: ageInYears(row.birthDate),
+    gdprConsent: consents.gdpr,
+    photoConsent: consents.photo,
+    syndromiPaid: syndromes.some((s) => s.status === SyndromiStatus.PLIROMENI),
     balanceDue: Number(balanceDue.toFixed(2)),
   };
 }
