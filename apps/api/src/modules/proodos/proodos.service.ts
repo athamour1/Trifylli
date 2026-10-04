@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { ProodosStatus } from '@prisma/client';
+import { MemberKind, ProodosStatus } from '@prisma/client';
 import { PROODOS_STATUS_LABEL, type KladosType } from '@trifylli/shared';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
@@ -62,7 +62,9 @@ export class ProodosService {
           topikoId: user.topikoId,
           archivedAt: null,
           status: 'ENERGO',
-          memberships: { some: { kladosId, leftAt: null } },
+          // Μόνο τα (ανήλικα) μέλη του κλάδου — όχι τα στελέχη: η ατομική πρόοδος
+          // (Υπόσχεση/Μονοπάτια/Πτυχία/Κορυφές) αφορά τους οδηγούς, όχι τους ενήλικες.
+          memberships: { some: { kladosId, leftAt: null, kind: MemberKind.MELOS } },
         },
         orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
         select: {
@@ -223,7 +225,9 @@ export class ProodosService {
         topikoId: user.topikoId,
         archivedAt: null,
         status: 'ENERGO',
-        memberships: { some: { kladosId, leftAt: null } },
+        // Μόνο τα (ανήλικα) μέλη του κλάδου — όχι τα στελέχη: η ατομική πρόοδος
+        // αφορά τους οδηγούς/ανήλικα μέλη, όχι τους ενήλικες αρχηγούς.
+        memberships: { some: { kladosId, leftAt: null, kind: MemberKind.MELOS } },
       },
       orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
       select: {
