@@ -20,7 +20,7 @@
       </div>
 
       <div class="row q-gutter-sm q-mb-md">
-        <q-btn v-if="canCheckout" color="klados" text-color="klados-on" no-caps icon="volunteer_activism" label="Δανεισμός σε κλάδο" @click="openLend" />
+        <q-btn v-if="canLend" color="klados" text-color="klados-on" no-caps icon="volunteer_activism" label="Δανεισμός" @click="openLend" />
       </div>
 
       <q-separator class="q-mb-md" />
@@ -49,12 +49,74 @@
         <div>
           <div class="row items-center justify-between q-mb-xs">
             <div class="section-title">Βλάβες & επιδιορθώσεις</div>
-            <q-btn v-if="canManage" flat dense no-caps color="klados" icon="add" label="Σημείωση" @click="openMaintenance" />
+            <q-btn
+              v-if="canManage"
+              flat dense no-caps color="klados"
+              :icon="showMaintForm ? 'close' : 'add'"
+              :label="showMaintForm ? 'Κλείσιμο' : 'Σημείωση'"
+              @click="toggleMaintForm"
+            />
           </div>
+
+          <!-- Νέα σημείωση: ανοίγει επιτόπου (όχι ξεχωριστό dialog). -->
+          <q-slide-transition>
+            <q-card v-if="showMaintForm" flat bordered class="maint-form q-mb-sm">
+              <q-card-section class="q-gutter-md">
+                <div class="text-subtitle2 text-weight-medium">Νέα σημείωση</div>
+                <q-select
+                  v-model="maint.kind"
+                  :options="kindOptions"
+                  label="Είδος *"
+                  outlined dense emit-value map-options
+                />
+                <q-input
+                  v-model="maint.note"
+                  label="Περιγραφή *"
+                  outlined dense type="textarea" autogrow
+                />
+                <div class="row q-col-gutter-sm items-start">
+                  <div :class="maint.kind === 'REPAIR' ? 'col-12 col-sm-6' : 'col-12'">
+                    <DateField v-model="maint.date" label="Ημερομηνία" />
+                  </div>
+                  <div v-if="maint.kind === 'REPAIR'" class="col-12 col-sm-6">
+                    <q-input
+                      v-model.number="maint.cost"
+                      type="number"
+                      label="Κόστος €"
+                      outlined dense :min="0" step="0.01"
+                    >
+                      <template #prepend>
+                        <q-icon name="euro" :style="{ color: 'var(--klados-ink)' }" />
+                      </template>
+                    </q-input>
+                  </div>
+                </div>
+                <!--
+                  Η χρέωση πάει αυτόματα στο ταμείο της εμβέλειας από την οποία
+                  ανοίχτηκε το υλικό (κλάδος ή Τοπικό) — χωρίς επιλογή, πιο καθαρό.
+                -->
+                <div
+                  v-if="maint.kind === 'REPAIR' && (maint.cost ?? 0) > 0"
+                  class="charge-note row items-center no-wrap"
+                >
+                  <q-icon name="account_balance_wallet" size="18px" class="q-mr-xs" :style="{ color: 'var(--klados-ink)' }" />
+                  <span>Το κόστος θα χρεωθεί στο ταμείο <strong>{{ chargeScopeLabel }}</strong>.</span>
+                </div>
+              </q-card-section>
+              <q-card-actions align="right" class="q-pt-none">
+                <q-btn flat no-caps label="Άκυρο" @click="showMaintForm = false" />
+                <q-btn
+                  color="klados" text-color="klados-on" no-caps label="Προσθήκη"
+                  :loading="busy" @click="submitMaintenance"
+                />
+              </q-card-actions>
+            </q-card>
+          </q-slide-transition>
+
           <q-list v-if="data.maintenance.length" dense separator>
             <q-item v-for="m in data.maintenance" :key="m.id" class="q-px-none">
               <q-item-section avatar>
-                <q-icon :name="m.kind === 'REPAIR' ? 'build' : 'report_problem'" :color="m.kind === 'REPAIR' ? 'positive' : 'warning'" size="20px" />
+                <q-icon :name="m.kind === 'REPAIR' ? 'build' : 'report_problem'" :color="m.kind === 'REPAIR' ? 'klados' : 'warning'" size="20px" />
               </q-item-section>
               <q-item-section>
                 <q-item-label>{{ m.note }}</q-item-label>
@@ -94,13 +156,13 @@
     <!-- ── Δανεισμός ── -->
     <q-dialog v-model="lendDialog">
       <q-card style="min-width: min(360px, 92vw)">
-        <q-card-section class="text-subtitle1 text-weight-medium">Δανεισμός σε κλάδο</q-card-section>
+        <q-card-section class="text-subtitle1 text-weight-medium">Δανεισμός</q-card-section>
         <q-card-section class="q-gutter-md">
-          <q-select v-model="lend.klados" :options="kladosOptions" label="Κλάδος *" outlined dense emit-value map-options />
+          <q-select v-model="lend.klados" :options="kladosOptions" label="Σε ποιον δανείζεται *" outlined dense emit-value map-options />
           <q-input v-model.number="lend.qty" type="number" label="Ποσότητα *" outlined dense :min="1" />
           <div class="row q-col-gutter-sm">
-            <div class="col-6"><q-input v-model="lend.from" type="date" label="Από *" outlined dense /></div>
-            <div class="col-6"><q-input v-model="lend.to" type="date" label="Έως *" outlined dense /></div>
+            <div class="col-6"><DateField v-model="lend.from" label="Από *" /></div>
+            <div class="col-6"><DateField v-model="lend.to" label="Έως *" /></div>
           </div>
         </q-card-section>
         <q-card-section v-if="lendError" class="bg-red-1 text-negative">{{ lendError }}</q-card-section>
@@ -127,24 +189,6 @@
       </q-card>
     </q-dialog>
 
-    <!-- ── Σημείωση συντήρησης ── -->
-    <q-dialog v-model="maintDialog">
-      <q-card style="min-width: min(380px, 92vw)">
-        <q-card-section class="text-subtitle1 text-weight-medium">Νέα σημείωση</q-card-section>
-        <q-card-section class="q-gutter-md">
-          <q-select v-model="maint.kind" :options="kindOptions" label="Είδος *" outlined dense emit-value map-options />
-          <q-input v-model="maint.note" label="Περιγραφή *" outlined dense type="textarea" autogrow />
-          <div class="row q-col-gutter-sm">
-            <div class="col-6"><q-input v-model.number="maint.cost" type="number" label="Κόστος €" outlined dense :min="0" /></div>
-            <div class="col-6"><q-input v-model="maint.date" type="date" label="Ημερομηνία" outlined dense /></div>
-          </div>
-        </q-card-section>
-        <q-card-actions align="right">
-          <q-btn flat label="Άκυρο" v-close-popup />
-          <q-btn color="klados" text-color="klados-on" label="Προσθήκη" :loading="busy" @click="submitMaintenance" />
-        </q-card-actions>
-      </q-card>
-    </q-dialog>
   </div>
 </template>
 
@@ -153,6 +197,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useQuasar } from 'quasar';
 import QRCode from 'qrcode';
 import {
+  KLADOI_IN_ORDER,
   KLADOS_LABEL,
   MAINTENANCE_KIND_LABEL,
   RETURN_CONDITION_LABEL,
@@ -165,8 +210,13 @@ import {
 import { ApiError, del, get, patch, post } from '../lib/api';
 import { formatDate, formatEuro, toISODate } from '../lib/format';
 import { useAuthStore } from '../stores/auth';
+import DateField from './DateField.vue';
 
-const props = defineProps<{ ylikoId: string }>();
+const props = defineProps<{
+  ylikoId: string;
+  /** Η εμβέλεια της σελίδας: κλάδος ή `null` για Τοπικό (Κεντρική αποθήκη). */
+  scopeKlados: KladosType | null;
+}>();
 const emit = defineEmits<{ changed: []; loaded: [klados: KladosType | null] }>();
 
 interface Checkout {
@@ -177,6 +227,7 @@ interface Checkout {
   to: string;
   returnedQty: number | null;
   returnCondition: string | null;
+  klados: { type: KladosType } | null;
   drasi: { title: string } | null;
   syggentrwsh: { date: string } | null;
   requestedBy: { firstName: string; lastName: string } | null;
@@ -203,11 +254,18 @@ interface Detail {
 
 const $q = useQuasar();
 const auth = useAuthStore();
-// Υλικό κλάδου: ο διαχειριστής του κλάδου· κεντρικό υλικό: μόνο ο υπερδιαχειριστής.
+// Η διαχείριση ακολουθεί την **εμβέλεια της σελίδας**: ο διαχειριστής κλάδου στη
+// σελίδα του κλάδου, ο υπερδιαχειριστής στην Κεντρική αποθήκη (Τοπικό). Ό,τι
+// σημείωση/επισκευή γίνεται, χρεώνεται στο ίδιο ταμείο (βλ. chargeScopeLabel).
 const canManage = computed(() =>
-  data.value?.klados ? auth.can('yliko:manage', data.value.klados.type) : auth.isSuperAdmin,
+  props.scopeKlados ? auth.can('yliko:manage', props.scopeKlados) : auth.isSuperAdmin,
 );
 const canCheckout = computed(() => auth.can('yliko:checkout'));
+
+/** Το ταμείο που χρεώνεται η επισκευή = η εμβέλεια της σελίδας. */
+const chargeScopeLabel = computed(() =>
+  props.scopeKlados ? KLADOS_LABEL[props.scopeKlados] : 'Τοπικό',
+);
 
 const data = ref<Detail | null>(null);
 const loading = ref(false);
@@ -261,7 +319,37 @@ async function downloadQr(): Promise<void> {
   }
 }
 
-const kladosOptions = computed(() => auth.kladoi.map((k) => ({ label: k.label, value: k.type })));
+// Σεντινέλα για «δανεισμός στο Τοπικό» (όπως στα φαρμακεία): η τιμή αυτή σημαίνει
+// ότι ο παραλήπτης είναι το Τοπικό, οπότε στο αίτημα παραλείπουμε τον κλάδο.
+const TOPIKO = '__TOPIKO__';
+
+/**
+ * Παραλήπτες δανεισμού: όλοι οι κλάδοι εκτός του ιδιοκτήτη, συν το Τοπικό όταν το
+ * είδος ανήκει σε κλάδο. Έτσι ένας κλάδος δανείζει σε οποιονδήποτε άλλο ή στο
+ * Τοπικό — ακριβώς όπως τα φαρμακεία.
+ */
+const kladosOptions = computed(() => {
+  const owner = data.value?.klados?.type ?? null;
+  const opts = KLADOI_IN_ORDER.filter((k) => k !== owner).map((k) => ({
+    label: KLADOS_LABEL[k],
+    value: k as string,
+  }));
+  if (owner !== null) opts.push({ label: 'Τοπικό', value: TOPIKO });
+  return opts;
+});
+
+/** Το είδος ανήκει στην εμβέλεια της σελίδας; (αλλιώς είναι δανεισμένο σ' αυτήν). */
+const isOwnedByScope = computed(() => (data.value?.klados?.type ?? null) === props.scopeKlados);
+
+/**
+ * Δανεισμός επιτρέπεται μόνο από την εμβέλεια που κατέχει το είδος: ο κάτοχος το
+ * δανείζει. Ο υπερδιαχειριστής μπορεί επιπλέον από την Κεντρική αποθήκη (Τοπικό)
+ * να δανείσει οτιδήποτε. Σε δανεισμένο είδος (π.χ. στη σελίδα του δανειζόμενου)
+ * το κουμπί κρύβεται.
+ */
+const canLend = computed(
+  () => canCheckout.value && (isOwnedByScope.value || (props.scopeKlados === null && auth.isSuperAdmin)),
+);
 const conditionOptions = (Object.keys(RETURN_CONDITION_LABEL) as ReturnCondition[]).map((v) => ({
   value: v,
   label: RETURN_CONDITION_LABEL[v],
@@ -274,11 +362,11 @@ const kindOptions = (Object.keys(MAINTENANCE_KIND_LABEL) as MaintenanceKind[]).m
 // ── Δανεισμός ──
 const lendDialog = ref(false);
 const lendError = ref<string | null>(null);
-const lend = reactive({ klados: null as KladosType | null, qty: 1, from: toISODate(new Date()), to: '' });
+const lend = reactive({ klados: null as string | null, qty: 1, from: toISODate(new Date()), to: '' });
 
 function openLend(): void {
   lendError.value = null;
-  lend.klados = auth.kladoi.length === 1 ? (auth.kladoi[0]?.type ?? null) : null;
+  lend.klados = null;
   lend.qty = 1;
   lend.from = toISODate(new Date());
   const inAWeek = new Date();
@@ -298,7 +386,8 @@ async function submitLend(): Promise<void> {
     await post('/yliko/checkouts', {
       ylikoId: props.ylikoId,
       qty: lend.qty,
-      kladosType: lend.klados,
+      // Τοπικό ⇒ παραλείπουμε τον κλάδο· αλλιώς ο κλάδος-παραλήπτης.
+      ...(lend.klados !== TOPIKO ? { kladosType: lend.klados } : {}),
       from: new Date(`${lend.from}T00:00:00`).toISOString(),
       to: new Date(`${lend.to}T23:59:59`).toISOString(),
     });
@@ -352,12 +441,26 @@ async function submitReturn(): Promise<void> {
 }
 
 // ── Συντήρηση ──
-const maintDialog = ref(false);
-const maint = reactive({ kind: 'DAMAGE' as MaintenanceKind, note: '', cost: null as number | null, date: toISODate(new Date()) });
+const showMaintForm = ref(false);
+const maint = reactive({
+  kind: 'DAMAGE' as MaintenanceKind,
+  note: '',
+  cost: null as number | null,
+  date: toISODate(new Date()),
+});
 
-function openMaintenance(): void {
-  Object.assign(maint, { kind: 'DAMAGE', note: '', cost: null, date: toISODate(new Date()) });
-  maintDialog.value = true;
+function toggleMaintForm(): void {
+  if (showMaintForm.value) {
+    showMaintForm.value = false;
+    return;
+  }
+  Object.assign(maint, {
+    kind: 'DAMAGE',
+    note: '',
+    cost: null,
+    date: toISODate(new Date()),
+  });
+  showMaintForm.value = true;
 }
 
 async function submitMaintenance(): Promise<void> {
@@ -365,15 +468,19 @@ async function submitMaintenance(): Promise<void> {
     $q.notify({ type: 'warning', message: 'Συμπλήρωσε περιγραφή.' });
     return;
   }
+  // Το κόστος μετράει μόνο στην επιδιόρθωση· χρεώνεται αυτόματα στην εμβέλεια
+  // της σελίδας (κλάδος ή Τοπικό).
+  const cost = maint.kind === 'REPAIR' && maint.cost != null && maint.cost > 0 ? maint.cost : undefined;
   busy.value = true;
   try {
     await post(`/yliko/${props.ylikoId}/maintenance`, {
       kind: maint.kind,
       note: maint.note.trim(),
-      cost: maint.cost ?? undefined,
+      cost,
+      chargeToKladosType: cost != null && props.scopeKlados ? props.scopeKlados : undefined,
       date: maint.date || undefined,
     });
-    maintDialog.value = false;
+    showMaintForm.value = false;
     await load();
     emit('changed');
   } catch (err) {
@@ -400,3 +507,17 @@ function removeMaintenance(id: string): void {
   });
 }
 </script>
+
+<style scoped>
+/* Η φόρμα νέας σημείωσης ξεχωρίζει διακριτικά με το χρώμα του κλάδου. */
+.maint-form {
+  border-color: color-mix(in srgb, var(--klados-color) 35%, transparent);
+  background: color-mix(in srgb, var(--klados-color) 5%, var(--q-card-bg, #fff));
+}
+
+/* Ενημέρωση για το ταμείο που χρεώνεται η επισκευή — όχι πεδίο, απλή γραμμή. */
+.charge-note {
+  font-size: 0.8rem;
+  color: var(--klados-ink);
+}
+</style>

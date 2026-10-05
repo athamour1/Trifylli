@@ -14,7 +14,7 @@ import {
 } from '@trifylli/shared';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
-import { assertKladosAccess, scopedKladoi } from '../../common/util/klados-scope';
+import { assertKladosAccess, assertScopeAccess, scopedKladoi } from '../../common/util/klados-scope';
 import { availableQty, peakReserved, type Interval } from './availability';
 import type {
   CreateMaintenanceDto,
@@ -37,6 +37,7 @@ export class YlikoService {
   async list(user: RequestUser, query: QueryYlikoDto): Promise<Paginated<YlikoAvailability>> {
     const window = readWindow(query);
     if (query.klados) assertKladosAccess(user, query.klados);
+    const scopeKladosId = query.klados ? await this.resolveKladosId(user, query.klados) : null;
 
     const where: Prisma.YlikoWhereInput = {
       topikoId: user.topikoId,
@@ -44,7 +45,20 @@ export class YlikoService {
       ...(query.category?.length ? { category: { in: query.category } } : {}),
       ...(query.q ? { name: { contains: query.q, mode: 'insensitive' } } : {}),
       ...(query.centralOnly ? { kladosId: null } : {}),
-      ...(query.klados ? { klados: { type: query.klados } } : {}),
+      // Σε εμβέλεια κλάδου: τα δικά του είδη **και** όσα του έχουν δανειστεί τώρα
+      // (ενεργή δέσμευση προς αυτόν) — όπως τα φαρμακεία δείχνουν «Δανεισμένο από».
+      ...(query.klados && !query.centralOnly
+        ? {
+            OR: [
+              { klados: { type: query.klados } },
+              {
+                checkouts: {
+                  some: { kladosId: scopeKladosId, status: { in: [...BLOCKING_CHECKOUT_STATUSES] } },
+                },
+              },
+            ],
+          }
+        : {}),
     };
 
     const [total, rows] = await this.prisma.$transaction([
@@ -57,23 +71,24 @@ export class YlikoService {
         include: {
           klados: { select: { type: true } },
           storagePoint: { select: { id: true, name: true } },
-          checkouts: window
-            ? {
-                where: {
-                  status: { in: [...BLOCKING_CHECKOUT_STATUSES] },
-                  from: { lt: window.to },
-                  to: { gt: window.from },
-                },
-                select: { qty: true, from: true, to: true },
-              }
-            : false,
+          // Όλες οι ενεργές δεσμεύσεις: για τη διαθεσιμότητα (peak στο παράθυρο)
+          // και για να ξεχωρίσουμε τι είναι δανεισμένο σε ποιον.
+          checkouts: {
+            where: { status: { in: [...BLOCKING_CHECKOUT_STATUSES] } },
+            select: { kladosId: true, qty: true, from: true, to: true },
+          },
         },
       }),
     ]);
 
     const items: YlikoAvailability[] = rows.map((row) => {
-      const reservations = 'checkouts' in row && Array.isArray(row.checkouts) ? row.checkouts : [];
+      const reservations = row.checkouts;
       const reserved = window ? peakReserved(reservations, window) : 0;
+      // Σε εμβέλεια κλάδου, ό,τι δεν ανήκει στον κλάδο επέστρεψε λόγω δανεισμού.
+      const borrowed = query.klados != null && row.kladosId !== scopeKladosId;
+      const myLoans = borrowed ? reservations.filter((c) => c.kladosId === scopeKladosId) : [];
+      const borrowedQty = myLoans.reduce((sum, c) => sum + c.qty, 0);
+      const borrowedUntil = myLoans.reduce<Date | null>((max, c) => (!max || c.to > max ? c.to : max), null);
       return {
         ylikoId: row.id,
         name: row.name,
@@ -82,6 +97,8 @@ export class YlikoService {
         reservedQty: reserved,
         availableQty: Math.max(0, row.totalQty - reserved),
         ownerKladosType: (row.klados?.type as KladosType | undefined) ?? null,
+        relation: borrowed ? ('BORROWED' as const) : ('OWNED' as const),
+        ...(borrowed ? { borrowedQty, borrowedUntil: borrowedUntil?.toISOString() ?? null } : {}),
         storagePointId: row.storagePointId ?? null,
         storagePointName: row.storagePoint?.name ?? null,
       };
@@ -109,6 +126,7 @@ export class YlikoService {
           orderBy: { from: 'desc' },
           take: 50,
           include: {
+            klados: { select: { type: true } },
             drasi: { select: { id: true, title: true, type: true } },
             syggentrwsh: { select: { id: true, date: true, klados: { select: { type: true } } } },
             requestedBy: { select: { id: true, firstName: true, lastName: true } },
@@ -271,6 +289,16 @@ export class YlikoService {
 
   // ──────────────────── Βλάβες & επιδιορθώσεις ────────────────────
 
+  /**
+   * Σημείωση βλάβης ή επιδιόρθωσης.
+   *
+   * Το **κόστος** αφορά μόνο τις επιδιορθώσεις (`REPAIR`) — μια βλάβη/φθορά δεν
+   * έχει χρέωση. Όταν μια επιδιόρθωση έχει κόστος, δημιουργείται αυτόματα κίνηση
+   * ταμείου (έξοδο, κατηγορία «Υλικό») στο ταμείο που την πλήρωσε: τον κλάδο που
+   * έκανε την επισκευή (π.χ. πριν επιστρέψει τη δέσμευση) ή το Τοπικό, για υλικό
+   * της γενικής αποθήκης. Η σημείωση και η κίνηση ταμείου συνδέονται, ώστε η
+   * διαγραφή της μίας να σβήνει και την άλλη.
+   */
   async addMaintenance(user: RequestUser, ylikoId: string, dto: CreateMaintenanceDto) {
     const yliko = await this.prisma.yliko.findFirst({
       where: { id: ylikoId, topikoId: user.topikoId },
@@ -279,16 +307,48 @@ export class YlikoService {
     if (!yliko) throw new NotFoundException('Το υλικό δεν βρέθηκε.');
     assertKladosAccess(user, yliko.klados?.type as KladosType | undefined);
 
-    return this.prisma.ylikoMaintenance.create({
-      data: {
-        ylikoId,
-        kind: dto.kind,
-        note: dto.note,
-        cost: dto.cost != null ? new Prisma.Decimal(dto.cost) : null,
-        date: dto.date ?? new Date(),
-        createdById: user.id,
-      },
-      include: { createdBy: { select: { firstName: true, lastName: true } } },
+    // Το κόστος μετράει μόνο στην επιδιόρθωση· σε βλάβη/φθορά το αγνοούμε.
+    const cost = dto.kind === 'REPAIR' && dto.cost != null && dto.cost > 0 ? dto.cost : null;
+    const date = dto.date ?? new Date();
+    const include = { createdBy: { select: { firstName: true, lastName: true } } };
+
+    if (cost == null) {
+      return this.prisma.ylikoMaintenance.create({
+        data: { ylikoId, kind: dto.kind, note: dto.note, cost: null, date, createdById: user.id },
+        include,
+      });
+    }
+
+    // Χρέωση: στον κλάδο που πλήρωσε την επισκευή ή στο Τοπικό (κενό).
+    const chargeKlados = dto.chargeToKladosType;
+    assertScopeAccess(user, 'treasury:manage', chargeKlados);
+    const chargeKladosId = chargeKlados ? await this.resolveKladosId(user, chargeKlados) : null;
+
+    return this.prisma.$transaction(async (tx) => {
+      const treasuryEntry = await tx.treasuryEntry.create({
+        data: {
+          topikoId: user.topikoId,
+          kladosId: chargeKladosId,
+          kind: 'EXPENSE',
+          category: 'YLIKO',
+          amount: new Prisma.Decimal(cost),
+          occurredAt: date,
+          description: `Επιδιόρθωση «${yliko.name}» — ${dto.note}`,
+          createdById: user.id,
+        },
+      });
+      return tx.ylikoMaintenance.create({
+        data: {
+          ylikoId,
+          kind: dto.kind,
+          note: dto.note,
+          cost: new Prisma.Decimal(cost),
+          date,
+          createdById: user.id,
+          treasuryEntryId: treasuryEntry.id,
+        },
+        include,
+      });
     });
   }
 
@@ -299,7 +359,14 @@ export class YlikoService {
     });
     if (!entry) throw new NotFoundException('Η σημείωση δεν βρέθηκε.');
     assertKladosAccess(user, entry.yliko.klados?.type as KladosType | undefined);
-    await this.prisma.ylikoMaintenance.delete({ where: { id } });
+
+    // Σβήνοντας μια επιδιόρθωση με κόστος, αντιλογίζουμε και την κίνηση ταμείου.
+    await this.prisma.$transaction(async (tx) => {
+      await tx.ylikoMaintenance.delete({ where: { id } });
+      if (entry.treasuryEntryId) {
+        await tx.treasuryEntry.delete({ where: { id: entry.treasuryEntryId } });
+      }
+    });
     return { deleted: true };
   }
 

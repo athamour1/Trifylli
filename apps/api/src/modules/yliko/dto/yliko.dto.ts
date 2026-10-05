@@ -212,11 +212,20 @@ export class CreateMaintenanceDto {
   @MaxLength(500)
   note!: string;
 
-  @ApiPropertyOptional({ minimum: 0, description: 'Κόστος σε ευρώ, αν υπάρχει.' })
+  @ApiPropertyOptional({ minimum: 0, description: 'Κόστος σε ευρώ — μόνο για επιδιόρθωση.' })
   @IsOptional()
   @Type(() => Number)
   @Min(0)
   cost?: number;
+
+  @ApiPropertyOptional({
+    enum: KladosType,
+    description:
+      'Σε ποιον κλάδο χρεώνεται το κόστος της επιδιόρθωσης. Κενό ⇒ στο Τοπικό (γενική αποθήκη).',
+  })
+  @IsOptional()
+  @IsEnum(KladosType)
+  chargeToKladosType?: KladosType;
 
   @ApiPropertyOptional({ type: String, format: 'date' })
   @IsOptional()

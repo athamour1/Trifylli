@@ -7,14 +7,14 @@
 
     <q-card flat bordered class="rounded-borders">
       <q-card-section>
-        <YlikoDetail :yliko-id="id" @loaded="onLoaded" />
+        <YlikoDetail :yliko-id="id" :scope-klados="itemKlados" @loaded="onLoaded" />
       </q-card-section>
     </q-card>
   </q-page>
 </template>
 
 <script setup lang="ts">
-import { computed, onUnmounted } from 'vue';
+import { computed, onUnmounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { KladosType } from '@trifylli/shared';
 import YlikoDetail from '../components/YlikoDetail.vue';
@@ -24,9 +24,12 @@ const route = useRoute();
 const router = useRouter();
 const id = computed(() => String(route.params.id));
 
-// Η διαδρομή του QR δεν περνά από `/k/:klados`, οπότε βάφουμε τη σελίδα από τον
-// κλάδο του ίδιου του υλικού — όπως κάνουν οι υπόλοιπες σελίδες λεπτομέρειας.
+// Η σελίδα του QR δεν έχει εμβέλεια διαδρομής· η φυσική εμβέλεια είναι ο ίδιος ο
+// κλάδος του υλικού (ή Τοπικό για κεντρικό) — εκεί βάφεται η σελίδα και εκεί
+// χρεώνεται τυχόν επισκευή.
+const itemKlados = ref<KladosType | null>(null);
 function onLoaded(klados: KladosType | null): void {
+  itemKlados.value = klados;
   applyKladosTheme(klados);
 }
 onUnmounted(() => applyKladosTheme(null));

@@ -29,7 +29,9 @@ export class CheckoutService {
     if (dto.from >= dto.to) {
       throw new BadRequestException('Η έναρξη της δέσμευσης πρέπει να προηγείται της λήξης.');
     }
-    if (dto.kladosType) assertKladosAccess(user, dto.kladosType);
+    // Ο παραλήπτης του δανεισμού μπορεί να είναι οποιοσδήποτε κλάδος ή το Τοπικό
+    // (όπως στα φαρμακεία) — το μόνο που ελέγχουμε είναι ότι ο χρήστης έχει
+    // δικαίωμα στο **είδος** που δανείζει (owner-check πιο κάτω).
 
     const window: Interval = { from: dto.from, to: dto.to };
 

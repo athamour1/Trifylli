@@ -28,10 +28,10 @@
           />
         </div>
         <div class="col-6 col-sm-3">
-          <q-input v-model="filters.from" type="date" label="Από" dense outlined />
+          <DateField v-model="filters.from" label="Από" />
         </div>
         <div class="col-6 col-sm-3">
-          <q-input v-model="filters.to" type="date" label="Έως" dense outlined />
+          <DateField v-model="filters.to" label="Έως" />
         </div>
       </q-card-section>
     </q-card>
@@ -48,7 +48,7 @@
       <q-list bordered separator class="rounded-borders">
         <q-item v-for="item in data?.items" :key="item.ylikoId">
           <q-item-section avatar>
-            <q-avatar :style="{ backgroundColor: avatarColor(item), color: readableOn(avatarColor(item)) }" size="36px">
+            <q-avatar :style="{ backgroundColor: avatarColor(item), color: '#fff' }" size="36px">
               <q-icon :name="CATEGORY_ICON[item.category]" />
             </q-avatar>
           </q-item-section>
@@ -60,17 +60,28 @@
               <span v-if="!inKlados">· {{ item.ownerKladosType ? KLADOS_LABEL[item.ownerKladosType] : 'Κεντρική αποθήκη' }}</span>
               <span v-if="item.storagePointName"> · <q-icon name="warehouse" size="14px" /> {{ item.storagePointName }}</span>
             </q-item-label>
+            <q-item-label v-if="item.relation === 'BORROWED'" class="q-mt-xs">
+              <q-chip dense square size="sm" color="blue-1" text-color="blue-9" icon="south_west">
+                Δανεισμένο από {{ item.ownerKladosType ? KLADOS_LABEL[item.ownerKladosType] : 'Τοπικό' }}
+              </q-chip>
+            </q-item-label>
           </q-item-section>
 
           <q-item-section side style="min-width: 120px">
             <div class="text-right">
-              <div>
-                <span class="text-weight-bold" :class="item.availableQty === 0 ? 'text-negative' : 'text-klados'">
-                  {{ hasWindow ? item.availableQty : item.totalQty }}
-                </span>
-                <span class="text-grey-7"> / {{ item.totalQty }}</span>
-              </div>
-              <div v-if="hasWindow" class="text-caption text-grey-7">{{ item.reservedQty }} δεσμευμένα</div>
+              <template v-if="item.relation === 'BORROWED'">
+                <div class="text-weight-bold text-klados">{{ item.borrowedQty }} τεμ.</div>
+                <div v-if="item.borrowedUntil" class="text-caption text-grey-7">έως {{ formatDate(item.borrowedUntil) }}</div>
+              </template>
+              <template v-else>
+                <div>
+                  <span class="text-weight-bold" :class="item.availableQty === 0 ? 'text-negative' : 'text-klados'">
+                    {{ hasWindow ? item.availableQty : item.totalQty }}
+                  </span>
+                  <span class="text-grey-7"> / {{ item.totalQty }}</span>
+                </div>
+                <div v-if="hasWindow" class="text-caption text-grey-7">{{ item.reservedQty }} δεσμευμένα</div>
+              </template>
             </div>
           </q-item-section>
 
@@ -79,11 +90,11 @@
               <q-btn dense flat round icon="info" @click="openDetail(item)">
                 <q-tooltip>Καρτέλα & ιστορικό</q-tooltip>
               </q-btn>
-              <q-btn v-if="canManage" dense flat round icon="edit" @click="openEdit(item)">
+              <q-btn v-if="canManage && item.relation === 'OWNED'" dense flat round icon="edit" @click="openEdit(item)">
                 <q-tooltip>Επεξεργασία</q-tooltip>
               </q-btn>
               <q-btn
-                v-if="auth.can('yliko:checkout')"
+                v-if="auth.can('yliko:checkout') && item.relation === 'OWNED'"
                 dense
                 flat
                 round
@@ -143,11 +154,11 @@
               <q-input v-model.number="ylikoForm.totalQty" type="number" label="Ποσότητα *" outlined dense :min="0" />
             </div>
           </div>
-          <div class="row q-col-gutter-sm">
-            <div class="col-6">
-              <q-input v-model="ylikoForm.unit" label="Μονάδα (π.χ. τεμ.)" outlined dense />
+          <div class="row q-col-gutter-sm items-center">
+            <div class="col-4">
+              <q-input v-model="ylikoForm.unit" label="Μονάδα" placeholder="π.χ. τεμ." outlined dense />
             </div>
-            <div class="col-6">
+            <div class="col">
               <q-select
                 v-model="ylikoForm.storagePointId"
                 :options="storagePointOptions"
@@ -166,7 +177,7 @@
               </q-select>
             </div>
           </div>
-          <q-toggle v-model="ylikoForm.consumable" label="Αναλώσιμο (η παραλαβή μειώνει μόνιμα το απόθεμα)" />
+          <q-toggle v-model="ylikoForm.consumable" color="klados" label="Αναλώσιμο (η παραλαβή μειώνει μόνιμα το απόθεμα)" />
           <q-input v-model="ylikoForm.notes" label="Σημειώσεις" outlined dense type="textarea" autogrow />
         </q-card-section>
         <q-card-section v-if="ylikoError" class="bg-red-1 text-negative">{{ ylikoError }}</q-card-section>
@@ -218,7 +229,7 @@
           <q-btn flat dense round icon="close" v-close-popup />
         </q-card-section>
         <q-card-section>
-          <YlikoDetail v-if="detailId" :yliko-id="detailId" @changed="reload" />
+          <YlikoDetail v-if="detailId" :yliko-id="detailId" :scope-klados="routeKlados" @changed="reload" />
         </q-card-section>
       </q-card>
     </q-dialog>
@@ -243,10 +254,11 @@ import PageState from '../components/PageState.vue';
 import YlikoDetail from '../components/YlikoDetail.vue';
 import { useAsyncData } from '../composables/useAsyncData';
 import { ApiError, del, get, patch, post } from '../lib/api';
-import { readableOn } from '../lib/color';
-import { toISODate } from '../lib/format';
+import { inkOnWhiteLarge } from '../lib/color';
+import { formatDate, toISODate } from '../lib/format';
 import { useAuthStore } from '../stores/auth';
 import { useKladosScope } from '../composables/useKladosScope';
+import DateField from '../components/DateField.vue';
 
 const $q = useQuasar();
 const auth = useAuthStore();
@@ -537,6 +549,9 @@ const CATEGORY_HEX: Record<YlikoCategory, string> = {
 };
 
 function avatarColor(item: YlikoAvailability): string {
-  return item.ownerKladosType ? KLADOS_META[item.ownerKladosType].color : CATEGORY_HEX[item.category];
+  const base = item.ownerKladosType ? KLADOS_META[item.ownerKladosType].color : CATEGORY_HEX[item.category];
+  // Σκουραίνουμε όσο χρειάζεται ώστε το **λευκό** εικονίδιο να διαβάζεται παντού
+  // (το κίτρινο των Πουλιών γίνεται χρυσό)· τα ήδη σκούρα μένουν ως έχουν.
+  return inkOnWhiteLarge(base);
 }
 </script>

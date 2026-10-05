@@ -734,10 +734,15 @@ model YlikoMaintenance {
   cost       Decimal? @db.Decimal(10, 2)
   date       DateTime @db.Date
   createdById String? @db.Uuid
+  /// Για επιδιορθώσεις με κόστος: η κίνηση ταμείου (έξοδο) που χρεώθηκε στον
+  /// κλάδο/Τοπικό που έκανε την επισκευή. Η διαγραφή της σημείωσης σβήνει κι
+  /// αυτήν.
+  treasuryEntryId String? @unique @db.Uuid
   createdAt  DateTime @default(now())
 
   yliko     Yliko @relation(fields: [ylikoId], references: [id], onDelete: Cascade)
   createdBy User? @relation("MaintenanceAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  treasuryEntry TreasuryEntry? @relation("MaintenanceExpense", fields: [treasuryEntryId], references: [id], onDelete: SetNull)
 
   @@index([ylikoId, date])
   @@map("yliko_maintenance")
@@ -972,6 +977,7 @@ model TreasuryEntry {
   klados      Klados?     @relation(fields: [kladosId], references: [id], onDelete: Cascade)
   receiptFile StoredFile? @relation(fields: [receiptFileId], references: [id], onDelete: SetNull)
   createdBy   User?       @relation("TreasuryAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  ylikoMaintenance YlikoMaintenance? @relation("MaintenanceExpense")
 
   @@index([topikoId, kladosId, occurredAt])
   @@map("treasury_entry")
