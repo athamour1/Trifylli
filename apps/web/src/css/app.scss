@@ -35,6 +35,40 @@ body {
   color: var(--klados-on-bar) !important;
 }
 
+// Τα πεδία (focus) ακολουθούν το χρώμα κλάδου, όπως τα κουμπιά — χωρίς να
+// χρειάζεται ρητό `color="klados"` παντού (εύκολο να ξεχαστεί στις φόρμες, π.χ.
+// στις σελίδες λεπτομέρειας). Εκτός κλάδου το `--klados-ink` είναι ήδη το χρώμα
+// της εφαρμογής, άρα το Τοπικό μένει ίδιο. Τα πεδία με σφάλμα (κόκκινο) εξαιρούνται.
+.q-field--focused:not(.q-field--error) {
+  .q-field__label {
+    color: var(--klados-ink) !important;
+  }
+  &.q-field--outlined .q-field__control:after,
+  &.q-field--standard .q-field__control:after {
+    border-color: var(--klados-ink) !important;
+  }
+}
+
+// Ίδια λογική για διακόπτες/τσεκ/radio: η Quasar τα βάφει `--q-primary` όταν
+// είναι ενεργά, οπότε χωρίς ρητό `color` ένα toggle μέσα σε κλάδο έμενε πράσινο
+// (π.χ. το «Μόνο με υπόλοιπο» στις Συνδρομές). Οι κλάσεις χρώματος της Quasar
+// (`color="deep-orange-7"`) είναι `!important`, άρα μια ρητή επιλογή υπερισχύει.
+.q-toggle__inner--truthy,
+.q-checkbox__inner--truthy,
+.q-checkbox__inner--indet,
+.q-radio__inner--truthy {
+  color: var(--klados-ink);
+}
+
+// Η επιλεγμένη επιλογή στο dropdown ενός `q-select` παίρνει το χρώμα του select
+// (default primary = πράσινο — μέσω `q-item--active` ή `text-primary`). Την
+// ευθυγραμμίζουμε με τον κλάδο. Μόνο μέσα σε `q-menu` (portaled dropdowns), ώστε
+// να μην αγγίζει το ενεργό στοιχείο του μενού πλοήγησης (που ζει στο drawer).
+.q-menu .q-item--active,
+.q-menu .q-item.text-primary {
+  color: var(--klados-ink) !important;
+}
+
 // Η μπάρα αλλάζει χρώμα καθώς περνάς από κλάδο σε κλάδο· χωρίς μετάβαση το
 // πήδημα τραβά το μάτι περισσότερο από την ίδια την αλλαγή σελίδας.
 .q-header {

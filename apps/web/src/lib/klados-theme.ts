@@ -1,5 +1,5 @@
 import { KLADOS_META, type KladosType } from '@trifylli/shared';
-import { inkOnWhite, inkOnWhiteLarge, readableOn, readableOnLarge } from './color';
+import { inkOnWhite, inkOnWhiteLarge, readableOnLarge } from './color';
 
 /**
  * Το χρώμα του κλάδου ως CSS μεταβλητές.
@@ -15,9 +15,15 @@ export function kladosVars(klados: KladosType | null | undefined): Record<string
   const color = KLADOS_META[klados].color;
   return {
     '--klados-color': color,
-    '--klados-on': readableOn(color),
-    // Η μπάρα είναι μεγάλη επιφάνεια με μεγάλα γράμματα· εκεί η σύμβαση κερδίζει
-    // τη μέγιστη αντίθεση, όσο το λευκό παραμένει αναγνώσιμο.
+    // Λευκό πάνω στο χρώμα του κλάδου — η σύμβαση του Σ.Ε.Ο. για γεμάτες
+    // επιφάνειες (κουμπιά, chips). Το `readableOn` (μέγιστη αντίθεση) έβγαζε
+    // **μαύρο** στο μπλε των Οδηγών, στο τιρκουάζ των Αστεριών και στο κόκκινο
+    // των Μεγάλων Οδηγών — τεχνικά πιο ευανάγνωστο, αλλά ξένο προς την ταυτότητα
+    // («Είσπραξη» με μαύρα γράμματα πάνω σε μπλε). Με το `readableOnLarge`
+    // γυρνάμε σε μαύρο μόνο όταν το λευκό πέφτει κάτω από 3:1 — δηλαδή μόνο στο
+    // κίτρινο των Πουλιών, που αλλιώς θα ήταν αδιάβαστο.
+    '--klados-on': readableOnLarge(color),
+    // Η μπάρα είναι μεγάλη επιφάνεια με μεγάλα γράμματα· ίδιος κανόνας.
     '--klados-on-bar': readableOnLarge(color),
     // Ξεχωριστή απόχρωση για κείμενο: το φόντο και η γραφή έχουν αντίστροφες
     // απαιτήσεις, και ένα χρώμα δεν τις ικανοποιεί και τις δύο.

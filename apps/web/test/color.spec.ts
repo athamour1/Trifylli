@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { inkOnWhite, readableOn, readableOnLarge } from '../src/lib/color';
+import { kladosVars } from '../src/lib/klados-theme';
 
 /** Σχετική φωτεινότητα κατά WCAG — ο ανεξάρτητος κριτής των δύο συναρτήσεων. */
 function luminance(hex: string): number {
@@ -73,5 +74,23 @@ describe('χρώματα κλάδων', () => {
   it('αφήνει ανέπαφο ό,τι δεν είναι hex', () => {
     expect(inkOnWhite('primary')).toBe('primary');
     expect(readableOn('var(--q-primary)')).toBe('#fff');
+  });
+});
+
+describe('μεταβλητές κλάδου', () => {
+  /**
+   * Γεμάτες επιφάνειες (κουμπιά «Είσπραξη», chips) θέλουν λευκό πάνω στο χρώμα
+   * του κλάδου· η μέγιστη αντίθεση έβγαζε μαύρο στο μπλε των Οδηγών και έμοιαζε
+   * ξένη προς την ταυτότητα. Μαύρο μένει μόνο εκεί που το λευκό δεν διαβάζεται.
+   */
+  it('το κείμενο πάνω στο χρώμα του κλάδου είναι λευκό — εκτός από τα Πουλιά', () => {
+    expect(kladosVars('ODIGOI')['--klados-on']).toBe('#fff');
+    expect(kladosVars('ASTERIA')['--klados-on']).toBe('#fff');
+    expect(kladosVars('MEGALOI_ODIGOI')['--klados-on']).toBe('#fff');
+    expect(kladosVars('POULIA')['--klados-on']).toBe('#000');
+  });
+
+  it('εκτός κλάδου δεν ορίζει τίποτα — ισχύει η εφεδρεία του app.scss', () => {
+    expect(kladosVars(null)).toEqual({});
   });
 });
