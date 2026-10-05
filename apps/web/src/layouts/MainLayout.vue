@@ -73,8 +73,9 @@
           :label="klados.label"
           :header-style="{ color: inkOnWhiteLarge(klados.color) }"
           :style="kladosVars(klados.type)"
-          :default-opened="auth.kladoi.length === 1 || activeKlados?.type === klados.type"
+          :model-value="openSection === klados.type"
           expand-separator
+          @update:model-value="(v: boolean) => toggleSection(klados.type, v)"
         >
           <q-item
             v-for="link in kladosLinks"
@@ -99,8 +100,9 @@
           label="Τοπικό"
           :header-style="{ color: 'var(--q-primary)' }"
           :style="topikoVars"
-          :default-opened="isTopikoRoute"
+          :model-value="openSection === 'topiko'"
           expand-separator
+          @update:model-value="(v: boolean) => toggleSection('topiko', v)"
         >
           <q-item
             v-for="link in topikoLinks"
@@ -206,6 +208,36 @@ const topikoLinks = computed(() => (auth.isSuperAdmin ? TOPIKO_LINKS : []));
 /** Ανοίγει το dropdown «Τοπικό» όταν βρισκόμαστε σε σελίδα Τοπικού. */
 const topikoRouteNames = new Set<string>(TOPIKO_LINKS.map((l) => l.name));
 const isTopikoRoute = computed(() => topikoRouteNames.has(String(route.name)));
+
+/**
+ * Το συρτάρι λειτουργεί ως ακορντεόν: ανοιχτή είναι το πολύ μία ενότητα κάθε
+ * στιγμή. Κρατάμε ποια είναι ανοιχτή σε ένα μόνο ref· όταν ανοίγει μία, η
+ * προηγούμενη κλείνει. `null` = όλες κλειστές.
+ */
+function initialSection(): string | null {
+  if (auth.kladoi.length === 1) return auth.kladoi[0]?.type ?? null;
+  if (activeKlados.value) return activeKlados.value.type;
+  if (isTopikoRoute.value) return 'topiko';
+  return null;
+}
+const openSection = ref<string | null>(initialSection());
+
+function toggleSection(key: string, open: boolean): void {
+  if (open) openSection.value = key;
+  else if (openSection.value === key) openSection.value = null;
+}
+
+/**
+ * Κατά την πλοήγηση σε σελίδα κλάδου ή Τοπικού ανοίγουμε τη σχετική ενότητα,
+ * ώστε ο χρήστης να βλέπει πού βρίσκεται· χειροκίνητες αλλαγές εκτός διαδρομής
+ * παραμένουν σεβαστές.
+ */
+watch(
+  () => (activeKlados.value?.type ?? (isTopikoRoute.value ? 'topiko' : null)),
+  (section) => {
+    if (section) openSection.value = section;
+  },
+);
 
 /** Χρώμα Τοπικού = πράσινο εφαρμογής, στη λογική των μεταβλητών κλάδου. */
 const topikoVars: Record<string, string> = {
