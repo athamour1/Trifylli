@@ -3,6 +3,7 @@ import { Prisma, SyndromiStatus } from '@prisma/client';
 import {
   KLADOS_LABEL,
   PAYMENT_HANDLING_FLOW,
+  PAYMENT_HANDLING_KLADOS_STAGES,
   type KladosType,
   type PaymentHandlingStatus,
 } from '@trifylli/shared';
@@ -224,6 +225,12 @@ export class SyndromesService {
     if (!payment) throw new NotFoundException('Η πληρωμή δεν βρέθηκε.');
     const kladosType = payment.syndromi.user.memberships[0]?.klados.type as KladosType | undefined;
     this.assertKladosInScope(user, kladosType);
+
+    // Ο κλάδος προχωρά μόνο μέχρι την παράδοση στον Έφορο· κατάθεση/τακτοποίηση
+    // τις κάνει ο Τοπικός Έφορος (υπερδιαχειριστής).
+    if (!PAYMENT_HANDLING_KLADOS_STAGES.includes(status)) {
+      assertScopeAccess(user, 'syndromes:manage', null);
+    }
 
     return this.prisma.payment.update({ where: { id: paymentId }, data: { handlingStatus: status } });
   }

@@ -368,6 +368,16 @@ export const PAYMENT_HANDLING_FLOW: readonly PaymentHandlingStatus[] = [
   'TAKTOPOIITHIKE',
 ];
 
+/**
+ * Μέχρι ποιο στάδιο προχωρά η πληρωμή ένας **διαχειριστής κλάδου**: είσπραξη και
+ * παράδοση στον Τοπικό Έφορο. Την κατάθεση στην τράπεζα και την τακτοποίηση τις
+ * κάνει ο Έφορος (υπερδιαχειριστής) από το Τοπικό.
+ */
+export const PAYMENT_HANDLING_KLADOS_STAGES: readonly PaymentHandlingStatus[] = [
+  'EISPRAXTHIKE',
+  'PARADOTHIKE',
+];
+
 /** Τρόπος πληρωμής συνδρομής. */
 export const PaymentMethod = {
   CASH: 'CASH',

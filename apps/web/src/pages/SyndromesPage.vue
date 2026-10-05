@@ -138,18 +138,27 @@
                     {{ formatDate(p.paidAt) }}
                     <span v-if="p.collectedBy"> · από {{ p.collectedBy }}</span>
                   </q-item-label>
+                  <!-- Πορεία πληρωμής: ποια στάδια έχουν γίνει, με τη σειρά. -->
+                  <q-breadcrumbs class="cash-flow q-mt-xs" gutter="xs" separator-color="grey-4">
+                    <q-breadcrumbs-el v-for="(stage, i) in PAYMENT_HANDLING_FLOW" :key="stage">
+                      <span :class="i <= stageIndex(p.handlingStatus) ? 'text-klados text-weight-medium' : 'text-grey-5'">
+                        <q-icon v-if="i <= stageIndex(p.handlingStatus)" name="check" size="13px" class="q-mr-xs" />{{ PAYMENT_HANDLING_SHORT[stage] }}
+                      </span>
+                    </q-breadcrumbs-el>
+                  </q-breadcrumbs>
                 </q-item-section>
-                <q-item-section side>
-                  <div class="row items-center no-wrap q-gutter-sm">
-                    <q-chip dense square color="klados" text-color="klados-on" class="text-caption">
-                      {{ PAYMENT_HANDLING_SHORT[p.handlingStatus] ?? p.handlingStatus }}
-                    </q-chip>
-                    <q-btn
-                      v-if="canManage && nextStage(p.handlingStatus)"
-                      dense flat no-caps color="klados" icon="arrow_forward"
-                      :label="PAYMENT_HANDLING_SHORT[nextStage(p.handlingStatus)!]"
-                      @click="advance(p)"
-                    />
+                <q-item-section side top>
+                  <q-btn
+                    v-if="canAdvance(p)"
+                    dense flat no-caps color="klados" icon="arrow_forward"
+                    :label="PAYMENT_HANDLING_SHORT[nextStage(p.handlingStatus)!]"
+                    @click="advance(p)"
+                  />
+                  <div v-else-if="waitsForEforos(p)" class="text-caption text-grey-6 text-right" style="max-width: 110px">
+                    <q-icon name="hourglass_empty" size="14px" /> Αναμονή Εφόρου
+                  </div>
+                  <div v-else-if="!nextStage(p.handlingStatus)" class="text-caption text-positive row items-center no-wrap">
+                    <q-icon name="check_circle" size="16px" class="q-mr-xs" /> Ολοκληρώθηκε
                   </div>
                 </q-item-section>
               </q-item>
@@ -191,7 +200,7 @@
             <q-input class="col" v-model.number="pay.amount" type="number" label="Ποσό € *" outlined dense :min="0" step="0.01" color="klados" />
             <q-select class="col" v-model="pay.method" :options="methodOptions" label="Τρόπος *" outlined dense emit-value map-options color="klados" />
           </div>
-          <q-input v-model="pay.paidAt" type="date" label="Ημερομηνία" outlined dense color="klados" />
+          <DateField v-model="pay.paidAt" label="Ημερομηνία" />
           <q-input v-model="pay.note" label="Σημείωση" outlined dense color="klados" />
 
           <q-separator />
@@ -224,6 +233,7 @@ import {
   KLADOS_LABEL,
   KLADOS_META,
   PAYMENT_HANDLING_FLOW,
+  PAYMENT_HANDLING_KLADOS_STAGES,
   PAYMENT_HANDLING_LABEL,
   PAYMENT_HANDLING_SHORT,
   PAYMENT_METHOD_LABEL,
@@ -237,6 +247,7 @@ import { useKladosScope } from '../composables/useKladosScope';
 import { ApiError, get, post, put } from '../lib/api';
 import { formatDate, formatEuro, toISODate } from '../lib/format';
 import { useAuthStore } from '../stores/auth';
+import DateField from '../components/DateField.vue';
 
 const $q = useQuasar();
 const auth = useAuthStore();
@@ -330,6 +341,25 @@ async function loadCash(): Promise<void> {
 function nextStage(s: PaymentHandlingStatus): PaymentHandlingStatus | null {
   const i = PAYMENT_HANDLING_FLOW.indexOf(s);
   return i >= 0 && i < PAYMENT_HANDLING_FLOW.length - 1 ? (PAYMENT_HANDLING_FLOW[i + 1] ?? null) : null;
+}
+/** Θέση σταδίου στη ροή — για το breadcrumbs (τι έχει γίνει). */
+function stageIndex(s: PaymentHandlingStatus): number {
+  return PAYMENT_HANDLING_FLOW.indexOf(s);
+}
+/**
+ * Μπορεί ο τρέχων χρήστης να προχωρήσει την πληρωμή στο επόμενο στάδιο; Ο κλάδος
+ * μόνο μέχρι την παράδοση στον Έφορο· τα επόμενα μόνο ο Έφορος (υπερδιαχειριστής).
+ */
+function canAdvance(p: Cash['items'][number]): boolean {
+  if (!canManage.value) return false;
+  const next = nextStage(p.handlingStatus);
+  if (!next) return false;
+  return auth.isSuperAdmin || PAYMENT_HANDLING_KLADOS_STAGES.includes(next);
+}
+/** Ο κλάδος περιμένει τον Έφορο (έφτασε στο όριό του, υπάρχει κι άλλο στάδιο). */
+function waitsForEforos(p: Cash['items'][number]): boolean {
+  const next = nextStage(p.handlingStatus);
+  return !!next && !auth.isSuperAdmin && !PAYMENT_HANDLING_KLADOS_STAGES.includes(next);
 }
 async function advance(p: Cash['items'][number]): Promise<void> {
   const next = nextStage(p.handlingStatus);
@@ -441,5 +471,14 @@ async function submitPayment(): Promise<void> {
 <style scoped>
 .form-row {
   gap: 12px;
+}
+
+/* Breadcrumbs πορείας μετρητών: μικρό, διακριτικό, να χωρά σε μία γραμμή. */
+.cash-flow {
+  font-size: 0.72rem;
+  line-height: 1.2;
+}
+.cash-flow :deep(.q-breadcrumbs__separator) {
+  margin: 0 2px;
 }
 </style>
