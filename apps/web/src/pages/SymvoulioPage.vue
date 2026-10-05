@@ -2,7 +2,11 @@
   <q-page padding>
     <PageState :loading="loading" :error="error" :stale="stale" @retry="reload">
       <template v-if="data">
-        <div class="row items-start justify-between q-col-gutter-sm q-mb-md">
+        <div class="row items-start no-wrap q-mb-md">
+          <q-btn flat round dense icon="arrow_back" color="klados" class="q-mr-sm q-mt-xs" @click="goBack">
+            <q-tooltip>Πίσω στη λίστα</q-tooltip>
+          </q-btn>
+          <div class="col row items-start justify-between q-col-gutter-sm">
           <div class="col-12 col-sm">
             <q-input
               v-model="header.title"
@@ -39,6 +43,7 @@
             >
               <q-tooltip>Κλειδώνει τα πρακτικά — δεν αλλάζουν μετά.</q-tooltip>
             </q-btn>
+          </div>
           </div>
         </div>
 
@@ -97,14 +102,7 @@
               </q-card-section>
               <q-separator />
               <q-card-section class="q-gutter-sm">
-                <q-input
-                  v-model="header.date"
-                  :readonly="!editable"
-                  type="date"
-                  label="Ημερομηνία"
-                  dense
-                  outlined
-                />
+                <DateField v-model="header.date" label="Ημερομηνία" :editable="editable" />
                 <q-input
                   v-model="header.location"
                   :readonly="!editable"
@@ -188,6 +186,7 @@ import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue';
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 import { useQuasar } from 'quasar';
 import { KLADOS_LABEL, type KladosType, type SymvoulioType } from '@trifylli/shared';
+import DateField from '../components/DateField.vue';
 import MarkdownField from '../components/MarkdownField.vue';
 import PageState from '../components/PageState.vue';
 import SaveStatus from '../components/SaveStatus.vue';
@@ -236,6 +235,12 @@ const $q = useQuasar();
 const auth = useAuthStore();
 const offline = useOfflineStore();
 const id = String(route.params.id);
+
+/** Πίσω στη λίστα συμβουλίων — του κλάδου αν υπάρχει, αλλιώς του Τοπικού. */
+function goBack(): void {
+  const k = data.value?.klados?.type;
+  void router.push(k ? { name: 'klados-symvoulia', params: { klados: k } } : { name: 'symvoulia' });
+}
 
 const { data, loading, error, stale, reload } = useAsyncData(
   () => get<SymvoulioDetail>(`/symvoulia/${id}`),

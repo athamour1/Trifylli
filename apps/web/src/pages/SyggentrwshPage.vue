@@ -3,7 +3,11 @@
     <PageState :loading="loading" :error="error" :stale="stale" @retry="reload">
       <template v-if="data">
         <!-- ── Κεφαλίδα ── -->
-        <div class="row items-start justify-between q-col-gutter-sm q-mb-md">
+        <div class="row items-start no-wrap q-mb-md">
+          <q-btn flat round dense icon="arrow_back" color="klados" class="q-mr-sm q-mt-xs" @click="goBack">
+            <q-tooltip>Πίσω στη λίστα</q-tooltip>
+          </q-btn>
+          <div class="col row items-start justify-between q-col-gutter-sm">
           <div class="col-12 col-sm">
             <q-input
               v-model="header.title"
@@ -39,6 +43,7 @@
             >
               <q-tooltip>Εκτύπωση ή αποθήκευση ως PDF</q-tooltip>
             </q-btn>
+          </div>
           </div>
         </div>
 
@@ -240,21 +245,11 @@
               </q-card-section>
               <q-separator />
               <q-card-section class="q-gutter-sm">
-                <q-input
-                  v-model="header.date"
-                  :readonly="!editable"
-                  type="date"
-                  label="Ημερομηνία"
-                  dense
-                  outlined
-                />
-                <q-input
+                <DateField v-model="header.date" label="Ημερομηνία" :editable="editable" />
+                <TimeField
                   v-model="header.startTime"
-                  :readonly="!editable"
-                  type="time"
                   label="Ώρα έναρξης"
-                  dense
-                  outlined
+                  :editable="editable"
                   hint="Με ώρα έναρξης, κάθε κομμάτι δείχνει πότε αρχίζει."
                 />
                 <q-input
@@ -445,6 +440,8 @@ import {
 import MarkdownField from '../components/MarkdownField.vue';
 import PageState from '../components/PageState.vue';
 import SaveStatus from '../components/SaveStatus.vue';
+import DateField from '../components/DateField.vue';
+import TimeField from '../components/TimeField.vue';
 import SyggentrwshPrint from '../components/SyggentrwshPrint.vue';
 import { useAsyncData } from '../composables/useAsyncData';
 import { applyKladosTheme } from '../lib/klados-theme';
@@ -554,6 +551,12 @@ interface Stelexos {
 
 const route = useRoute();
 const router = useRouter();
+
+/** Πίσω στη λίστα συγκεντρώσεων του κλάδου. */
+function goBack(): void {
+  const k = data.value?.klados?.type;
+  void router.push(k ? { name: 'klados-syggentrwseis', params: { klados: k } } : { name: 'dashboard' });
+}
 const $q = useQuasar();
 const auth = useAuthStore();
 const offline = useOfflineStore();

@@ -169,7 +169,7 @@
             outlined
             dense
           />
-          <q-input v-model="form.passedAt" label="Ημερομηνία" outlined dense type="date" />
+          <DateField v-model="form.passedAt" label="Ημερομηνία" />
         </q-card-section>
         <q-card-section v-if="formError" class="bg-red-1 text-negative">{{ formError }}</q-card-section>
         <q-card-actions align="right">
@@ -196,6 +196,7 @@ import { useAsyncData } from '../composables/useAsyncData';
 import { ApiError, del, get, post } from '../lib/api';
 import { formatDate } from '../lib/format';
 import { useAuthStore } from '../stores/auth';
+import DateField from './DateField.vue';
 
 const props = defineProps<{ klados: KladosType }>();
 

@@ -131,7 +131,7 @@
             <q-select class="col" v-model="form.category" :options="categoryOptions" label="Κατηγορία *" outlined dense emit-value map-options color="klados" />
             <q-input class="col" v-model.number="form.amount" type="number" label="Ποσό € *" outlined dense :min="0" step="0.01" color="klados" />
           </div>
-          <q-input v-model="form.occurredAt" type="date" label="Ημερομηνία" outlined dense color="klados" />
+          <DateField v-model="form.occurredAt" label="Ημερομηνία" />
           <q-select
             v-if="form.kind === 'INCOME' && form.category === 'DOREA'"
             v-model="form.donorType"
@@ -212,6 +212,7 @@ import {
 import { ApiError, del, get, getBlob, post, upload } from '../lib/api';
 import { formatDate, formatEuro, toISODate } from '../lib/format';
 import { useAuthStore } from '../stores/auth';
+import DateField from './DateField.vue';
 
 const props = defineProps<{ klados: KladosType | null }>();
 
