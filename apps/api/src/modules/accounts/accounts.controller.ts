@@ -35,9 +35,25 @@ export class AccountsController {
   }
 
   @Post()
-  @ApiOperation({ summary: 'Δημιουργία λογαριασμού' })
+  @ApiOperation({
+    summary: 'Δημιουργία λογαριασμού',
+    description:
+      'Στέλνει και email με σύνδεσμο ορισμού κωδικού (Authentik). Αν η αποστολή αποτύχει, ο ' +
+      'λογαριασμός δημιουργείται ούτως ή άλλως και η απάντηση το λέει στο `inviteError`.',
+  })
   create(@CurrentUser() user: RequestUser, @Body() dto: CreateAccountDto) {
     return this.accounts.create(user, dto);
+  }
+
+  @Post(':id/invite')
+  @ApiOperation({
+    summary: 'Αποστολή συνδέσμου ορισμού κωδικού',
+    description:
+      'Για πρόσκληση που χάθηκε ή για επαναφορά κωδικού. Το Trifylli δεν βλέπει ποτέ τον ' +
+      'κωδικό: τον ορίζει ο ίδιος ο χρήστης μέσα από το Authentik.',
+  })
+  invite(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.accounts.invite(user, id);
   }
 
   @Patch(':id')

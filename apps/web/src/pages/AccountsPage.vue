@@ -63,6 +63,23 @@
                   }}
                 </q-tooltip>
               </q-icon>
+              <q-btn
+                dense
+                flat
+                round
+                icon="forward_to_inbox"
+                :loading="inviting === account.id"
+                :disable="!account.email"
+                @click="confirmInvite(account)"
+              >
+                <q-tooltip>
+                  {{
+                    account.activated
+                      ? 'Αποστολή συνδέσμου επαναφοράς κωδικού'
+                      : 'Αποστολή πρόσκλησης — συνδέσμου ορισμού κωδικού'
+                  }}
+                </q-tooltip>
+              </q-btn>
               <q-btn dense flat round icon="edit" @click="openEdit(account)">
                 <q-tooltip>Επεξεργασία</q-tooltip>
               </q-btn>
@@ -158,6 +175,7 @@ import {
   KLADOS_LABEL,
   KLADOS_META,
   toOptions,
+  type AccountCreated,
   type AccountRole,
   type AccountSummary,
   type KladosType,
@@ -193,6 +211,8 @@ const dialog = ref(false);
 const editing = ref<AccountSummary | null>(null);
 const saving = ref(false);
 const formError = ref<string | null>(null);
+/** Το id του λογαριασμού που στέλνει αυτή τη στιγμή email — για το spinner. */
+const inviting = ref<string | null>(null);
 
 const form = reactive({
   firstName: '',
@@ -266,16 +286,63 @@ async function save(): Promise<void> {
   };
 
   try {
+    // Η δημιουργία στέλνει και email ορισμού κωδικού. Αν δεν φύγει, ο
+    // λογαριασμός έχει ήδη γίνει — το λέμε καθαρά αντί να δείξουμε «επιτυχία»
+    // και να περιμένει ο νέος διαχειριστής ένα email που δεν ήρθε ποτέ.
+    let created: AccountCreated | null = null;
     if (editing.value) await patch(`/accounts/${editing.value.id}`, payload);
-    else await post('/accounts', payload);
+    else created = await post<AccountCreated>('/accounts', payload);
 
     dialog.value = false;
     await reload();
-    $q.notify({ type: 'positive', message: editing.value ? 'Ο λογαριασμός ενημερώθηκε.' : 'Ο λογαριασμός δημιουργήθηκε.' });
+
+    if (!created) {
+      $q.notify({ type: 'positive', message: 'Ο λογαριασμός ενημερώθηκε.' });
+    } else if (created.invited) {
+      $q.notify({
+        type: 'positive',
+        message: `Ο λογαριασμός δημιουργήθηκε — στάλθηκε email ορισμού κωδικού στο ${created.account.email}.`,
+      });
+    } else {
+      $q.notify({
+        type: 'warning',
+        timeout: 0,
+        actions: [{ label: 'OK', color: 'white' }],
+        message: `Ο λογαριασμός δημιουργήθηκε, αλλά δεν στάλθηκε email: ${created.inviteError}`,
+      });
+    }
   } catch (err) {
     formError.value = err instanceof ApiError ? err.message : 'Αποτυχία αποθήκευσης.';
   } finally {
     saving.value = false;
+  }
+}
+
+function confirmInvite(account: AccountSummary): void {
+  $q.dialog({
+    title: account.activated ? 'Επαναφορά κωδικού' : 'Αποστολή πρόσκλησης',
+    message:
+      `Θα σταλεί email στο ${account.email} με σύνδεσμο ορισμού κωδικού. ` +
+      'Ο κωδικός ορίζεται από τον ίδιο τον χρήστη — εμείς δεν τον βλέπουμε ποτέ. Συνέχεια;',
+    cancel: { label: 'Άκυρο', flat: true },
+    ok: { label: 'Αποστολή', color: 'primary' },
+  }).onOk(() => void invite(account));
+}
+
+async function invite(account: AccountSummary): Promise<void> {
+  inviting.value = account.id;
+  try {
+    await post(`/accounts/${account.id}/invite`, {});
+    $q.notify({ type: 'positive', message: `Στάλθηκε email στο ${account.email}.` });
+  } catch (err) {
+    $q.notify({
+      type: 'negative',
+      timeout: 0,
+      actions: [{ label: 'OK', color: 'white' }],
+      message: err instanceof ApiError ? err.message : 'Αποτυχία αποστολής email.',
+    });
+  } finally {
+    inviting.value = null;
   }
 }
 

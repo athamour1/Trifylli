@@ -1,15 +1,17 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { AccountRole, MemberKind } from '@prisma/client';
 import {
   KLADOI_IN_ORDER,
   KLADOS_LABEL,
   KLADOS_META,
   accountRoleLabel,
+  type AccountCreated,
   type AccountSummary,
   type KladosType,
 } from '@trifylli/shared';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
+import { AuthentikClient } from '../integrations/authentik.client';
 import type { CreateAccountDto, UpdateAccountDto } from './dto/account.dto';
 
 /**
@@ -26,7 +28,12 @@ import type { CreateAccountDto, UpdateAccountDto } from './dto/account.dto';
  */
 @Injectable()
 export class AccountsService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(AccountsService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly authentik: AuthentikClient,
+  ) {}
 
   async list(user: RequestUser): Promise<{ accounts: AccountSummary[]; kladoiWithoutAdmin: KladosType[] }> {
     const rows = await this.prisma.user.findMany({
@@ -52,7 +59,7 @@ export class AccountsService {
     };
   }
 
-  async create(user: RequestUser, dto: CreateAccountDto): Promise<AccountSummary> {
+  async create(user: RequestUser, dto: CreateAccountDto): Promise<AccountCreated> {
     const email = dto.email.trim().toLowerCase();
     const adminKladosId = await this.resolveKladosId(user.topikoId, dto.role, dto.adminKlados);
 
@@ -79,7 +86,7 @@ export class AccountsService {
         },
         include: { adminKlados: { select: { type: true } } },
       });
-      return this.toSummary(updated);
+      return this.withInvitation(this.toSummary(updated));
     }
 
     const created = await this.prisma.user.create({
@@ -95,7 +102,62 @@ export class AccountsService {
       include: { adminKlados: { select: { type: true } } },
     });
 
-    return this.toSummary(created);
+    return this.withInvitation(this.toSummary(created));
+  }
+
+  /**
+   * Ξαναστέλνει τον σύνδεσμο ορισμού κωδικού — για πρόσκληση που χάθηκε και για
+   * «ξέχασα τον κωδικό» που ζητείται από τον υπερδιαχειριστή.
+   *
+   * Εδώ, σε αντίθεση με τη δημιουργία, η αποτυχία **πρέπει** να φτάσει στον
+   * χρήστη: το μόνο που ζήτησε είναι να φύγει ένα email.
+   */
+  async invite(user: RequestUser, id: string): Promise<{ sent: true; email: string }> {
+    const account = await this.load(user, id);
+    if (!account.email) {
+      throw new BadRequestException('Ο λογαριασμός δεν έχει email — προσθέστε το πρώτα.');
+    }
+
+    await this.authentik.sendPasswordSetupEmail({
+      email: account.email,
+      firstName: account.firstName,
+      lastName: account.lastName,
+    });
+
+    return { sent: true, email: account.email };
+  }
+
+  /**
+   * Στέλνει την πρόσκληση **χωρίς** να ρίξει τη δημιουργία: ο λογαριασμός έχει
+   * ήδη γραφτεί στη βάση, και ένα 503 από το Authentik δεν πρέπει να κάνει τον
+   * υπερδιαχειριστή να νομίζει ότι απέτυχε όλη η ενέργεια — θα ξαναδοκίμαζε και
+   * θα έπαιρνε «υπάρχει ήδη λογαριασμός».
+   */
+  private async withInvitation(account: AccountSummary): Promise<AccountCreated> {
+    if (!account.email) {
+      return { account, invited: false, inviteError: 'Ο λογαριασμός δεν έχει email.' };
+    }
+    if (!this.authentik.configured) {
+      return {
+        account,
+        invited: false,
+        inviteError:
+          'Δεν έχει ρυθμιστεί η σύνδεση με το Authentik — ο κωδικός ορίζεται χειροκίνητα από εκεί.',
+      };
+    }
+
+    try {
+      await this.authentik.sendPasswordSetupEmail({
+        email: account.email,
+        firstName: account.firstName,
+        lastName: account.lastName,
+      });
+      return { account, invited: true, inviteError: null };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Ο λογαριασμός ${account.email} δημιουργήθηκε αλλά η πρόσκληση απέτυχε: ${message}`);
+      return { account, invited: false, inviteError: message };
+    }
   }
 
   async update(user: RequestUser, id: string, dto: UpdateAccountDto): Promise<AccountSummary> {

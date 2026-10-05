@@ -35,6 +35,19 @@ const schema = z.object({
   SUPER_ADMIN_EMAIL: z.string().email().optional(),
 
   /**
+   * Admin API του Authentik — για πρόσκληση νέου λογαριασμού και επαναφορά
+   * κωδικού (το API ζητά να σταλεί σύνδεσμος ορισμού κωδικού στο email).
+   *
+   * Προαιρετικά: χωρίς αυτά οι λογαριασμοί δημιουργούνται κανονικά, απλώς δεν
+   * φεύγει email — ο υπερδιαχειριστής το κάνει χειροκίνητα από το Authentik.
+   * Σε docker βάλε το **εσωτερικό** URL (http://authentik-server:9000).
+   */
+  AUTHENTIK_API_URL: blankToUndefined(z.string().url()),
+  AUTHENTIK_API_TOKEN: blankToUndefined(z.string()),
+  /** Το email stage της ροής `trifylli-recovery` (blueprint). */
+  AUTHENTIK_RECOVERY_EMAIL_STAGE: z.string().default('trifylli-recovery-email'),
+
+  /**
    * Παρακάμπτει την επικύρωση JWT και δουλεύει με έναν υπαρκτό λογαριασμό της
    * βάσης. Επιτρέπεται **μόνο** εκτός production — ο έλεγχος είναι παρακάτω.
    */

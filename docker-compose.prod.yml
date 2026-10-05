@@ -65,7 +65,7 @@ services:
 
   # ─────────────────────── Authentik (SSO) ───────────────────────
   authentik-server:
-    image: ghcr.io/goauthentik/server:2025.2
+    image: ghcr.io/goauthentik/server:2026.8.3
     restart: always
     <<: *logging
     command: server
@@ -80,14 +80,38 @@ services:
       # Μόνο για το πρώτο boot (δημιουργία αρχικού διαχειριστή Authentik).
       AUTHENTIK_BOOTSTRAP_EMAIL: ${AUTHENTIK_BOOTSTRAP_EMAIL:-}
       AUTHENTIK_BOOTSTRAP_PASSWORD: ${AUTHENTIK_BOOTSTRAP_PASSWORD:-}
+      # Δημόσια URLs των εφαρμογών (με τελικό «/»). Τα διαβάζουν τα blueprints
+      # (`!Env`) για redirect URIs, launch URL και **front-channel logout URI
+      # (Single Logout)**. ΠΡΕΠΕΙ να είναι υποτομείς του ΙΔΙΟΥ registrable domain
+      # με το Authentik (π.χ. app./ouch./id.trifylli.gr) — αλλιώς ο browser
+      # διαχωρίζει (partitions) το storage του κρυφού iframe και το SLO σπάει.
+      TRIFYLLI_APP_URL: ${TRIFYLLI_APP_URL:?TRIFYLLI_APP_URL is required (π.χ. https://app.trifylli.gr/)}
+      OUCHTRACKER_APP_URL: ${OUCHTRACKER_APP_URL:?OUCHTRACKER_APP_URL is required (π.χ. https://ouch.trifylli.gr/)}
+      AUTHENTIK_LOG_LEVEL: ${AUTHENTIK_LOG_LEVEL:-info}
+      # ── Email (ανάκτηση κωδικού, ειδοποιήσεις) ──
+      # Πραγματικός πάροχος SMTP. Υποχρεωτικός: χωρίς αυτόν η «ανάκτηση κωδικού»
+      # αποτυγχάνει τη στιγμή που κάποιος τη χρειάζεται, και κανείς δεν το
+      # μαθαίνει νωρίτερα — προτιμάμε να μη σηκωθεί η στοίβα.
+      AUTHENTIK_EMAIL__HOST: ${SMTP_HOST:?SMTP_HOST is required (π.χ. smtp.eu.mailgun.org)}
+      AUTHENTIK_EMAIL__PORT: ${SMTP_PORT:-587}
+      AUTHENTIK_EMAIL__USERNAME: ${SMTP_USERNAME:-}
+      AUTHENTIK_EMAIL__PASSWORD: ${SMTP_PASSWORD:-}
+      # 587 → STARTTLS (USE_TLS=true). 465 → implicit TLS (USE_SSL=true, USE_TLS=false).
+      # Ποτέ και τα δύο true: το Authentik αποτυγχάνει στη σύνδεση.
+      AUTHENTIK_EMAIL__USE_TLS: ${SMTP_USE_TLS:-true}
+      AUTHENTIK_EMAIL__USE_SSL: ${SMTP_USE_SSL:-false}
+      AUTHENTIK_EMAIL__TIMEOUT: ${SMTP_TIMEOUT:-30}
+      # Ο αποστολέας πρέπει να είναι σε domain που ο πάροχος επιτρέπει (SPF/DKIM),
+      # αλλιώς τα μηνύματα καταλήγουν σε spam ή απορρίπτονται.
+      AUTHENTIK_EMAIL__FROM: ${SMTP_FROM:?SMTP_FROM is required (π.χ. Trifylli <noreply@trifylli.gr>)}
     volumes:
       - authentik-media:/media
-      # Το blueprint ορίζει τον OIDC provider. ΠΡΟΣΟΧΗ: τα redirect URIs μέσα
-      # στο trifylli-oidc.yaml είναι localhost — για production άλλαξέ τα στο
-      # πραγματικό domain (TRIFYLLI_APP_URL + redirect_uris).
+      # Τα blueprints (OIDC providers + SLO) εφαρμόζονται αυτόματα. Τα δημόσια
+      # URLs έρχονται από το περιβάλλον (TRIFYLLI_APP_URL / OUCHTRACKER_APP_URL)
+      # — ΔΕΝ χρειάζεται πλέον χειροκίνητη αλλαγή στα .yaml.
       - ./infra/authentik:/blueprints/custom:ro
       - ./infra/authentik/branding:/media/public:ro
-      - ./infra/authentik/branding/custom.css:/web/dist/custom.css:ro
+      - ./infra/authentik/email-templates:/templates:ro
     ports:
       - '${BIND_ADDR:-127.0.0.1}:${AUTHENTIK_PORT:-9010}:9000'
     depends_on:
@@ -97,7 +121,7 @@ services:
         condition: service_healthy
 
   authentik-worker:
-    image: ghcr.io/goauthentik/server:2025.2
+    image: ghcr.io/goauthentik/server:2026.8.3
     restart: always
     <<: *logging
     command: worker
@@ -106,6 +130,8 @@ services:
       - authentik-media:/media
       - ./infra/authentik:/blueprints/custom:ro
       - ./infra/authentik/branding:/media/public:ro
+      # Τα email τα στέλνει ο worker — χωρίς αυτό δεν βλέπει τα πρότυπα.
+      - ./infra/authentik/email-templates:/templates:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -190,6 +216,12 @@ services:
       OIDC_AUDIENCE: ${OIDC_AUDIENCE:-trifylli-pwa}
       OIDC_JWKS_URI: ${OIDC_JWKS_URI:?OIDC_JWKS_URI is required}
       SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL:?SUPER_ADMIN_EMAIL is required}
+      # Admin API του Authentik — για το email ορισμού/επαναφοράς κωδικού που
+      # στέλνει το `/accounts`. Το token φτιάχνεται στο Authentik (Directory →
+      # Tokens) σε λογαριασμό με δικαίωμα διαχείρισης χρηστών. Χωρίς αυτό οι
+      # λογαριασμοί δημιουργούνται κανονικά, αλλά κανένα email δεν φεύγει.
+      AUTHENTIK_API_URL: ${AUTHENTIK_API_URL:-http://authentik-server:9000}
+      AUTHENTIK_API_TOKEN: ${AUTHENTIK_API_TOKEN:-}
       # ── Αποθήκευση αρχείων (Garage S3) ──
       S3_ENDPOINT: http://garage:3900
       S3_REGION: ${S3_REGION:-garage}

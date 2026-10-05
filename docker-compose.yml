@@ -39,11 +39,32 @@ services:
       timeout: 3s
       retries: 10
 
+  # ─────────────────────── Mailpit (SMTP ανάπτυξης) ───────────────────────
+  # Ψεύτικος SMTP server με web UI: δέχεται ό,τι του στείλει το Authentik και το
+  # δείχνει στο http://localhost:8025 αντί να το παραδώσει. Υποδομή και όχι
+  # profile, γιατί χωρίς αυτόν η ανάκτηση κωδικού αποτυγχάνει σιωπηλά στο dev.
+  # Τα μηνύματα ζουν στη μνήμη του container — ένα restart τα καθαρίζει, που
+  # είναι ακριβώς ό,τι θέλουμε σε δοκιμές.
+  mailpit:
+    image: axllent/mailpit:v1.31.4
+    restart: unless-stopped
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+    ports:
+      - '${MAILPIT_SMTP_PORT:-1025}:1025'
+      - '${MAILPIT_UI_PORT:-8025}:8025'
+    healthcheck:
+      test: ['CMD', '/mailpit', 'readyz']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
   # ─────────────────────── Authentik (SSO) ───────────────────────
   # Η βάση του Authentik ζει στο ίδιο Postgres, σε ξεχωριστό database που
   # δημιουργείται από το init script.
   authentik-server:
-    image: ghcr.io/goauthentik/server:2025.2
+    image: ghcr.io/goauthentik/server:2026.8.3
     restart: unless-stopped
     command: server
     environment: &authentik-env
@@ -58,13 +79,31 @@ services:
       # Σταθερό token διαχειριστή, ώστε η ρύθμιση να γίνεται από script αντί για
       # κλικ στο UI. Μόνο για development.
       AUTHENTIK_BOOTSTRAP_TOKEN: ${AUTHENTIK_BOOTSTRAP_TOKEN:-}
+      AUTHENTIK_LOG_LEVEL: ${AUTHENTIK_LOG_LEVEL:-info}
+      # ── Email (ανάκτηση κωδικού, ειδοποιήσεις) ──
+      # Στο development ο SMTP είναι το Mailpit: τίποτα δεν φεύγει προς τα έξω
+      # και κάθε μήνυμα φαίνεται στο http://localhost:8025. Έτσι η ροή
+      # «ξέχασα τον κωδικό» δοκιμάζεται ολόκληρη, χωρίς πάροχο και χωρίς ρίσκο
+      # να φτάσει δοκιμαστικό mail σε πραγματικό παραλήπτη.
+      AUTHENTIK_EMAIL__HOST: ${SMTP_HOST:-mailpit}
+      AUTHENTIK_EMAIL__PORT: ${SMTP_PORT:-1025}
+      AUTHENTIK_EMAIL__USERNAME: ${SMTP_USERNAME:-}
+      AUTHENTIK_EMAIL__PASSWORD: ${SMTP_PASSWORD:-}
+      # Το Mailpit δέχεται σκέτο SMTP· στο prod ισχύει το αντίθετο (STARTTLS).
+      AUTHENTIK_EMAIL__USE_TLS: ${SMTP_USE_TLS:-false}
+      AUTHENTIK_EMAIL__USE_SSL: ${SMTP_USE_SSL:-false}
+      AUTHENTIK_EMAIL__TIMEOUT: ${SMTP_TIMEOUT:-10}
+      AUTHENTIK_EMAIL__FROM: ${SMTP_FROM:-Trifylli <noreply@trifylli.local>}
     volumes:
       - authentik-media:/media
       - ./infra/authentik:/blueprints/custom:ro
       # Εμφάνιση στα χρώματα του Trifylli: η οθόνη σύνδεσης είναι μέρος της
-      # ίδιας διαδρομής, δεν πρέπει να μοιάζει με ξένο προϊόν.
+      # ίδιας διαδρομής, δεν πρέπει να μοιάζει με ξένο προϊόν. Τα αρχεία τα
+      # βλέπει το Authentik ως `logo.svg`/`favicon.svg`/`clover-pattern.jpg`
+      # (τα ονόματα που δηλώνει το blueprint του brand).
       - ./infra/authentik/branding:/media/public:ro
-      - ./infra/authentik/branding/custom.css:/web/dist/custom.css:ro
+      # Ελληνικά πρότυπα email (ορισμός κωδικού) — `email.template_dir`.
+      - ./infra/authentik/email-templates:/templates:ro
     ports:
       - '${AUTHENTIK_PORT:-9010}:9000'
     depends_on:
@@ -74,7 +113,7 @@ services:
         condition: service_healthy
 
   authentik-worker:
-    image: ghcr.io/goauthentik/server:2025.2
+    image: ghcr.io/goauthentik/server:2026.8.3
     restart: unless-stopped
     command: worker
     environment: *authentik-env
@@ -82,6 +121,8 @@ services:
       - authentik-media:/media
       - ./infra/authentik:/blueprints/custom:ro
       - ./infra/authentik/branding:/media/public:ro
+      # Τα email τα στέλνει ο worker — χωρίς αυτό δεν βλέπει τα πρότυπα.
+      - ./infra/authentik/email-templates:/templates:ro
     depends_on:
       postgres:
         condition: service_healthy
@@ -140,6 +181,11 @@ services:
       # Το JWKS το κατεβάζει ο server, οπότε εδώ το εσωτερικό όνομα είναι εντάξει.
       OIDC_JWKS_URI: ${OIDC_JWKS_URI:-http://authentik-server:9000/application/o/trifylli/jwks/}
       SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL:-}
+      # Admin API του Authentik: το API ζητά να σταλεί σύνδεσμος ορισμού κωδικού
+      # όταν ο υπερδιαχειριστής φτιάχνει λογαριασμό. Εσωτερικό DNS — το token
+      # είναι του bootstrap διαχειριστή στο dev.
+      AUTHENTIK_API_URL: ${AUTHENTIK_API_URL:-http://authentik-server:9000}
+      AUTHENTIK_API_TOKEN: ${AUTHENTIK_API_TOKEN:-${AUTHENTIK_BOOTSTRAP_TOKEN:-}}
       OUCHTRACKER_BASE_URL: ${OUCHTRACKER_BASE_URL:-http://ouchtracker-backend:3000}
       OUCHTRACKER_EMAIL: ${OUCHTRACKER_EMAIL:-}
       OUCHTRACKER_PASSWORD: ${OUCHTRACKER_PASSWORD:-}

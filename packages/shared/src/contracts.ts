@@ -43,6 +43,21 @@ export interface AccountSummary {
   createdAt: string;
 }
 
+/**
+ * Αποτέλεσμα δημιουργίας λογαριασμού.
+ *
+ * Η πρόσκληση (email ορισμού κωδικού) **δεν** μπλοκάρει τη δημιουργία: ο
+ * λογαριασμός φτιάχνεται ακόμη κι αν το Authentik είναι άφταστο, και ο
+ * υπερδιαχειριστής μαθαίνει αμέσως ότι πρέπει να στείλει πρόσκληση αργότερα.
+ */
+export interface AccountCreated {
+  account: AccountSummary;
+  /** `true` όταν έφυγε email με σύνδεσμο ορισμού κωδικού. */
+  invited: boolean;
+  /** Γιατί δεν έφυγε — `null` όταν έφυγε κανονικά. */
+  inviteError: string | null;
+}
+
 export interface MemberSummary {
   id: string;
   firstName: string;
@@ -58,6 +73,14 @@ export interface MemberSummary {
   /** Έχει ενεργό πτυχίο «Στέλεχος SOS». */
   isSOS: boolean;
   birthDate: string | null;
+  /** Ηλικία σε συμπληρωμένα έτη (από `birthDate`). */
+  age: number | null;
+  /** Συναίνεση GDPR (από e-SEO). */
+  gdprConsent: boolean;
+  /** Άδεια χρήσης φωτογραφιών — του ιδίου ή του γονέα (από e-SEO). */
+  photoConsent: boolean;
+  /** Επιβεβαιωμένη/πληρωμένη συνδρομή τρέχουσας περιόδου (e-SEO). */
+  syndromiPaid: boolean;
   /** Υπόλοιπο οφειλής σε ευρώ για την τρέχουσα περίοδο. */
   balanceDue: number;
 }
@@ -110,6 +133,16 @@ export interface YlikoAvailability {
   reservedQty: number;
   availableQty: number;
   ownerKladosType: KladosType | null;
+  /**
+   * Σχέση με την εμβέλεια της λίστας: `OWNED` = ανήκει στον κλάδο/Τοπικό της
+   * σελίδας· `BORROWED` = δανεισμένο σε αυτόν τον κλάδο από αλλού (ο ιδιοκτήτης
+   * είναι το `ownerKladosType`). Στη σελίδα Τοπικού όλα είναι `OWNED`.
+   */
+  relation: 'OWNED' | 'BORROWED';
+  /** Μόνο όταν `BORROWED`: πόσα τεμάχια έχει δανειστεί τώρα αυτός ο κλάδος. */
+  borrowedQty?: number;
+  /** Μόνο όταν `BORROWED`: έως πότε (η τελευταία ενεργή δέσμευση). */
+  borrowedUntil?: string | null;
   /** Σημείο αποθήκευσης (από τη ρυθμιζόμενη λίστα), αν έχει οριστεί. */
   storagePointId: string | null;
   storagePointName: string | null;

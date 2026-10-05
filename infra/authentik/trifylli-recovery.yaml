@@ -1,0 +1,238 @@
+# Ορισμός και επαναφορά κωδικού — Authentik blueprint για το Trifylli.
+#
+# Λύνει δύο προβλήματα με την ίδια ροή:
+#   1. **Πρόσκληση**: ο υπερδιαχειριστής φτιάχνει λογαριασμό στο `/accounts`· το
+#      API ζητά από το Authentik να στείλει σύνδεσμο ορισμού κωδικού. Κανένας
+#      δεν χρειάζεται να επινοήσει, να γράψει σε chat ή να θυμάται προσωρινό
+#      κωδικό — ο χρήστης ορίζει μόνος του τον δικό του.
+#   2. **Ξέχασα τον κωδικό**: ο ίδιος σύνδεσμος, αλλά τον ζητά ο χρήστης από την
+#      οθόνη σύνδεσης.
+#
+# Χωρίς αυτό το blueprint το Authentik δεν έχει ροή `recovery`: η οθόνη σύνδεσης
+# δεν δείχνει «Ξέχασα τον κωδικό» και το `recovery_email` του API απαντά 404.
+#
+# Προϋπόθεση: ρυθμισμένος SMTP (`AUTHENTIK_EMAIL__*` στο compose). Στο dev τα
+# μηνύματα πάνε στο Mailpit — http://localhost:8025.
+#
+# Εφαρμόζεται αυτόματα από τον worker (mount στο /blueprints/custom), ή χειροκίνητα:
+#   docker compose exec authentik-worker ak apply_blueprint /blueprints/custom/trifylli-recovery.yaml
+version: 1
+metadata:
+  name: Trifylli — ορισμός & επαναφορά κωδικού
+  labels:
+    blueprints.goauthentik.io/instantiate: 'true'
+
+entries:
+  # ── Η ροή ──
+  #
+  # `require_unauthenticated`: ο σύνδεσμος απευθύνεται σε κάποιον που δεν μπορεί
+  # να μπει. Αν είναι ήδη συνδεδεμένος, αλλάζει κωδικό από τις ρυθμίσεις του.
+  - model: authentik_flows.flow
+    id: trifylli-recovery-flow
+    identifiers:
+      slug: trifylli-recovery
+    attrs:
+      name: Trifylli — ορισμός κωδικού
+      title: Ορισμός κωδικού
+      designation: recovery
+      authentication: require_unauthenticated
+
+  # ── 10. Ποιος είσαι ──
+  #
+  # Μόνο email και username, όπως και η οθόνη σύνδεσης. Το `pretend_user_exists`
+  # κρατά την ίδια απάντηση για υπαρκτό και ανύπαρκτο email: αλλιώς η φόρμα
+  # γίνεται εργαλείο επιβεβαίωσης διευθύνσεων.
+  - model: authentik_stages_identification.identificationstage
+    id: trifylli-recovery-identification
+    identifiers:
+      name: trifylli-recovery-identification
+    attrs:
+      user_fields:
+        - email
+        - username
+      case_insensitive_matching: true
+      pretend_user_exists: true
+      show_matched_user: false
+
+  # ── 20. Το email με τον σύνδεσμο ──
+  #
+  # `use_global_settings`: ο SMTP έρχεται από το περιβάλλον του container, άρα
+  # το ίδιο blueprint δουλεύει σε dev (Mailpit) και prod (πραγματικός πάροχος)
+  # χωρίς να γράφουμε ποτέ διαπιστευτήρια σε αρχείο του repo.
+  #
+  # `activate_user_on_success`: αν κάποιος χρήστης είναι απενεργοποιημένος στο
+  # Authentik, ο σύνδεσμος τον ξαναζωντανεύει μόλις ορίσει κωδικό. Το API
+  # δημιουργεί τους προσκεκλημένους **ενεργούς αλλά χωρίς κωδικό** (δεν μπαίνουν
+  # μέχρι να ορίσουν), ώστε να δουλεύει και το «ξέχασα τον κωδικό» αν χαθεί το
+  # πρώτο email.
+  - model: authentik_stages_email.emailstage
+    id: trifylli-recovery-email
+    identifiers:
+      name: trifylli-recovery-email
+    attrs:
+      use_global_settings: true
+      # 24 ώρες και όχι 30 λεπτά: η πρόσκληση φτάνει σε εθελοντές που ανοίγουν
+      # τα email τους το βράδυ, όχι σε υπαλλήλους μπροστά σε οθόνη.
+      # Αν αλλάξει, άλλαξε και το κείμενο «24 ώρες» στα πρότυπα email
+      # (infra/authentik/email-templates/trifylli_password_setup.*).
+      token_expiry: hours=24
+      subject: Trifylli — ορισμός κωδικού
+      # Δικό μας ελληνικό πρότυπο (`infra/authentik/email-templates`, mount στο
+      # /templates). Το προεπιλεγμένο `email/password_reset.html` είναι αγγλικό
+      # και μιλά για «your authentik account» — ο παραλήπτης όμως δεν ξέρει καν
+      # ότι υπάρχει Authentik.
+      template: trifylli_password_setup.html
+      activate_user_on_success: true
+      # Φρένο σε επαναλαμβανόμενα αιτήματα για το ίδιο email.
+      recovery_max_attempts: 5
+      recovery_cache_timeout: minutes=5
+
+  # ── 30. Ο νέος κωδικός ──
+  - model: authentik_stages_prompt.prompt
+    id: trifylli-recovery-field-password
+    identifiers:
+      name: trifylli-recovery-field-password
+    attrs:
+      field_key: password
+      label: Κωδικός
+      type: password
+      required: true
+      placeholder: Κωδικός
+      placeholder_expression: false
+      order: 0
+
+  - model: authentik_stages_prompt.prompt
+    id: trifylli-recovery-field-password-repeat
+    identifiers:
+      name: trifylli-recovery-field-password-repeat
+    attrs:
+      field_key: password_repeat
+      label: Επανάληψη κωδικού
+      type: password
+      required: true
+      placeholder: Επανάληψη κωδικού
+      placeholder_expression: false
+      order: 1
+
+  - model: authentik_stages_prompt.promptstage
+    id: trifylli-recovery-prompt
+    identifiers:
+      name: trifylli-recovery-prompt
+    attrs:
+      fields:
+        - !KeyOf trifylli-recovery-field-password
+        - !KeyOf trifylli-recovery-field-password-repeat
+      validation_policies: []
+
+  # ── 40. Αποθήκευση ──
+  #
+  # `never_create`: η ροή αλλάζει κωδικό σε υπαρκτό χρήστη. Χωρίς αυτό, ένα
+  # λάθος στα προηγούμενα στάδια θα δημιουργούσε καινούργιο χρήστη — δηλαδή
+  # λογαριασμό που δεν πέρασε ποτέ από τον υπερδιαχειριστή.
+  - model: authentik_stages_user_write.userwritestage
+    id: trifylli-recovery-user-write
+    identifiers:
+      name: trifylli-recovery-user-write
+    attrs:
+      user_creation_mode: never_create
+
+  # ── 100. Είσοδος ──
+  #
+  # Μόλις ορίσει κωδικό είναι ήδη ταυτοποιημένος (άνοιξε το email του). Μια
+  # δεύτερη οθόνη σύνδεσης εδώ δεν προσθέτει ασφάλεια, μόνο εγκατάλειψη.
+  - model: authentik_stages_user_login.userloginstage
+    id: trifylli-recovery-user-login
+    identifiers:
+      name: trifylli-recovery-user-login
+
+  - model: authentik_flows.flowstagebinding
+    id: trifylli-recovery-binding-identification
+    identifiers:
+      target: !KeyOf trifylli-recovery-flow
+      stage: !KeyOf trifylli-recovery-identification
+      order: 10
+    attrs:
+      evaluate_on_plan: true
+      # Ξαναζυγίζεται τη στιγμή που φτάνει η σειρά του σταδίου, όχι μόνο όταν
+      # φτιάχνεται το πλάνο — εκεί κρίνεται αν ερχόμαστε από τον σύνδεσμο.
+      re_evaluate_policies: true
+      policy_engine_mode: any
+      invalid_response_action: retry
+
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf trifylli-recovery-flow
+      stage: !KeyOf trifylli-recovery-email
+      order: 20
+    attrs:
+      evaluate_on_plan: true
+      invalid_response_action: retry
+
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf trifylli-recovery-flow
+      stage: !KeyOf trifylli-recovery-prompt
+      order: 30
+    attrs:
+      evaluate_on_plan: true
+      invalid_response_action: retry
+
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf trifylli-recovery-flow
+      stage: !KeyOf trifylli-recovery-user-write
+      order: 40
+    attrs:
+      evaluate_on_plan: true
+      invalid_response_action: retry
+
+  - model: authentik_flows.flowstagebinding
+    identifiers:
+      target: !KeyOf trifylli-recovery-flow
+      stage: !KeyOf trifylli-recovery-user-login
+      order: 100
+    attrs:
+      evaluate_on_plan: true
+      invalid_response_action: retry
+
+  # ── Ποιος ρωτά «ποιος είσαι» ──
+  #
+  # Το πλάνο που ταξιδεύει μέσα στον σύνδεσμο του email περιέχει **ολόκληρη** τη
+  # ροή, από την ταυτοποίηση και κάτω (έτσι το φτιάχνει το `recovery_email` του
+  # Authentik). Χωρίς αυτή την πολιτική, όποιος κλικάρει το email καταλήγει να
+  # ξαναγράφει το email του — ενώ το Authentik ξέρει ήδη ποιος είναι, αφού το
+  # token είναι δικό του. Το `is_restored` υπάρχει μόνο σε αποκατεστημένο πλάνο.
+  - model: authentik_policies_expression.expressionpolicy
+    id: trifylli-recovery-skip-identification
+    identifiers:
+      name: trifylli-recovery-skip-identification
+    attrs:
+      expression: |
+        # Ταυτοποίηση μόνο όταν ΔΕΝ ερχόμαστε από τον σύνδεσμο του email.
+        return not request.context.get("is_restored")
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      policy: !KeyOf trifylli-recovery-skip-identification
+      target: !KeyOf trifylli-recovery-binding-identification
+      order: 0
+    attrs:
+      negate: false
+      enabled: true
+      timeout: 30
+
+  # ── Πού φαίνεται ──
+  #
+  # Στο brand, ώστε το `/if/flow/.../recovery` και τα admin «recovery link» να
+  # ξέρουν ποια ροή να τρέξουν.
+  - model: authentik_brands.brand
+    identifiers:
+      domain: authentik-default
+    attrs:
+      flow_recovery: !KeyOf trifylli-recovery-flow
+
+  # Ο σύνδεσμος «Ξέχασα τον κωδικό» στην οθόνη σύνδεσης μπαίνει από το
+  # `infra/authentik/setup.sh`: το στάδιο `default-authentication-identification`
+  # είναι της Authentik και ένα blueprint entry το ξαναγράφει ΟΛΟΚΛΗΡΟ (η
+  # επικύρωση απορρίπτει attrs χωρίς `user_fields`). Ένα PATCH στο API αλλάζει
+  # μόνο το πεδίο που μας αφορά και αφήνει τα υπόλοιπα όπως τα βρήκε.
