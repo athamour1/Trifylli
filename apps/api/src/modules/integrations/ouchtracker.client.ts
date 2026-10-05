@@ -155,6 +155,35 @@ export class OuchtrackerClient {
     return kits.map((k) => ({ id: k.id, name: k.name, location: k.location ?? null }));
   }
 
+  /**
+   * Μετρητές λήξης ανά Kit: πόσα είδη έχουν **λήξει** και πόσα **λήγουν σύντομα**
+   * (έως `soonDays` ημέρες). Κλειδί = OuchTracker kit id. Μία κλήση για όλα τα
+   * kit· ο καλών το τυλίγει best-effort (να μη ρίχνει τη λίστα φαρμακείων).
+   */
+  async kitExpiryCounts(
+    soonDays = 30,
+  ): Promise<Record<string, { expired: number; expiringSoon: number }>> {
+    const kits = await this.get('/api/kits', z.array(kitSchema));
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const soon = new Date(today.getTime() + soonDays * 24 * 60 * 60 * 1000);
+
+    const out: Record<string, { expired: number; expiringSoon: number }> = {};
+    for (const kit of kits) {
+      let expired = 0;
+      let expiringSoon = 0;
+      for (const item of kit.kitItems) {
+        if (!item.expirationDate) continue;
+        const d = new Date(item.expirationDate);
+        if (Number.isNaN(d.getTime())) continue;
+        if (d < today) expired += 1;
+        else if (d <= soon) expiringSoon += 1;
+      }
+      out[kit.id] = { expired, expiringSoon };
+    }
+    return out;
+  }
+
   /** Οι χρήστες του OuchTracker — για αντιστοίχιση με μέλη κλάδου μέσω email. */
   async listUsers(): Promise<{ id: string; email: string }[]> {
     const users = await this.get('/api/users', z.array(ouchUserSchema));

@@ -60,6 +60,28 @@
             <div class="row items-center no-wrap">
               <q-icon name="local_pharmacy" class="q-mr-sm" :style="{ color: 'var(--klados-ink, var(--q-primary))' }" />
               <div class="text-subtitle1 text-weight-medium ellipsis">{{ kit.name }}</div>
+              <q-space />
+              <!-- Quick-view λήξεων: ένας αριθμός (ληγμένα + λήγουν σύντομα),
+                   κόκκινος αν υπάρχει ληγμένο· στο hover η ανάλυση. -->
+              <q-chip
+                v-if="kit.expiry.expired + kit.expiry.expiringSoon > 0"
+                dense
+                size="sm"
+                class="q-ml-sm"
+                text-color="white"
+                :color="kit.expiry.expired > 0 ? 'negative' : 'warning'"
+                :icon="kit.expiry.expired > 0 ? 'event_busy' : 'schedule'"
+              >
+                {{ kit.expiry.expired + kit.expiry.expiringSoon }}
+                <q-tooltip class="text-body2">
+                  <div v-if="kit.expiry.expired > 0">
+                    <q-icon name="event_busy" size="16px" class="q-mr-xs" />{{ kit.expiry.expired }} ληγμένα
+                  </div>
+                  <div v-if="kit.expiry.expiringSoon > 0">
+                    <q-icon name="schedule" size="16px" class="q-mr-xs" />{{ kit.expiry.expiringSoon }} λήγουν σύντομα (≤30 ημ.)
+                  </div>
+                </q-tooltip>
+              </q-chip>
             </div>
             <!-- Σχέση με την εμβέλεια -->
             <div class="q-mt-xs">
@@ -175,11 +197,10 @@
             outlined dense
             label="Σε ποιον δανείζεται"
           />
-          <q-input
+          <DateField
             v-model="lendDue"
-            outlined dense class="q-mt-sm"
+            class="q-mt-sm"
             label="Έως (προαιρετικό)"
-            type="date"
             hint="Στη λήξη επιστρέφεται αυτόματα."
           />
           <q-input v-model="lendNote" outlined dense class="q-mt-md" label="Σημείωση (προαιρετικό)" type="textarea" autogrow />
@@ -207,6 +228,7 @@ import { useAuthStore } from '../stores/auth';
 import { get, post, del } from '../lib/api';
 import { formatDate } from '../lib/format';
 import { OUCHTRACKER_URL } from '../lib/runtime-config';
+import DateField from '../components/DateField.vue';
 
 const TOPIKO = '__TOPIKO__';
 
@@ -224,6 +246,8 @@ interface KitView {
     dueAt: string | null;
     overdue: boolean;
   } | null;
+  /** Quick-view λήξεων ειδών του kit. */
+  expiry: { expired: number; expiringSoon: number };
 }
 interface ListResponse { configured: boolean; kits: KitView[] }
 

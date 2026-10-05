@@ -56,11 +56,23 @@ export class PharmaciesService {
     const borrowed = borrowedRaw.filter((k) => k.kladosId !== scopeKladosId);
 
     const configured = this.ouchtracker.configured;
+
+    // Μετρητές λήξης ανά kit — μία κλήση στο OuchTracker. Best-effort: αν
+    // αποτύχει (π.χ. offline), η λίστα βγαίνει κανονικά χωρίς τα badge.
+    const expiry = configured
+      ? await this.ouchtracker.kitExpiryCounts().catch((e: unknown) => {
+          this.logger.warn(
+            `Αποτυχία ανάκτησης λήξεων OuchTracker: ${e instanceof Error ? e.message : String(e)}`,
+          );
+          return {} as Record<string, { expired: number; expiringSoon: number }>;
+        })
+      : {};
+
     return {
       configured,
       kits: [
-        ...own.map((k) => this.toView(k, 'OWNED')),
-        ...borrowed.map((k) => this.toView(k, 'BORROWED')),
+        ...own.map((k) => this.toView(k, 'OWNED', expiry[k.ouchtrackerKitId])),
+        ...borrowed.map((k) => this.toView(k, 'BORROWED', expiry[k.ouchtrackerKitId])),
       ],
     };
   }
@@ -399,6 +411,7 @@ export class PharmaciesService {
       loans: { id: string; toKladosId: string | null; borrowedAt: Date; dueAt: Date | null; toKlados: { type: KladosType } | null }[];
     },
     relation: 'OWNED' | 'BORROWED',
+    expiry?: { expired: number; expiringSoon: number },
   ) {
     const ownerType = kit.klados?.type ?? null;
     const loan = kit.loans[0] ?? null;
@@ -407,6 +420,8 @@ export class PharmaciesService {
       name: kit.name,
       ouchtrackerKitId: kit.ouchtrackerKitId,
       relation,
+      // Quick-view λήξεων (0/0 αν δεν υπάρχουν δεδομένα OuchTracker).
+      expiry: { expired: expiry?.expired ?? 0, expiringSoon: expiry?.expiringSoon ?? 0 },
       owner: { kladosType: ownerType, label: ownerType ? KLADOS_LABEL[ownerType] : 'Τοπικό' },
       loan: loan
         ? {
