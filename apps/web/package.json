@@ -1,5 +1,6 @@
 {
   "name": "@trifylli/web",
+  "productName": "Trifylli",
   "version": "0.1.0",
   "private": true,
   "description": "Trifylli PWA — Quasar (Vue 3) offline-first client",

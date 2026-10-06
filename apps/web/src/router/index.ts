@@ -1,5 +1,6 @@
 import { defineRouter } from '#q-app/wrappers';
 import { createMemoryHistory, createRouter, createWebHashHistory, createWebHistory } from 'vue-router';
+import { KLADOS_LABEL, type KladosType } from '@trifylli/shared';
 import routes from './routes';
 import { useSessionStore } from '../stores/session';
 import { useAuthStore } from '../stores/auth';
@@ -43,6 +44,21 @@ export default defineRouter(() => {
     }
 
     return true;
+  });
+
+  /**
+   * Ο τίτλος της καρτέλας.
+   *
+   * Το πρότυπο του Quasar γράφει `productName` **μία φορά**, στο build — οπότε
+   * κάθε σελίδα έδειχνε το ίδιο. Εδώ ακολουθεί τη διαδρομή, με τον κλάδο μέσα:
+   * με τρεις καρτέλες ανοιχτές σε Αστέρια/Πουλιά/Οδηγούς, το «Υλικό» σκέτο δεν
+   * λέει τίποτα. Ο κλάδος διαβάζεται από την παράμετρο — η ετικέτα είναι
+   * στατικός χάρτης, δεν περιμένει το προφίλ να φορτώσει.
+   */
+  router.afterEach((to) => {
+    const klados = KLADOS_LABEL[to.params.klados as KladosType] as string | undefined;
+    const parts = [to.meta.title, klados].filter(Boolean);
+    document.title = parts.length > 0 ? `${parts.join(' — ')} · Trifylli` : 'Trifylli';
   });
 
   return router;
