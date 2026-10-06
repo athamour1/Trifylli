@@ -27,6 +27,15 @@ x-logging: &logging
       max-size: '10m'
       max-file: '3'
 
+# Σκλήρυνση για τα δικά μας containers (Node): καμία ικανότητα kernel, καμία
+# απόκτηση προνομίων από setuid binaries. Αν ποτέ εκτελεστεί κώδικας μέσα στο
+# container, μένει μέσα στο container.
+x-hardened: &hardened
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -88,6 +97,17 @@ services:
       TRIFYLLI_APP_URL: ${TRIFYLLI_APP_URL:?TRIFYLLI_APP_URL is required (π.χ. https://app.trifylli.gr/)}
       OUCHTRACKER_APP_URL: ${OUCHTRACKER_APP_URL:?OUCHTRACKER_APP_URL is required (π.χ. https://ouch.trifylli.gr/)}
       AUTHENTIK_LOG_LEVEL: ${AUTHENTIK_LOG_LEVEL:-info}
+      # ── Blueprint ασφάλειας (trifylli-security.yaml) ──
+      # Το κλειδί του token του service account `trifylli-api` (ίδια τιμή με το
+      # AUTHENTIK_API_TOKEN του API). Υποχρεωτικό: χωρίς αυτό δεν φεύγουν προσκλήσεις.
+      TRIFYLLI_API_TOKEN: ${AUTHENTIK_API_TOKEN:?AUTHENTIK_API_TOKEN is required (openssl rand -hex 32)}
+      # MFA: `configure` = όποιος δεν έχει authenticator στήνει TOTP στην πρώτη
+      # σύνδεση. `skip` μόνο αν συνειδητά δεν θέλεις MFA.
+      TRIFYLLI_MFA_NOT_CONFIGURED: ${AUTHENTIK_MFA_MODE:-configure}
+      # Αν ο reverse proxy ΔΕΝ είναι σε ιδιωτική IP (default: 10/8, 172.16/12,
+      # 192.168/16, 127/8), δήλωσέ τον εδώ — αλλιώς το Authentik βλέπει την IP
+      # του proxy και το φρένο brute force κλειδώνει όλους μαζί.
+      AUTHENTIK_LISTEN__TRUSTED_PROXY_CIDRS: ${AUTHENTIK_TRUSTED_PROXY_CIDRS:-127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
       # ── Email (ανάκτηση κωδικού, ειδοποιήσεις) ──
       # Πραγματικός πάροχος SMTP. Υποχρεωτικός: χωρίς αυτόν η «ανάκτηση κωδικού»
       # αποτυγχάνει τη στιγμή που κάποιος τη χρειάζεται, και κανείς δεν το
@@ -191,7 +211,7 @@ services:
   migrate:
     image: ghcr.io/athamour1/trifylli/api:${TAG:-latest}
     restart: 'no'
-    <<: *logging
+    <<: [*logging, *hardened]
     working_dir: /repo/apps/api
     command: ['node_modules/.bin/prisma', 'migrate', 'deploy']
     environment:
@@ -204,7 +224,12 @@ services:
   api:
     image: ghcr.io/athamour1/trifylli/api:${TAG:-latest}
     restart: always
-    <<: *logging
+    <<: [*logging, *hardened]
+    # Τρέχει ως `node` (>1024 port), δεν γράφει στον δίσκο: read-only root,
+    # μόνο /tmp σε μνήμη.
+    read_only: true
+    tmpfs:
+      - /tmp
     environment:
       NODE_ENV: production
       PORT: 3000
@@ -221,7 +246,12 @@ services:
       # Tokens) σε λογαριασμό με δικαίωμα διαχείρισης χρηστών. Χωρίς αυτό οι
       # λογαριασμοί δημιουργούνται κανονικά, αλλά κανένα email δεν φεύγει.
       AUTHENTIK_API_URL: ${AUTHENTIK_API_URL:-http://authentik-server:9000}
-      AUTHENTIK_API_TOKEN: ${AUTHENTIK_API_TOKEN:-}
+      AUTHENTIK_API_TOKEN: ${AUTHENTIK_API_TOKEN:?AUTHENTIK_API_TOKEN is required (openssl rand -hex 32)}
+      # Ένας reverse proxy μπροστά: το API εμπιστεύεται ΕΝΑ hop X-Forwarded-For
+      # για την IP πελάτη (rate limiting, logs). Όχι `true` — θα ήταν spoofable.
+      TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-1}
+      # Το Swagger είναι ο χάρτης του API· κλειστό εκτός αν το ανοίξεις ρητά.
+      SWAGGER_ENABLED: ${SWAGGER_ENABLED:-false}
       # ── Αποθήκευση αρχείων (Garage S3) ──
       S3_ENDPOINT: http://garage:3900
       S3_REGION: ${S3_REGION:-garage}
@@ -254,6 +284,18 @@ services:
   web:
     image: ghcr.io/athamour1/trifylli/web:${TAG:-latest}
     restart: always
+    <<: *logging
+    security_opt:
+      - no-new-privileges:true
+    # Το nginx ξεκινά ως root μόνο για να δέσει την :80 και να αλλάξει σε
+    # `nginx`: μόνο αυτές οι τέσσερις ικανότητες, τίποτα άλλο.
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+      - NET_BIND_SERVICE
     # Ρυθμίσεις runtime (ο entrypoint γράφει το /config.js) — ίδια image για κάθε
     # περιβάλλον, καμία ανάγκη rebuild όταν αλλάζει ένα URL.
     environment:
@@ -263,11 +305,37 @@ services:
       OIDC_LOGOUT_FLOW: ${VITE_OIDC_LOGOUT_FLOW:-trifylli-invalidation}
       # URL του OuchTracker — στόχος των deep-links των φαρμακείων.
       OUCHTRACKER_URL: ${VITE_OUCHTRACKER_URL:-}
-    <<: *logging
     ports:
       - '${BIND_ADDR:-127.0.0.1}:${WEB_PORT:-8080}:80'
     depends_on:
       - api
+
+  # ─────────────────── Αντίγραφα ασφαλείας βάσης ───────────────────
+  # Καθημερινό pg_dump όλων των βάσεων (Trifylli, Authentik, OuchTracker) σε
+  # ξεχωριστό volume, με περιστροφή. Το volume πρέπει να συγχρονίζεται ΕΚΤΟΣ
+  # διακομιστή (rclone/restic/rsync) — ένα backup στον ίδιο δίσκο με τη βάση
+  # προστατεύει από λάθος `DELETE`, όχι από χαμένο δίσκο. Επαναφορά:
+  #   zcat backups/daily/trifylli-*.sql.gz | docker compose exec -T postgres psql -U trifylli trifylli
+  backup:
+    image: prodrigestivill/postgres-backup-local:16
+    restart: always
+    <<: [*logging, *hardened]
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: ${POSTGRES_DB:-trifylli},${AUTHENTIK_DB:-authentik},${OUCHTRACKER_DB:-ouchtracker}
+      POSTGRES_USER: ${POSTGRES_USER:-trifylli}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_EXTRA_OPTS: '-Z6 --blobs'
+      SCHEDULE: ${BACKUP_SCHEDULE:-@daily}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+      BACKUP_KEEP_WEEKS: ${BACKUP_KEEP_WEEKS:-8}
+      BACKUP_KEEP_MONTHS: ${BACKUP_KEEP_MONTHS:-6}
+      HEALTHCHECK_PORT: 8080
+    volumes:
+      - postgres-backups:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   # ─────────────────── OuchTracker (φαρμακεία) ───────────────────
   # Μοιράζεται Postgres (δική του βάση), Authentik (SSO) και το ίδιο domain
@@ -316,6 +384,7 @@ services:
       - ouchtracker-backend
 
 volumes:
+  postgres-backups:
   postgres-data:
   redis-data:
   authentik-media:

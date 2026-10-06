@@ -6,6 +6,11 @@
 
 name: trifylli
 
+# Όλες οι θύρες δένονται στο `DEV_BIND_ADDR` (default 127.0.0.1): η στοίβα
+# ανάπτυξης τρέχει με default κωδικούς και ΔΕΝ πρέπει να ακούει σε κοινό Wi-Fi.
+# Για δοκιμή από κινητό στο ίδιο δίκτυο: `DEV_BIND_ADDR=0.0.0.0` στο .env —
+# συνειδητά και προσωρινά.
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -17,7 +22,7 @@ services:
       AUTHENTIK_DB: ${AUTHENTIK_DB:-authentik}
       OUCHTRACKER_DB: ${OUCHTRACKER_DB:-ouchtracker}
     ports:
-      - '${POSTGRES_PORT:-5432}:5432'
+      - '${DEV_BIND_ADDR:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432'
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
@@ -52,8 +57,8 @@ services:
       MP_SMTP_AUTH_ACCEPT_ANY: 1
       MP_SMTP_AUTH_ALLOW_INSECURE: 1
     ports:
-      - '${MAILPIT_SMTP_PORT:-1025}:1025'
-      - '${MAILPIT_UI_PORT:-8025}:8025'
+      - '${DEV_BIND_ADDR:-127.0.0.1}:${MAILPIT_SMTP_PORT:-1025}:1025'
+      - '${DEV_BIND_ADDR:-127.0.0.1}:${MAILPIT_UI_PORT:-8025}:8025'
     healthcheck:
       test: ['CMD', '/mailpit', 'readyz']
       interval: 10s
@@ -80,6 +85,12 @@ services:
       # κλικ στο UI. Μόνο για development.
       AUTHENTIK_BOOTSTRAP_TOKEN: ${AUTHENTIK_BOOTSTRAP_TOKEN:-}
       AUTHENTIK_LOG_LEVEL: ${AUTHENTIK_LOG_LEVEL:-info}
+      # ── Blueprint ασφάλειας (trifylli-security.yaml) ──
+      # Το κλειδί του token που δίνεται στο service account `trifylli-api` — η
+      # ΙΔΙΑ τιμή πηγαίνει και στο API ως AUTHENTIK_API_TOKEN.
+      TRIFYLLI_API_TOKEN: ${AUTHENTIK_API_TOKEN:-trifylli-dev-api-token}
+      # MFA όταν ο χρήστης δεν έχει authenticator: `skip` στο dev, `configure` σε prod.
+      TRIFYLLI_MFA_NOT_CONFIGURED: ${AUTHENTIK_MFA_MODE:-skip}
       # ── Email (ανάκτηση κωδικού, ειδοποιήσεις) ──
       # Στο development ο SMTP είναι το Mailpit: τίποτα δεν φεύγει προς τα έξω
       # και κάθε μήνυμα φαίνεται στο http://localhost:8025. Έτσι η ροή
@@ -105,7 +116,7 @@ services:
       # Ελληνικά πρότυπα email (ορισμός κωδικού) — `email.template_dir`.
       - ./infra/authentik/email-templates:/templates:ro
     ports:
-      - '${AUTHENTIK_PORT:-9010}:9000'
+      - '${DEV_BIND_ADDR:-127.0.0.1}:${AUTHENTIK_PORT:-9010}:9000'
     depends_on:
       postgres:
         condition: service_healthy
@@ -142,8 +153,8 @@ services:
       - ./infra/garage/garage.toml:/etc/garage.toml:ro
       - garage-data:/var/lib/garage
     ports:
-      - '${GARAGE_S3_PORT:-3900}:3900'
-      - '${GARAGE_ADMIN_PORT:-3903}:3903'
+      - '${DEV_BIND_ADDR:-127.0.0.1}:${GARAGE_S3_PORT:-3900}:3900'
+      - '${DEV_BIND_ADDR:-127.0.0.1}:${GARAGE_ADMIN_PORT:-3903}:3903'
 
   # One-shot: αναθέτει layout, φτιάχνει bucket + σταθερό key (idempotent).
   garage-init:
@@ -171,6 +182,9 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: production
+      # Στο dev το Swagger μένει ανοιχτό παρά το NODE_ENV=production (που εδώ
+      # σημαίνει «χτισμένο bundle», όχι «ζωντανό σύστημα»).
+      SWAGGER_ENABLED: ${SWAGGER_ENABLED:-true}
       PORT: 3000
       DATABASE_URL: postgresql://${POSTGRES_USER:-trifylli}:${POSTGRES_PASSWORD:-trifylli}@postgres:5432/${POSTGRES_DB:-trifylli}?schema=public
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080}
@@ -182,10 +196,11 @@ services:
       OIDC_JWKS_URI: ${OIDC_JWKS_URI:-http://authentik-server:9000/application/o/trifylli/jwks/}
       SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL:-}
       # Admin API του Authentik: το API ζητά να σταλεί σύνδεσμος ορισμού κωδικού
-      # όταν ο υπερδιαχειριστής φτιάχνει λογαριασμό. Εσωτερικό DNS — το token
-      # είναι του bootstrap διαχειριστή στο dev.
+      # όταν ο υπερδιαχειριστής φτιάχνει λογαριασμό. Εσωτερικό DNS. Το token
+      # ανήκει στο service account `trifylli-api` με ελάχιστα δικαιώματα (το
+      # φτιάχνει το blueprint trifylli-security.yaml από την ίδια τιμή).
       AUTHENTIK_API_URL: ${AUTHENTIK_API_URL:-http://authentik-server:9000}
-      AUTHENTIK_API_TOKEN: ${AUTHENTIK_API_TOKEN:-${AUTHENTIK_BOOTSTRAP_TOKEN:-}}
+      AUTHENTIK_API_TOKEN: ${AUTHENTIK_API_TOKEN:-trifylli-dev-api-token}
       OUCHTRACKER_BASE_URL: ${OUCHTRACKER_BASE_URL:-http://ouchtracker-backend:3000}
       OUCHTRACKER_EMAIL: ${OUCHTRACKER_EMAIL:-}
       OUCHTRACKER_PASSWORD: ${OUCHTRACKER_PASSWORD:-}
@@ -203,7 +218,7 @@ services:
       S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?S3_SECRET_ACCESS_KEY is required}
       S3_FORCE_PATH_STYLE: 'true'
     ports:
-      - '${API_PORT:-3000}:3000'
+      - '${DEV_BIND_ADDR:-127.0.0.1}:${API_PORT:-3000}:3000'
     # Για να φτάνει το API σε υπηρεσίες του host (π.χ. Ouchtracker στο :80).
     extra_hosts:
       - 'host.docker.internal:host-gateway'
@@ -227,7 +242,7 @@ services:
       OIDC_LOGOUT_FLOW: ${VITE_OIDC_LOGOUT_FLOW:-trifylli-invalidation}
       OUCHTRACKER_URL: ${VITE_OUCHTRACKER_URL:-http://localhost:9100}
     ports:
-      - '${WEB_PORT:-8080}:80'
+      - '${DEV_BIND_ADDR:-127.0.0.1}:${WEB_PORT:-8080}:80'
     depends_on:
       - api
 
@@ -274,7 +289,7 @@ services:
       OIDC_AUTHORITY: ${OUCHTRACKER_OIDC_ISSUER:-http://localhost:9010/application/o/ouchtracker/}
       OIDC_CLIENT_ID: ${OUCHTRACKER_OIDC_CLIENT_ID:-ouchtracker}
     ports:
-      - '${OUCHTRACKER_WEB_PORT:-9100}:80'
+      - '${DEV_BIND_ADDR:-127.0.0.1}:${OUCHTRACKER_WEB_PORT:-9100}:80'
     depends_on:
       - ouchtracker-backend
 
