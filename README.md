@@ -13,8 +13,8 @@
 ```bash
 pnpm install
 cp apps/api/.env.example apps/api/.env
-pnpm infra:up                  # Postgres, Redis, Authentik
-pnpm infra:sso                 # provider, application και χρήστες ανάπτυξης
+pnpm infra:up                  # Postgres, Redis, Mailpit, Authentik, Garage S3
+pnpm infra:sso                 # blueprints (OIDC, κωδικός, εμφάνιση) + χρήστες ανάπτυξης
 pnpm db:migrate                # δημιουργεί το σχήμα
 pnpm db:seed                   # δεδομένα ενός πλήρους Τοπικού
 pnpm dev                       # API :3000 · PWA :9000
@@ -26,6 +26,7 @@ Authentik θέλει λίγα λεπτά για migrations.
 * API & Swagger: <http://localhost:3000/api/docs>
 * PWA: <http://localhost:9000>
 * Authentik: <http://localhost:9010>
+* **Mailpit** (όλα τα email της ανάπτυξης): <http://localhost:8025>
 
 ### Σύνδεση
 
@@ -57,6 +58,73 @@ curl -H 'x-dev-email: seed-0010@trifylli.local' http://localhost:3000/api/me
 
 ---
 
+## Αρχιτεκτονική
+
+Μία στοίβα, τρία «προϊόντα» που μοιράζονται ταυτότητα και βάση: το Trifylli
+(API + PWA), το OuchTracker (φαρμακεία) και το Authentik που απαντά **μόνο**
+στο «ποιος είσαι».
+
+```mermaid
+flowchart LR
+    subgraph browser["Πρόγραμμα περιήγησης"]
+        pwa["Trifylli PWA<br/>service worker · ουρά IndexedDB"]
+        otui["OuchTracker UI"]
+    end
+
+    subgraph edge["Στατικό σερβίρισμα"]
+        web["web — nginx :8080<br/>runtime /config.js"]
+        otf["ouchtracker-frontend :9100"]
+    end
+
+    subgraph apps["Εφαρμογές"]
+        api["api — NestJS :3000<br/>REST · RBAC · ενσωματώσεις"]
+        otb["ouchtracker-backend"]
+        ak["authentik-server :9010<br/>authentik-worker — email, blueprints"]
+    end
+
+    subgraph data["Δεδομένα & υποδομή"]
+        pg[("postgres<br/>trifylli · authentik · ouchtracker")]
+        rd[("redis")]
+        s3[("garage — S3<br/>αποδείξεις, εικόνες")]
+        mp["mailpit :8025<br/>ΜΟΝΟ σε development"]
+    end
+
+    eseo["e-SEO — μητρώο Σ.Ε.Ο."]
+    smtp["SMTP παρόχου<br/>ΜΟΝΟ σε παραγωγή"]
+
+    web -. "σερβίρει" .-> pwa
+    otf -. "σερβίρει" .-> otui
+
+    pwa -->|"REST + Bearer"| api
+    pwa -->|"OIDC · PKCE"| ak
+    pwa -->|"deep-link φαρμακείων"| otui
+    otui -->|"OIDC"| ak
+    otui --> otb
+
+    api --> pg
+    api --> s3
+    api -->|"πρόσκληση & επαναφορά κωδικού"| ak
+    api -->|"δανεισμός kit"| otb
+    api <-->|"cron + webhook"| eseo
+
+    otb --> pg
+    ak --> pg
+    ak --> rd
+    ak -->|"email"| mp
+    ak -->|"email"| smtp
+
+    classDef dev fill:#fff8e1,stroke:#f9a825;
+    classDef prod fill:#e8f5e9,stroke:#2e7d32;
+    class mp dev
+    class smtp prod
+```
+
+Σε **development** τα email πάνε στο Mailpit και δεν φεύγει τίποτα προς τα έξω·
+σε **παραγωγή** τη θέση του παίρνει ο πραγματικός SMTP (`SMTP_*`) και το
+`migrate` service τρέχει τα Prisma migrations πριν ξεκινήσει το API.
+
+---
+
 ## Δομή
 
 ```
@@ -66,8 +134,16 @@ apps/
 packages/
   shared/         Enums, ελληνικές ετικέτες, κανόνες πρόσβασης — κοινά σε API & PWA
 infra/
-  authentik/      Blueprint (provider, ροή, εφαρμογή), branding και setup.sh
-  postgres/init/  Δημιουργία της βάσης του Authentik στο πρώτο boot
+  authentik/
+    trifylli-oidc.yaml       Blueprint: provider, εφαρμογή, ροές σύνδεσης/αποσύνδεσης
+    trifylli-recovery.yaml   Blueprint: ροή «ορισμός & επαναφορά κωδικού»
+    trifylli-branding.yaml   Blueprint: λογότυπο, φόντο και ΟΛΟ το custom CSS
+    ouchtracker-oidc.yaml    Blueprint: η δεύτερη OIDC εφαρμογή (SSO)
+    branding/                logo.svg, favicon.svg, clover-pattern.webp
+    email-templates/         Ελληνικά πρότυπα email (mount στο /templates)
+    setup.sh                 Εφαρμογή blueprints + χρήστες ανάπτυξης
+  garage/         Ρυθμίσεις και αρχικοποίηση του S3 (layout, bucket, key)
+  postgres/init/  Δημιουργία των βάσεων Authentik/OuchTracker στο πρώτο boot
 ```
 
 Το `packages/shared` είναι ο λόγος που το UI δεν δείχνει ποτέ κουμπί που ο
@@ -87,7 +163,8 @@ server θα απορρίψει: η συνάρτηση `can()` είναι **ο ί
 | `pnpm db:migrate` | Prisma migration σε development |
 | `pnpm db:seed` | Idempotent seed — τρέχει ξανά χωρίς διπλότυπα |
 | `pnpm db:studio` | Prisma Studio |
-| `pnpm infra:up` / `infra:down` | Υποδομές σε Docker |
+| `pnpm infra:up` / `infra:down` | Υποδομές σε Docker (Postgres, Redis, **Mailpit**, Authentik, Garage) |
+| `pnpm infra:sso` | Εφαρμόζει τα blueprints του Authentik και φτιάχνει χρήστες ανάπτυξης |
 
 Πλήρης στοίβα σε containers: `docker compose --profile full up -d`.
 
@@ -112,6 +189,23 @@ line στο [`availability.ts`](apps/api/src/modules/yliko/availability.ts). Η
 εφαρμογής, που ξέρει τη σημασιολογία τους (`recordedAt`, σειρά, ποια 4xx δεν
 αξίζει να ξαναδοκιμαστούν). Ένα background sync στο επίπεδο του SW θα τις
 έστελνε τυφλά.
+
+```mermaid
+flowchart LR
+    A["Ενέργεια χρήστη<br/>π.χ. παρουσία στο γήπεδο"] --> B{"Υπάρχει δίκτυο;"}
+    B -- "ναι" --> C["Απευθείας στο API"]
+    B -- "όχι" --> D[("Ουρά στο IndexedDB<br/>trifylli:outbox")]
+    C -- "σφάλμα δικτύου" --> D
+    D -- "συμβάν online" --> E["flush — μία-μία, με σειρά"]
+    E --> F{"Απάντηση"}
+    F -- "2xx" --> G["φεύγει από την ουρά"]
+    F -- "4xx" --> H["οριστική αποτυχία<br/>ορατή στον χρήστη, χωρίς επανάληψη"]
+    F -- "5xx ή δίκτυο" --> I["νέα προσπάθεια<br/>έως 5 φορές"]
+    I --> D
+```
+
+Το UI δείχνει πάντα πόσες εγγραφές εκκρεμούν και ποιες απέτυχαν: μια ουρά που
+κρύβεται είναι χειρότερη από καθόλου ουρά.
 
 **Το Authentik αυθεντικοποιεί, η βάση εξουσιοδοτεί.** Τα Authentik groups δεν
 δίνουν δικαιώματα: θα ήταν δεύτερη πηγή αλήθειας δίπλα στους λογαριασμούς που
@@ -152,13 +246,117 @@ Authentik με αυτό, δένει με τον λογαριασμό. Αν το 
 γίνεται υπερδιαχειριστής. Είναι το μοναδικό σημείο όπου ρόλος έρχεται από το
 περιβάλλον. Το `GET /api/setup-check` δείχνει τι λείπει.
 
+### Πρόσκληση και κωδικός
+
+**Το Trifylli δεν βλέπει ποτέ κωδικό** — ούτε προσωρινό. Η δημιουργία
+λογαριασμού ζητά από το Authentik να στείλει **σύνδεσμο ορισμού κωδικού** στο
+email του ατόμου· τον κωδικό τον διαλέγει μόνο του. Έτσι κανείς δεν χρειάζεται
+να επινοήσει κωδικό, να τον γράψει σε chat ή να τον πει σε συγκέντρωση.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Y as Υπερδιαχειριστής
+    participant T as Trifylli PWA
+    participant A as API
+    participant K as Authentik
+    participant M as SMTP · Mailpit σε dev
+    actor N as Νέο στέλεχος
+
+    Y->>T: Λογαριασμοί → Νέος λογαριασμός
+    T->>A: POST /api/accounts
+    A->>A: ρόλος + κλάδος στη βάση<br/>(κλειδί: το email)
+    A->>K: χρήστης αν λείπει, μετά recovery_email
+    K->>M: «Trifylli — ορισμός κωδικού»
+    M-->>N: email με σύνδεσμο (24 ώρες)
+    A-->>T: {account, invited, inviteError}
+    N->>K: ανοίγει τον σύνδεσμο → ορίζει κωδικό
+    K-->>N: αυτόματη είσοδος
+    N->>T: μπαίνει στην εφαρμογή
+```
+
+Αν η αποστολή αποτύχει (π.χ. χωρίς `AUTHENTIK_API_TOKEN`), ο λογαριασμός
+**δημιουργείται ούτως ή άλλως** και η απάντηση το λέει στο `inviteError` — η
+εναλλακτική θα ήταν ο υπερδιαχειριστής να ξαναπροσπαθήσει και να πάρει «υπάρχει
+ήδη λογαριασμός».
+
+Το κουμπί **✉** δίπλα σε κάθε λογαριασμό (`POST /api/accounts/:id/invite`)
+ξαναστέλνει τον ίδιο σύνδεσμο: για πρόσκληση που χάθηκε και για επαναφορά
+κωδικού. Ο χρήστης μπορεί επίσης να ζητήσει μόνος του «Ξέχασα τον κωδικό» από
+την οθόνη σύνδεσης — ίδια ροή, άλλη αφετηρία.
+
+> **Προσοχή σε μια σιωπή που μοιάζει με σφάλμα.** Το «Ξέχασα τον κωδικό» λέει
+> «Check your Inbox» ακόμη κι όταν το email **δεν** αντιστοιχεί σε χρήστη του
+> Authentik (`pretend_user_exists`), ώστε η δημόσια οθόνη να μη γίνεται εργαλείο
+> ανακάλυψης διευθύνσεων. Λογαριασμοί φτιαγμένοι πριν υπάρξει η πρόσκληση δεν
+> έχουν χρήστη στο Authentik: γι' αυτούς δεν θα έρθει ποτέ email — στείλε τους
+> πρόσκληση από το ✉, που δημιουργεί τον χρήστη και μετά στέλνει τον σύνδεσμο.
+> Το εικονίδιο ⏳ στους Λογαριασμούς δείχνει ακριβώς αυτούς που δεν έχουν μπει
+> ποτέ.
+
+### Email
+
+| | development | παραγωγή |
+| :--- | :--- | :--- |
+| SMTP | `mailpit` (υπηρεσία του compose) | πραγματικός πάροχος, `SMTP_*` |
+| Πού φτάνουν | <http://localhost:8025> — τίποτα δεν φεύγει έξω | στον παραλήπτη |
+| Υποχρεωτικά | κανένα (defaults) | `SMTP_HOST`, `SMTP_FROM` — αλλιώς η στοίβα δεν σηκώνεται |
+
+Τα μηνύματα τα στέλνει ο **worker** του Authentik, με δικά μας ελληνικά πρότυπα
+([`infra/authentik/email-templates`](infra/authentik/email-templates)) αντί για
+τα αγγλικά του Authentik, που μιλούν για «your authentik account» — ο
+παραλήπτης όμως δεν ξέρει καν ότι υπάρχει Authentik. Είναι σκόπιμα **χωρίς
+εικόνες**: τα URL των αρχείων του Authentik είναι υπογεγραμμένα και λήγουν, και
+οι πελάτες email μπλοκάρουν ούτως ή άλλως τις εικόνες — η ταυτότητα γίνεται με
+χρώμα και τυπογραφία.
+
+Έλεγχος ότι δουλεύει ο αγωγός, χωρίς να πειραχτεί λογαριασμός:
+
+```bash
+docker compose exec authentik-worker ak test_email kapoios@example.gr
+```
+
 ### Η ροή σύνδεσης
 
 Authorization Code + **PKCE**, δημόσιος client χωρίς secret — ό,τι μπει στο
-bundle μιας PWA είναι δημόσιο ούτως ή άλλως. Τα tokens ζουν στο `sessionStorage`:
-κλείνοντας την καρτέλα η συνεδρία τελειώνει, που είναι το σωστό για τον
-κοινόχρηστο υπολογιστή της Εστίας. Όσο η καρτέλα είναι ανοιχτή, η ανανέωση
-γίνεται σιωπηλά με κρυφό iframe.
+bundle μιας PWA είναι δημόσιο ούτως ή άλλως.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor X as Χρήστης
+    participant T as Trifylli PWA
+    participant K as Authentik
+    participant A as API
+
+    X->>T: ανοίγει σύνδεσμο της εφαρμογής
+    T->>T: χωρίς συνεδρία → signinRedirect<br/>state + PKCE verifier στο localStorage
+    T->>K: /authorize (code + PKCE)
+    K-->>X: μία οθόνη: email και κωδικός
+    X->>K: στοιχεία
+    K-->>T: /auth/callback?code&state
+    T->>K: code → tokens (sessionStorage)
+    T->>A: GET /api/me με Bearer
+    A->>A: sub ή email → λογαριασμός, ρόλος, κλάδος
+    A-->>T: προφίλ + δικαιώματα
+    T-->>X: η σελίδα που ζήτησε, ήδη γεμάτη
+```
+
+**Πού μένει τι.** Τα **tokens** στο `sessionStorage`: κλείνοντας την καρτέλα η
+συνεδρία τελειώνει, που είναι το σωστό για τον κοινόχρηστο υπολογιστή της
+Εστίας. Το **state** της αίτησης (με το PKCE verifier) και ο προορισμός
+επιστροφής στο `localStorage`, γιατί η επιστροφή δεν προσγειώνεται πάντα στην
+καρτέλα που ξεκίνησε: ο σύνδεσμος «ορισμός κωδικού» ανοίγει από το email, άρα
+σε **άλλη** καρτέλα — με `sessionStorage` το callback έσκαγε με «No matching
+state found in storage». Το state είναι βραχύβιο, καθαρίζεται μόλις
+καταναλωθεί, και χωρίς τον authorization code δεν αξίζει τίποτα.
+
+Κι αν παρ' όλα αυτά λείπει (άλλος browser, καθαρισμένα δεδομένα), η σελίδα
+επιστροφής **δεν** δείχνει αδιέξοδο: ζητά νέα αίτηση σύνδεσης και, με ζωντανή
+συνεδρία στο Authentik, ο χρήστης γυρίζει αμέσως πίσω χωρίς να γράψει τίποτα —
+μία φορά ανά καρτέλα, ώστε να μην μπορεί να γίνει βρόχος.
+
+Όσο η καρτέλα είναι ανοιχτή, η ανανέωση γίνεται σιωπηλά με κρυφό iframe.
 
 **Η σύνδεση δεν διακόπτει τη ροή.** Ο χρήστης που πατά έναν σύνδεσμο χωρίς
 συνεδρία δεν βλέπει ενδιάμεση οθόνη με κουμπί «σύνδεση»: δεν διάλεξε να βρεθεί
@@ -166,13 +364,25 @@ bundle μιας PWA είναι δημόσιο ούτως ή άλλως. Τα tok
 τα δεδομένα ήδη φορτωμένα. Με ζωντανή συνεδρία στο Authentik, η επιστροφή στην
 εφαρμογή γίνεται **χωρίς κανένα κλικ**.
 
-Το Authentik φοριέται στα χρώματα της εφαρμογής (`infra/authentik/branding/`):
-ίδιο λογότυπο, ίδιο πράσινο, ίδια γραμματοσειρά, ανοιχτό θέμα, και όνομα και
-κωδικός σε **μία** οθόνη αντί για δύο.
+**Το Authentik φοριέται στα χρώματα της εφαρμογής.** Ίδιο λογότυπο, ίδιο
+πράσινο, ίδιες γωνίες και σκιές με τις κάρτες της PWA, ανοιχτό θέμα, μοτίβο
+τριφυλλιού στο φόντο, και όνομα και κωδικός σε **μία** οθόνη αντί για δύο. Όλα
+ζουν στο [`trifylli-branding.yaml`](infra/authentik/trifylli-branding.yaml) —
+brand **και** ολόκληρο το custom CSS — ώστε να εφαρμόζονται μόνα τους και σε
+παραγωγή. Τρεις λεπτομέρειες που κόστισαν ώρα, γραμμένες και στα σχόλια του
+blueprint:
 
-> Οι ετικέτες της φόρμας μένουν αγγλικές: το Authentik 2025.2 δεν διαθέτει
-> ελληνική μετάφραση (de, en, es, fr, it, ko, nl, pl, ru). Ο τίτλος της οθόνης
-> είναι ελληνικός· τα υπόλοιπα θα χρειάζονταν μετάφραση upstream.
+* τα `branding_logo`/`branding_favicon` δέχονται **σκέτο όνομα αρχείου**·
+  απόλυτη διαδρομή απορρίπτεται («Absolute paths are not allowed»),
+* από το 2026.x το αρχείο `/web/dist/custom.css` **δεν φορτώνεται** — το CSS
+  ζει στο πεδίο `branding_custom_css` και ενίεται και μέσα στα shadow roots,
+* η εικόνα φόντου ζωγραφίζεται στο `body::before` και **μόνο** πάνω από
+  `35rem` πλάτος· στο κινητό το Authentik τη ρίχνει επίτηδες.
+
+> Οι ετικέτες της φόρμας μένουν αγγλικές: το Authentik 2026.8 δεν διαθέτει
+> ελληνική μετάφραση (ar, bg, cs, de, en, es, fi, fr, it, ja, ko, nb, nl, pl,
+> pt-BR, ru, tr, zh). Ελληνικά είναι ό,τι ορίζουμε εμείς — τίτλοι ροών, πεδία
+> κωδικού, email· τα υπόλοιπα θα χρειάζονταν μετάφραση upstream.
 
 Ένα σημείο αξίζει εξήγηση, γιατί μοιάζει με παράλειψη και δεν είναι: **δεν
 ζητάμε `offline_access`**, άρα δεν εκδίδεται refresh token.
@@ -285,6 +495,41 @@ backend κάνει migrate + seed μόνο του στην εκκίνηση. Τ�
 | `sso.example.gr` | Authentik (SSO) | `AUTHENTIK_PORT` (9010) |
 | `ouch.example.gr` | OuchTracker — κάνει μόνο του proxy `/api` | `OUCHTRACKER_WEB_PORT` (8081) |
 
+```mermaid
+flowchart LR
+    net(("Internet"))
+    subgraph host["Ο διακομιστής σου"]
+        proxy["reverse proxy + TLS<br/>Caddy · Traefik · nginx"]
+        subgraph bind["δεμένα στο BIND_ADDR — 127.0.0.1"]
+            web["web :8080"]
+            api["api :3000"]
+            ak["authentik :9010"]
+            otf["ouchtracker :8081"]
+        end
+        subgraph closed["χωρίς καμία θύρα προς τα έξω"]
+            pg[("postgres")]
+            rd[("redis")]
+            s3[("garage S3")]
+        end
+    end
+    smtp["SMTP παρόχου"]
+
+    net --> proxy
+    proxy -->|"app."| web
+    proxy -->|"api."| api
+    proxy -->|"sso."| ak
+    proxy -->|"ouch."| otf
+    api --> pg
+    api --> s3
+    ak --> pg
+    ak --> rd
+    ak --> smtp
+```
+
+**Οι υποτομείς πρέπει να είναι του ίδιου registrable domain** με το Authentik:
+αλλιώς ο browser διαχωρίζει το storage του κρυφού iframe και σπάνε η σιωπηλή
+ανανέωση και το Single Logout.
+
 **Οι ρυθμίσεις της PWA είναι runtime, όχι build-time.** Ο entrypoint του nginx
 γράφει το `/config.js` από μεταβλητές περιβάλλοντος (`API_URL`, `OIDC_*`,
 `OUCHTRACKER_URL`) σε κάθε εκκίνηση — η ίδια image δουλεύει σε κάθε περιβάλλον,
@@ -306,6 +551,18 @@ redirect URIs για development. Για production όρισε στον πάρο
 **ακριβώς** με το δημόσιο URL του Authentik — είναι το `iss` του token. Το
 `SUPER_ADMIN_EMAIL` δίνει τον πρώτο υπερδιαχειριστή, και το
 `OUCHTRACKER_OIDC_ADMIN_EMAILS` ποιοι γίνονται ADMIN στο OuchTracker.
+
+**Email — υποχρεωτικό.** `SMTP_HOST` και `SMTP_FROM` είναι `${VAR:?}`: χωρίς
+αυτά η στοίβα δεν σηκώνεται. Σκόπιμα, γιατί η εναλλακτική είναι να το
+ανακαλύψεις τη μέρα που κάποιος ξεχνά τον κωδικό του. Για 587 άσε
+`SMTP_USE_TLS=true` (STARTTLS), για 465 βάλε `SMTP_USE_SSL=true` και
+`SMTP_USE_TLS=false` — ποτέ και τα δύο. Ο αποστολέας θέλει domain με SPF/DKIM
+στον πάροχο, αλλιώς τα μηνύματα πάνε για spam.
+
+**Πρόσκληση λογαριασμών.** Το `AUTHENTIK_API_TOKEN` (Authentik → *Directory →
+Tokens*, σε λογαριασμό με δικαίωμα διαχείρισης χρηστών) είναι αυτό που επιτρέπει
+στο API να φτιάχνει χρήστες και να στέλνει συνδέσμους κωδικού. Χωρίς αυτό οι
+λογαριασμοί δημιουργούνται κανονικά, αλλά κανένα email δεν φεύγει.
 
 **Object storage (Garage).** Αποδείξεις ταμείου και εικόνες markdown πάνε σε
 S3-συμβατό Garage, μέσα από το backend με guards· το `garage-init` φτιάχνει
@@ -349,6 +606,11 @@ layout + bucket + key (idempotent) στο πρώτο boot.
 ταμείο/συνδρομές με αποθήκευση αρχείων σε Garage S3, και πλήρης ενσωμάτωση
 OuchTracker (SSO + Φαρμακεία με δανεισμό) δοκιμασμένη απέναντι σε ζωντανή
 εγκατάσταση. Ενοποιημένη στοίβα παραγωγής (βλ. [Παραγωγή](#παραγωγή)).
+
+Ο κύκλος ζωής λογαριασμού είναι πλήρης: δημιουργία με **email πρόσκλησης**,
+ορισμός κωδικού από τον ίδιο τον χρήστη, «ξέχασα τον κωδικό» από την οθόνη
+σύνδεσης, επαναποστολή από τον υπερδιαχειριστή — με ελληνικά πρότυπα email και
+Mailpit στην ανάπτυξη.
 
 Δεν έχει γίνει ακόμη: επεξεργασία timeline μέσα από το UI (το API το υποστηρίζει
 πλήρως), end-to-end tests, και δοκιμή του e-SEO απέναντι σε πραγματικά endpoints.
