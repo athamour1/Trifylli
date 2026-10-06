@@ -47,6 +47,10 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     return this.directory.resolveFromToken({
       ssoId,
       email,
+      // Το claim που βάζει το Authentik από το attribute `trifylli_account_id`
+      // (το γράφει το API στην πρόσκληση — βλ. AuthentikClient). Είναι ο
+      // **σταθερός** δεσμός χρήστη ↔ λογαριασμού, ανεξάρτητος από το email.
+      accountId: asString(payload.trifylli_account_id),
       firstName: asString(payload.given_name) ?? asString(payload.name),
       lastName: asString(payload.family_name),
     });

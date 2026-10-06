@@ -119,6 +119,7 @@ export class AccountsService {
     }
 
     await this.authentik.sendPasswordSetupEmail({
+      accountId: account.id,
       email: account.email,
       firstName: account.firstName,
       lastName: account.lastName,
@@ -148,6 +149,7 @@ export class AccountsService {
 
     try {
       await this.authentik.sendPasswordSetupEmail({
+        accountId: account.id,
         email: account.email,
         firstName: account.firstName,
         lastName: account.lastName,
@@ -155,7 +157,7 @@ export class AccountsService {
       return { account, invited: true, inviteError: null };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.error(`Ο λογαριασμός ${account.email} δημιουργήθηκε αλλά η πρόσκληση απέτυχε: ${message}`);
+      this.logger.error(`Ο λογαριασμός ${account.id} δημιουργήθηκε αλλά η πρόσκληση απέτυχε: ${message}`);
       return { account, invited: false, inviteError: message };
     }
   }

@@ -10,10 +10,18 @@ import {
 import { AppConfigToken } from '../config/config.module';
 import type { AppConfig } from '../config/configuration';
 import { PrismaService } from '../prisma/prisma.service';
+import { maskEmail } from '../util/mask';
 
 export interface TokenIdentity {
   /** `sub` του Authentik· κενό στη dev παράκαμψη. */
   ssoId?: string;
+  /**
+   * Το id του λογαριασμού Trifylli, όπως το έγραψε το API στο attribute του
+   * χρήστη Authentik κατά την πρόσκληση και το επιστρέφει το token ως claim.
+   * Όταν υπάρχει, είναι η **μόνη** αλήθεια: το email μπορεί να το αλλάξει ο
+   * ίδιος ο χρήστης, αυτό όχι.
+   */
+  accountId?: string;
   email: string;
   firstName?: string;
   lastName?: string;
@@ -48,15 +56,35 @@ export class UserDirectoryService {
 
     const email = identity.email.trim().toLowerCase();
 
-    // 1) Γνωστή συνεδρία: ο χρήστης έχει ξανασυνδεθεί.
-    let account = identity.ssoId
-      ? await this.prisma.user.findUnique({
-          where: { ssoId: identity.ssoId },
+    // 0) Σταθερός δεσμός από την πρόσκληση: το claim `trifylli_account_id`.
+    //    Προηγείται από όλα — ούτε αλλαγή email ούτε αλλαγή `sub` το επηρεάζει.
+    let account = identity.accountId
+      ? await this.prisma.user.findFirst({
+          where: { id: identity.accountId, topikoId: topiko.id, accountRole: { not: null } },
           include: { adminKlados: { select: { type: true } } },
         })
       : null;
 
-    // 2) Πρώτη σύνδεση σε λογαριασμό που δημιούργησε ο υπερδιαχειριστής.
+    if (account && identity.ssoId && account.ssoId !== identity.ssoId) {
+      account = await this.prisma.user.update({
+        where: { id: account.id },
+        data: { ssoId: identity.ssoId },
+        include: { adminKlados: { select: { type: true } } },
+      });
+    }
+
+    // 1) Γνωστή συνεδρία: ο χρήστης έχει ξανασυνδεθεί.
+    if (!account && identity.ssoId) {
+      account = await this.prisma.user.findUnique({
+        where: { ssoId: identity.ssoId },
+        include: { adminKlados: { select: { type: true } } },
+      });
+    }
+
+    // 2) Πρώτη σύνδεση σε λογαριασμό που δημιούργησε ο υπερδιαχειριστής — με
+    //    κλειδί το email. Εφεδρεία για λογαριασμούς που προϋπήρχαν της
+    //    πρόσκλησης (χωρίς claim)· γι' αυτό το email στο Authentik είναι
+    //    read-only για τον χρήστη (βλ. trifylli-security.yaml).
     if (!account) {
       account = await this.prisma.user.findFirst({
         where: { topikoId: topiko.id, email, accountRole: { not: null } },
@@ -69,13 +97,26 @@ export class UserDirectoryService {
           data: { ssoId: identity.ssoId },
           include: { adminKlados: { select: { type: true } } },
         });
-        this.logger.log(`Ο λογαριασμός ${email} συνδέθηκε με το Authentik.`);
+        this.logger.log(`Ο λογαριασμός ${maskEmail(email)} συνδέθηκε με το Authentik.`);
       }
     }
 
-    // 3) Bootstrap υπερδιαχειριστή σε φρέσκο στήσιμο.
+    // 3) Bootstrap υπερδιαχειριστή — **μόνο σε φρέσκο στήσιμο**, δηλαδή όταν δεν
+    //    υπάρχει κανένας υπερδιαχειριστής. Αλλιώς ένας λογαριασμός με αυτό το email
+    //    που ανακλήθηκε θα ξαναγινόταν υπερδιαχειριστής στην επόμενη σύνδεση — και
+    //    η ανάκληση θα ήταν διακοσμητική.
     if (!account && this.config.SUPER_ADMIN_EMAIL?.toLowerCase() === email) {
-      account = await this.bootstrapSuperAdmin(topiko.id, email, identity);
+      const superAdmins = await this.prisma.user.count({
+        where: { topikoId: topiko.id, accountRole: AccountRole.SUPER_ADMIN },
+      });
+      if (superAdmins === 0) {
+        account = await this.bootstrapSuperAdmin(topiko.id, email, identity);
+      } else {
+        this.logger.warn(
+          `Το SUPER_ADMIN_EMAIL (${maskEmail(email)}) ζήτησε σύνδεση χωρίς λογαριασμό, ` +
+            'αλλά υπάρχει ήδη υπερδιαχειριστής — δεν γίνεται bootstrap.',
+        );
+      }
     }
 
     if (!account) {
@@ -118,7 +159,7 @@ export class UserDirectoryService {
       select: { id: true },
     });
 
-    this.logger.warn(`Bootstrap υπερδιαχειριστή για ${email} (SUPER_ADMIN_EMAIL).`);
+    this.logger.warn(`Bootstrap υπερδιαχειριστή για ${maskEmail(email)} (SUPER_ADMIN_EMAIL).`);
 
     const data = {
       accountRole: AccountRole.SUPER_ADMIN,

@@ -4,6 +4,7 @@ import { firstValueFrom } from 'rxjs';
 import { z } from 'zod';
 import { AppConfigToken } from '../../common/config/config.module';
 import type { AppConfig } from '../../common/config/configuration';
+import { maskEmail } from '../../common/util/mask';
 
 /**
  * Πελάτης του **admin API** του Authentik — μόνο για πρόσκληση και επαναφορά κωδικού.
@@ -29,6 +30,7 @@ const userSchema = z
     username: z.string(),
     email: z.string().nullish(),
     is_active: z.boolean().nullish(),
+    attributes: z.record(z.unknown()).nullish(),
   })
   .passthrough();
 
@@ -41,10 +43,15 @@ const stageListSchema = z
   .passthrough();
 
 export interface AuthentikInvitee {
+  /** Το id του λογαριασμού Trifylli — γίνεται attribute και claim (σταθερός δεσμός). */
+  accountId: string;
   email: string;
   firstName: string;
   lastName: string;
 }
+
+/** Το attribute του χρήστη Authentik που ταξιδεύει ως claim στο token. */
+const ACCOUNT_ATTRIBUTE = 'trifylli_account_id';
 
 @Injectable()
 export class AuthentikClient {
@@ -75,11 +82,19 @@ export class AuthentikClient {
     const existing = await this.findByEmail(email);
     const pk = existing?.pk ?? (await this.createUser(invitee, email));
 
+    // Υπάρχων χρήστης χωρίς (ή με άλλο) δεσμό: τον γράφουμε τώρα, ώστε από την
+    // επόμενη σύνδεση να μην εξαρτάται από το email.
+    if (existing && existing.attributes?.[ACCOUNT_ATTRIBUTE] !== invitee.accountId) {
+      await this.patch(`/api/v3/core/users/${pk}/`, {
+        attributes: { ...(existing.attributes ?? {}), [ACCOUNT_ATTRIBUTE]: invitee.accountId },
+      });
+    }
+
     await this.post(`/api/v3/core/users/${pk}/recovery_email/`, {
       email_stage: await this.resolveEmailStage(),
     });
 
-    this.logger.log(`Στάλθηκε σύνδεσμος ορισμού κωδικού στο ${email}.`);
+    this.logger.log(`Στάλθηκε σύνδεσμος ορισμού κωδικού στο ${maskEmail(email)}.`);
   }
 
   private async findByEmail(email: string) {
@@ -94,10 +109,18 @@ export class AuthentikClient {
     // το Authentik — ένα `papadopoulou2` δεν λέει τίποτα σε κανέναν.
     const created = await this.post(
       '/api/v3/core/users/',
-      { username: email, name: name || email, email, is_active: true, path: 'users', type: 'internal' },
+      {
+        username: email,
+        name: name || email,
+        email,
+        is_active: true,
+        path: 'users',
+        type: 'internal',
+        attributes: { [ACCOUNT_ATTRIBUTE]: invitee.accountId },
+      },
       userSchema,
     );
-    this.logger.log(`Δημιουργήθηκε χρήστης Authentik για το ${email}.`);
+    this.logger.log(`Δημιουργήθηκε χρήστης Authentik για το ${maskEmail(email)}.`);
     return created.pk;
   }
 
@@ -150,6 +173,17 @@ export class AuthentikClient {
       return schema.parse(response.data);
     } catch (error) {
       throw this.fail(`GET ${path}`, error);
+    }
+  }
+
+  private async patch(path: string, body: unknown): Promise<void> {
+    this.assertConfigured();
+    try {
+      await firstValueFrom(
+        this.http.patch<unknown>(this.url(path), body, { headers: this.headers, timeout: 15_000 }),
+      );
+    } catch (error) {
+      throw this.fail(`PATCH ${path}`, error);
     }
   }
 

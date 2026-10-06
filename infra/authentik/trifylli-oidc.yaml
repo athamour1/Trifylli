@@ -25,6 +25,23 @@ context:
   TRIFYLLI_APP_URL: !Env [TRIFYLLI_APP_URL, 'http://localhost:8080/']
 
 entries:
+  # ── Το claim που δένει χρήστη Authentik ↔ λογαριασμό Trifylli ──
+  #
+  # Το API, όταν προσκαλεί, γράφει στον χρήστη το attribute
+  # `trifylli_account_id`. Εδώ το βγάζουμε στο token ως claim, ώστε η σύνδεση
+  # να μην εξαρτάται από το email — που είναι δεδομένο, όχι ταυτότητα. Μπαίνει
+  # κάτω από το scope `profile` που ήδη ζητά η PWA· πολλά mappings με το ίδιο
+  # scope συγχωνεύονται.
+  - model: authentik_providers_oauth2.scopemapping
+    id: trifylli-account-claim
+    identifiers:
+      name: Trifylli — σταθερός δεσμός λογαριασμού
+    attrs:
+      scope_name: profile
+      description: Ο δεσμός με τον λογαριασμό Trifylli
+      expression: |
+        return {"trifylli_account_id": request.user.attributes.get("trifylli_account_id")}
+
   # ── Ροή εξουσιοδότησης χωρίς κανένα βήμα ──
   #
   # Δική μας ροή και όχι η προεπιλεγμένη, για δύο λόγους: η default είναι κοινή
@@ -132,6 +149,7 @@ entries:
         - !Find [authentik_providers_oauth2.scopemapping, [managed, 'goauthentik.io/providers/oauth2/scope-openid']]
         - !Find [authentik_providers_oauth2.scopemapping, [managed, 'goauthentik.io/providers/oauth2/scope-profile']]
         - !Find [authentik_providers_oauth2.scopemapping, [managed, 'goauthentik.io/providers/oauth2/scope-email']]
+        - !KeyOf trifylli-account-claim
 
       redirect_uris:
         # Κύριο URL εφαρμογής (από TRIFYLLI_APP_URL· dev→localhost:8080, prod→domain).
