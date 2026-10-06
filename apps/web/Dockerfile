@@ -19,7 +19,10 @@ RUN pnpm --filter @trifylli/shared build \
  && pnpm --filter @trifylli/web build
 
 FROM nginx:1.27-alpine AS runtime
-COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
+# Το nginx config ΔΕΝ είναι στατικό: ο entrypoint το αποδίδει από το template
+# με Content-Security-Policy που περιέχει τα origins του API/Authentik (runtime).
+COPY apps/web/nginx.conf.template /opt/trifylli/nginx.conf.template
+COPY apps/web/nginx-headers.conf /etc/nginx/trifylli-headers.conf
 COPY --from=build /repo/apps/web/dist/pwa /usr/share/nginx/html
 # Ο entrypoint του nginx τρέχει τα /docker-entrypoint.d/*.sh πριν ξεκινήσει ο
 # server· εδώ γράφεται το runtime /config.js από μεταβλητές περιβάλλοντος.

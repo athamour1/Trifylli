@@ -1,0 +1,62 @@
+# Αποδίδεται από τον entrypoint (envsubst) σε /etc/nginx/conf.d/default.conf.
+# Μόνο οι μεταβλητές ${CSP_BASE} και ${FRAME_ANCESTORS_SLO} αντικαθίστανται —
+# τα $uri κ.λπ. είναι του nginx και μένουν ως έχουν.
+#
+# Οι κεφαλίδες ασφάλειας επαναλαμβάνονται σε ΚΑΘΕ location που έχει δικό του
+# add_header: το nginx δεν κληρονομεί add_header από το server όταν το location
+# ορίζει έστω ένα. Γι' αυτό το include + η CSP μπαίνουν παντού ρητά.
+server {
+  listen 80;
+  server_name _;
+  root /usr/share/nginx/html;
+  server_tokens off;
+
+  gzip on;
+  gzip_types text/css application/javascript application/json image/svg+xml;
+  gzip_min_length 1024;
+
+  include /etc/nginx/trifylli-headers.conf;
+  add_header Content-Security-Policy "${CSP_BASE} frame-ancestors 'none'" always;
+
+  # Τα hashed assets είναι αμετάβλητα· το bundle αλλάζει όνομα σε κάθε build.
+  location /assets/ {
+    expires 1y;
+    add_header Cache-Control "public, immutable";
+    include /etc/nginx/trifylli-headers.conf;
+    add_header Content-Security-Policy "${CSP_BASE} frame-ancestors 'none'" always;
+  }
+
+  # Ο service worker και το manifest ΔΕΝ μπαίνουν σε cache: αλλιώς ο browser
+  # κρατά για πάντα την παλιά έκδοση και οι ενημερώσεις δεν φτάνουν ποτέ.
+  location = /sw.js {
+    add_header Cache-Control "no-cache, no-store, must-revalidate";
+    include /etc/nginx/trifylli-headers.conf;
+    add_header Content-Security-Policy "${CSP_BASE} frame-ancestors 'none'" always;
+  }
+  location = /manifest.json {
+    add_header Cache-Control "no-cache";
+    include /etc/nginx/trifylli-headers.conf;
+    add_header Content-Security-Policy "${CSP_BASE} frame-ancestors 'none'" always;
+  }
+
+  # Runtime config — ποτέ cache· ο entrypoint το γράφει σε κάθε εκκίνηση.
+  location = /config.js {
+    add_header Cache-Control "no-store, no-cache, must-revalidate";
+    default_type application/javascript;
+    include /etc/nginx/trifylli-headers.conf;
+    add_header Content-Security-Policy "${CSP_BASE} frame-ancestors 'none'" always;
+  }
+
+  # Front-channel Single Logout: η ΜΟΝΗ διαδρομή που επιτρέπεται να μπει σε
+  # iframe — και μόνο από το δικό μας Authentik. Παντού αλλού frame-ancestors 'none'.
+  location = /auth/frontchannel-logout {
+    include /etc/nginx/trifylli-headers.conf;
+    add_header Content-Security-Policy "${CSP_BASE} frame-ancestors ${FRAME_ANCESTORS_SLO}" always;
+    try_files /index.html =404;
+  }
+
+  # SPA fallback για vueRouterMode: 'history'.
+  location / {
+    try_files $uri $uri/ /index.html;
+  }
+}

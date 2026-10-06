@@ -14,7 +14,7 @@ try {
 }
 
 export default defineConfig((ctx) => ({
-  boot: ['api', 'auth'],
+  boot: ['fonts', 'api', 'auth'],
 
   css: ['app.scss'],
 
