@@ -90,6 +90,66 @@ export const DrasiType = {
 export type DrasiType = (typeof DrasiType)[keyof typeof DrasiType];
 
 /**
+ * Κατάσταση δράσης.
+ *
+ * `PROSXEDIO`: το wizard δεν ολοκληρώθηκε — η δράση υπάρχει για να μη χαθεί
+ * τίποτα, αλλά δεν μετράει σε ημερολόγιο και στατιστικά. `KLEISTI`: τελείωσε και
+ * το ταμείο της κλείδωσε. Βλ. docs/draseis.md (F0).
+ */
+export const DrasiStatus = {
+  PROSXEDIO: 'PROSXEDIO',
+  ENERGI: 'ENERGI',
+  KLEISTI: 'KLEISTI',
+} as const;
+export type DrasiStatus = (typeof DrasiStatus)[keyof typeof DrasiStatus];
+
+/**
+ * Ευθύνες μέσα σε μία δράση: το **αρχηγείο** (σχεδόν πάντα παρόν) και οι
+ * **υπηρεσίες** (κατ' επιλογήν — δεν έχει κάθε δράση μαγείρεμα ή SOS).
+ *
+ * Ένα enum και όχι δύο, γιατί και στις δύο περιπτώσεις η ερώτηση είναι η ίδια:
+ * «ποιο στέλεχος είναι υπεύθυνο για τι». Η διάκριση είναι μόνο εμφάνισης —
+ * βλ. `DRASI_ARXIGEIO_KINDS` / `DRASI_YPIRESIA_KINDS`.
+ */
+export const DrasiRoleKind = {
+  // Αρχηγείο
+  ARXIGOS: 'ARXIGOS',
+  PROGRAMMA: 'PROGRAMMA',
+  LEITOURGIA: 'LEITOURGIA',
+  TAMIAS: 'TAMIAS',
+  TROFODOSIA: 'TROFODOSIA',
+  /** Το άτομο που μαγειρεύει — διαφορετικό από την υπηρεσία `MAGEIREMA`, που βοηθά. */
+  MAGEIRISSA: 'MAGEIRISSA',
+  // Υπηρεσίες
+  EXORAISMOS: 'EXORAISMOS',
+  PIATA: 'PIATA',
+  MAGEIREMA: 'MAGEIREMA',
+  SERVIRISMA: 'SERVIRISMA',
+  KATHARIOTITA: 'KATHARIOTITA',
+  FARMAKEIO: 'FARMAKEIO',
+  SOS: 'SOS',
+} as const;
+export type DrasiRoleKind = (typeof DrasiRoleKind)[keyof typeof DrasiRoleKind];
+
+export const DRASI_ARXIGEIO_KINDS: readonly DrasiRoleKind[] = [
+  'ARXIGOS',
+  'PROGRAMMA',
+  'LEITOURGIA',
+  'TAMIAS',
+  'TROFODOSIA',
+  'MAGEIRISSA',
+];
+export const DRASI_YPIRESIA_KINDS: readonly DrasiRoleKind[] = [
+  'EXORAISMOS',
+  'PIATA',
+  'MAGEIREMA',
+  'SERVIRISMA',
+  'KATHARIOTITA',
+  'FARMAKEIO',
+  'SOS',
+];
+
+/**
  * Τύπος συμβουλίου.
  *
  * Ο κλάδος έχει **έναν**: το συμβούλιό του. Η παλιότερη διάκριση σε Ομάδας /

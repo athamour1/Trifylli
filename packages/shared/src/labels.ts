@@ -2,6 +2,8 @@
 import {
   AccountRole,
   CheckoutStatus,
+  DrasiRoleKind,
+  DrasiStatus,
   DrasiType,
   KladosType,
   MemberKind,
@@ -77,6 +79,28 @@ export const DRASI_TYPE_LABEL: Record<DrasiType, string> = {
   MONOIMERI: 'Μονοήμερη',
   POLYIMERI: 'Πολυήμερη',
   KATASKINOSI: 'Κατασκήνωση',
+};
+
+export const DRASI_STATUS_LABEL: Record<DrasiStatus, string> = {
+  PROSXEDIO: 'Προσχέδιο',
+  ENERGI: 'Ενεργή',
+  KLEISTI: 'Κλειστή',
+};
+
+export const DRASI_ROLE_LABEL: Record<DrasiRoleKind, string> = {
+  ARXIGOS: 'Αρχηγός',
+  PROGRAMMA: 'Πρόγραμμα',
+  LEITOURGIA: 'Λειτουργία',
+  TAMIAS: 'Ταμίας',
+  TROFODOSIA: 'Τροφοδοσία',
+  MAGEIRISSA: 'Μαγείρισσα',
+  EXORAISMOS: 'Εξωραϊσμός',
+  PIATA: 'Πλύσιμο πιάτων',
+  MAGEIREMA: 'Μαγείρεμα',
+  SERVIRISMA: 'Σερβίρισμα',
+  KATHARIOTITA: 'Καθαριότητα',
+  FARMAKEIO: 'Φαρμακείο',
+  SOS: 'SOS',
 };
 
 export const SYMVOULIO_TYPE_LABEL: Record<SymvoulioType, string> = {

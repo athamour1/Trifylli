@@ -58,6 +58,30 @@ enum DrasiType {
   KATASKINOSI
 }
 
+/// Προσχέδιο (wizard ημιτελές) → ενεργή → κλειστή (κλειδωμένο ταμείο).
+enum DrasiStatus {
+  PROSXEDIO
+  ENERGI
+  KLEISTI
+}
+
+/// Ευθύνες μέσα σε δράση: αρχηγείο + υπηρεσίες σε ΕΝΑ enum (βλ. shared `DrasiRoleKind`).
+enum DrasiRoleKind {
+  ARXIGOS
+  PROGRAMMA
+  LEITOURGIA
+  TAMIAS
+  TROFODOSIA
+  MAGEIRISSA
+  EXORAISMOS
+  PIATA
+  MAGEIREMA
+  SERVIRISMA
+  KATHARIOTITA
+  FARMAKEIO
+  SOS
+}
+
 enum SymvoulioType {
   KLADOU
   TOPIKOU
@@ -172,6 +196,7 @@ model Klados {
   admins       User[]        @relation("KladosAdmin")
   pharmacyKits PharmacyKit[]
   kitLoansReceived KitLoan[]  @relation("KitLoanToKlados")
+  drasiSymmetoxes DrasiKlados[]
 
   @@unique([topikoId, type])
   @@map("klados")
@@ -240,6 +265,7 @@ model User {
   storedFiles     StoredFile[]           @relation("StoredFileAuthor")
   treasuryEntries TreasuryEntry[]        @relation("TreasuryAuthor")
   collectedPayments Payment[]            @relation("PaymentCollector")
+  drasiRoles      DrasiRole[]            @relation("DrasiRoleUser")
   auditLogs       AuditLog[]
 
   @@index([topikoId, status])
@@ -391,20 +417,77 @@ model Drasi {
   description String?
   /// Κόστος συμμετοχής ανά άτομο, όταν υπάρχει.
   costPerPerson Decimal? @db.Decimal(10, 2)
+  /// Προεπιλογή `ENERGI` ώστε seed και απλές κλήσεις API να φτιάχνουν «κανονική»
+  /// δράση· το wizard ζητά ρητά `PROSXEDIO` μέχρι να ολοκληρωθεί.
+  status    DrasiStatus @default(ENERGI)
   archivedAt DateTime?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
   topiko       Topiko             @relation(fields: [topikoId], references: [id], onDelete: Cascade)
+  /// Ο κλάδος που ΔΙΟΡΓΑΝΩΝΕΙ. Ποιοι συμμετέχουν: `kladoi` + `guestTopika`.
   klados       Klados?            @relation(fields: [kladosId], references: [id], onDelete: SetNull)
   participants DrasiParticipant[]
   syggentrwseis Syggentrwsh[]
   checkouts    YlikoCheckout[]
   incidents    Incident[]
+  kladoi       DrasiKlados[]
+  guestTopika  DrasiGuestTopiko[]
+  roles        DrasiRole[]
 
   @@index([topikoId, dateStart])
   @@index([kladosId, dateStart])
   @@map("drasi")
+}
+
+/// Ποιοι δικοί μας κλάδοι συμμετέχουν στη δράση (ο διοργανωτής περιλαμβάνεται).
+model DrasiKlados {
+  drasiId  String @db.Uuid
+  kladosId String @db.Uuid
+
+  drasi  Drasi  @relation(fields: [drasiId], references: [id], onDelete: Cascade)
+  klados Klados @relation(fields: [kladosId], references: [id], onDelete: Cascade)
+
+  @@id([drasiId, kladosId])
+  @@map("drasi_klados")
+}
+
+/// Φιλοξενούμενο Τοπικό. Ο `topikoCode` είναι το `unitId` του e-SEO — το όνομα
+/// αντιγράφεται, γιατί δεν έχουμε (ούτε θέλουμε) τις μονάδες άλλων Τοπικών στη βάση.
+model DrasiGuestTopiko {
+  id           String       @id @default(uuid()) @db.Uuid
+  drasiId      String       @db.Uuid
+  topikoCode   String
+  topikoName   String
+  /// Ποιοι κλάδοι τους έρχονται — τιμές, όχι FK: δεν υπάρχουν εγγραφές `Klados` γι' αυτούς.
+  kladoi       KladosType[]
+  contactName  String?
+  contactPhone String?
+  createdAt    DateTime     @default(now())
+
+  drasi Drasi @relation(fields: [drasiId], references: [id], onDelete: Cascade)
+
+  @@unique([drasiId, topikoCode])
+  @@map("drasi_guest_topiko")
+}
+
+/// Ποιο στέλεχος έχει ποια ευθύνη στη δράση. Μοναδικό ανά (δράση, ευθύνη, άτομο):
+/// δύο στελέχη στο πρόγραμμα ή τρία στο φαρμακείο είναι ο κανόνας. Υπηρεσία που
+/// δεν ισχύει = καμία γραμμή.
+model DrasiRole {
+  id        String        @id @default(uuid()) @db.Uuid
+  drasiId   String        @db.Uuid
+  kind      DrasiRoleKind
+  userId    String        @db.Uuid
+  note      String?
+  createdAt DateTime      @default(now())
+
+  drasi Drasi @relation(fields: [drasiId], references: [id], onDelete: Cascade)
+  user  User  @relation("DrasiRoleUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([drasiId, kind, userId])
+  @@index([userId])
+  @@map("drasi_role")
 }
 
 model DrasiParticipant {

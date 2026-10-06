@@ -2,6 +2,7 @@
 import type {
   AccountRole,
   CheckoutStatus,
+  DrasiRoleKind,
   DrasiType,
   KladosType,
   MemberKind,
@@ -264,4 +265,42 @@ export interface TreasurySummary {
   expense: number;
   balance: number;
   byCategory: { category: string; kind: 'INCOME' | 'EXPENSE'; amount: number }[];
+}
+
+// ───────────────────────── Δράσεις (wizard, F0/F12/F13) ─────────────────────────
+
+/** Μία ευθύνη (αρχηγείο ή υπηρεσία) με το στέλεχος που την έχει. */
+export interface DrasiRoleView {
+  id: string;
+  kind: DrasiRoleKind;
+  note: string | null;
+  user: { id: string; firstName: string; lastName: string; phone: string | null };
+}
+
+/** Φιλοξενούμενο Τοπικό — ο κωδικός είναι το `unitId` του e-SEO. */
+export interface DrasiGuestTopikoView {
+  id: string;
+  topikoCode: string;
+  topikoName: string;
+  kladoi: KladosType[];
+  contactName: string | null;
+  contactPhone: string | null;
+}
+
+/** Ένα Τοπικό όπως το ξέρει το e-SEO (`GET /unit/{id}`). */
+export interface EseoUnitInfo {
+  code: string;
+  name: string;
+  /** Ο Τομέας στον οποίο ανήκει, αν τον δίνει το e-SEO. */
+  parentName: string | null;
+  type: string | null;
+}
+
+/**
+ * «Ίδια όπως την προηγούμενη»: οι ευθύνες της τελευταίας δράσης του ίδιου
+ * φορέα, για να μην ξαναδιαλέγει κανείς έξι ονόματα κάθε φορά.
+ */
+export interface DrasiRolesTemplate {
+  source: { id: string; title: string; dateStart: string } | null;
+  roles: { kind: DrasiRoleKind; userId: string; note: string | null }[];
 }
