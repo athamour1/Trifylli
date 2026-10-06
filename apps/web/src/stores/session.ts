@@ -3,12 +3,16 @@ import type { User } from 'oidc-client-ts';
 import { setAccessToken } from '../lib/api';
 import {
   clearLocalSession,
+  clearStaleAuthState,
   currentUser,
   login as oidcLogin,
   logout as oidcLogout,
   oidcEnabled,
   userManager,
 } from '../lib/oidc';
+
+/** Το `storage` listener του SLO δένεται μία φορά (το `init` μπορεί να κληθεί ξανά). */
+let sloListenerBound = false;
 
 /**
  * Η συνεδρία OIDC: το «ποιος είσαι» κατά το Authentik.
@@ -46,6 +50,10 @@ export const useSessionStore = defineStore('session', {
 
       const manager = userManager();
 
+      // Ημιτελείς αιτήσεις σύνδεσης (κλειστή καρτέλα στην οθόνη του Authentik)
+      // αφήνουν εγγραφές στο `localStorage`· τις καθαρίζουμε στην εκκίνηση.
+      void clearStaleAuthState();
+
       manager.events.addUserLoaded((user) => {
         this.user = user;
         setAccessToken(user.access_token);
@@ -62,6 +70,20 @@ export const useSessionStore = defineStore('session', {
         this.error = error.message;
         void this.signOutLocally();
       });
+
+      // Front-channel Single Logout: όταν ο χρήστης αποσυνδεθεί από άλλη
+      // εφαρμογή/καρτέλα του ίδιου SSO, το κρυφό iframe του Authentik σηκώνει το
+      // σήμα `trifylli:slo` στο localStorage. Το `storage` event σκάει μόνο στις
+      // ΑΛΛΕΣ καρτέλες ίδιας προέλευσης — άρα εδώ, στην κύρια. Κλείνουμε τη
+      // συνεδρία και πάμε σε καθαρή οθόνη σύνδεσης.
+      if (!sloListenerBound) {
+        sloListenerBound = true;
+        window.addEventListener('storage', (event) => {
+          if (event.key === 'trifylli:slo' && event.newValue) {
+            void this.signOutLocally().finally(() => window.location.assign('/login'));
+          }
+        });
+      }
 
       try {
         const user = await currentUser();

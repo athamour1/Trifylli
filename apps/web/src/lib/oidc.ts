@@ -23,7 +23,12 @@ export const oidcEnabled = Boolean(OIDC_AUTHORITY && OIDC_CLIENT_ID);
 const REDIRECT_PATH = '/auth/callback';
 const SILENT_PATH = '/auth/silent';
 
-/** Πού βρισκόταν ο χρήστης πριν τον στείλουμε για login. */
+/**
+ * Πού βρισκόταν ο χρήστης πριν τον στείλουμε για login.
+ *
+ * Στο `localStorage` μαζί με το state, για τον ίδιο λόγο: αν η επιστροφή πέσει
+ * σε άλλη καρτέλα, χωρίς αυτό θα κατέληγε στην Αρχική αντί εκεί που πήγαινε.
+ */
 const RETURN_TO_KEY = 'trifylli:returnTo';
 
 function origin(): string {
@@ -57,7 +62,15 @@ export function userManager(): UserManager {
     // στη συνεδρία του Authentik, οπότε ο χρήστης δεν βλέπει ποτέ τίποτα.
     scope: 'openid profile email',
     userStore: new WebStorageStateStore({ store: window.sessionStorage }),
-    stateStore: new WebStorageStateStore({ store: window.sessionStorage }),
+    // Το **state** (και το PKCE verifier) ζει στο `localStorage`, σε αντίθεση με
+    // τα tokens: η επιστροφή από το Authentik δεν προσγειώνεται πάντα στην
+    // καρτέλα που ξεκίνησε τη σύνδεση. Ο σύνδεσμος «ορισμός κωδικού» ανοίγει
+    // από το email, δηλαδή σε ΑΛΛΗ καρτέλα, και το `sessionStorage` είναι ανά
+    // καρτέλα — εκεί το callback έσκαγε με «No matching state found in storage».
+    // Η εγγραφή είναι βραχύβια (σβήνεται μόλις καταναλωθεί, και το
+    // `clearStaleState` καθαρίζει ό,τι έμεινε), και χωρίς τον κωδικό
+    // εξουσιοδότησης δεν αξίζει τίποτα· τα tokens μένουν στο `sessionStorage`.
+    stateStore: new WebStorageStateStore({ store: window.localStorage }),
     automaticSilentRenew: true,
     // Ανανέωση 60΄΄ πριν τη λήξη, ώστε να μη σκάσει αίτημα στο ενδιάμεσο.
     accessTokenExpiringNotificationTimeInSeconds: 60,
@@ -66,6 +79,22 @@ export function userManager(): UserManager {
   });
 
   return manager;
+}
+
+/**
+ * Καθαρίζει ημιτελείς αιτήσεις σύνδεσης που έμειναν στο `localStorage`.
+ *
+ * Μια σύνδεση που εγκαταλείφθηκε (ο χρήστης έκλεισε την καρτέλα στην οθόνη του
+ * Authentik) αφήνει πίσω της μια εγγραφή state. Χωρίς αυτό θα μαζεύονταν —
+ * ιδίως σε κοινόχρηστο υπολογιστή Εστίας, όπου περνούν πολλοί.
+ */
+export async function clearStaleAuthState(): Promise<void> {
+  if (!oidcEnabled) return;
+  try {
+    await userManager().clearStaleState();
+  } catch {
+    // Αδιάφορο: είναι καθάρισμα, όχι προϋπόθεση για τη σύνδεση.
+  }
 }
 
 export async function currentUser(): Promise<User | null> {
@@ -77,7 +106,7 @@ export async function currentUser(): Promise<User | null> {
 export async function login(returnTo?: string): Promise<void> {
   if (returnTo) {
     try {
-      window.sessionStorage.setItem(RETURN_TO_KEY, returnTo);
+      window.localStorage.setItem(RETURN_TO_KEY, returnTo);
     } catch {
       // Ιδιωτική περιήγηση: χάνουμε μόνο την επιστροφή στη σελίδα, όχι το login.
     }
@@ -89,8 +118,8 @@ export async function completeLogin(): Promise<{ user: User; returnTo: string }>
   const user = await userManager().signinRedirectCallback();
   let returnTo = '/';
   try {
-    returnTo = window.sessionStorage.getItem(RETURN_TO_KEY) ?? '/';
-    window.sessionStorage.removeItem(RETURN_TO_KEY);
+    returnTo = window.localStorage.getItem(RETURN_TO_KEY) ?? '/';
+    window.localStorage.removeItem(RETURN_TO_KEY);
   } catch {
     // βλ. παραπάνω
   }
