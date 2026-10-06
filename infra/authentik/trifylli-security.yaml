@@ -1,0 +1,153 @@
+# Σκλήρυνση του Authentik — Trifylli.
+#
+# Τέσσερα πράγματα που το Authentik ΔΕΝ κάνει μόνο του και που, χωρίς αυτά, η
+# οθόνη σύνδεσης είναι η πιο αδύναμη πόρτα της εφαρμογής:
+#
+#   1. Φρένο στο brute force: μετά από λίγες αποτυχίες από μια IP, η ροή σύνδεσης
+#      αρνείται να τρέξει από εκεί για ένα 24ωρο (`reputation.expiry`).
+#   2. Email και username read-only για τον χρήστη: το API δένει λογαριασμό με
+#      email στην πρώτη σύνδεση — αν ο χρήστης μπορεί να γράψει το email ενός
+#      άλλου στις ρυθμίσεις του, μπορεί να «κληρονομήσει» τον λογαριασμό του.
+#   3. MFA: στην παραγωγή ο χρήστης χωρίς authenticator στήνει TOTP στην πρώτη
+#      σύνδεση· στο development παρακάμπτεται (ρυθμίζεται με `!Env`).
+#   4. Service account για το API με ΜΟΝΟ τα δικαιώματα που χρειάζεται (πρόσκληση
+#      και επαναφορά κωδικού) — όχι το superuser token του bootstrap.
+#
+# Η πολιτική κωδικών ζει στο `trifylli-recovery.yaml`, δίπλα στη φόρμα που την
+# εφαρμόζει.
+#
+# Εφαρμόζεται αυτόματα από τον worker (mount στο /blueprints/custom), ή χειροκίνητα:
+#   docker compose exec authentik-worker ak apply_blueprint /blueprints/custom/trifylli-security.yaml
+version: 1
+metadata:
+  name: Trifylli — ασφάλεια
+  labels:
+    blueprints.goauthentik.io/instantiate: 'true'
+
+context:
+  # `skip` = χωρίς MFA όταν δεν υπάρχει authenticator (development).
+  # `configure` = υποχρεωτικό στήσιμο TOTP στην πρώτη σύνδεση (παραγωγή).
+  TRIFYLLI_MFA_NOT_CONFIGURED: !Env [TRIFYLLI_MFA_NOT_CONFIGURED, 'skip']
+  # Το κλειδί του token του API. Έρχεται από το περιβάλλον ώστε API και Authentik
+  # να μοιράζονται την ίδια τιμή χωρίς χειροκίνητο βήμα στο admin UI.
+  TRIFYLLI_API_TOKEN: !Env [TRIFYLLI_API_TOKEN, '']
+
+entries:
+  # ── 1. Brute force ──
+  #
+  # Κάθε αποτυχημένη σύνδεση χρεώνει -1 στην IP και στο username. Κάτω από το
+  # κατώφλι, η ροή σύνδεσης απορρίπτει το αίτημα πριν δείξει καν φόρμα. Δεμένο
+  # στη ΡΟΗ (όχι σε στάδιο): ένα στάδιο που «παραλείπεται» λόγω πολιτικής δεν
+  # αρνείται, απλώς προσπερνιέται — και στη σύνδεση αυτό θα ήταν τρύπα, όχι φρένο.
+  #
+  # ΠΡΟΣΟΧΗ στη σημασιολογία: η reputation policy «περνά» όταν η φήμη είναι
+  # ΚΑΚΗ (`score <= threshold`) — είναι ανιχνευτής, όχι φύλακας. Γι' αυτό το
+  # binding έχει `negate: true`: καλή φήμη → η πολιτική δεν περνά → αρνητικό →
+  # η ροή τρέχει. Χωρίς negate κλείδωνε ΟΛΟΥΣ έξω (το πληρώσαμε μία φορά).
+  - model: authentik_policies_reputation.reputationpolicy
+    id: trifylli-login-reputation
+    identifiers:
+      name: trifylli-login-reputation
+    attrs:
+      check_ip: true
+      check_username: true
+      threshold: -5
+
+  # ΠΡΟΣΟΧΗ στο `target`: η ροή έχει ΔΥΟ κλειδιά — το δικό της (`flow_uuid`) και
+  # αυτό του PolicyBindingModel που κληρονομεί (`pbm_uuid`). Το binding δείχνει
+  # στο δεύτερο. Ένα `!Find` της ροής δίνει το πρώτο: στη δημιουργία περνά (ο
+  # serializer μεταφράζει), αλλά στην ΑΝΑΖΗΤΗΣΗ του υπάρχοντος binding αποτυγχάνει
+  # και κάθε επανεφαρμογή σκάει με «must make a unique set». Γι' αυτό ψάχνουμε
+  # απευθείας το PolicyBindingModel μέσω της ροής του.
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !Find [authentik_policies.policybindingmodel, [flow__slug, default-authentication-flow]]
+      order: 0
+    attrs:
+      policy: !Find [authentik_policies_reputation.reputationpolicy, [name, trifylli-login-reputation]]
+      negate: true
+      enabled: true
+      timeout: 30
+      # Σε σφάλμα αξιολόγησης το αποτέλεσμα είναι `true` → με το negate γίνεται
+      # άρνηση: αν δεν μπορούμε να ελέγξουμε τη φήμη, ΔΕΝ ανοίγει η πόρτα.
+      failure_result: true
+
+  # ── 2. Email & username: μόνο ο υπερδιαχειριστής ──
+  #
+  # Το προεπιλεγμένο στάδιο ρυθμίσεων χρήστη αφήνει τον χρήστη να αλλάξει
+  # username, name, email, locale. Μένουν μόνο name και locale. Το entry
+  # ξαναγράφει ολόκληρη τη λίστα πεδίων — αυτό θέλουμε.
+  - model: authentik_stages_prompt.promptstage
+    identifiers:
+      name: default-user-settings
+    attrs:
+      fields:
+        - !Find [authentik_stages_prompt.prompt, [name, default-user-settings-field-name]]
+        - !Find [authentik_stages_prompt.prompt, [name, default-user-settings-field-locale]]
+
+  # ── 3. MFA ──
+  #
+  # Το στάδιο επικύρωσης υπάρχει ήδη στη ροή σύνδεσης (order 30) αλλά με
+  # `skip` όταν ο χρήστης δεν έχει authenticator — δηλαδή είναι διακοσμητικό.
+  # Μένουν οι κλάσεις που δουλεύουν χωρίς εξωτερικό πάροχο: TOTP (εφαρμογή
+  # κινητού), WebAuthn (κλειδί/βιομετρικά), static (κωδικοί ανάκτησης).
+  - model: authentik_stages_authenticator_validate.authenticatorvalidatestage
+    identifiers:
+      name: default-authentication-mfa-validation
+    attrs:
+      not_configured_action: !Context TRIFYLLI_MFA_NOT_CONFIGURED
+      device_classes:
+        - totp
+        - webauthn
+        - static
+      configuration_stages:
+        - !Find [authentik_stages_authenticator_totp.authenticatortotpstage, [name, default-authenticator-totp-setup]]
+      last_auth_threshold: seconds=0
+
+  # ── 4. Service account για το API ──
+  #
+  # Ό,τι χρειάζεται το `AuthentikClient` και τίποτα παραπάνω: να βρει/φτιάξει
+  # χρήστη, να του γράψει το attribute δεσμού, να ζητήσει email επαναφοράς.
+  # Αν πέσει το API, ο επιτιθέμενος ΔΕΝ παίρνει το Authentik.
+  #
+  # Τα δικαιώματα ζουν σε ΡΟΛΟ (RBAC) και όχι «πάνω» στον χρήστη: έτσι
+  # φαίνονται και αλλάζουν σε ένα σημείο, και ο χρήστης μένει ένα κενό κέλυφος.
+  - model: authentik_rbac.role
+    id: trifylli-api-role
+    identifiers:
+      name: trifylli-api
+    attrs:
+      name: trifylli-api
+      permissions:
+        - authentik_core.add_user
+        - authentik_core.view_user
+        - authentik_core.change_user
+        - authentik_core.reset_user_password
+        - authentik_stages_email.view_emailstage
+
+  - model: authentik_core.user
+    id: trifylli-api-user
+    identifiers:
+      username: trifylli-api
+    attrs:
+      name: Trifylli API (service account)
+      type: service_account
+      path: trifylli
+      is_active: true
+      roles:
+        - !KeyOf trifylli-api-role
+
+  # Το token δημιουργείται μόνο όταν έχει δοθεί κλειδί — ένα token με κενό
+  # κλειδί δεν σημαίνει τίποτα. Το `key` γίνεται δεκτό μόνο μέσα από blueprint
+  # (όχι από το δημόσιο API) — ακριβώς η περίπτωσή μας.
+  - model: authentik_core.token
+    identifiers:
+      identifier: trifylli-api-token
+    conditions:
+      - !Condition [AND, !Context TRIFYLLI_API_TOKEN]
+    attrs:
+      user: !KeyOf trifylli-api-user
+      intent: api
+      expiring: false
+      description: Trifylli API — πρόσκληση & επαναφορά κωδικού (βλ. trifylli-security.yaml)
+      key: !Context TRIFYLLI_API_TOKEN

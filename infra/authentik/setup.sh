@@ -42,6 +42,10 @@ echo "→ Εφαρμογή blueprint (εμφάνιση: λογότυπο, φόν
 docker compose exec -T authentik-worker \
   ak apply_blueprint /blueprints/custom/trifylli-branding.yaml >/dev/null 2>&1
 
+echo "→ Εφαρμογή blueprint (ασφάλεια: brute force, MFA, service account)"
+docker compose exec -T authentik-worker \
+  ak apply_blueprint /blueprints/custom/trifylli-security.yaml >/dev/null 2>&1
+
 # Οι λογαριασμοί του Trifylli, με τα email του seed. Το email είναι το κλειδί
 # αντιστοίχισης: ο χρήστης του Authentik δένει με τον λογαριασμό της εφαρμογής
 # μόνο αν ταιριάζει.

@@ -114,6 +114,31 @@ entries:
       placeholder_expression: false
       order: 1
 
+  # Τι περνά ως κωδικός. Τρία φίλτρα, γιατί κανένα μόνο του δεν αρκεί: το μήκος
+  # κόβει τα «1234», το zxcvbn κόβει τα «Trifylli2026!» που περνούν κάθε κανόνα
+  # χαρακτήρων και μαντεύονται σε δευτερόλεπτα, και το Have I Been Pwned κόβει
+  # όσα έχουν ήδη διαρρεύσει (ρωτά με k-anonymity — ο κωδικός δεν φεύγει ποτέ).
+  - model: authentik_policies_password.passwordpolicy
+    id: trifylli-password-policy
+    identifiers:
+      name: trifylli-password-policy
+    attrs:
+      password_field: password
+      length_min: 12
+      check_static_rules: true
+      amount_digits: 0
+      amount_uppercase: 0
+      amount_lowercase: 0
+      amount_symbols: 0
+      check_zxcvbn: true
+      zxcvbn_score_threshold: 3
+      check_have_i_been_pwned: true
+      hibp_allowed_count: 0
+      error_message: >-
+        Ο κωδικός πρέπει να έχει τουλάχιστον 12 χαρακτήρες, να μη μαντεύεται
+        εύκολα και να μην έχει εμφανιστεί σε γνωστές διαρροές. Μια φράση από
+        3-4 λέξεις δουλεύει καλύτερα από συνδυασμούς συμβόλων.
+
   - model: authentik_stages_prompt.promptstage
     id: trifylli-recovery-prompt
     identifiers:
@@ -122,7 +147,8 @@ entries:
       fields:
         - !KeyOf trifylli-recovery-field-password
         - !KeyOf trifylli-recovery-field-password-repeat
-      validation_policies: []
+      validation_policies:
+        - !KeyOf trifylli-password-policy
 
   # ── 40. Αποθήκευση ──
   #
