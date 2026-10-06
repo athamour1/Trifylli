@@ -18,7 +18,7 @@
     "db:migrate": "pnpm --filter @trifylli/api prisma:migrate",
     "db:seed": "pnpm --filter @trifylli/api prisma:seed",
     "db:studio": "pnpm --filter @trifylli/api prisma:studio",
-    "infra:up": "docker compose up -d postgres redis authentik-server authentik-worker garage garage-init",
+    "infra:up": "docker compose up -d postgres redis mailpit authentik-server authentik-worker garage garage-init",
     "infra:down": "docker compose down",
     "infra:logs": "docker compose logs -f",
     "infra:sso": "./infra/authentik/setup.sh"
