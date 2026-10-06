@@ -113,6 +113,16 @@ export interface NormalizedEseoGuardian {
   email?: string;
 }
 
+/** Μονάδα του e-SEO (Τοπικό/Τομέας) — κανονικοποιημένη. */
+export interface EseoUnit {
+  code: string;
+  name: string;
+  /** `LOCAL` για Τοπικό, `DISTRICT` για Τομέα, `CENTRAL_HQ`, `GROUP_PLUS`. */
+  type: string | null;
+  status: string | null;
+  parentName: string | null;
+}
+
 /** Πτυχίο/άδεια στελέχους — κανονικοποιημένο. */
 export interface NormalizedEseoLicense {
   eseoId: string;
@@ -167,6 +177,17 @@ const billingPagedSchema = z.object({
   content: z.array(billingMethodSchema).default([]),
   page: pageMetaSchema,
 });
+
+/** `OrgUnitDTO` — αρκεί η ταυτότητα της μονάδας και ο γονέας της (Τομέας). */
+const unitSchema = z
+  .object({
+    id: z.union([z.string(), z.number()]).transform(String),
+    name: z.string().nullish(),
+    type: z.string().nullish(),
+    status: z.string().nullish(),
+    parent: unitInfoSchema.nullish(),
+  })
+  .passthrough();
 
 const PAGE_SIZE = 100;
 /** Οι τύποι μέλους που αντιστοιχούν σε ποσό συνδρομής (όχι εκπτωτικοί κανόνες). */
@@ -286,6 +307,42 @@ export class EseoClient {
         page += 1;
       }
     }
+  }
+
+  /**
+   * Ένα Τοπικό με τον κωδικό του (`unitId`).
+   *
+   * Το token είναι δεμένο στο δικό μας Τοπικό: η **λίστα** μονάδων (`/unit/`)
+   * επιστρέφει μόνο εμάς και τα μέλη άλλων Τοπικών δεν φαίνονται καθόλου. Το
+   * `GET /unit/{id}` όμως απαντά για οποιαδήποτε μονάδα — αρκεί για να
+   * επιβεβαιώσουμε «ο 34 είναι η Ελευσίνα» όταν στήνεται κοινή δράση.
+   * Επιστρέφει `null` αν ο κωδικός δεν αντιστοιχεί σε μονάδα.
+   */
+  async unit(code: string): Promise<EseoUnit | null> {
+    if (!this.configured) {
+      throw new ServiceUnavailableException(
+        'Το e-SEO δεν έχει ρυθμιστεί (ESEO_BASE_URL / ESEO_REFRESH_TOKEN).',
+      );
+    }
+    if (!/^\d{1,10}$/.test(code)) return null;
+
+    let data: unknown;
+    try {
+      data = await this.get(`/unit/${code}`, {});
+    } catch {
+      // 404 ή οποιοδήποτε άλλο σφάλμα: για τον καλούντα σημαίνει «δεν βρέθηκε».
+      return null;
+    }
+    const parsed = unitSchema.safeParse(data);
+    if (!parsed.success || !parsed.data.name) return null;
+
+    return {
+      code: parsed.data.id,
+      name: parsed.data.name.trim(),
+      type: parsed.data.type ?? null,
+      status: parsed.data.status ?? null,
+      parentName: parsed.data.parent?.name?.trim() || null,
+    };
   }
 
   /**

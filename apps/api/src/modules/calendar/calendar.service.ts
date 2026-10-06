@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { DrasiStatus, Prisma } from '@prisma/client';
 import {
   DRASI_TYPE_LABEL,
   KLADOS_META,
@@ -56,6 +56,8 @@ export class CalendarService {
         where: {
           topikoId: user.topikoId,
           archivedAt: null,
+          // Ένα προσχέδιο (wizard στη μέση) δεν είναι ακόμη δέσμευση ημερομηνίας.
+          status: { not: DrasiStatus.PROSXEDIO },
           dateStart: { lte: to },
           dateEnd: { gte: from },
           ...ownerFilter,
@@ -187,6 +189,7 @@ export class CalendarService {
         where: {
           topikoId: user.topikoId,
           archivedAt: null,
+          status: { not: DrasiStatus.PROSXEDIO },
           dateStart: { lte: now },
           dateEnd: { gte: now },
         },

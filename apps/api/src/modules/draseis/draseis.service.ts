@@ -1,8 +1,10 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { CheckoutStatus, DrasiType, MemberKind, Prisma } from '@prisma/client';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { CheckoutStatus, DrasiStatus, DrasiType, MemberKind, Prisma } from '@prisma/client';
 import {
   KLADOS_LABEL,
   KLADOS_META,
+  type DrasiRolesTemplate,
+  type EseoUnitInfo,
   type KataskinosiStats,
   type KladosType,
   type Paginated,
@@ -10,35 +12,61 @@ import {
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
 import { assertKladosAccess, scopedKladoi } from '../../common/util/klados-scope';
+import { EseoClient } from '../integrations/eseo.client';
 import type {
   AddParticipantsDto,
   CreateDrasiDto,
   QueryDraseisDto,
+  RolesTemplateQueryDto,
+  SetDrasiKladoiDto,
+  SetDrasiRolesDto,
+  SetGuestTopikaDto,
   UpdateDrasiDto,
   UpdateParticipantDto,
 } from './dto/drasi.dto';
 
+const roleUserSelect = { id: true, firstName: true, lastName: true, phone: true } as const;
+
 @Injectable()
 export class DraseisService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly eseo: EseoClient,
+  ) {}
 
   async list(user: RequestUser, query: QueryDraseisDto): Promise<Paginated<unknown>> {
     if (query.klados) assertKladosAccess(user, query.klados);
 
+    const scope = scopedKladoi(user);
     const where: Prisma.DrasiWhereInput = {
       topikoId: user.topikoId,
       archivedAt: null,
       ...(query.type?.length ? { type: { in: query.type } } : {}),
-      ...(query.klados ? { klados: { type: query.klados } } : {}),
+      ...(query.klados
+        ? {
+            // «Δράσεις του κλάδου»: όσες διοργανώνει ΚΑΙ όσες συμμετέχει.
+            OR: [{ klados: { type: query.klados } }, { kladoi: { some: { klados: { type: query.klados } } } }],
+          }
+        : {}),
       ...(query.upcoming ? { dateEnd: { gte: new Date() } } : {}),
       ...(query.from ? { dateEnd: { gte: query.from } } : {}),
       ...(query.to ? { dateStart: { lte: query.to } } : {}),
-      // Ο διαχειριστής κλάδου βλέπει τις δράσεις του κλάδου του και τις δράσεις
-      // Τοπικού (kladosId = null), στις οποίες συμμετέχει το Τμήμα όλο.
-      ...(scopedKladoi(user)
-        ? { OR: [{ kladosId: null }, { klados: { type: { in: user.kladoi } } }] }
-        : {}),
     };
+
+    // Ο διαχειριστής κλάδου βλέπει: τις δράσεις που διοργανώνει ο κλάδος του, τις
+    // δράσεις Τοπικού (kladosId = null) και όσες ο κλάδος του απλώς συμμετέχει.
+    // Μπαίνει ως AND ώστε να μη συγχωνευτεί με το OR του φίλτρου `klados`.
+    if (scope) {
+      where.AND = [
+        {
+          OR: [
+            { kladosId: null },
+            { klados: { type: { in: scope } } },
+            { kladoi: { some: { klados: { type: { in: scope } } } } },
+          ],
+        },
+      ];
+    }
 
     const [total, items] = await this.prisma.$transaction([
       this.prisma.drasi.count({ where }),
@@ -49,12 +77,19 @@ export class DraseisService {
         take: query.take,
         include: {
           klados: { select: { type: true } },
-          _count: { select: { participants: true, syggentrwseis: true, checkouts: true } },
+          kladoi: { select: { klados: { select: { type: true } } } },
+          guestTopika: { select: { topikoName: true } },
+          _count: { select: { participants: true, syggentrwseis: true, checkouts: true, roles: true } },
         },
       }),
     ]);
 
-    return { items, total, page: query.page, pageSize: query.pageSize };
+    return {
+      items: items.map((d) => ({ ...d, kladoi: d.kladoi.map((k) => k.klados.type as KladosType) })),
+      total,
+      page: query.page,
+      pageSize: query.pageSize,
+    };
   }
 
   async findOne(user: RequestUser, id: string) {
@@ -62,6 +97,12 @@ export class DraseisService {
       where: { id, topikoId: user.topikoId },
       include: {
         klados: { select: { type: true, name: true } },
+        kladoi: { select: { klados: { select: { type: true } } } },
+        guestTopika: { orderBy: { topikoName: 'asc' } },
+        roles: {
+          include: { user: { select: roleUserSelect } },
+          orderBy: [{ kind: 'asc' }, { user: { lastName: 'asc' } }],
+        },
         participants: {
           include: {
             user: {
@@ -88,18 +129,15 @@ export class DraseisService {
       },
     });
     if (!drasi) throw new NotFoundException('Η δράση δεν βρέθηκε.');
-    assertKladosAccess(user, drasi.klados?.type as KladosType | undefined);
-    return drasi;
+
+    const kladoi = drasi.kladoi.map((k) => k.klados.type as KladosType);
+    this.assertReadAccess(user, drasi.klados?.type as KladosType | undefined, kladoi);
+
+    return { ...drasi, kladoi };
   }
 
   async create(user: RequestUser, dto: CreateDrasiDto) {
-    if (dto.dateStart > dto.dateEnd) {
-      throw new BadRequestException('Η έναρξη της δράσης πρέπει να προηγείται της λήξης.');
-    }
-    // Μια μονοήμερη που απλώνεται σε δύο μέρες είναι λάθος τύπος, όχι λάθος ημερομηνία.
-    if (dto.type === DrasiType.MONOIMERI && !sameDay(dto.dateStart, dto.dateEnd)) {
-      throw new BadRequestException('Η μονοήμερη δράση πρέπει να ξεκινά και να τελειώνει την ίδια μέρα.');
-    }
+    this.assertDates(dto.type, dto.dateStart, dto.dateEnd);
 
     const kladosId = dto.kladosType ? await this.kladosId(user, dto.kladosType) : null;
 
@@ -114,17 +152,20 @@ export class DraseisService {
         location: dto.location,
         description: dto.description,
         costPerPerson: dto.costPerPerson,
+        status: dto.draft ? DrasiStatus.PROSXEDIO : DrasiStatus.ENERGI,
+        // Ο διοργανωτής συμμετέχει εξ ορισμού — το «ποιοι έρχονται» ξεκινά από εδώ.
+        ...(kladosId ? { kladoi: { create: { kladosId } } } : {}),
       },
     });
   }
 
   async update(user: RequestUser, id: string, dto: UpdateDrasiDto) {
     const drasi = await this.assertAccess(user, id);
+    const type = dto.type ?? drasi.type;
     const dateStart = dto.dateStart ?? drasi.dateStart;
     const dateEnd = dto.dateEnd ?? drasi.dateEnd;
-    if (dateStart > dateEnd) {
-      throw new BadRequestException('Η έναρξη της δράσης πρέπει να προηγείται της λήξης.');
-    }
+    this.assertDates(type, dateStart, dateEnd);
+
     return this.prisma.drasi.update({ where: { id }, data: { ...dto } });
   }
 
@@ -132,6 +173,146 @@ export class DraseisService {
     await this.assertAccess(user, id);
     return this.prisma.drasi.update({ where: { id }, data: { archivedAt: new Date() } });
   }
+
+  // ───────────────────────── Wizard: ποιοι έρχονται ─────────────────────────
+
+  /**
+   * Αντικαθιστά τους συμμετέχοντες κλάδους. Ο διοργανωτής μένει πάντα μέσα —
+   * μια δράση Οδηγών χωρίς Οδηγούς δεν σημαίνει τίποτα.
+   */
+  async setKladoi(user: RequestUser, id: string, dto: SetDrasiKladoiDto): Promise<KladosType[]> {
+    const drasi = await this.assertAccess(user, id);
+    const wanted = new Set<KladosType>(dto.kladoi);
+    if (drasi.klados?.type) wanted.add(drasi.klados.type as KladosType);
+
+    const rows = await this.prisma.klados.findMany({
+      where: { topikoId: user.topikoId, type: { in: [...wanted] } },
+      select: { id: true, type: true },
+    });
+    const missing = [...wanted].filter((t) => !rows.some((r) => r.type === t));
+    if (missing.length > 0) {
+      throw new BadRequestException(`Δεν υπάρχει στο Τοπικό: ${missing.map((t) => KLADOS_LABEL[t]).join(', ')}.`);
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.drasiKlados.deleteMany({ where: { drasiId: id } }),
+      this.prisma.drasiKlados.createMany({ data: rows.map((r) => ({ drasiId: id, kladosId: r.id })) }),
+    ]);
+
+    return rows
+      .map((r) => r.type as KladosType)
+      .sort((a, b) => KLADOS_META[a].order - KLADOS_META[b].order);
+  }
+
+  /** Αντικαθιστά τα φιλοξενούμενα Τοπικά. Ίδιος κωδικός δύο φορές ⇒ κρατιέται ο τελευταίος. */
+  async setGuestTopika(user: RequestUser, id: string, dto: SetGuestTopikaDto) {
+    await this.assertAccess(user, id);
+
+    const byCode = new Map(dto.items.map((item) => [item.topikoCode, item]));
+    await this.prisma.$transaction([
+      this.prisma.drasiGuestTopiko.deleteMany({ where: { drasiId: id } }),
+      this.prisma.drasiGuestTopiko.createMany({
+        data: [...byCode.values()].map((item) => ({
+          drasiId: id,
+          topikoCode: item.topikoCode,
+          topikoName: item.topikoName.trim(),
+          kladoi: item.kladoi,
+          contactName: item.contactName?.trim() || null,
+          contactPhone: item.contactPhone?.trim() || null,
+        })),
+      }),
+    ]);
+
+    return this.prisma.drasiGuestTopiko.findMany({ where: { drasiId: id }, orderBy: { topikoName: 'asc' } });
+  }
+
+  /**
+   * Ένα Τοπικό από το e-SEO, για να μην πληκτρολογεί κανείς «Ελευσίνα» με τρεις
+   * ορθογραφίες. Το token μας βλέπει μονάδες μόνο με κωδικό (όχι λίστα), οπότε
+   * η ροή είναι: κωδικός → όνομα → επιβεβαίωση.
+   */
+  async eseoTopiko(code: string): Promise<EseoUnitInfo> {
+    const unit = await this.eseo.unit(code);
+    if (!unit) throw new NotFoundException('Δεν βρέθηκε Τοπικό με αυτόν τον κωδικό στο e-SEO.');
+    return { code: unit.code, name: unit.name, parentName: unit.parentName, type: unit.type };
+  }
+
+  // ───────────────────────── Wizard: αρχηγείο & υπηρεσίες ─────────────────────────
+
+  /** Αντικαθιστά όλες τις ευθύνες. Τα ids ελέγχονται στο Τοπικό — όχι ευθύνες-φαντάσματα. */
+  async setRoles(user: RequestUser, id: string, dto: SetDrasiRolesDto) {
+    await this.assertAccess(user, id);
+
+    const userIds = [...new Set(dto.roles.map((r) => r.userId))];
+    const known = await this.prisma.user.findMany({
+      where: { id: { in: userIds }, topikoId: user.topikoId, archivedAt: null },
+      select: { id: true },
+    });
+    const knownIds = new Set(known.map((k) => k.id));
+    const unknown = userIds.filter((uid) => !knownIds.has(uid));
+    if (unknown.length > 0) throw new BadRequestException(`Άγνωστα στελέχη: ${unknown.join(', ')}`);
+
+    // Ίδιο ζεύγος (ευθύνη, άτομο) δύο φορές: μία γραμμή, η σημείωση του τελευταίου.
+    const unique = new Map(dto.roles.map((r) => [`${r.kind}:${r.userId}`, r]));
+
+    await this.prisma.$transaction([
+      this.prisma.drasiRole.deleteMany({ where: { drasiId: id } }),
+      this.prisma.drasiRole.createMany({
+        data: [...unique.values()].map((r) => ({
+          drasiId: id,
+          kind: r.kind,
+          userId: r.userId,
+          note: r.note?.trim() || null,
+        })),
+      }),
+    ]);
+
+    return this.prisma.drasiRole.findMany({
+      where: { drasiId: id },
+      include: { user: { select: roleUserSelect } },
+      orderBy: [{ kind: 'asc' }, { user: { lastName: 'asc' } }],
+    });
+  }
+
+  /**
+   * «Ίδια όπως την προηγούμενη»: οι ευθύνες της πιο πρόσφατης ολοκληρωμένης
+   * δράσης του ίδιου φορέα (κλάδος ή Τοπικό). Τα αρχηγεία αλλάζουν σπάνια· το να
+   * ξαναδιαλέγεις έξι ονόματα κάθε φορά είναι ο λόγος που κάποιος θα παρατήσει
+   * το wizard. Στελέχη που έφυγαν από το μητρώο δεν προτείνονται.
+   */
+  async rolesTemplate(user: RequestUser, query: RolesTemplateQueryDto): Promise<DrasiRolesTemplate> {
+    const kladosId = query.klados ? await this.kladosId(user, query.klados) : null;
+
+    const source = await this.prisma.drasi.findFirst({
+      where: {
+        topikoId: user.topikoId,
+        archivedAt: null,
+        status: { not: DrasiStatus.PROSXEDIO },
+        kladosId,
+        ...(query.exclude ? { id: { not: query.exclude } } : {}),
+        roles: { some: {} },
+      },
+      orderBy: { dateStart: 'desc' },
+      select: {
+        id: true,
+        title: true,
+        dateStart: true,
+        roles: {
+          where: { user: { archivedAt: null } },
+          select: { kind: true, userId: true, note: true },
+          orderBy: { kind: 'asc' },
+        },
+      },
+    });
+
+    if (!source) return { source: null, roles: [] };
+    return {
+      source: { id: source.id, title: source.title, dateStart: source.dateStart.toISOString() },
+      roles: source.roles,
+    };
+  }
+
+  // ───────────────────────── Συμμετέχοντες ─────────────────────────
 
   async addParticipants(user: RequestUser, id: string, dto: AddParticipantsDto) {
     await this.assertAccess(user, id);
@@ -279,7 +460,12 @@ export class DraseisService {
   /** Συγκεντρωτικά όλων των κατασκηνώσεων — η προβολή του Τοπικού. */
   async kataskinoseis(user: RequestUser) {
     const rows = await this.prisma.drasi.findMany({
-      where: { topikoId: user.topikoId, type: DrasiType.KATASKINOSI, archivedAt: null },
+      where: {
+        topikoId: user.topikoId,
+        type: DrasiType.KATASKINOSI,
+        archivedAt: null,
+        status: { not: DrasiStatus.PROSXEDIO },
+      },
       orderBy: { dateStart: 'desc' },
       include: {
         klados: { select: { type: true } },
@@ -302,6 +488,9 @@ export class DraseisService {
     }));
   }
 
+  // ───────────────────────── Εσωτερικά ─────────────────────────
+
+  /** Εγγραφή: μόνο ο διοργανωτής (ή ο υπερδιαχειριστής για δράσεις Τοπικού). */
   private async assertAccess(user: RequestUser, id: string) {
     const drasi = await this.prisma.drasi.findFirst({
       where: { id, topikoId: user.topikoId },
@@ -310,6 +499,27 @@ export class DraseisService {
     if (!drasi) throw new NotFoundException('Η δράση δεν βρέθηκε.');
     assertKladosAccess(user, drasi.klados?.type as KladosType | undefined);
     return drasi;
+  }
+
+  /**
+   * Ανάγνωση: και ο κλάδος που απλώς **συμμετέχει** βλέπει τη δράση — τα
+   * στελέχη του θα είναι εκεί, χρειάζονται το πρόγραμμα και το αρχηγείο.
+   */
+  private assertReadAccess(user: RequestUser, organiser: KladosType | undefined, kladoi: KladosType[]): void {
+    const scope = scopedKladoi(user);
+    if (!scope || !organiser) return;
+    if (scope.includes(organiser) || kladoi.some((k) => scope.includes(k))) return;
+    throw new ForbiddenException(`Δεν έχετε πρόσβαση στα δεδομένα του κλάδου ${organiser}.`);
+  }
+
+  private assertDates(type: DrasiType, dateStart: Date, dateEnd: Date): void {
+    if (dateStart > dateEnd) {
+      throw new BadRequestException('Η έναρξη της δράσης πρέπει να προηγείται της λήξης.');
+    }
+    // Μια μονοήμερη που απλώνεται σε δύο μέρες είναι λάθος τύπος, όχι λάθος ημερομηνία.
+    if (type === DrasiType.MONOIMERI && !sameDay(dateStart, dateEnd)) {
+      throw new BadRequestException('Η μονοήμερη δράση πρέπει να ξεκινά και να τελειώνει την ίδια μέρα.');
+    }
   }
 
   private async kladosId(user: RequestUser, type: KladosType): Promise<string> {
