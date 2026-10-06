@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import type { KladosType } from '@trifylli/shared';
+import { AuditService } from '../../common/audit/audit.service';
 import { CapabilityGuard } from '../../common/auth/capability.guard';
 import { CurrentUser, RequireCapability } from '../../common/auth/decorators';
 import type { RequestUser } from '../../common/auth/types';
@@ -23,7 +24,10 @@ import { SyndromesService } from './syndromes.service';
 @UseGuards(CapabilityGuard)
 @Controller('syndromes')
 export class SyndromesController {
-  constructor(private readonly syndromes: SyndromesService) {}
+  constructor(
+    private readonly syndromes: SyndromesService,
+    private readonly audit: AuditService,
+  ) {}
 
   @Get('periods')
   @RequireCapability('syndromes:read')
@@ -34,8 +38,10 @@ export class SyndromesController {
   @Post('periods')
   @RequireCapability('syndromes:manage')
   @ApiOperation({ summary: 'Νέα οδηγική χρονιά', description: 'Προαιρετικά δημιουργεί συνδρομές για όλα τα ενεργά μέλη.' })
-  createPeriod(@CurrentUser() user: RequestUser, @Body() dto: CreatePeriodDto) {
-    return this.syndromes.createPeriod(user, dto);
+  async createPeriod(@CurrentUser() user: RequestUser, @Body() dto: CreatePeriodDto) {
+    const period = await this.syndromes.createPeriod(user, dto);
+    await this.audit.record(user, 'syndromes.period.create', 'period', (period as { id?: string }).id, { ...dto });
+    return period;
   }
 
   @Get('report')
@@ -77,12 +83,14 @@ export class SyndromesController {
   @Put('member/:memberId')
   @RequireCapability('syndromes:manage')
   @ApiOperation({ summary: 'Ορισμός οφειλόμενου ποσού ή απαλλαγής' })
-  setSyndromi(
+  async setSyndromi(
     @CurrentUser() user: RequestUser,
     @Param('memberId', ParseUUIDPipe) memberId: string,
     @Body() dto: SetSyndromiDto,
   ) {
-    return this.syndromes.setSyndromi(user, memberId, dto);
+    const result = await this.syndromes.setSyndromi(user, memberId, dto);
+    await this.audit.record(user, 'syndromes.set', 'user', memberId, { ...dto });
+    return result;
   }
 
   @Post(':syndromiId/payments')
@@ -91,19 +99,23 @@ export class SyndromesController {
     summary: 'Καταγραφή πληρωμής',
     description: 'Το σύνολο ξαναϋπολογίζεται από τις εγγραφές πληρωμών.',
   })
-  addPayment(
+  async addPayment(
     @CurrentUser() user: RequestUser,
     @Param('syndromiId', ParseUUIDPipe) syndromiId: string,
     @Body() dto: CreatePaymentDto,
   ) {
-    return this.syndromes.addPayment(user, syndromiId, dto);
+    const result = await this.syndromes.addPayment(user, syndromiId, dto);
+    await this.audit.record(user, 'syndromes.payment.add', 'syndromi', syndromiId, { ...dto });
+    return result;
   }
 
   @Delete('payments/:paymentId')
   @RequireCapability('syndromes:manage')
   @ApiOperation({ summary: 'Διαγραφή πληρωμής (επανυπολογισμός συνόλου)' })
-  deletePayment(@CurrentUser() user: RequestUser, @Param('paymentId', ParseUUIDPipe) paymentId: string) {
-    return this.syndromes.deletePayment(user, paymentId);
+  async deletePayment(@CurrentUser() user: RequestUser, @Param('paymentId', ParseUUIDPipe) paymentId: string) {
+    const result = await this.syndromes.deletePayment(user, paymentId);
+    await this.audit.record(user, 'syndromes.payment.delete', 'payment', paymentId);
+    return result;
   }
 
   @Get('cash')
@@ -121,11 +133,13 @@ export class SyndromesController {
   @Put('payments/:paymentId/handling')
   @RequireCapability('syndromes:manage')
   @ApiOperation({ summary: 'Αλλαγή σταδίου διαχείρισης μετρητών' })
-  updateHandling(
+  async updateHandling(
     @CurrentUser() user: RequestUser,
     @Param('paymentId', ParseUUIDPipe) paymentId: string,
     @Body() dto: UpdateHandlingDto,
   ) {
-    return this.syndromes.updateHandling(user, paymentId, dto.handlingStatus);
+    const result = await this.syndromes.updateHandling(user, paymentId, dto.handlingStatus);
+    await this.audit.record(user, 'syndromes.payment.handling', 'payment', paymentId, { status: dto.handlingStatus });
+    return result;
   }
 }

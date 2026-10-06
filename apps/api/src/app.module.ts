@@ -5,6 +5,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AuthModule } from './common/auth/auth.module';
 import { JwtAuthGuard } from './common/auth/jwt-auth.guard';
 import { AppConfigModule } from './common/config/config.module';
+import { AuditModule } from './common/audit/audit.module';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { StorageModule } from './common/storage/storage.module';
 import { HealthController } from './health.controller';
@@ -29,6 +30,7 @@ import { YlikoModule } from './modules/yliko/yliko.module';
   imports: [
     AppConfigModule,
     PrismaModule,
+    AuditModule,
     StorageModule,
     AuthModule,
     ScheduleModule.forRoot(),

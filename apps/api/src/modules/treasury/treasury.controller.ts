@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { AuditService } from '../../common/audit/audit.service';
 import { CapabilityGuard } from '../../common/auth/capability.guard';
 import { CurrentUser, RequireCapability } from '../../common/auth/decorators';
 import type { RequestUser } from '../../common/auth/types';
@@ -11,7 +12,10 @@ import { TreasuryService } from './treasury.service';
 @UseGuards(CapabilityGuard)
 @Controller('treasury')
 export class TreasuryController {
-  constructor(private readonly treasury: TreasuryService) {}
+  constructor(
+    private readonly treasury: TreasuryService,
+    private readonly audit: AuditService,
+  ) {}
 
   @Get('overview')
   @RequireCapability('treasury:read')
@@ -37,14 +41,23 @@ export class TreasuryController {
   @Post()
   @RequireCapability('treasury:manage')
   @ApiOperation({ summary: 'Νέα κίνηση (έσοδο ή έξοδο, με προαιρετική απόδειξη)' })
-  create(@CurrentUser() user: RequestUser, @Body() dto: CreateTreasuryEntryDto) {
-    return this.treasury.create(user, dto);
+  async create(@CurrentUser() user: RequestUser, @Body() dto: CreateTreasuryEntryDto) {
+    const entry = await this.treasury.create(user, dto);
+    await this.audit.record(user, 'treasury.create', 'treasury_entry', entry.id, {
+      kind: dto.kind,
+      amount: dto.amount,
+      category: dto.category,
+      klados: dto.kladosType ?? null,
+    });
+    return entry;
   }
 
   @Delete(':id')
   @RequireCapability('treasury:manage')
   @ApiOperation({ summary: 'Διαγραφή κίνησης (και της απόδειξής της)' })
-  remove(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
-    return this.treasury.remove(user, id);
+  async remove(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
+    const result = await this.treasury.remove(user, id);
+    await this.audit.record(user, 'treasury.delete', 'treasury_entry', id);
+    return result;
   }
 }

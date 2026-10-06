@@ -1,5 +1,7 @@
 import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
+import { AuditService } from '../../common/audit/audit.service';
 import { CapabilityGuard } from '../../common/auth/capability.guard';
 import { CurrentUser, SuperAdminOnly } from '../../common/auth/decorators';
 import type { RequestUser } from '../../common/auth/types';
@@ -17,7 +19,10 @@ import { CreateAccountDto, UpdateAccountDto } from './dto/account.dto';
 @SuperAdminOnly()
 @Controller('accounts')
 export class AccountsController {
-  constructor(private readonly accounts: AccountsService) {}
+  constructor(
+    private readonly accounts: AccountsService,
+    private readonly audit: AuditService,
+  ) {}
 
   @Get()
   @ApiOperation({
@@ -41,29 +46,41 @@ export class AccountsController {
       'Στέλνει και email με σύνδεσμο ορισμού κωδικού (Authentik). Αν η αποστολή αποτύχει, ο ' +
       'λογαριασμός δημιουργείται ούτως ή άλλως και η απάντηση το λέει στο `inviteError`.',
   })
-  create(@CurrentUser() user: RequestUser, @Body() dto: CreateAccountDto) {
-    return this.accounts.create(user, dto);
+  async create(@CurrentUser() user: RequestUser, @Body() dto: CreateAccountDto) {
+    const result = await this.accounts.create(user, dto);
+    await this.audit.record(user, 'account.create', 'user', result.account.id, {
+      role: dto.role,
+      adminKlados: dto.adminKlados ?? null,
+      invited: result.invited,
+    });
+    return result;
   }
 
   @Post(':id/invite')
+  // Κάθε κλήση στέλνει email σε τρίτο: αυστηρό όριο, πέρα από το καθολικό.
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiOperation({
     summary: 'Αποστολή συνδέσμου ορισμού κωδικού',
     description:
       'Για πρόσκληση που χάθηκε ή για επαναφορά κωδικού. Το Trifylli δεν βλέπει ποτέ τον ' +
       'κωδικό: τον ορίζει ο ίδιος ο χρήστης μέσα από το Authentik.',
   })
-  invite(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
-    return this.accounts.invite(user, id);
+  async invite(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
+    const result = await this.accounts.invite(user, id);
+    await this.audit.record(user, 'account.invite', 'user', id);
+    return result;
   }
 
   @Patch(':id')
   @ApiOperation({ summary: 'Αλλαγή στοιχείων, ρόλου ή κλάδου' })
-  update(
+  async update(
     @CurrentUser() user: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateAccountDto,
   ) {
-    return this.accounts.update(user, id, dto);
+    const result = await this.accounts.update(user, id, dto);
+    await this.audit.record(user, 'account.update', 'user', id, { ...dto });
+    return result;
   }
 
   @Delete(':id')
@@ -71,7 +88,9 @@ export class AccountsController {
     summary: 'Ανάκληση πρόσβασης',
     description: 'Το άτομο παραμένει στο μητρώο με το ιστορικό του· χάνει μόνο τη δυνατότητα εισόδου.',
   })
-  revoke(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
-    return this.accounts.revoke(user, id);
+  async revoke(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
+    const result = await this.accounts.revoke(user, id);
+    await this.audit.record(user, 'account.revoke', 'user', id);
+    return result;
   }
 }
