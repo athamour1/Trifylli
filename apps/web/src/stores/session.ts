@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import type { User } from 'oidc-client-ts';
 import { setAccessToken } from '../lib/api';
+import { useOfflineStore } from './offline';
 import {
   clearLocalSession,
   clearStaleAuthState,
@@ -113,6 +114,9 @@ export const useSessionStore = defineStore('session', {
     async signOut(): Promise<void> {
       setAccessToken(null);
       this.user = null;
+      // Πρώτα τα δεδομένα, μετά η ανακατεύθυνση: αν φύγουμε πριν τελειώσει το
+      // σβήσιμο, ο επόμενος χρήστης του ίδιου υπολογιστή κληρονομεί το cache.
+      await useOfflineStore().purgeLocalData();
       await oidcLogout();
     },
 
@@ -120,6 +124,7 @@ export const useSessionStore = defineStore('session', {
     async signOutLocally(): Promise<void> {
       setAccessToken(null);
       this.user = null;
+      await useOfflineStore().purgeLocalData();
       await clearLocalSession();
     },
 

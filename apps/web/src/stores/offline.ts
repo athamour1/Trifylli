@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { del as idbDel, get as idbGet, set as idbSet } from 'idb-keyval';
+import { del as idbDel, get as idbGet, keys as idbKeys, set as idbSet } from 'idb-keyval';
 import { Notify } from 'quasar';
 import type { OutboxItem } from '@trifylli/shared';
 import { ApiError, OfflineError, http } from '../lib/api';
@@ -221,6 +221,35 @@ export const useOfflineStore = defineStore('offline', {
 
     async clearCache(key: string): Promise<void> {
       await idbDel(CACHE_PREFIX + key);
+    },
+
+    /**
+     * Σβήνει ΟΛΑ τα τοπικά δεδομένα: cache ανάγνωσης, ουρά, και το cache του
+     * service worker για το API.
+     *
+     * Καλείται στην αποσύνδεση. Χωρίς αυτό, στον κοινόχρηστο υπολογιστή της
+     * Εστίας ο επόμενος χρήστης βρίσκει μητρώο, συνδρομές και ταμείο του
+     * προηγούμενου μέσα στο Cache Storage — και η ουρά του προηγούμενου θα
+     * έφευγε με το token του επόμενου. Το «κλείνει η καρτέλα, τελειώνει η
+     * συνεδρία» πρέπει να ισχύει και για τα δεδομένα, όχι μόνο για τα tokens.
+     */
+    async purgeLocalData(): Promise<void> {
+      this.outbox = [];
+      try {
+        const all = await idbKeys();
+        await Promise.all(
+          all
+            .filter((k) => typeof k === 'string' && (k.startsWith(CACHE_PREFIX) || k === OUTBOX_KEY))
+            .map((k) => idbDel(k)),
+        );
+      } catch {
+        // Χωρίς IndexedDB (ιδιωτική περιήγηση) δεν υπάρχει και τι να σβηστεί.
+      }
+      try {
+        if (typeof caches !== 'undefined') await caches.delete('trifylli-api');
+      } catch {
+        // Ό,τι δεν σβήστηκε θα λήξει μόνο του (ExpirationPlugin).
+      }
     },
   },
 });
