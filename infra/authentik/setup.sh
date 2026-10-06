@@ -34,6 +34,14 @@ echo "→ Εφαρμογή blueprint (provider + application)"
 docker compose exec -T authentik-worker \
   ak apply_blueprint /blueprints/custom/trifylli-oidc.yaml >/dev/null 2>&1
 
+echo "→ Εφαρμογή blueprint (ορισμός & επαναφορά κωδικού)"
+docker compose exec -T authentik-worker \
+  ak apply_blueprint /blueprints/custom/trifylli-recovery.yaml >/dev/null 2>&1
+
+echo "→ Εφαρμογή blueprint (εμφάνιση: λογότυπο, φόντο, CSS)"
+docker compose exec -T authentik-worker \
+  ak apply_blueprint /blueprints/custom/trifylli-branding.yaml >/dev/null 2>&1
+
 # Οι λογαριασμοί του Trifylli, με τα email του seed. Το email είναι το κλειδί
 # αντιστοίχισης: ο χρήστης του Authentik δένει με τον λογαριασμό της εφαρμογής
 # μόνο αν ταιριάζει.
@@ -64,18 +72,6 @@ create_user() {
     -d "$(printf '{"password":"%s"}' "$DEV_PASSWORD")" >/dev/null
 }
 
-echo "→ Εμφάνιση (brand)"
-# Ο χρήστης δεν πρέπει να νιώσει ότι άλλαξε προϊόν στη μέση της σύνδεσης.
-BRAND_PK=$(api GET '/core/brands/?default=true' | python3 -c \
-  "import sys,json; print(json.load(sys.stdin)['results'][0]['brand_uuid'])")
-api PATCH "/core/brands/$BRAND_PK/" -d '{
-  "branding_title": "Trifylli",
-  "branding_logo": "/media/public/logo.svg",
-  "branding_favicon": "/media/public/favicon.svg",
-  "attributes": {"settings": {"theme": {"base": "light"}}}
-}' >/dev/null
-echo "   = τίτλος, λογότυπο, favicon, ανοιχτό θέμα"
-
 echo "→ Ροή σύνδεσης σε ένα βήμα"
 # Το προεπιλεγμένο flow ζητά πρώτα όνομα και μετά κωδικό, σε δύο φορτώσεις
 # σελίδας. Δένοντας το password stage πάνω στο identification, τα δύο πεδία
@@ -85,10 +81,22 @@ IDENT_PK=$(api GET '/stages/identification/' | python3 -c \
 PASSWORD_PK=$(api GET '/stages/password/' | python3 -c \
   "import sys,json; r=[x for x in json.load(sys.stdin)['results'] if x['name']=='default-authentication-password']; print(r[0]['pk'] if r else '')")
 
+# Και ο σύνδεσμος «Ξέχασα τον κωδικό», στην ΙΔΙΑ κλήση: ο serializer του
+# Authentik επικυρώνει τα `user_fields` ακόμη και σε PATCH, οπότε ένα δεύτερο
+# αίτημα μόνο με `recovery_flow` απαντά 400 («When no user fields are selected…»).
+RECOVERY_PK=$(api GET '/flows/instances/?slug=trifylli-recovery' | python3 -c \
+  "import sys,json; r=json.load(sys.stdin).get('results',[]); print(r[0]['pk'] if r else '')")
+
 if [ -n "$IDENT_PK" ] && [ -n "$PASSWORD_PK" ]; then
   api PATCH "/stages/identification/$IDENT_PK/" \
-    -d "$(printf '{"password_stage":"%s","user_fields":["email","username"]}' "$PASSWORD_PK")" >/dev/null
+    -d "$(printf '{"password_stage":"%s","user_fields":["email","username"],"recovery_flow":%s}' \
+      "$PASSWORD_PK" "$([ -n "$RECOVERY_PK" ] && printf '"%s"' "$RECOVERY_PK" || echo null)")" >/dev/null
   echo "   = όνομα και κωδικός σε μία οθόνη"
+  if [ -n "$RECOVERY_PK" ]; then
+    echo "   = η οθόνη σύνδεσης δείχνει «Ξέχασα τον κωδικό»"
+  else
+    echo "   ! δεν βρέθηκε η ροή trifylli-recovery — χωρίς «Ξέχασα τον κωδικό»" >&2
+  fi
 fi
 
 # Το blueprint δηλώνει τη ροή μας κενή, αλλά το Authentik δεν αφαιρεί bindings
@@ -110,19 +118,16 @@ for b in json.load(sys.stdin).get('results', []):
 fi
 echo "   = η ροή είναι κενή· η επιστροφή στην εφαρμογή γίνεται χωρίς κλικ"
 
-echo "→ Τίτλοι και φόντο ροών"
-# Προσοχή: αυτά τα endpoints δέχονται **slug**, όχι uuid, και το
-# `set_background_url` προσθέτει μόνο του το πρόθεμα `/media/public/`.
+echo "→ Ελληνικοί τίτλοι στις ροές του Authentik"
+# Μόνο οι τίτλοι των **προεπιλεγμένων** ροών: οι δικές μας τα έχουν ήδη από τα
+# blueprints. Το φόντο δεν μπαίνει ανά ροή — το ορίζει μία φορά το brand
+# (`branding_default_flow_background`, blueprint εμφάνισης).
+# Προσοχή: αυτά τα endpoints δέχονται **slug**, όχι uuid.
 api PATCH '/flows/instances/default-authentication-flow/' \
   -d '{"title":"Σύνδεση στο Trifylli"}' >/dev/null
 api PATCH '/flows/instances/default-invalidation-flow/' \
   -d '{"title":"Αποσύνδεση από το Trifylli"}' >/dev/null
-
-for slug in default-authentication-flow trifylli-authorization \
-            trifylli-invalidation default-invalidation-flow; do
-  api POST "/flows/instances/$slug/set_background_url/" -d '{"url":"background.svg"}' >/dev/null
-done
-echo "   = ελληνικοί τίτλοι, φόντο στα χρώματα της εφαρμογής"
+echo "   = ελληνικοί τίτλοι"
 
 echo "→ Χρήστες ανάπτυξης (κωδικός: $DEV_PASSWORD)"
 create_user 'trifylli-admin'  'admin@trifylli.local'    'Τοπικός Διαχειριστής'

@@ -1,0 +1,458 @@
+# Εμφάνιση του Authentik — Trifylli.
+#
+# Ο χρήστης φεύγει από την εφαρμογή για να συνδεθεί και γυρίζει πίσω. Αν η
+# ενδιάμεση οθόνη μοιάζει με άλλο προϊόν, η διαδρομή σπάει στα δύο· εδώ μπαίνουν
+# το λογότυπο, το φόντο και το CSS που την κάνουν να μοιάζει με συνέχεια.
+#
+# ΠΟΥ ΖΟΥΝ ΤΑ ΑΡΧΕΙΑ: `infra/authentik/branding/` → mount στο `/media/public`
+# (βλ. compose). Το Authentik τα βλέπει ως `logo.svg`, `favicon.svg`,
+# `clover-pattern.jpg` — **σκέτα ονόματα**: απόλυτη διαδρομή (`/media/...`) κόβεται
+# από τον validator («Absolute paths are not allowed»).
+#
+# ΓΙΑΤΙ ΕΔΩ ΤΟ CSS: στο Authentik 2026.x το αρχείο `/web/dist/custom.css` ΔΕΝ
+# φορτώνεται πλέον· το CSS ζει στο πεδίο `branding_custom_css` του brand και
+# ενίεται και μέσα στα shadow roots των components. Το blueprint είναι ο μόνος
+# τρόπος να εφαρμοστεί **και** σε prod χωρίς χειροκίνητο βήμα.
+#
+# Εφαρμόζεται αυτόματα από τον worker (mount στο /blueprints/custom), ή χειροκίνητα:
+#   docker compose exec authentik-worker ak apply_blueprint /blueprints/custom/trifylli-branding.yaml
+version: 1
+metadata:
+  name: Trifylli — εμφάνιση (brand)
+  labels:
+    blueprints.goauthentik.io/instantiate: 'true'
+
+entries:
+  - model: authentik_brands.brand
+    identifiers:
+      domain: authentik-default
+    attrs:
+      branding_title: Trifylli
+      branding_logo: logo.svg
+      branding_favicon: favicon.svg
+      branding_default_flow_background: clover-pattern.webp
+      # Ανοιχτό θέμα, όπως η εφαρμογή — όχι «ό,τι έχει ο browser».
+      attributes:
+        settings:
+          theme:
+            base: light
+      branding_custom_css: |
+        /*
+         * Η εμφάνιση του Authentik, στη γλώσσα σχεδιασμού του Trifylli.
+         *
+         * Ο χρήστης δεν πρέπει να νιώσει ότι έφυγε από την εφαρμογή: η οθόνη σύνδεσης
+         * και ο ορισμός κωδικού είναι μέρος της ίδιας διαδρομής, όχι ξένο προϊόν στη
+         * μέση. Γι' αυτό αντιγράφουμε τα ίδια tokens με το `apps/web/src/css/app.scss`
+         * — χρώμα, γωνίες, σκιές, τυπογραφία — και τα περνάμε πάνω στα components της
+         * PatternFly που χρησιμοποιεί το Authentik.
+         *
+         * ΠΡΟΣΟΧΗ: αυτό ΕΙΝΑΙ η πηγή — γράφεται απευθείας εδώ, μέσα στο blueprint.
+         * Μη ψάχνεις ξεχωριστό .css· το Authentik 2026.x δεν φορτώνει πια αρχείο
+         * (`/web/dist/custom.css`), διαβάζει το πεδίο `branding_custom_css`.
+         */
+
+        /* ══════════════ Tokens — ίδια τιμή με το app.scss ══════════════ */
+        :root,
+        :host {
+          --tf-primary: #2e7d32;
+          --tf-primary-dark: #1b5e20;
+          --tf-ink: #1f2a21;
+          --tf-muted: #5c6b5c;
+          --tf-surface: #ffffff;
+          --tf-bg: #f4f6f3;
+          --tf-border: #e4e8e2;
+          --tf-radius: 14px;
+          --tf-radius-sm: 10px;
+          --tf-shadow: 0 6px 16px rgba(16, 24, 20, 0.09), 0 2px 6px rgba(16, 24, 20, 0.05);
+          --tf-font: Roboto, -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
+
+          /* Τα δικά του tokens: ό,τι δεν πιάσουμε με κανόνα, το πιάνει η μεταβλητή. */
+          --ak-accent: var(--tf-primary);
+          --ak-font-family-sans-serif: var(--tf-font);
+          --ak-generic-sans-serif: var(--tf-font);
+          --ak-font-family-heading: var(--tf-font);
+          --ak-v2-global--BackgroundColor--100: var(--tf-surface);
+          --ak-v2-global--BorderColor--100: var(--tf-border);
+          --ak-v2-global--BorderColor--200: var(--tf-border);
+          --ak-v2-global--Color--100: var(--tf-ink);
+
+          /* PatternFly v4 (τα components της ροής) και v5 (ό,τι έχει ήδη μεταφερθεί). */
+          --pf-global--primary-color--100: var(--tf-primary);
+          --pf-global--primary-color--200: var(--tf-primary-dark);
+          --pf-global--active-color--100: var(--tf-primary);
+          --pf-global--link--Color: var(--tf-primary);
+          --pf-global--link--Color--hover: var(--tf-primary-dark);
+          --pf-global--Color--100: var(--tf-ink);
+          --pf-global--Color--200: var(--tf-muted);
+          --pf-global--BorderColor--100: var(--tf-border);
+          --pf-global--BackgroundColor--100: var(--tf-surface);
+          --pf-global--FontFamily--sans-serif: var(--tf-font);
+          --pf-global--FontFamily--redhat-updated--sans-serif: var(--tf-font);
+          --pf-global--FontFamily--heading--sans-serif: var(--tf-font);
+          --pf-v5-global--Color--100: var(--tf-ink);
+          --pf-v5-global--BorderColor--100: var(--tf-border);
+
+          --ak-dark-background: var(--tf-surface);
+          --ak-dark-background-light: var(--tf-surface);
+          --ak-dark-background-lighter: #fafbfa;
+          --ak-dark-foreground: var(--tf-ink);
+          --ak-dark-foreground-link: var(--tf-primary);
+        }
+
+        body,
+        .pf-c-login,
+        .pf-c-page {
+          font-family: var(--tf-font);
+          color: var(--tf-ink);
+        }
+
+        /* ══════════════ Φόντο ══════════════ */
+        /* Η εικόνα φόντου ζωγραφίζεται στο `body::before`. Ο περιέκτης της ροής ΠΡΕΠΕΙ
+           να μείνει διάφανος — ένα αδιαφανές χρώμα εδώ τη σκεπάζει ολόκληρη (το
+           πληρώσαμε μία φορά). Το χρώμα μπαίνει στο body, ως υπόστρωμα. */
+        body,
+        .ak-static-page {
+          background-color: var(--tf-bg);
+        }
+
+        .pf-c-login,
+        .pf-c-login__container {
+          background-color: transparent;
+        }
+
+        /* Το μοτίβο τριφυλλιού επαναλαμβάνεται αντί να «γεμίζει» την οθόνη: είναι
+           seamless tile, οπότε με `cover` (η προεπιλογή του Authentik) θα
+           μεγέθυνε τα φύλλα σε τεράστια μπαλώματα.
+           Το αρχείο είναι 900px αλλά ζωγραφίζεται σε **450px**: διπλή πυκνότητα
+           εικονοστοιχείων, ώστε σε οθόνη Retina/HiDPI να μένει καθαρό αντί να
+           μεγεθύνεται θολό — και τα φύλλα βγαίνουν στο μισό μέγεθος, πιο κοντά
+           σε υφή παρά σε εικονογράφηση. */
+        body::before {
+          background-repeat: repeat;
+          background-size: 450px auto;
+          background-position: top center;
+        }
+
+        /* ══════════════ Η κάρτα: ίδια με `q-card flat bordered` ══════════════ */
+        .pf-c-login__main {
+          background: var(--tf-surface);
+          border: 1px solid var(--tf-border);
+          border-radius: var(--tf-radius);
+          /* Πιο βαθιά σκιά από της εφαρμογής: εδώ η κάρτα πατά πάνω σε μοτίβο,
+             όχι σε ήρεμο off-white, και χρειάζεται να ξεχωρίζει καθαρά. */
+          box-shadow: 0 18px 40px rgba(10, 30, 15, 0.28), 0 4px 12px rgba(10, 30, 15, 0.16);
+          overflow: hidden;
+        }
+
+        .pf-c-login__container {
+          max-width: 28rem;
+        }
+
+        .pf-c-login__main-header,
+        .pf-c-login__main-body,
+        .pf-c-login__main-footer {
+          padding-inline: 2rem;
+        }
+
+        .pf-c-login__main-header {
+          padding-block-start: 1.75rem;
+          padding-block-end: 0.25rem;
+        }
+
+        .pf-c-login__main-body {
+          padding-block: 1.25rem;
+        }
+
+        .pf-c-login__main-footer {
+          padding-block-end: 1.5rem;
+        }
+
+        /* Λογότυπο: μέγεθος σαν το avatar της εφαρμογής, με αέρα γύρω του. */
+        .pf-c-brand,
+        img.pf-c-brand {
+          max-height: 84px;
+          margin-inline: auto;
+          margin-block: 0.5rem 1.25rem;
+        }
+
+        /* Τίτλος ροής: ίδιο βάρος και μέγεθος με το `.page-title`. */
+        .pf-c-title,
+        .pf-c-login__main-header .pf-c-title,
+        h1.pf-c-title {
+          font-family: var(--tf-font);
+          font-size: 1.35rem;
+          font-weight: 600;
+          line-height: 1.25;
+          letter-spacing: -0.01em;
+          color: var(--tf-ink);
+          text-align: center;
+        }
+
+        .pf-c-login__main-header-desc,
+        .pf-c-login__main-body p {
+          color: var(--tf-muted);
+          text-align: center;
+        }
+
+        /* ══════════════ Πεδία: η αίσθηση των `outlined` q-input ══════════════ */
+        .pf-c-form__label-text {
+          font-size: 0.8rem;
+          font-weight: 600;
+          color: var(--tf-muted);
+        }
+
+        .pf-c-form-control {
+          font-family: var(--tf-font);
+          font-size: 1rem;
+          color: var(--tf-ink);
+          background: var(--tf-surface);
+          border: 1px solid var(--tf-border);
+          border-radius: var(--tf-radius-sm);
+          padding: 0.65rem 0.85rem;
+          box-shadow: none;
+          transition: border-color 150ms ease, box-shadow 150ms ease;
+        }
+
+        .pf-c-form-control:hover {
+          border-color: #cbd5c8;
+        }
+
+        .pf-c-form-control:focus,
+        .pf-c-form-control:focus-visible {
+          border-color: var(--tf-primary);
+          box-shadow: 0 0 0 3px rgba(46, 125, 50, 0.16);
+          outline: none;
+        }
+
+        .pf-c-form-control::placeholder {
+          color: #9aa79a;
+          font-style: normal;
+        }
+
+        /* ══════════════ Κουμπιά: πεζά, στρογγυλεμένα, πράσινα ══════════════ */
+        .pf-c-button {
+          font-family: var(--tf-font);
+          font-weight: 600;
+          letter-spacing: 0;
+          text-transform: none;
+          border-radius: var(--tf-radius-sm);
+          transition: background-color 150ms ease, box-shadow 150ms ease;
+        }
+
+        .pf-c-button.pf-m-primary {
+          background: var(--tf-primary);
+          color: #fff;
+          padding-block: 0.7rem;
+          box-shadow: 0 1px 2px rgba(16, 24, 20, 0.12);
+        }
+
+        .pf-c-button.pf-m-primary:hover,
+        .pf-c-button.pf-m-primary:focus {
+          background: var(--tf-primary-dark);
+        }
+
+        .pf-c-button.pf-m-primary:focus-visible {
+          outline: 2px solid var(--tf-primary);
+          outline-offset: 2px;
+        }
+
+        .pf-c-button.pf-m-secondary {
+          color: var(--tf-primary);
+          border: 1px solid var(--tf-primary);
+          background: transparent;
+        }
+
+        .pf-c-button.pf-m-link,
+        a:not(.pf-c-button) {
+          color: var(--tf-primary);
+        }
+
+        .pf-c-button.pf-m-link:hover,
+        a:not(.pf-c-button):hover {
+          color: var(--tf-primary-dark);
+        }
+
+        /* ══════════════ Μηνύματα ══════════════ */
+        .pf-c-alert.pf-m-danger,
+        .pf-c-form__helper-text.pf-m-error {
+          color: #c62828;
+        }
+
+        .pf-c-alert {
+          border-radius: var(--tf-radius-sm);
+        }
+
+        /* Δευτερεύουσες ενέργειες μέσα στην κάρτα («Ξέχασα τον κωδικό»): κανονικός
+           σύνδεσμος, όχι ψιλά γράμματα — είναι η έξοδος κινδύνου της οθόνης. */
+        .pf-c-login__main-footer-band {
+          background: transparent;
+          padding-block-start: 0.25rem;
+        }
+
+        .pf-c-login__main-footer-band-item a,
+        .pf-c-login__main-footer-band a {
+          font-size: 0.9rem;
+          font-weight: 600;
+          color: var(--tf-primary);
+        }
+
+        .pf-c-login__main-footer-band-item a:hover {
+          color: var(--tf-primary-dark);
+          text-decoration: underline;
+        }
+
+        /* Το κουμπί δράσης δεν χρειάζεται τόσο κενό από πάνω του. */
+        .pf-c-form__group.pf-m-action {
+          margin-block-start: 0.25rem;
+        }
+
+        /* ══════════════ Υποσέλιδο & επιλογή γλώσσας ══════════════ */
+        /* Η αναφορά στο Authentik μένει — απλώς σταματά να διεκδικεί προσοχή. */
+        .pf-c-login__footer,
+        ak-brand-links,
+        ak-brand-links .pf-c-list {
+          font-size: 0.72rem;
+          color: var(--tf-muted);
+          opacity: 0.5;
+        }
+
+        .pf-c-login__footer a {
+          color: var(--tf-muted);
+        }
+
+        /* Ο επιλογέας γλώσσας γεννιέται με «σκούρο» modifier (λευκά γράμματα) και πάνω
+           στο ανοιχτό φόντο μας γίνεται αόρατος. */
+        ak-locale-select,
+        ak-locale-select select,
+        ak-locale-select.pf-m-dark select {
+          color: var(--tf-muted) !important;
+          font-family: var(--tf-font);
+          font-size: 0.8rem;
+        }
+
+        /* ── Μόνο εκεί που φαίνεται το μοτίβο ──
+           Το Authentik δείχνει την εικόνα φόντου **μόνο** πάνω από αυτό το
+           κατώφλι (δικό του media query· στο κινητό η κάρτα πιάνει όλο το πλάτος
+           και η εικόνα δεν θα φαινόταν ούτως ή άλλως, οπότε γλιτώνει και 100KB).
+           Άρα το λευκό κείμενο ισχύει μόνο εδώ — αλλιώς στο κινητό θα έγραφε
+           λευκά πάνω σε ανοιχτό φόντο. */
+        @media (min-width: 35rem) and (min-height: 17.5rem) {
+          .pf-c-login__footer,
+          ak-brand-links,
+          ak-brand-links .pf-c-list {
+            color: #ffffff;
+            opacity: 0.6;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+          }
+
+          .pf-c-login__footer a {
+            color: #ffffff;
+          }
+
+          ak-locale-select,
+          ak-locale-select select,
+          ak-locale-select.pf-m-dark select {
+            color: #ffffff !important;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+          }
+        }
+
+        /* ══════════════ Διεπαφή χρήστη (/if/user) ══════════════ */
+        /* Μπάρα πράσινη και drawer ανοιχτός, όπως στην εφαρμογή. Ο επιλογέας είναι
+           `header.` και όχι σκέτο `.pf-c-page__header`: η ίδια κλάση ξαναχρησιμοποιείται
+           σε ένα `div` μέσα στο περιεχόμενο (η μπάρα «Application Dashboard»), που με
+           πράσινο φόντο έμενε με σκούρα γράμματα πάνω σε σκούρο. */
+        header.pf-c-page__header {
+          background: var(--tf-primary);
+          color: #fff;
+        }
+
+        header.pf-c-page__header a,
+        header.pf-c-page__header .pf-c-button,
+        header.pf-c-page__header .pf-c-nav__link {
+          color: #fff;
+        }
+
+        /* Το λογότυπο έχει σκούρα πράσινα γράμματα — πάνω στην πράσινη μπάρα χάνεται.
+           Το `brightness(0) invert(1)` το κάνει καθαρά λευκό χωρίς δεύτερο αρχείο. */
+        header.pf-c-page__header .pf-c-brand img,
+        header.pf-c-page__header img.pf-c-brand,
+        header.pf-c-page__header .pf-c-page__header-brand img {
+          filter: brightness(0) invert(1);
+          max-height: 32px;
+        }
+
+        div.pf-c-page__header,
+        div.pf-c-page__header.pf-c-content {
+          background: transparent;
+          color: var(--tf-ink);
+        }
+
+        div.pf-c-page__header.pf-c-content h1,
+        div.pf-c-page__header.pf-c-content .pf-c-title {
+          color: var(--tf-ink);
+          text-align: start;
+        }
+
+        .pf-c-page__sidebar {
+          background: #fbfcfa;
+          border-right: 1px solid var(--tf-border);
+        }
+
+        .pf-c-page__main,
+        .pf-c-page {
+          background: var(--tf-bg);
+        }
+
+        .pf-c-card {
+          border-radius: var(--tf-radius);
+          border: 1px solid var(--tf-border);
+          box-shadow: 0 1px 2px rgba(16, 24, 20, 0.04), 0 1px 3px rgba(16, 24, 20, 0.06);
+        }
+
+        /* ══════════════ Οθόνη σύνδεσης: χωρίς διπλό τίτλο ══════════════ */
+        /* Το λογότυπο από πάνω λέει ήδη «Trifylli»· ο τίτλος «Σύνδεση στο Trifylli»
+           και η αγγλική επεξήγηση «Log in to continue to Trifylli.» μόνο θόρυβο
+           προσθέτουν — και η δεύτερη δεν μεταφράζεται (δεν υπάρχει ελληνικό locale).
+           Κρύβονται ΜΟΝΟ στη ροή σύνδεσης: στις ροές κωδικού ο τίτλος («Ορισμός
+           κωδικού») είναι η μόνη ένδειξη για το πού βρίσκεται ο χρήστης.
+
+           Δύο γραφές του ίδιου κανόνα, ως χωριστοί κανόνες: το CSS ενίεται και στο
+           document και μέσα στα shadow roots των components. Εκεί το
+           `ak-flow-executor` δεν είναι ορατός πρόγονος — το πιάνει το
+           `:host-context()`. Χωριστά και όχι με κόμμα, γιατί ένας άγνωστος
+           επιλογέας σε λίστα ακυρώνει ΟΛΟΚΛΗΡΟ τον κανόνα.
+
+           Το `:not(.pf-c-brand)` προστατεύει το λογότυπο: ζει σε δικό του
+           `.pf-c-login__main-header` (με την κλάση `pf-c-brand`) στο shadow root
+           του executor, όπου το `:host-context` ταιριάζει εξίσου. */
+        ak-flow-executor[slug='default-authentication-flow'] .pf-c-login__main-header:not(.pf-c-brand) {
+          display: none;
+        }
+
+        :host-context(ak-flow-executor[slug='default-authentication-flow']) .pf-c-login__main-header:not(.pf-c-brand) {
+          display: none;
+        }
+
+        ak-flow-executor[slug='default-authentication-flow'] form.pf-c-form > p {
+          display: none;
+        }
+
+        :host-context(ak-flow-executor[slug='default-authentication-flow']) form.pf-c-form > p {
+          display: none;
+        }
+
+        /* ══════════════ Προσβασιμότητα & κίνηση ══════════════ */
+        :focus-visible {
+          outline: 2px solid var(--tf-primary);
+          outline-offset: 2px;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          *,
+          *::before,
+          *::after {
+            transition-duration: 0.01ms !important;
+            animation-duration: 0.01ms !important;
+          }
+        }
