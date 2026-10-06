@@ -15,6 +15,6 @@
     "test": "echo \"(καθαρό πακέτο τύπων — καλύπτεται από τα tests του API)\""
   },
   "devDependencies": {
-    "typescript": "^5.7.3"
+    "typescript": "^5.9.3"
   }
 }
