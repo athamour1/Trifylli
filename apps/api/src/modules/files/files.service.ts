@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { randomUUID } from 'node:crypto';
+import { sniffMime } from './sniff';
 import {
   FilePurpose,
   MARKDOWN_IMAGE_MIME_TYPES,
@@ -122,11 +123,21 @@ export class FilesService {
     if (!limits.mimes.includes(file.mimetype)) throw new BadRequestException(limits.error);
     if (file.size > limits.maxBytes) throw new BadRequestException('Το αρχείο υπερβαίνει το όριο μεγέθους.');
 
+    // Ο τύπος που δηλώνει ο client είναι απλώς ό,τι είπε ο client. Διαβάζουμε τα
+    // πρώτα bytes: ένα HTML με όνομα `apodeixi.png` και mimetype `image/png` θα
+    // περνούσε τον παραπάνω έλεγχο και θα σερβιριζόταν μετά από το API μας.
+    const actualMime = sniffMime(file.buffer);
+    if (!actualMime || !limits.mimes.includes(actualMime)) {
+      throw new BadRequestException(
+        `Το περιεχόμενο του αρχείου δεν είναι ${describeMimes(limits.mimes)} (ανιχνεύθηκε: ${actualMime ?? 'άγνωστο'}).`,
+      );
+    }
+
     assertScopeAccess(user, caps.write, dto.kladosType);
     const kladosId = await this.resolveKladosId(user, dto.kladosType);
 
     const objectKey = `${dto.purpose.toLowerCase()}/${user.topikoId}/${randomUUID()}-${safeName(file.originalname)}`;
-    await this.storage.put(objectKey, file.buffer, file.mimetype);
+    await this.storage.put(objectKey, file.buffer, actualMime);
 
     const stored = await this.prisma.storedFile.create({
       data: {
@@ -135,7 +146,7 @@ export class FilesService {
         purpose: dto.purpose,
         objectKey,
         filename: file.originalname,
-        contentType: file.mimetype,
+        contentType: actualMime,
         size: file.size,
         createdById: user.id,
       },
@@ -263,6 +274,10 @@ function toRef(f: {
     size: f.size,
     createdAt: f.createdAt.toISOString(),
   };
+}
+
+function describeMimes(mimes: readonly string[]): string {
+  return mimes.includes('application/pdf') ? 'εικόνα ή PDF' : 'εικόνα';
 }
 
 function safeName(name: string): string {
