@@ -71,6 +71,25 @@ export class EseoSyncService {
     }
   }
 
+  /**
+   * Συγχρονισμός «όταν μπορείς»: αν τρέχει ήδη, σημειώνει ότι χρειάζεται ένα
+   * ακόμη πέρασμα μόλις τελειώσει, αντί να αποτύχει ή να στοιβάξει δεύτερο.
+   * Για το webhook: δέκα ειδοποιήσεις στη σειρά = ένας sync τώρα + ένας μετά.
+   */
+  async requestSync(topikoId: string): Promise<void> {
+    if (this.running) {
+      this.rerunRequested.add(topikoId);
+      return;
+    }
+    await this.syncTopiko(topikoId);
+    if (this.rerunRequested.delete(topikoId)) {
+      this.logger.log('Ήρθαν νέες ειδοποιήσεις όσο έτρεχε ο συγχρονισμός — τρέχει ξανά.');
+      await this.syncTopiko(topikoId);
+    }
+  }
+
+  private readonly rerunRequested = new Set<string>();
+
   /** Χειροκίνητος συγχρονισμός ενός Τοπικού. */
   async syncTopiko(topikoId: string): Promise<SyncSummary> {
     // Ο συγχρονισμός γράφει σε όλο το μητρώο· δύο ταυτόχρονες εκτελέσεις

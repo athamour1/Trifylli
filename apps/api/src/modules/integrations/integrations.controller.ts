@@ -8,12 +8,17 @@ import {
   Inject,
   Logger,
   Post,
+  Req,
   ServiceUnavailableException,
   UnauthorizedException,
   UseGuards,
+  type RawBodyRequest,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiExcludeEndpoint, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
+import type { Request } from 'express';
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { AuditService } from '../../common/audit/audit.service';
 import { CapabilityGuard } from '../../common/auth/capability.guard';
 import { CurrentUser, Public, SuperAdminOnly } from '../../common/auth/decorators';
 import type { RequestUser } from '../../common/auth/types';
@@ -37,6 +42,7 @@ export class IntegrationsController {
     private readonly eseo: EseoClient,
     private readonly ouchtracker: OuchtrackerClient,
     @Inject(AppConfigToken) private readonly config: AppConfig,
+    private readonly audit: AuditService,
   ) {}
 
   @Get('status')
@@ -67,7 +73,8 @@ export class IntegrationsController {
     summary: 'Χειροκίνητος συγχρονισμός μητρώου από e-SEO',
     description: 'Ο ρόλος των χρηστών δεν αλλάζει — τα δικαιώματα ορίζονται στο Authentik.',
   })
-  syncEseo(@CurrentUser() user: RequestUser) {
+  async syncEseo(@CurrentUser() user: RequestUser) {
+    await this.audit.record(user, 'integrations.eseo.sync', 'topiko', user.topikoId);
     return this.eseoSync.syncTopiko(user.topikoId);
   }
 
@@ -82,7 +89,11 @@ export class IntegrationsController {
   @Public()
   @HttpCode(202)
   @ApiExcludeEndpoint()
+  // Δημόσιο endpoint χωρίς χρήστη: μικρό όριο, ώστε μια καταιγίδα αιτημάτων να
+  // μη γίνει καταιγίδα υπολογισμών HMAC.
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
   async webhook(
+    @Req() req: RawBodyRequest<Request>,
     @Headers('x-eseo-signature') signature: string | undefined,
     @Body() payload: { topikoCode?: string },
   ) {
@@ -92,10 +103,25 @@ export class IntegrationsController {
     }
     if (!signature) throw new UnauthorizedException('Λείπει η υπογραφή.');
 
-    const expected = createHmac('sha256', secret).update(JSON.stringify(payload)).digest('hex');
+    // Η υπογραφή επαληθεύεται πάνω στα **bytes που έφτασαν** — όχι σε δική μας
+    // επανασειριοποίηση, που θα διέφερε σε κενά, σειρά κλειδιών ή escaping και θα
+    // απέρριπτε έγκυρα μηνύματα (ή, χειρότερα, θα δεχόταν ό,τι τυχαίνει να
+    // σειριοποιείται ίδια).
+    const raw = req.rawBody;
+    if (!raw) throw new BadRequestException('Κενό σώμα.');
+
+    const expected = createHmac('sha256', secret).update(raw).digest('hex');
     if (!safeEqual(signature, expected)) {
       this.logger.warn('Webhook e-SEO με άκυρη υπογραφή — απορρίφθηκε.');
       throw new UnauthorizedException('Άκυρη υπογραφή.');
+    }
+
+    // Replay: μια έγκυρη υπογραφή που ξανάρχεται μέσα στο παράθυρο δεν πυροδοτεί
+    // δεύτερο συγχρονισμό. Ο αποστολέας δεν στέλνει timestamp, οπότε το «ξανά»
+    // το κρίνουμε από την ίδια την υπογραφή.
+    if (!this.replayGuard.admit(signature)) {
+      this.logger.warn('Webhook e-SEO: επαναλαμβανόμενη υπογραφή — αγνοήθηκε.');
+      return { accepted: true, duplicate: true };
     }
 
     if (!payload.topikoCode) throw new BadRequestException('Λείπει το `topikoCode`.');
@@ -107,14 +133,36 @@ export class IntegrationsController {
     if (!topiko) throw new BadRequestException('Άγνωστος κωδικός Τοπικού.');
 
     // Απαντάμε 202 και τρέχουμε τον συγχρονισμό στο παρασκήνιο: το e-SEO δεν
-    // πρέπει να περιμένει ένα πλήρες πέρασμα μητρώου για να πάρει απάντηση.
+    // πρέπει να περιμένει ένα πλήρες πέρασμα μητρώου για να πάρει απάντηση. Αν
+    // τρέχει ήδη, ο sync σημειώνει «ξανά μετά» αντί να ξεκινήσει δεύτερος.
     void this.eseoSync
-      .syncTopiko(topiko.id)
+      .requestSync(topiko.id)
       .catch((error: unknown) =>
         this.logger.error(`Αποτυχία συγχρονισμού από webhook: ${String(error)}`),
       );
 
     return { accepted: true };
+  }
+
+  private readonly replayGuard = new ReplayGuard(10 * 60 * 1000);
+}
+
+/**
+ * Θυμάται τις υπογραφές που έγιναν δεκτές για `windowMs`. Μικρό και in-memory:
+ * ένα Τοπικό δέχεται λίγα webhooks την ημέρα, και μια επανεκκίνηση απλώς
+ * ξεχνά — το κόστος είναι ένας επιπλέον (idempotent) συγχρονισμός.
+ */
+class ReplayGuard {
+  private readonly seen = new Map<string, number>();
+
+  constructor(private readonly windowMs: number) {}
+
+  admit(signature: string): boolean {
+    const now = Date.now();
+    for (const [key, at] of this.seen) if (now - at > this.windowMs) this.seen.delete(key);
+    if (this.seen.has(signature)) return false;
+    this.seen.set(signature, now);
+    return true;
   }
 }
 
