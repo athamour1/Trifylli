@@ -574,6 +574,89 @@ layout + bucket + key (idempotent) στο πρώτο boot.
 
 ---
 
+## Ασφάλεια
+
+Τι επιβάλλεται πού — και τι μένει στον διαχειριστή του server, γιατί δεν μπορεί
+να μπει μέσα σε container.
+
+### Ταυτότητα
+
+* **Ο δεσμός χρήστη ↔ λογαριασμού είναι σταθερός, όχι το email.** Στην πρόσκληση
+  το API γράφει στον χρήστη Authentik το attribute `trifylli_account_id`· ένα
+  scope mapping το βγάζει στο token και το API δένει με αυτό πρώτα
+  ([`user-directory.service.ts`](apps/api/src/common/auth/user-directory.service.ts)).
+  Το email μένει εφεδρεία για λογαριασμούς που προϋπήρχαν — γι' αυτό είναι
+  **read-only** για τον χρήστη στο Authentik (`trifylli-security.yaml`).
+* **Brute force**: reputation policy στη ροή σύνδεσης — πέντε αποτυχίες από μια
+  IP και η ροή αρνείται για 24 ώρες. Το API μετρά ανά IP μόνο αν ξέρει πόσοι
+  proxies μεσολαβούν (`TRUST_PROXY_HOPS`, ποτέ `true`).
+* **MFA**: στην παραγωγή (`AUTHENTIK_MFA_MODE=configure`) όποιος δεν έχει
+  authenticator στήνει TOTP στην πρώτη σύνδεση. Στο dev παρακάμπτεται.
+* **Κωδικοί**: ≥ 12 χαρακτήρες, zxcvbn ≥ 3, έλεγχος Have I Been Pwned
+  (k-anonymity — ο κωδικός δεν φεύγει ποτέ). Το Trifylli δεν βλέπει κωδικό.
+* **Το API μιλά στο Authentik ως service account** με πέντε δικαιώματα (χρήστης:
+  δημιουργία/ανάγνωση/αλλαγή/επαναφορά, ανάγνωση email stage) — όχι superuser.
+  Το token το φτιάχνει το blueprint από το `AUTHENTIK_API_TOKEN`.
+* Το `SUPER_ADMIN_EMAIL` κάνει bootstrap **μόνο** όταν δεν υπάρχει κανένας
+  υπερδιαχειριστής· η ανάκληση δεν αναιρείται από το περιβάλλον.
+
+### Browser
+
+* **CSP** από το nginx της PWA, αποδίδεται στον entrypoint με τα origins του API
+  και του Authentik: `script-src 'self'` (κανένα inline script — το SLO είναι
+  εξωτερικό `/slo.js`), `object-src 'none'`, `frame-ancestors 'none'` παντού
+  εκτός από το `/auth/frontchannel-logout`, που επιτρέπει **μόνο** το Authentik.
+  Μαζί: `nosniff`, `Referrer-Policy`, `Permissions-Policy`, HSTS.
+* **Single Logout μόνο από το δικό μας Authentik**: το `iss` ελέγχεται πριν
+  σηκωθεί το σήμα — αλλιώς κάθε ξένο site με ένα iframe θα αποσυνδέει όλους.
+* **Η αποσύνδεση σβήνει τα δεδομένα**, όχι μόνο τα tokens: cache του service
+  worker για το API, IndexedDB cache, ουρά. Στον κοινόχρηστο υπολογιστή της
+  Εστίας ο επόμενος δεν βρίσκει μητρώο και ταμείο του προηγούμενου.
+* Tokens σε `sessionStorage`, state/PKCE σε `localStorage` (βλ. ροή σύνδεσης).
+
+### API
+
+* JWT RS256 με `iss`/`aud`, JWKS με όριο· RBAC κοινός με το UI· `ValidationPipe`
+  με `forbidNonWhitelisted`· `helmet`· CORS allowlist χωρίς credentials.
+* Rate limiting: 300/λεπτό ανά IP καθολικά, 10/λεπτό προσκλήσεις, 30/λεπτό
+  uploads και webhook.
+* Uploads: τύπος από τα **πρώτα bytes** ([`sniff.ts`](apps/api/src/modules/files/sniff.ts)),
+  όχι από ό,τι δηλώνει ο client· τα αρχεία σερβίρονται με `CSP: sandbox`.
+* Webhook e-SEO: HMAC πάνω στα raw bytes, αγνόηση επαναλαμβανόμενης υπογραφής
+  για 10΄, ένας συγχρονισμός τη φορά.
+* **Audit log** (`audit_log`): λογαριασμοί, ταμείο, συνδρομές, διαγραφές
+  αρχείων, χειροκίνητοι συγχρονισμοί — ποιος, τι, πότε. Δεν σβήνεται από την
+  εφαρμογή.
+* Swagger κλειστό σε παραγωγή (`SWAGGER_ENABLED`)· το `/health/ready` δεν
+  εξηγεί γιατί απέτυχε η βάση· emails στα logs μασκαρισμένα.
+
+### Containers & δεδομένα
+
+* `no-new-privileges`, `cap_drop: ALL` στα δικά μας containers· το API με
+  read-only root και `/tmp` σε μνήμη· το nginx με τις τέσσερις ικανότητες που
+  χρειάζεται για να δέσει την :80 και να γίνει `nginx`.
+* **Backup**: υπηρεσία `backup` — καθημερινό `pg_dump` όλων των βάσεων με
+  περιστροφή στο volume `postgres-backups`.
+* Στο development όλες οι θύρες δένονται στο `127.0.0.1` (`DEV_BIND_ADDR`).
+
+### Τι μένει σε σένα (δεν μπαίνει σε container)
+
+1. **TLS + HSTS στον reverse proxy.** Το HSTS που στέλνει η PWA αγνοείται πάνω
+   από http· ο proxy το κάνει πραγματικό.
+2. **Allowlist για το admin UI του Authentik** (`sso.<domain>/if/admin/`). Π.χ.
+   Caddy: `@admin path /if/admin/* ... remote_ip 1.2.3.4` → `respond 403`. Ο
+   `akadmin` με MFA, πάντα.
+3. **Το volume `postgres-backups` να φεύγει από τον server** (rclone/restic).
+   Backup στον ίδιο δίσκο σώζει από λάθος `DELETE`, όχι από χαμένο δίσκο.
+4. **Περιστροφή μυστικών**: `AUTHENTIK_API_TOKEN` (νέα τιμή + restart — το
+   blueprint ξαναγράφει το token), `ESEO_REFRESH_TOKEN` όταν ο Keycloak τον
+   περιστρέψει (το log προειδοποιεί), κωδικός OuchTracker.
+5. `pnpm audit --prod` πριν από κάθε release. Δύο advisories μένουν συνειδητά:
+   `deepmerge-ts` (μέσω `prisma` CLI, τρέχει μόνο στο `migrate`) και `js-yaml`
+   (μέσω `@nestjs/swagger`, που είναι κλειστό σε παραγωγή).
+
+---
+
 ## Χάρτης λειτουργιών
 
 Κάθε λειτουργία ζει είτε **ανά κλάδο** (`/k/:klados/…`, ορατή στον διαχειριστή
