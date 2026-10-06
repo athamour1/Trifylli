@@ -17,6 +17,27 @@ const schema = z.object({
   API_PREFIX: z.string().default('api'),
   CORS_ORIGINS: z.string().default('http://localhost:9000'),
 
+  /**
+   * Πόσοι reverse proxies μεσολαβούν (Express `trust proxy` ως hop count).
+   *
+   * `0` = κανένας, οπότε το `X-Forwarded-For` αγνοείται — σωστό για τοπική
+   * ανάπτυξη, όπου όποιος φτάνει το API μπορεί να γράψει ό,τι header θέλει.
+   * `1` = ένας proxy μπροστά (η παραγωγική στοίβα). Αριθμός και όχι `true`:
+   * με `true` το Express εμπιστεύεται ΟΛΗ την αλυσίδα, άρα η IP «πλαστογραφείται»
+   * με ένα ακόμη `X-Forwarded-For`. Από αυτό εξαρτώνται το rate limiting ανά IP
+   * και οι IP στα logs.
+   */
+  TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(0),
+
+  /**
+   * Το Swagger είναι χάρτης όλου του API· στην παραγωγή μένει κλειστό εκτός αν
+   * ζητηθεί ρητά. Εκτός παραγωγής ανοίγει μόνο του.
+   */
+  SWAGGER_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v === 'true')),
+
   DATABASE_URL: z.string().url(),
 
   // ── Authentik (OIDC) ──

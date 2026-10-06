@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { resolve } from 'node:path';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
@@ -26,13 +27,19 @@ function loadDotEnv(): void {
 
 async function bootstrap(): Promise<void> {
   loadDotEnv();
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  // `rawBody`: το webhook του e-SEO επαληθεύει HMAC πάνω στα **ακριβή bytes** που
+  // υπέγραψε ο αποστολέας, όχι σε δική μας επανασειριοποίηση του JSON.
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true, rawBody: true });
   const config = app.get<AppConfig>(AppConfigToken);
   const logger = new Logger('Bootstrap');
 
   app.setGlobalPrefix(config.API_PREFIX);
+  app.set('trust proxy', config.TRUST_PROXY_HOPS);
+  app.disable('x-powered-by');
   app.use(helmet());
-  app.enableCors({ origin: corsOrigins(config), credentials: true });
+  // Χωρίς `credentials`: η αυθεντικοποίηση είναι Bearer, όχι cookies — δεν
+  // υπάρχει λόγος ο browser να στέλνει credentials cross-origin.
+  app.enableCors({ origin: corsOrigins(config) });
 
   // Το API σερβίρει δυναμικά δεδομένα — όχι HTTP caching. Χωρίς αυτό, ο browser
   // κρατά παλιές απαντήσεις (ETag → 304) και οι λίστες «κολλάνε» μετά από
@@ -57,18 +64,22 @@ async function bootstrap(): Promise<void> {
   app.useGlobalFilters(new PrismaExceptionFilter());
   app.enableShutdownHooks();
 
-  const swagger = new DocumentBuilder()
-    .setTitle('Trifylli API')
-    .setDescription('Σύστημα διαχείρισης Τοπικού Τμήματος Σ.Ε.Ο.')
-    .setVersion('0.1.0')
-    .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' })
-    .build();
-  SwaggerModule.setup(`${config.API_PREFIX}/docs`, app, SwaggerModule.createDocument(app, swagger));
+  const swaggerEnabled = config.SWAGGER_ENABLED ?? config.NODE_ENV !== 'production';
+  if (swaggerEnabled) {
+    const swagger = new DocumentBuilder()
+      .setTitle('Trifylli API')
+      .setDescription('Σύστημα διαχείρισης Τοπικού Τμήματος Σ.Ε.Ο.')
+      .setVersion('0.1.0')
+      .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' })
+      .build();
+    SwaggerModule.setup(`${config.API_PREFIX}/docs`, app, SwaggerModule.createDocument(app, swagger));
+  }
 
   await app.listen(config.PORT, '0.0.0.0');
 
   logger.log(`API: http://localhost:${config.PORT}/${config.API_PREFIX}`);
-  logger.log(`Swagger: http://localhost:${config.PORT}/${config.API_PREFIX}/docs`);
+  if (swaggerEnabled) logger.log(`Swagger: http://localhost:${config.PORT}/${config.API_PREFIX}/docs`);
+  if (config.TRUST_PROXY_HOPS > 0) logger.log(`Εμπιστεύεται ${config.TRUST_PROXY_HOPS} proxy hop(s) για την IP πελάτη.`);
   if (config.DEV_AUTH_BYPASS) {
     logger.warn(`Auth bypass ενεργό ως: ${config.DEV_AUTH_EMAIL} (header x-dev-email για αλλαγή)`);
   }

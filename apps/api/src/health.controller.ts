@@ -1,4 +1,4 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Logger } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Public } from './common/auth/decorators';
 import { PrismaService } from './common/prisma/prisma.service';
@@ -6,6 +6,8 @@ import { PrismaService } from './common/prisma/prisma.service';
 @ApiTags('Health')
 @Controller('health')
 export class HealthController {
+  private readonly logger = new Logger(HealthController.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   @Get()
@@ -23,11 +25,10 @@ export class HealthController {
       await this.prisma.$queryRaw`SELECT 1`;
       return { status: 'ok', database: 'up' };
     } catch (error) {
-      return {
-        status: 'degraded',
-        database: 'down',
-        error: error instanceof Error ? error.message : String(error),
-      };
+      // Η λεπτομέρεια (host, χρήστης, διάγνωση) ανήκει στα logs — το endpoint
+      // είναι δημόσιο και δεν χρειάζεται να εξηγεί σε όποιον περάσει.
+      this.logger.error(`Readiness: η βάση δεν απαντά — ${error instanceof Error ? error.message : String(error)}`);
+      return { status: 'degraded', database: 'down' };
     }
   }
 }
