@@ -81,6 +81,13 @@ const kladosChildren: RouteRecordRaw[] = [
     meta: { title: 'Δράσεις', capability: 'calendar:read' },
   },
   {
+    // Wizard 4 βημάτων· με `?id=` συνεχίζει ένα προσχέδιο.
+    path: 'draseis/nea',
+    name: 'klados-drasi-nea',
+    component: () => import('../pages/DrasiWizardPage.vue'),
+    meta: { title: 'Νέα δράση', capability: 'drasi:write' },
+  },
+  {
     path: 'symvoulia',
     name: 'klados-symvoulia',
     component: () => import('../pages/SymvouliaPage.vue'),

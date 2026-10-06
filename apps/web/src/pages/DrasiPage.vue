@@ -2,15 +2,79 @@
   <q-page padding>
     <PageState :loading="loading" :error="error" :stale="stale" @retry="reload">
       <template v-if="data">
-        <div class="page-title">{{ data.title }}</div>
-        <div class="text-caption text-grey-7 q-mb-md">
-          {{ DRASI_TYPE_LABEL[data.type] }} · {{ formatDateRange(data.dateStart, data.dateEnd) }}
-          <span v-if="data.location"> · {{ data.location }}</span>
+        <div class="row items-start justify-between q-gutter-sm">
+          <div>
+            <div class="page-title">{{ data.title }}</div>
+            <div class="text-caption text-grey-7">
+              {{ DRASI_TYPE_LABEL[data.type] }} · {{ formatDateRange(data.dateStart, data.dateEnd) }}
+              <span v-if="data.location"> · {{ data.location }}</span>
+            </div>
+          </div>
+          <q-btn
+            v-if="canWrite && wizardRoute"
+            flat
+            color="klados"
+            icon="tune"
+            :label="data.status === 'PROSXEDIO' ? 'Συνέχεια στήσιμου' : 'Στήσιμο'"
+            :to="wizardRoute"
+          />
         </div>
+
+        <!-- Ποιοι έρχονται: δικοί μας κλάδοι στο χρώμα τους, φιλοξενούμενα Τοπικά ουδέτερα. -->
+        <div class="row items-center q-gutter-xs q-mt-sm q-mb-md">
+          <q-chip
+            v-for="k in data.kladoi"
+            :key="k"
+            dense
+            :style="kladosVars(k)"
+            class="bg-klados text-klados-on"
+            :icon="KLADOS_META[k].icon"
+            :label="KLADOS_LABEL[k]"
+          />
+          <q-chip
+            v-for="g in data.guestTopika"
+            :key="g.id"
+            dense
+            outline
+            icon="location_city"
+            :label="g.topikoName"
+          >
+            <q-tooltip v-if="g.kladoi.length || g.contactName">
+              <span v-if="g.kladoi.length">{{ g.kladoi.map((k) => KLADOS_LABEL[k]).join(', ') }}</span>
+              <span v-if="g.contactName"> · {{ g.contactName }}</span>
+              <span v-if="g.contactPhone"> {{ g.contactPhone }}</span>
+            </q-tooltip>
+          </q-chip>
+          <span v-if="!data.kladoi.length && !data.guestTopika.length" class="text-caption text-grey-6">
+            Δεν έχει δηλωθεί ποιοι έρχονται.
+          </span>
+        </div>
+
+        <q-banner v-if="data.status === 'PROSXEDIO'" rounded class="bg-grey-2 q-mb-md">
+          <template #avatar><q-icon name="edit_note" color="grey-7" /></template>
+          Προσχέδιο: το στήσιμο δεν ολοκληρώθηκε. Δεν εμφανίζεται στο ημερολόγιο μέχρι να ολοκληρωθεί.
+        </q-banner>
+
+        <!-- Το αρχηγείο: ονόματα και τηλέφωνα — αυτό ψάχνει κανείς στις 7 το πρωί. -->
+        <q-card v-if="arxigeio.length" flat bordered class="q-mb-md">
+          <q-card-section class="q-pb-none text-subtitle2">Αρχηγείο</q-card-section>
+          <q-card-section class="row q-col-gutter-sm">
+            <div v-for="group in arxigeio" :key="group.kind" class="col-12 col-sm-6 col-md-4">
+              <div class="text-caption text-grey-7">{{ DRASI_ROLE_LABEL[group.kind] }}</div>
+              <div v-for="r in group.roles" :key="r.id">
+                {{ r.user.lastName }} {{ r.user.firstName }}
+                <a v-if="r.user.phone" :href="`tel:${r.user.phone}`" class="text-klados text-caption q-ml-xs">
+                  {{ r.user.phone }}
+                </a>
+              </div>
+            </div>
+          </q-card-section>
+        </q-card>
 
         <q-tabs v-model="tab" dense align="left" class="text-klados q-mb-md" narrow-indicator>
           <q-tab name="stats" label="Στοιχεία ανά κλάδο" />
           <q-tab name="participants" :label="`Συμμετέχοντες (${data.participants.length})`" />
+          <q-tab v-if="ypiresies.length" name="ypiresies" label="Υπηρεσίες" />
           <q-tab name="yliko" :label="`Υλικό (${data.checkouts.length})`" />
           <q-tab v-if="data.syggentrwseis.length" name="programma" label="Πρόγραμμα" />
           <q-tab v-if="data.incidents.length" name="incidents" label="Περιστατικά" />
@@ -85,6 +149,19 @@
             </q-list>
           </q-tab-panel>
 
+          <q-tab-panel name="ypiresies" class="q-pa-none">
+            <q-list bordered separator class="rounded-borders">
+              <q-item v-for="group in ypiresies" :key="group.kind">
+                <q-item-section>
+                  <q-item-label>{{ DRASI_ROLE_LABEL[group.kind] }}</q-item-label>
+                  <q-item-label caption>
+                    {{ group.roles.map((r) => `${r.user.lastName} ${r.user.firstName}`).join(', ') }}
+                  </q-item-label>
+                </q-item-section>
+              </q-item>
+            </q-list>
+          </q-tab-panel>
+
           <q-tab-panel name="yliko" class="q-pa-none">
             <q-list bordered separator class="rounded-borders">
               <q-item v-for="c in data.checkouts" :key="c.id">
@@ -141,15 +218,23 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import {
   CHECKOUT_STATUS_LABEL,
+  DRASI_ARXIGEIO_KINDS,
+  DRASI_ROLE_LABEL,
   DRASI_TYPE_LABEL,
+  DRASI_YPIRESIA_KINDS,
   KLADOS_LABEL,
+  KLADOS_META,
   MEMBER_KIND_LABEL,
   YLIKO_CATEGORY_LABEL,
   type CheckoutStatus,
+  type DrasiGuestTopikoView,
+  type DrasiRoleKind,
+  type DrasiRoleView,
+  type DrasiStatus,
   type DrasiType,
   type KataskinosiStats,
   type KladosType,
@@ -158,18 +243,23 @@ import {
 } from '@trifylli/shared';
 import PageState from '../components/PageState.vue';
 import { useAsyncData } from '../composables/useAsyncData';
-import { applyKladosTheme } from '../lib/klados-theme';
+import { applyKladosTheme, kladosVars } from '../lib/klados-theme';
 import { get } from '../lib/api';
 import { formatDate, formatDateRange, formatDateTime } from '../lib/format';
+import { useAuthStore } from '../stores/auth';
 
 interface DrasiDetail {
   id: string;
   title: string;
   type: DrasiType;
+  status: DrasiStatus;
   dateStart: string;
   dateEnd: string;
   location: string | null;
   klados: { type: KladosType } | null;
+  kladoi: KladosType[];
+  guestTopika: DrasiGuestTopikoView[];
+  roles: DrasiRoleView[];
   participants: {
     id: string;
     kind: MemberKind;
@@ -198,6 +288,7 @@ interface DrasiDetail {
 }
 
 const route = useRoute();
+const auth = useAuthStore();
 const id = String(route.params.id);
 const tab = ref('stats');
 
@@ -213,6 +304,33 @@ watch(
   (klados) => applyKladosTheme(klados ?? null),
   { immediate: true },
 );
+
+const canWrite = computed(() => auth.can('drasi:write', data.value?.klados?.type ?? undefined));
+
+/**
+ * Το wizard ζει κάτω από `/k/:klados/`. Για δράση Τοπικού (χωρίς διοργανωτή
+ * κλάδο) χρησιμοποιείται ο πρώτος κλάδος που βλέπει ο χρήστης — το στήσιμο
+ * δεν εξαρτάται από τη διαδρομή, μόνο το θέμα χρωμάτων.
+ */
+const wizardRoute = computed(() => {
+  const klados = data.value?.klados?.type ?? auth.kladoi[0]?.type;
+  return klados ? { name: 'klados-drasi-nea', params: { klados }, query: { id } } : null;
+});
+
+interface RoleGroup {
+  kind: DrasiRoleKind;
+  roles: DrasiRoleView[];
+}
+
+function groupRoles(kinds: readonly DrasiRoleKind[]): RoleGroup[] {
+  const roles = data.value?.roles ?? [];
+  return kinds
+    .map((kind) => ({ kind, roles: roles.filter((r) => r.kind === kind) }))
+    .filter((g) => g.roles.length > 0);
+}
+
+const arxigeio = computed(() => groupRoles(DRASI_ARXIGEIO_KINDS));
+const ypiresies = computed(() => groupRoles(DRASI_YPIRESIA_KINDS));
 
 const stats = ref<KataskinosiStats | null>(null);
 const statsLoading = ref(false);

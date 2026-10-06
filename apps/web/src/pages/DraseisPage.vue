@@ -1,20 +1,31 @@
 <template>
   <q-page padding>
-    <div class="row items-center justify-between q-mb-md">
+    <div class="row items-center justify-between q-mb-md q-gutter-sm">
       <div class="page-title">Δράσεις{{ inKlados ? ` — ${kladosLabel}` : '' }}</div>
-      <q-btn-toggle
-        v-model="typeFilter"
-        dense
-        unelevated
-        toggle-color="klados"
-        toggle-text-color="klados-on"
-        :options="[
-          { label: 'Όλες', value: null },
-          { label: 'Μονοήμερες', value: 'MONOIMERI' },
-          { label: 'Πολυήμερες', value: 'POLYIMERI' },
-          { label: 'Κατασκηνώσεις', value: 'KATASKINOSI' },
-        ]"
-      />
+      <div class="row items-center q-gutter-sm">
+        <q-btn-toggle
+          v-model="typeFilter"
+          dense
+          unelevated
+          toggle-color="klados"
+          toggle-text-color="klados-on"
+          :options="[
+            { label: 'Όλες', value: null },
+            { label: 'Μονοήμερες', value: 'MONOIMERI' },
+            { label: 'Πολυήμερες', value: 'POLYIMERI' },
+            { label: 'Κατασκηνώσεις', value: 'KATASKINOSI' },
+          ]"
+        />
+        <q-btn
+          v-if="canWrite && inKlados"
+          color="klados"
+          text-color="klados-on"
+          unelevated
+          icon="add"
+          label="Νέα δράση"
+          :to="{ name: 'klados-drasi-nea' }"
+        />
+      </div>
     </div>
 
     <PageState
@@ -28,16 +39,23 @@
     >
       <div class="row q-col-gutter-md">
         <div v-for="d in data?.items" :key="d.id" class="col-12 col-md-6">
-          <q-card flat bordered clickable @click="$router.push({ name: 'drasi', params: { id: d.id } })">
+          <q-card flat bordered clickable :class="{ 'drasi-draft': d.status === 'PROSXEDIO' }" @click="open(d)">
             <q-card-section class="row items-start justify-between">
               <div>
                 <div class="text-subtitle1 text-weight-medium">{{ d.title }}</div>
                 <div class="text-caption text-grey-7">
                   {{ formatDateRange(d.dateStart, d.dateEnd) }}
                   <span v-if="d.location"> · {{ d.location }}</span>
+                  <span v-if="d.kladoi.length > 1 || d.guestTopika.length">
+                    · {{ [...d.kladoi.map((k) => KLADOS_LABEL[k]), ...d.guestTopika.map((g) => g.topikoName)].join(', ') }}
+                  </span>
                 </div>
               </div>
-              <q-badge :color="TYPE_COLOR[d.type]" :label="DRASI_TYPE_LABEL[d.type]" />
+              <div class="column items-end q-gutter-xs">
+                <q-badge :color="TYPE_COLOR[d.type]" :label="DRASI_TYPE_LABEL[d.type]" />
+                <!-- Προσχέδιο = το wizard δεν τελείωσε· το κλικ το συνεχίζει. -->
+                <q-badge v-if="d.status === 'PROSXEDIO'" outline color="grey-7" label="Προσχέδιο — συνέχεια" />
+              </div>
             </q-card-section>
 
             <q-separator />
@@ -70,27 +88,51 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
-import { DRASI_TYPE_LABEL, KLADOS_LABEL, type DrasiType, type KladosType, type Paginated } from '@trifylli/shared';
+import { computed, ref } from 'vue';
+import { useRouter } from 'vue-router';
+import {
+  DRASI_TYPE_LABEL,
+  KLADOS_LABEL,
+  type DrasiStatus,
+  type DrasiType,
+  type KladosType,
+  type Paginated,
+} from '@trifylli/shared';
 import PageState from '../components/PageState.vue';
 import { useAsyncData } from '../composables/useAsyncData';
 import { get } from '../lib/api';
 import { formatDateRange } from '../lib/format';
+import { useAuthStore } from '../stores/auth';
 import { useKladosScope } from '../composables/useKladosScope';
 
 interface DrasiRow {
   id: string;
   title: string;
   type: DrasiType;
+  status: DrasiStatus;
   dateStart: string;
   dateEnd: string;
   location: string | null;
   klados: { type: KladosType } | null;
-  _count: { participants: number; syggentrwseis: number; checkouts: number };
+  kladoi: KladosType[];
+  guestTopika: { topikoName: string }[];
+  _count: { participants: number; syggentrwseis: number; checkouts: number; roles: number };
 }
 
+const router = useRouter();
+const auth = useAuthStore();
 const { klados, inKlados, label: kladosLabel } = useKladosScope();
 const typeFilter = ref<DrasiType | null>(null);
+const canWrite = computed(() => auth.can('drasi:write', klados.value ?? undefined));
+
+/** Προσχέδιο → πίσω στο wizard· αλλιώς η σελίδα της δράσης. */
+function open(d: DrasiRow): void {
+  if (d.status === 'PROSXEDIO' && canWrite.value && inKlados.value) {
+    void router.push({ name: 'klados-drasi-nea', query: { id: d.id } });
+  } else {
+    void router.push({ name: 'drasi', params: { id: d.id } });
+  }
+}
 
 const { data, loading, error, stale, reload } = useAsyncData(
   () =>
@@ -110,3 +152,10 @@ const TYPE_COLOR: Record<DrasiType, string> = {
   KATASKINOSI: 'orange-8',
 };
 </script>
+
+<style scoped>
+.drasi-draft {
+  border-style: dashed;
+  opacity: 0.85;
+}
+</style>
