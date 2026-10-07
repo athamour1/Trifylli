@@ -3,6 +3,9 @@ import type {
   AccountRole,
   CheckoutStatus,
   DrasiFeeKind,
+  DrasiFormField,
+  DrasiFormStatus,
+  DrasiFormType,
   DrasiGroupKind,
   DrasiLedgerKind,
   DrasiRoleKind,
@@ -12,6 +15,7 @@ import type {
   MemberStatus,
   ParousiaStatus,
   PaymentHandlingStatus,
+  SignerRole,
   ProodosStatus,
   SymvoulioType,
   SyndromiStatus,
@@ -457,4 +461,71 @@ export interface DrasiGroupsView {
   groups: DrasiGroupView[];
   /** Όλοι οι συμμετέχοντες (για τους «αταξινόμητους» ανά είδος). */
   participants: DrasiGroupMemberView[];
+}
+
+// ───────────────────────── Δράσεις: έντυπα (F5) & φαρμακείο (F6) ─────────────────────────
+
+export interface DrasiFormView {
+  id: string;
+  participantId: string;
+  type: DrasiFormType;
+  status: DrasiFormStatus;
+  sentAt: string | null;
+  expiresAt: string | null;
+  submittedAt: string | null;
+  signerName: string | null;
+  signerRole: SignerRole | null;
+  hasData: boolean;
+  purgedAt: string | null;
+}
+
+export interface DrasiFormsMatrix {
+  participants: {
+    participantId: string;
+    user: { id: string; firstName: string; lastName: string; kind: MemberKind; birthDate: string | null; phone: string | null };
+    isMinor: boolean;
+    forms: DrasiFormView[];
+  }[];
+  pending: number;
+  total: number;
+}
+
+/** Ο σύνδεσμος που βγαίνει ΜΙΑ φορά: στη βάση μένει μόνο το hash του token. */
+export interface IssuedFormLink {
+  participantId: string;
+  formId: string;
+  type: DrasiFormType;
+  url: string;
+  expiresAt: string;
+}
+
+/** Τι βλέπει ο γονέας: μόνο αυτό το έντυπο, αυτού του παιδιού. */
+export interface PublicFormView {
+  drasi: { title: string; dateStart: string; dateEnd: string; location: string | null; topiko: string };
+  participant: { firstName: string; lastName: string };
+  type: DrasiFormType;
+  status: DrasiFormStatus;
+  expiresAt: string;
+  isMinor: boolean;
+  fields: DrasiFormField[];
+}
+
+export interface HealthSummaryEntry {
+  participantId: string;
+  user: { firstName: string; lastName: string; birthDate: string | null; kladosType: KladosType | null };
+  skini: string | null;
+  group: string | null;
+  allergies: string;
+  medications: string;
+  conditions: string;
+  diet: string;
+  bloodType: string;
+  emergencyPhone: string;
+  notes: string;
+  submittedAt: string;
+}
+
+export interface DrasiPharmacyView {
+  assigned: { id: string; name: string; kladosType: KladosType | null; ouchtrackerKitId: string }[];
+  candidates: { id: string; name: string; kladosType: KladosType | null; borrowed: boolean }[];
 }

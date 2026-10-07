@@ -3,6 +3,8 @@ import {
   AccountRole,
   CheckoutStatus,
   DrasiFeeKind,
+  DrasiFormStatus,
+  DrasiFormType,
   DrasiGroupKind,
   DrasiLedgerKind,
   DrasiRoleKind,
@@ -13,6 +15,7 @@ import {
   MemberStatus,
   ParousiaStatus,
   ProodosEntryKind,
+  SignerRole,
   ProodosStatus,
   SymvoulioType,
   SyndromiStatus,
@@ -230,6 +233,23 @@ export const DRASI_GROUP_KIND_PLURAL: Record<DrasiGroupKind, string> = {
   ENOMOTIA: 'Ενωμοτίες',
   SKINI: 'Σκηνές',
   ALLO: 'Ομάδες',
+};
+
+export const DRASI_FORM_TYPE_LABEL: Record<DrasiFormType, string> = {
+  SYMMETOXI: 'Δήλωση συμμετοχής',
+  YGEIA: 'Κατάσταση υγείας',
+};
+export const DRASI_FORM_STATUS_LABEL: Record<DrasiFormStatus, string> = {
+  PENDING: 'Δεν στάλθηκε',
+  SENT: 'Στάλθηκε',
+  OPENED: 'Ανοίχτηκε',
+  SUBMITTED: 'Συμπληρώθηκε',
+  VOID: 'Ακυρώθηκε',
+};
+export const SIGNER_ROLE_LABEL: Record<SignerRole, string> = {
+  GONEAS: 'Γονέας',
+  KIDEMONAS: 'Κηδεμόνας',
+  IDIOS: 'Ο ίδιος / η ίδια',
 };
 
 export const DRASI_LEDGER_KIND_LABEL: Record<DrasiLedgerKind, string> = {

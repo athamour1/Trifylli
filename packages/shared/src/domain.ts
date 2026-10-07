@@ -520,6 +520,8 @@ export const FilePurpose = {
   RECEIPT: 'RECEIPT',
   /** Εικόνα ενσωματωμένη σε σημείωση Markdown (ατζέντες, πρακτικά…). */
   MARKDOWN: 'MARKDOWN',
+  /** Ζωγραφισμένη υπογραφή εντύπου δράσης — γράφεται μόνο από το δημόσιο έντυπο. */
+  SIGNATURE: 'SIGNATURE',
 } as const;
 export type FilePurpose = (typeof FilePurpose)[keyof typeof FilePurpose];
 
@@ -580,3 +582,63 @@ export const IDIOTITA_VALUES: readonly Idiotita[] = [
   'SYNDIASKEPSI',
   'FILOS_ODIGISMOU',
 ];
+
+// ───────────────────────── Δράσεις: έντυπα (F5) ─────────────────────────
+
+/** Δήλωση συμμετοχής (ανήλικοι) και κατάσταση υγείας (όλοι). */
+export const DrasiFormType = { SYMMETOXI: 'SYMMETOXI', YGEIA: 'YGEIA' } as const;
+export type DrasiFormType = (typeof DrasiFormType)[keyof typeof DrasiFormType];
+
+export const DrasiFormStatus = {
+  PENDING: 'PENDING',
+  SENT: 'SENT',
+  OPENED: 'OPENED',
+  SUBMITTED: 'SUBMITTED',
+  VOID: 'VOID',
+} as const;
+export type DrasiFormStatus = (typeof DrasiFormStatus)[keyof typeof DrasiFormStatus];
+
+export const SignerRole = { GONEAS: 'GONEAS', KIDEMONAS: 'KIDEMONAS', IDIOS: 'IDIOS' } as const;
+export type SignerRole = (typeof SignerRole)[keyof typeof SignerRole];
+
+export interface DrasiFormField {
+  key: string;
+  label: string;
+  kind: 'text' | 'textarea' | 'yesno' | 'select' | 'phone';
+  options?: string[];
+  required?: boolean;
+  hint?: string;
+}
+
+/**
+ * Τα πεδία κάθε εντύπου. Ζουν εδώ (όχι στη βάση) ώστε μια αλλαγή ερωτήσεων να
+ * είναι ένα commit και όχι migration· οι απαντήσεις αποθηκεύονται ως JSON με
+ * κλειδί το `key`.
+ */
+export const DRASI_FORM_FIELDS: Record<DrasiFormType, DrasiFormField[]> = {
+  SYMMETOXI: [
+    { key: 'consent', label: 'Επιτρέπω τη συμμετοχή του παιδιού μου στη δράση', kind: 'yesno', required: true },
+    { key: 'emergencyName', label: 'Άτομο επικοινωνίας σε έκτακτη ανάγκη', kind: 'text', required: true },
+    { key: 'emergencyPhone', label: 'Τηλέφωνο έκτακτης ανάγκης', kind: 'phone', required: true },
+    { key: 'photoConsent', label: 'Επιτρέπω τη λήψη και χρήση φωτογραφιών για τους σκοπούς του Σ.Ε.Ο.', kind: 'yesno', required: true },
+    { key: 'swim', label: 'Το παιδί ξέρει κολύμπι', kind: 'yesno' },
+    { key: 'pickup', label: 'Ποιος θα παραλάβει το παιδί στην επιστροφή', kind: 'text' },
+    { key: 'notes', label: 'Άλλες παρατηρήσεις', kind: 'textarea' },
+  ],
+  YGEIA: [
+    { key: 'allergies', label: 'Αλλεργίες (τροφές, φάρμακα, έντομα)', kind: 'textarea', required: true, hint: 'Γράψε «καμία» αν δεν υπάρχουν.' },
+    { key: 'medications', label: 'Φάρμακα που παίρνει και δοσολογία', kind: 'textarea', required: true, hint: 'Γράψε «κανένα» αν δεν παίρνει.' },
+    { key: 'conditions', label: 'Χρόνιες παθήσεις ή ιδιαιτερότητες (άσθμα, διαβήτης, επιληψία…)', kind: 'textarea', required: true },
+    { key: 'diet', label: 'Διατροφικοί περιορισμοί', kind: 'textarea' },
+    { key: 'bloodType', label: 'Ομάδα αίματος', kind: 'select', options: ['Δεν γνωρίζω', 'O+', 'O−', 'A+', 'A−', 'B+', 'B−', 'AB+', 'AB−'] },
+    { key: 'tetanus', label: 'Εμβόλιο τετάνου σε ισχύ', kind: 'yesno' },
+    { key: 'doctor', label: 'Παιδίατρος / γιατρός και τηλέφωνο', kind: 'text' },
+    { key: 'emergencyPhone', label: 'Τηλέφωνο έκτακτης ανάγκης', kind: 'phone', required: true },
+    { key: 'notes', label: 'Ό,τι άλλο πρέπει να ξέρει το στέλεχος', kind: 'textarea' },
+  ],
+};
+
+/** Πόσες μέρες μετά τη λήξη της δράσης σβήνονται οι απαντήσεις υγείας. */
+export const HEALTH_DATA_RETENTION_DAYS = 30;
+/** Πόσες μέρες ζει ένας σύνδεσμος εντύπου αν δεν συμπληρωθεί. */
+export const FORM_LINK_TTL_DAYS = 30;

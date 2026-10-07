@@ -80,6 +80,25 @@ enum DrasiLedgerKind {
   APODOSI
 }
 
+enum DrasiFormType {
+  SYMMETOXI
+  YGEIA
+}
+
+enum DrasiFormStatus {
+  PENDING
+  SENT
+  OPENED
+  SUBMITTED
+  VOID
+}
+
+enum SignerRole {
+  GONEAS
+  KIDEMONAS
+  IDIOS
+}
+
 /// Ομάδες δράσης: υποομάδα κλάδου (πεντάδα/φωλιά/ενωμοτία) ή σκηνή — ανεξάρτητοι άξονες.
 enum DrasiGroupKind {
   PENTADA
@@ -476,10 +495,62 @@ model Drasi {
   budget       DrasiBudget[]
   ledger       DrasiLedgerEntry[]
   groups       DrasiGroup[]
+  forms        DrasiForm[]
+  pharmacyKits DrasiPharmacyKit[]
 
   @@index([topikoId, dateStart])
   @@index([kladosId, dateStart])
   @@map("drasi")
+}
+
+/// Έντυπο ανά συμμετέχοντα: δήλωση συμμετοχής ή κατάσταση υγείας. Βλ. docs/draseis.md F5.
+///
+/// Ο σύνδεσμος που πάει στον γονέα είναι token που ΔΕΝ αποθηκεύεται — μόνο το
+/// hash του. Μόνο γραφή, ένα παιδί, ένα έντυπο, λήγει. Τα ιατρικά (`data` του
+/// YGEIA) σβήνονται `HEALTH_DATA_RETENTION_DAYS` μετά τη λήξη της δράσης.
+model DrasiForm {
+  id              String          @id @default(uuid()) @db.Uuid
+  drasiId         String          @db.Uuid
+  participantId   String          @db.Uuid
+  type            DrasiFormType
+  status          DrasiFormStatus @default(PENDING)
+  tokenHash       String?         @unique
+  expiresAt       DateTime?
+  sentTo          String?
+  sentAt          DateTime?
+  openedAt        DateTime?
+  submittedAt     DateTime?
+  submittedIp     String?
+  /// Οι απαντήσεις, με κλειδί το `key` του πεδίου (βλ. shared `DRASI_FORM_FIELDS`).
+  data            Json?
+  signerName      String?
+  signerRole      SignerRole?
+  signatureFileId String?         @unique @db.Uuid
+  purgeAfter      DateTime?
+  purgedAt        DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  drasi         Drasi            @relation(fields: [drasiId], references: [id], onDelete: Cascade)
+  participant   DrasiParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  signatureFile StoredFile?      @relation("DrasiFormSignature", fields: [signatureFileId], references: [id], onDelete: SetNull)
+
+  @@unique([participantId, type])
+  @@index([drasiId, status])
+  @@index([purgeAfter])
+  @@map("drasi_form")
+}
+
+/// Ποια φαρμακεία (kits) έχει η δράση — δικά μας ή δανεισμένα σε εμάς. Βλ. F6.
+model DrasiPharmacyKit {
+  drasiId       String @db.Uuid
+  pharmacyKitId String @db.Uuid
+
+  drasi Drasi       @relation(fields: [drasiId], references: [id], onDelete: Cascade)
+  kit   PharmacyKit @relation(fields: [pharmacyKitId], references: [id], onDelete: Cascade)
+
+  @@id([drasiId, pharmacyKitId])
+  @@map("drasi_pharmacy_kit")
 }
 
 /// Ομάδα μέσα σε δράση: «Αετοί» (ενωμοτία), «Σκηνή 3». Βλ. docs/draseis.md F14.
@@ -653,6 +724,7 @@ model DrasiParticipant {
   payments  DrasiPayment[]
   groups    DrasiGroupMember[]
   leads     DrasiGroup[]     @relation("DrasiGroupLeader")
+  forms     DrasiForm[]
 
   @@unique([drasiId, userId])
   @@index([drasiId, kind])
@@ -1020,6 +1092,7 @@ model PharmacyKit {
   topiko Topiko  @relation(fields: [topikoId], references: [id], onDelete: Cascade)
   klados Klados? @relation(fields: [kladosId], references: [id], onDelete: SetNull)
   loans  KitLoan[]
+  draseis DrasiPharmacyKit[]
 
   @@unique([topikoId, ouchtrackerKitId])
   @@index([topikoId, kladosId])
@@ -1183,6 +1256,7 @@ model StoredFile {
   createdBy     User?          @relation("StoredFileAuthor", fields: [createdById], references: [id], onDelete: SetNull)
   treasuryEntry TreasuryEntry?
   drasiPayment  DrasiPayment?  @relation("DrasiPaymentReceipt")
+  drasiForm     DrasiForm?     @relation("DrasiFormSignature")
 
   @@index([topikoId, kladosId, purpose])
   @@map("stored_file")
