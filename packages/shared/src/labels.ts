@@ -2,6 +2,8 @@
 import {
   AccountRole,
   CheckoutStatus,
+  DrasiFeeKind,
+  DrasiLedgerKind,
   DrasiRoleKind,
   DrasiStatus,
   DrasiType,
@@ -201,6 +203,23 @@ export const TREASURY_CATEGORY_LABEL: Record<string, string> = {
   METAKINISI: 'Μετακίνηση',
   LEITOURGIKA: 'Λειτουργικά',
   ALLO: 'Άλλο',
+  SYMMETOXI: 'Συμμετοχές',
+  PROGRAMMA: 'Πρόγραμμα',
+  DIATROFI: 'Διατροφή',
+  APROVLEPTA: 'Απρόβλεπτα',
+};
+
+export const DRASI_FEE_KIND_LABEL: Record<DrasiFeeKind, string> = {
+  PLIRIS: 'Πλήρης',
+  MEIOMENI: 'Μειωμένη',
+  STELEXOS: 'Στέλεχος',
+  DOREAN: 'Δωρεάν',
+};
+
+export const DRASI_LEDGER_KIND_LABEL: Record<DrasiLedgerKind, string> = {
+  PROKATAVOLI: 'Προκαταβολή από το ταμείο',
+  EPISTROFI: 'Επιστροφή στο ταμείο',
+  APODOSI: 'Απόδοση εξόδων στο στέλεχος',
 };
 
 export const PAYMENT_HANDLING_LABEL: Record<string, string> = {

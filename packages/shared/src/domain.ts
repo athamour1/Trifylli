@@ -387,8 +387,47 @@ export const TreasuryCategory = {
   METAKINISI: 'METAKINISI',
   LEITOURGIKA: 'LEITOURGIKA',
   ALLO: 'ALLO',
+  // Κατηγορίες δράσης (από το υπόδειγμα ταμείου κατασκήνωσης — βλ. docs/draseis.md F1).
+  /** Έσοδο: συμμετοχές — μετριούνται από τις πληρωμές, όχι από κινήσεις. */
+  SYMMETOXI: 'SYMMETOXI',
+  /** Έξοδο: πρόγραμμα (γραφική ύλη, φωτοτυπίες, μαγαζάκι). */
+  PROGRAMMA: 'PROGRAMMA',
+  DIATROFI: 'DIATROFI',
+  APROVLEPTA: 'APROVLEPTA',
 } as const;
 export type TreasuryCategory = (typeof TreasuryCategory)[keyof typeof TreasuryCategory];
+
+/** Οι κατηγορίες του ταμείου ΜΙΑΣ ΔΡΑΣΗΣ — ένα φύλλο ανά κατηγορία εξόδων στην εξαγωγή. */
+export const DRASI_INCOME_CATEGORIES: readonly TreasuryCategory[] = ['EPIXORIGISI', 'DOREA', 'ALLO'];
+export const DRASI_EXPENSE_CATEGORIES: readonly TreasuryCategory[] = [
+  'METAKINISI',
+  'LEITOURGIKA',
+  'PROGRAMMA',
+  'DIATROFI',
+  'APROVLEPTA',
+  'ALLO',
+];
+
+/** Είδος συμμετοχής στο κόστος της δράσης. */
+export const DrasiFeeKind = {
+  PLIRIS: 'PLIRIS',
+  MEIOMENI: 'MEIOMENI',
+  STELEXOS: 'STELEXOS',
+  DOREAN: 'DOREAN',
+} as const;
+export type DrasiFeeKind = (typeof DrasiFeeKind)[keyof typeof DrasiFeeKind];
+
+/**
+ * Λογαριασμός στελέχους μέσα στη δράση: το ταμείο του έδωσε μετρητά για αγορές
+ * (προκαταβολή), το στέλεχος επέστρεψε ρέστα, ή το ταμείο του απέδωσε έξοδα
+ * που πλήρωσε από την τσέπη. Βλ. docs/draseis.md F2.
+ */
+export const DrasiLedgerKind = {
+  PROKATAVOLI: 'PROKATAVOLI',
+  EPISTROFI: 'EPISTROFI',
+  APODOSI: 'APODOSI',
+} as const;
+export type DrasiLedgerKind = (typeof DrasiLedgerKind)[keyof typeof DrasiLedgerKind];
 
 /** Ποιες κατηγορίες προτείνονται ανά είδος κίνησης. */
 export const TREASURY_INCOME_CATEGORIES: readonly TreasuryCategory[] = [

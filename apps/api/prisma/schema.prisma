@@ -65,6 +65,21 @@ enum DrasiStatus {
   KLEISTI
 }
 
+/// Είδος συμμετοχής στο κόστος (πλήρης / μειωμένη / στέλεχος / δωρεάν).
+enum DrasiFeeKind {
+  PLIRIS
+  MEIOMENI
+  STELEXOS
+  DOREAN
+}
+
+/// Λογαριασμός στελέχους στη δράση: προκαταβολή από το ταμείο / επιστροφή / απόδοση εξόδων.
+enum DrasiLedgerKind {
+  PROKATAVOLI
+  EPISTROFI
+  APODOSI
+}
+
 /// Ευθύνες μέσα σε δράση: αρχηγείο + υπηρεσίες σε ΕΝΑ enum (βλ. shared `DrasiRoleKind`).
 enum DrasiRoleKind {
   ARXIGOS
@@ -238,6 +253,11 @@ model User {
   lastLoginAt DateTime?
   status    MemberStatus @default(ENERGO)
   source    DataSource   @default(LOCAL)
+  /// Φιλοξενούμενος σε δράση από ΑΛΛΟ Τοπικό (κωδικός/όνομα e-SEO). Όσο είναι
+  /// συμπληρωμένο, το άτομο μένει εκτός μητρώου, συνδρομών και προόδου —
+  /// το βλέπουν μόνο οι δράσεις (βλ. docs/draseis.md F3).
+  guestTopikoCode String?
+  guestTopikoName String?
   /// Ελεύθερα πεδία από e-SEO που δεν έχουν δική τους κολόνα (ΑΜΚΑ, ΑΔΤ, συναινέσεις).
   eseoPayload Json?
   lastSyncedAt DateTime?
@@ -266,6 +286,10 @@ model User {
   treasuryEntries TreasuryEntry[]        @relation("TreasuryAuthor")
   collectedPayments Payment[]            @relation("PaymentCollector")
   drasiRoles      DrasiRole[]            @relation("DrasiRoleUser")
+  drasiFeesCollected DrasiParticipant[]  @relation("DrasiFeeCollector")
+  drasiPaymentsCollected DrasiPayment[]  @relation("DrasiPaymentCollector")
+  drasiLedger     DrasiLedgerEntry[]     @relation("DrasiLedgerUser")
+  drasiLedgerAuthored DrasiLedgerEntry[] @relation("DrasiLedgerAuthor")
   auditLogs       AuditLog[]
 
   @@index([topikoId, status])
@@ -415,8 +439,12 @@ model Drasi {
   dateStart DateTime
   dateEnd   DateTime
   description String?
-  /// Κόστος συμμετοχής ανά άτομο, όταν υπάρχει.
+  /// Κόστος συμμετοχής ανά άτομο — η προεπιλογή «πλήρης». Μαζί με τα τρία επόμενα
+  /// γεμίζουν τα πεδία κόστους κάθε νέου συμμετέχοντα (βλ. docs/draseis.md F4).
   costPerPerson Decimal? @db.Decimal(10, 2)
+  costReduced   Decimal? @db.Decimal(10, 2)
+  costStelexos  Decimal? @db.Decimal(10, 2)
+  transportCost Decimal? @db.Decimal(10, 2)
   /// Προεπιλογή `ENERGI` ώστε seed και απλές κλήσεις API να φτιάχνουν «κανονική»
   /// δράση· το wizard ζητά ρητά `PROSXEDIO` μέχρι να ολοκληρωθεί.
   status    DrasiStatus @default(ENERGI)
@@ -434,10 +462,71 @@ model Drasi {
   kladoi       DrasiKlados[]
   guestTopika  DrasiGuestTopiko[]
   roles        DrasiRole[]
+  treasuryEntries TreasuryEntry[]
+  budget       DrasiBudget[]
+  ledger       DrasiLedgerEntry[]
 
   @@index([topikoId, dateStart])
   @@index([kladosId, dateStart])
   @@map("drasi")
+}
+
+/// Πληρωμή συμμετοχής — καθρέφτης του `Payment` των συνδρομών: ίδια πορεία μετρητών.
+model DrasiPayment {
+  id             String                 @id @default(uuid()) @db.Uuid
+  participantId  String                 @db.Uuid
+  amount         Decimal                @db.Decimal(10, 2)
+  paidAt         DateTime               @default(now())
+  /// `CASH` / `BANK` — τα μετρητά ακολουθούν την πορεία `handlingStatus`.
+  method         String?
+  handlingStatus PaymentHandlingStatus?
+  collectedById  String?                @db.Uuid
+  receiptFileId  String?                @unique @db.Uuid
+  note           String?
+  createdAt      DateTime               @default(now())
+
+  participant DrasiParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  collectedBy User?            @relation("DrasiPaymentCollector", fields: [collectedById], references: [id], onDelete: SetNull)
+  receiptFile StoredFile?      @relation("DrasiPaymentReceipt", fields: [receiptFileId], references: [id], onDelete: SetNull)
+
+  @@index([participantId, paidAt])
+  @@map("drasi_payment")
+}
+
+/// Προϋπολογισμός ανά κατηγορία εξόδων, με στόχο ποσοστού επί του συνόλου.
+model DrasiBudget {
+  drasiId   String   @db.Uuid
+  /// Ίδιο λεξιλόγιο με το `TreasuryEntry.category`.
+  category  String
+  planned   Decimal  @db.Decimal(10, 2)
+  targetPct Decimal? @db.Decimal(5, 4)
+
+  drasi Drasi @relation(fields: [drasiId], references: [id], onDelete: Cascade)
+
+  @@id([drasiId, category])
+  @@map("drasi_budget")
+}
+
+/// Λογαριασμός στελέχους: προκαταβολές, επιστροφές, αποδόσεις. Βλ. docs/draseis.md F2.
+model DrasiLedgerEntry {
+  id          String          @id @default(uuid()) @db.Uuid
+  drasiId     String          @db.Uuid
+  userId      String          @db.Uuid
+  kind        DrasiLedgerKind
+  amount      Decimal         @db.Decimal(10, 2)
+  occurredAt  DateTime        @db.Date
+  note        String?
+  /// Πότε έκλεισε ο λογαριασμός (τακτοποιήθηκε).
+  settledAt   DateTime?
+  createdById String?         @db.Uuid
+  createdAt   DateTime        @default(now())
+
+  drasi     Drasi @relation(fields: [drasiId], references: [id], onDelete: Cascade)
+  user      User  @relation("DrasiLedgerUser", fields: [userId], references: [id], onDelete: Cascade)
+  createdBy User? @relation("DrasiLedgerAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([drasiId, userId])
+  @@map("drasi_ledger_entry")
 }
 
 /// Ποιοι δικοί μας κλάδοι συμμετέχουν στη δράση (ο διοργανωτής περιλαμβάνεται).
@@ -501,9 +590,18 @@ model DrasiParticipant {
   /// Παρουσία στη δράση (χρήσιμο για πολυήμερες/κατασκηνώσεις).
   attended  Boolean?
   note      String?
+  /// Κόστος: τι είδους συμμετοχή, πόσο για τη δράση, πόσο μεταφορικά (χωριστά).
+  feeKind         DrasiFeeKind @default(PLIRIS)
+  feeAmount       Decimal?     @db.Decimal(10, 2)
+  transportAmount Decimal?     @db.Decimal(10, 2)
+  feeNote         String?
+  /// Το στέλεχος που είναι υπεύθυνο να εισπράξει από αυτό το άτομο.
+  collectorId     String?      @db.Uuid
 
-  drasi Drasi @relation(fields: [drasiId], references: [id], onDelete: Cascade)
-  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  drasi     Drasi          @relation(fields: [drasiId], references: [id], onDelete: Cascade)
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  collector User?          @relation("DrasiFeeCollector", fields: [collectorId], references: [id], onDelete: SetNull)
+  payments  DrasiPayment[]
 
   @@unique([drasiId, userId])
   @@index([drasiId, kind])
@@ -1033,6 +1131,7 @@ model StoredFile {
   klados        Klados?        @relation(fields: [kladosId], references: [id], onDelete: Cascade)
   createdBy     User?          @relation("StoredFileAuthor", fields: [createdById], references: [id], onDelete: SetNull)
   treasuryEntry TreasuryEntry?
+  drasiPayment  DrasiPayment?  @relation("DrasiPaymentReceipt")
 
   @@index([topikoId, kladosId, purpose])
   @@map("stored_file")
@@ -1043,6 +1142,9 @@ model TreasuryEntry {
   id            String            @id @default(uuid()) @db.Uuid
   topikoId      String            @db.Uuid
   kladosId      String?           @db.Uuid
+  /// Κίνηση του ταμείου ΜΙΑΣ ΔΡΑΣΗΣ. Τα ταμεία κλάδου/Τοπικού τη ΔΕΝ βλέπουν —
+  /// η δράση έχει δικό της ταμείο (`kladosId` εδώ = ο διοργανωτής, για εμβέλεια).
+  drasiId       String?           @db.Uuid
   kind          TreasuryEntryKind
   category      String
   amount        Decimal           @db.Decimal(10, 2)
@@ -1058,10 +1160,12 @@ model TreasuryEntry {
 
   topiko      Topiko      @relation(fields: [topikoId], references: [id], onDelete: Cascade)
   klados      Klados?     @relation(fields: [kladosId], references: [id], onDelete: Cascade)
+  drasi       Drasi?      @relation(fields: [drasiId], references: [id], onDelete: Cascade)
   receiptFile StoredFile? @relation(fields: [receiptFileId], references: [id], onDelete: SetNull)
   createdBy   User?       @relation("TreasuryAuthor", fields: [createdById], references: [id], onDelete: SetNull)
   ylikoMaintenance YlikoMaintenance? @relation("MaintenanceExpense")
 
   @@index([topikoId, kladosId, occurredAt])
+  @@index([drasiId, occurredAt])
   @@map("treasury_entry")
 }

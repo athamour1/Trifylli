@@ -2,12 +2,15 @@
 import type {
   AccountRole,
   CheckoutStatus,
+  DrasiFeeKind,
+  DrasiLedgerKind,
   DrasiRoleKind,
   DrasiType,
   KladosType,
   MemberKind,
   MemberStatus,
   ParousiaStatus,
+  PaymentHandlingStatus,
   ProodosStatus,
   SymvoulioType,
   SyndromiStatus,
@@ -303,4 +306,115 @@ export interface EseoUnitInfo {
 export interface DrasiRolesTemplate {
   source: { id: string; title: string; dateStart: string } | null;
   roles: { kind: DrasiRoleKind; userId: string; note: string | null }[];
+}
+
+// ───────────────────────── Δράσεις: ταμείο & κόστη (F1, F2, F4) ─────────────────────────
+
+export interface DrasiBudgetView {
+  category: string;
+  planned: number;
+  /** Στόχος ποσοστού επί του συνόλου των εξόδων, 0–1. */
+  targetPct: number | null;
+}
+
+/** Μία κατηγορία εξόδων: τι σχεδιάστηκε, τι ξοδεύτηκε, τι ποσοστό βγήκε. */
+export interface DrasiCategoryLine {
+  category: string;
+  planned: number;
+  targetPct: number | null;
+  actual: number;
+  actualPct: number;
+  count: number;
+}
+
+export interface DrasiTreasurySummary {
+  /** Έσοδα από κινήσεις + εισπράξεις συμμετοχών. */
+  income: number;
+  incomeFromEntries: number;
+  incomeFromPayments: number;
+  expense: number;
+  balance: number;
+  /** `true` όταν η δράση είναι ΚΛΕΙΣΤΗ — καμία κίνηση δεν δέχεται πια. */
+  locked: boolean;
+  expenses: DrasiCategoryLine[];
+  incomes: { category: string; amount: number; count: number }[];
+  fees: {
+    expected: number;
+    collected: number;
+    outstanding: number;
+    byKind: { kind: DrasiFeeKind; count: number; amount: number }[];
+    byStage: { stage: PaymentHandlingStatus; amount: number; count: number }[];
+  };
+  ledger: { given: number; returned: number; reimbursed: number; open: number };
+}
+
+export interface DrasiLedgerView {
+  id: string;
+  kind: DrasiLedgerKind;
+  amount: number;
+  occurredAt: string;
+  note: string | null;
+  settledAt: string | null;
+  user: { id: string; firstName: string; lastName: string };
+}
+
+/** Ο λογαριασμός ενός στελέχους: τι πήρε, τι επέστρεψε, τι του αποδόθηκε, τι μένει. */
+export interface DrasiLedgerAccount {
+  user: { id: string; firstName: string; lastName: string };
+  given: number;
+  returned: number;
+  reimbursed: number;
+  /** Θετικό ⇒ το στέλεχος χρωστά στο ταμείο· αρνητικό ⇒ το ταμείο χρωστά στο στέλεχος. */
+  balance: number;
+  entries: DrasiLedgerView[];
+}
+
+export interface DrasiPaymentView {
+  id: string;
+  amount: number;
+  paidAt: string;
+  method: string | null;
+  handlingStatus: PaymentHandlingStatus | null;
+  collectedBy: { id: string; firstName: string; lastName: string } | null;
+  receipt: StoredFileRef | null;
+  note: string | null;
+}
+
+export interface DrasiParticipantView {
+  id: string;
+  kind: MemberKind;
+  confirmed: boolean;
+  attended: boolean | null;
+  note: string | null;
+  feeKind: DrasiFeeKind;
+  feeAmount: number | null;
+  transportAmount: number | null;
+  feeNote: string | null;
+  /** Τι οφείλει συνολικά (συμμετοχή + μεταφορικά). */
+  due: number;
+  paid: number;
+  balance: number;
+  collector: { id: string; firstName: string; lastName: string } | null;
+  payments: DrasiPaymentView[];
+  user: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    kind: MemberKind;
+    birthDate: string | null;
+    phone: string | null;
+    kladosType: KladosType | null;
+    guestTopikoName: string | null;
+  };
+}
+
+/** «Η Μαρία έχει 8 παιδιά, εισέπραξε 6, κρατά 1.440 €, δεν τα έχει παραδώσει.» */
+export interface DrasiCollectorView {
+  collector: { id: string; firstName: string; lastName: string } | null;
+  participants: number;
+  expected: number;
+  collected: number;
+  /** Εισπραγμένα μετρητά που δεν έχουν παραδοθεί ακόμη (στάδιο ΕΙΣΠΡΑΧΘΗΚΕ). */
+  holding: number;
+  outstanding: number;
 }
