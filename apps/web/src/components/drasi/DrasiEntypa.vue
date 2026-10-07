@@ -6,6 +6,17 @@
         <span class="text-grey-7"> από {{ matrix.total }} εκκρεμούν</span>
       </div>
       <q-space />
+      <q-btn-dropdown flat color="klados" icon="picture_as_pdf" label="Λήψη εντύπων" :disable="!submittedCount" :loading="downloading">
+        <q-list dense>
+          <q-item v-for="type in (['SYMMETOXI', 'YGEIA'] as const)" :key="type" clickable v-close-popup :disable="!submittedOf(type)" @click="downloadAll(type)">
+            <q-item-section avatar><q-icon name="picture_as_pdf" /></q-item-section>
+            <q-item-section>
+              <q-item-label>{{ type === 'SYMMETOXI' ? 'Δηλώσεις Συμμετοχής' : 'Πιστοποιητικά Υγείας' }}</q-item-label>
+              <q-item-label caption>{{ submittedOf(type) }} συμπληρωμένα · τα πρωτότυπα του Σ.Ε.Ο., σε ένα PDF</q-item-label>
+            </q-item-section>
+          </q-item>
+        </q-list>
+      </q-btn-dropdown>
       <q-btn v-if="canWrite" flat color="klados" icon="send" label="Υπενθύμιση σε όσους εκκρεμούν" :loading="issuing" @click="issue({ reissue: true })" />
       <q-btn v-if="canWrite" color="klados" text-color="klados-on" unelevated icon="link" label="Έκδοση συνδέσμων" :loading="issuing" @click="issue({})" />
     </div>
@@ -41,6 +52,7 @@
               </span>
               <span v-else-if="formOf(p, type)!.sentAt" class="text-caption text-grey-7">έως {{ formatDate(formOf(p, type)!.expiresAt!) }}</span>
               <q-btn v-if="formOf(p, type)!.hasData" flat dense round size="sm" icon="visibility" color="klados" @click="view(formOf(p, type)!)"><q-tooltip>Προβολή</q-tooltip></q-btn>
+              <q-btn v-if="formOf(p, type)!.hasData && formOf(p, type)!.status === 'SUBMITTED'" flat dense round size="sm" icon="picture_as_pdf" color="klados" @click="downloadOne(formOf(p, type)!, p)"><q-tooltip>Λήψη — το έντυπο του Σ.Ε.Ο. συμπληρωμένο</q-tooltip></q-btn>
               <q-btn v-if="canWrite && formOf(p, type)!.id && formOf(p, type)!.status !== 'SUBMITTED' && formOf(p, type)!.status !== 'VOID'" flat dense round size="sm" icon="link_off" color="negative" @click="voidForm(formOf(p, type)!)"><q-tooltip>Ακύρωση συνδέσμου</q-tooltip></q-btn>
               <q-btn v-if="canWrite && formOf(p, type)!.status !== 'SUBMITTED'" flat dense round size="sm" icon="refresh" color="klados" @click="issue({ participantIds: [p.participantId], types: [type], reissue: true })"><q-tooltip>Νέος σύνδεσμος</q-tooltip></q-btn>
             </template>
@@ -95,13 +107,19 @@
           </div>
         </q-card-section>
         <q-card-section v-if="viewed">
-          <div v-for="f in viewed.fields" :key="f.key" class="q-mb-sm">
-            <div class="text-caption text-grey-7">{{ f.label }}</div>
-            <div class="text-body2">{{ answerText(viewed.data?.[f.key]) }}</div>
-          </div>
+          <template v-for="f in viewedFields" :key="f.key">
+            <div v-if="f.section" class="text-subtitle2 q-mt-sm q-mb-xs">{{ f.section }}</div>
+            <div class="q-mb-sm">
+              <div class="text-caption text-grey-7">{{ viewedMinor || !f.labelAdult ? f.label : f.labelAdult }}</div>
+              <div class="text-body2 pre-line">{{ answerText(viewed.data?.[f.key]) }}</div>
+            </div>
+          </template>
           <img v-if="signatureUrl" :src="signatureUrl" alt="Υπογραφή" style="max-width: 320px; border: 1px solid #ddd; border-radius: 6px" />
         </q-card-section>
-        <q-card-actions align="right"><q-btn flat label="Κλείσιμο" v-close-popup /></q-card-actions>
+        <q-card-actions align="right">
+          <q-btn v-if="viewed?.status === 'SUBMITTED'" flat color="klados" icon="picture_as_pdf" label="Λήψη PDF" @click="downloadOne(viewed!, null)" />
+          <q-btn flat label="Κλείσιμο" v-close-popup />
+        </q-card-actions>
       </q-card>
     </q-dialog>
   </div>
@@ -116,6 +134,7 @@ import {
   FORM_LINK_TTL_DAYS,
   HEALTH_DATA_RETENTION_DAYS,
   SIGNER_ROLE_LABEL,
+  formFieldApplies,
   type DrasiFormField,
   type DrasiFormStatus,
   type DrasiFormsMatrix,
@@ -124,7 +143,7 @@ import {
   type IssuedFormLink,
   type SignerRole,
 } from '@trifylli/shared';
-import { ApiError, del, get, getBlob, post } from '../../lib/api';
+import { ApiError, del, downloadFile, get, getBlob, post } from '../../lib/api';
 import { formatDate, formatDateTime } from '../../lib/format';
 
 const props = defineProps<{ drasiId: string; canWrite: boolean }>();
@@ -137,6 +156,29 @@ type Row = DrasiFormsMatrix['participants'][number];
 const formOf = (p: Row, type: DrasiFormType): DrasiFormView | undefined => p.forms.find((f) => f.type === type);
 const names = computed(() => new Map((matrix.value?.participants ?? []).map((p) => [p.participantId, `${p.user.lastName} ${p.user.firstName}`])));
 const nameOf = (pid: string) => names.value.get(pid) ?? '';
+
+const submittedOf = (type: DrasiFormType): number => (matrix.value?.participants ?? []).filter((p) => formOf(p, type)?.status === 'SUBMITTED').length;
+const submittedCount = computed(() => submittedOf('SYMMETOXI') + submittedOf('YGEIA'));
+
+// ── Λήψη: τα πρωτότυπα έντυπα του Σ.Ε.Ο. συμπληρωμένα, με την υπογραφή στη θέση της ──
+const downloading = ref(false);
+async function downloadAll(type: DrasiFormType): Promise<void> {
+  downloading.value = true;
+  try {
+    await downloadFile(`/draseis/${props.drasiId}/forms/export.pdf?type=${type}`, `${DRASI_FORM_TYPE_LABEL[type]}.pdf`);
+  } catch (err) {
+    notifyError(err, 'Αποτυχία λήψης.');
+  } finally {
+    downloading.value = false;
+  }
+}
+async function downloadOne(f: DrasiFormView, p: Row | null): Promise<void> {
+  try {
+    await downloadFile(`/draseis/${props.drasiId}/forms/${f.id}/pdf`, `${DRASI_FORM_TYPE_LABEL[f.type]}${p ? ` - ${p.user.lastName} ${p.user.firstName}` : ''}.pdf`);
+  } catch (err) {
+    notifyError(err, 'Αποτυχία λήψης.');
+  }
+}
 
 function statusColor(s: DrasiFormStatus): string {
   return { PENDING: 'grey-6', SENT: 'blue-7', OPENED: 'orange-7', SUBMITTED: 'positive', VOID: 'grey-8' }[s];
@@ -202,6 +244,9 @@ interface FormDetail extends DrasiFormView {
 }
 const viewDialog = ref(false);
 const viewed = ref<FormDetail | null>(null);
+const viewedMinor = computed(() => matrix.value?.participants.find((p) => p.participantId === viewed.value?.participantId)?.isMinor ?? true);
+/** Μόνο τα πεδία που ίσχυαν για αυτή τη συμπλήρωση (π.χ. «αναλυτικά» μόνο αν απάντησε Ναι). */
+const viewedFields = computed(() => (viewed.value ? viewed.value.fields.filter((f) => formFieldApplies(f, viewed.value!.data ?? {}, viewedMinor.value)) : []));
 const signatureUrl = ref('');
 async function view(f: DrasiFormView): Promise<void> {
   try {
@@ -230,3 +275,9 @@ function notifyError(err: unknown, fallback: string): void {
   $q.notify({ type: 'negative', message: err instanceof ApiError ? err.message : fallback });
 }
 </script>
+
+<style scoped>
+.pre-line {
+  white-space: pre-line;
+}
+</style>

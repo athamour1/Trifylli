@@ -1,5 +1,7 @@
-import { Body, Controller, Delete, Get, HttpCode, Ip, Param, ParseUUIDPipe, Post, Put, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { BadRequestException, Body, Controller, Delete, Get, HttpCode, Ip, Param, ParseUUIDPipe, Post, Put, Query, Res, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import type { Response } from 'express';
+import { DrasiFormType } from '@trifylli/shared';
 import { Throttle } from '@nestjs/throttler';
 import { AuditService } from '../../common/audit/audit.service';
 import { CapabilityGuard } from '../../common/auth/capability.guard';
@@ -33,6 +35,23 @@ export class DraseisFormsController {
   @ApiOperation({ summary: 'Έκδοση συνδέσμων — το token επιστρέφεται μία φορά' })
   issue(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: IssueFormsDto) {
     return this.forms.issue(user, id, dto);
+  }
+
+  // Πριν από το `forms/:formId`: αλλιώς το «export.pdf» θα έπεφτε στο ParseUUIDPipe.
+  @Get('forms/export.pdf')
+  @RequireCapability('calendar:read')
+  @ApiQuery({ name: 'type', enum: DrasiFormType })
+  @ApiOperation({ summary: 'Όλα τα συμπληρωμένα έντυπα ενός είδους — τα πρωτότυπα του Σ.Ε.Ο. συμπληρωμένα, σε ένα PDF' })
+  async exportAll(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Query('type') type: string, @Res() res: Response) {
+    if (type !== DrasiFormType.SYMMETOXI && type !== DrasiFormType.YGEIA) throw new BadRequestException('Άγνωστο είδος εντύπου.');
+    sendPdf(res, await this.forms.pdfAll(user, id, type));
+  }
+
+  @Get('forms/:formId/pdf')
+  @RequireCapability('calendar:read')
+  @ApiOperation({ summary: 'Το έντυπο όπως το πρωτότυπο του Σ.Ε.Ο., συμπληρωμένο και υπογεγραμμένο' })
+  async exportOne(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Param('formId', ParseUUIDPipe) formId: string, @Res() res: Response) {
+    sendPdf(res, await this.forms.pdf(user, id, formId));
   }
 
   @Get('forms/:formId')
@@ -99,4 +118,11 @@ export class PublicFormsController {
   submit(@Param('token') token: string, @Body() dto: SubmitFormDto, @Ip() ip: string) {
     return this.forms.submit(token, dto, ip);
   }
+}
+
+function sendPdf(res: Response, file: { filename: string; buffer: Buffer }): void {
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(file.filename)}`);
+  res.setHeader('Cache-Control', 'no-store');
+  res.end(file.buffer);
 }

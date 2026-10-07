@@ -511,6 +511,8 @@ export interface PublicFormView {
   expiresAt: string;
   isMinor: boolean;
   fields: DrasiFormField[];
+  /** Προσυμπληρωμένες τιμές από το μητρώο (διεύθυνση, αρ. ταυτότητας) — ο γονέας τις διορθώνει. */
+  prefill: Record<string, string>;
 }
 
 export interface HealthSummaryEntry {

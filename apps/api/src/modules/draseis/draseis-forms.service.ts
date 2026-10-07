@@ -14,6 +14,9 @@ import {
   DRASI_FORM_FIELDS,
   FORM_LINK_TTL_DAYS,
   HEALTH_DATA_RETENTION_DAYS,
+  KLADOS_LABEL,
+  formFieldApplies,
+  type DrasiFormField,
   type DrasiFormsMatrix,
   type DrasiFormView,
   type HealthSummaryEntry,
@@ -29,8 +32,10 @@ import { StorageService } from '../../common/storage/storage.service';
 import type { RequestUser } from '../../common/auth/types';
 import { ageInYears } from '../meloi/age';
 import { sniffMime } from '../files/sniff';
+import { EseoClient } from '../integrations/eseo.client';
 import { DrasiAccessService } from './drasi-access.service';
 import type { IssueFormsDto, SubmitFormDto } from './dto/drasi-forms.dto';
+import { mergePdfs, renderFilledForm, type FilledFormInput, type FormTemplate } from './forms-pdf';
 
 const MAX_SIGNATURE_BYTES = 250 * 1024;
 
@@ -52,6 +57,7 @@ export class DraseisFormsService {
     private readonly access: DrasiAccessService,
     private readonly storage: StorageService,
     private readonly audit: AuditService,
+    private readonly eseo: EseoClient,
     @Inject(AppConfigToken) private readonly config: AppConfig,
   ) {}
 
@@ -208,9 +214,14 @@ export class DraseisFormsService {
     });
     await this.audit.record(user, 'drasi.health.read', 'drasi', id, { count: forms.length });
 
-    const text = (v: unknown): string => (typeof v === 'string' ? v.trim() : v === true ? 'ναι' : v === false ? 'όχι' : '');
+    const text = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
+    // «Ναι + αναλυτικά» → το κείμενο· «Όχι» → «όχι»· αναπάντητο → κενό.
+    const yesDetails = (d: Record<string, unknown>, key: string): string => (d[key] === true ? text(d[`${key}Details`]) || 'ναι' : d[key] === false ? 'όχι' : '');
     return forms.map((f) => {
       const d = (f.data as Record<string, unknown> | null) ?? {};
+      const flags = (['epilepsy', 'panic', 'claustrophobia', 'nosebleeds', 'sleepwalking', 'enuresis', 'lice', 'enzymes'] as const)
+        .filter((k) => d[k] === true)
+        .map((k) => FLAG_LABEL[k]);
       return {
         participantId: f.participantId,
         user: {
@@ -221,15 +232,109 @@ export class DraseisFormsService {
         },
         skini: f.participant.groups.find((g) => g.group.kind === 'SKINI')?.group.name ?? null,
         group: f.participant.groups.find((g) => g.group.kind !== 'SKINI')?.group.name ?? null,
-        allergies: text(d.allergies),
-        medications: text(d.medications),
-        conditions: text(d.conditions),
-        diet: text(d.diet),
-        bloodType: text(d.bloodType),
-        emergencyPhone: text(d.emergencyPhone),
-        notes: text(d.notes),
+        allergies: yesDetails(d, 'allergies'),
+        medications: yesDetails(d, 'medications'),
+        conditions: [yesDetails(d, 'conditions'), ...flags].filter((x) => x && x !== 'όχι').join(' · ') || yesDetails(d, 'conditions'),
+        diet: yesDetails(d, 'diet'),
+        bloodType: text(d.bloodType) === 'Δεν γνωρίζω' ? '' : text(d.bloodType),
+        emergencyPhone: [text(d.emergency1Phone1), text(d.emergency1Name)].filter(Boolean).join(' '),
+        notes: [yesDetails(d, 'extraInfo'), text(d.addendum)].filter((x) => x && x !== 'όχι').join(' · '),
         submittedAt: f.submittedAt?.toISOString() ?? '',
       };
+    });
+  }
+
+  // ───────────────────────── Λήψη: τα επίσημα έντυπα συμπληρωμένα ─────────────────────────
+
+  /** Ένα έντυπο ως το πρωτότυπο PDF του Σ.Ε.Ο. συμπληρωμένο, με την υπογραφή στη θέση της. */
+  async pdf(user: RequestUser, id: string, formId: string): Promise<{ filename: string; buffer: Buffer }> {
+    const drasi = await this.access.load(user, id, 'read');
+    const form = await this.prisma.drasiForm.findFirst({ where: { id: formId, drasiId: id }, include: formPdfInclude });
+    if (!form) throw new NotFoundException('Το έντυπο δεν βρέθηκε.');
+    if (form.status !== DrasiFormStatus.SUBMITTED || !form.data) throw new BadRequestException('Το έντυπο δεν έχει συμπληρωθεί.');
+    if (form.type === DrasiFormType.YGEIA) await this.audit.record(user, 'drasi.health.read', 'drasi_form', formId, { drasiId: id, pdf: true });
+    const ctx = await this.pdfContext(drasi.id);
+    const bytes = await this.renderOne(form, ctx);
+    const kind = form.type === DrasiFormType.SYMMETOXI ? 'Δήλωση Συμμετοχής' : 'Πιστοποιητικό Υγείας';
+    return { filename: `${kind} - ${form.participant.user.lastName} ${form.participant.user.firstName}.pdf`, buffer: Buffer.from(bytes) };
+  }
+
+  /** Όλα τα συμπληρωμένα έντυπα ενός είδους σε ένα PDF — για εκτύπωση/αρχείο της δράσης. */
+  async pdfAll(user: RequestUser, id: string, type: DrasiFormType): Promise<{ filename: string; buffer: Buffer }> {
+    const drasi = await this.access.load(user, id, 'read');
+    const forms = await this.prisma.drasiForm.findMany({
+      where: { drasiId: id, type, status: DrasiFormStatus.SUBMITTED, data: { not: Prisma.DbNull } },
+      include: formPdfInclude,
+      orderBy: [{ participant: { user: { lastName: 'asc' } } }, { participant: { user: { firstName: 'asc' } } }],
+    });
+    if (!forms.length) throw new NotFoundException('Δεν υπάρχει συμπληρωμένο έντυπο αυτού του είδους.');
+    if (type === DrasiFormType.YGEIA) await this.audit.record(user, 'drasi.health.read', 'drasi', id, { count: forms.length, pdf: true });
+    const ctx = await this.pdfContext(drasi.id);
+    const parts: Uint8Array[] = [];
+    for (const f of forms) parts.push(await this.renderOne(f, ctx));
+    const kind = type === DrasiFormType.SYMMETOXI ? 'Δηλώσεις Συμμετοχής' : 'Πιστοποιητικά Υγείας';
+    return { filename: `${kind} - ${drasi.title}.pdf`, buffer: Buffer.from(await mergePdfs(parts)) };
+  }
+
+  /** Ό,τι είναι κοινό για όλα τα έντυπα μιας δράσης (Μέρος 1). */
+  private async pdfContext(id: string): Promise<FilledFormInput['drasi']> {
+    const d = await this.prisma.drasi.findUniqueOrThrow({
+      where: { id },
+      include: {
+        topiko: { select: { name: true, eseoCode: true } },
+        klados: { select: { type: true } },
+        roles: { include: { user: { select: { firstName: true, lastName: true } } } },
+      },
+    });
+    // Υπεύθυνος Α' Βοηθειών: όποιος έχει το Φαρμακείο, αλλιώς ο Αρχηγός.
+    const firstAid = d.roles.find((r) => r.kind === 'FARMAKEIO') ?? d.roles.find((r) => r.kind === 'ARXIGOS');
+    // Η Περιφέρεια δεν τηρείται τοπικά· το e-SEO τη δίνει ως γονέα του Τοπικού (best effort).
+    let region: string | null = null;
+    if (d.topiko.eseoCode) {
+      try {
+        region = (await this.eseo.unit(d.topiko.eseoCode))?.parentName ?? null;
+      } catch {
+        region = null;
+      }
+    }
+    return {
+      title: d.title,
+      location: d.location,
+      dateStart: d.dateStart,
+      dateEnd: d.dateEnd,
+      topiko: d.topiko.name,
+      region,
+      firstAid: firstAid ? `${firstAid.user.firstName} ${firstAid.user.lastName}` : null,
+      kladosLabel: d.klados ? KLADOS_LABEL[d.klados.type as KladosType] : null,
+    };
+  }
+
+  private async renderOne(form: Prisma.DrasiFormGetPayload<{ include: typeof formPdfInclude }>, ctx: FilledFormInput['drasi']): Promise<Uint8Array> {
+    const u = form.participant.user;
+    const isMinor = minorAt(u.birthDate, ctx.dateStart);
+    const template: FormTemplate = form.type === DrasiFormType.SYMMETOXI ? 'dilosi' : isMinor ? 'ygeia-paidi' : 'ygeia-stelexos';
+    // Ο κλάδος του παιδιού (για τη δήλωση), αλλιώς ο διοργανωτής.
+    const memberKlados = u.memberships[0]?.klados.type as KladosType | undefined;
+    let signaturePng: Uint8Array | null = null;
+    if (form.signatureFile) {
+      try {
+        const { stream } = await this.storage.getStream(form.signatureFile.objectKey);
+        const chunks: Buffer[] = [];
+        for await (const chunk of stream) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array));
+        signaturePng = new Uint8Array(Buffer.concat(chunks));
+      } catch {
+        signaturePng = null;
+      }
+    }
+    return renderFilledForm({
+      template,
+      drasi: { ...ctx, kladosLabel: memberKlados ? KLADOS_LABEL[memberKlados] : ctx.kladosLabel },
+      participant: { firstName: u.firstName, lastName: u.lastName, birthDate: u.birthDate },
+      answers: (form.data as Record<string, unknown> | null) ?? {},
+      signerName: form.signerName,
+      submittedAt: form.submittedAt,
+      dueAt: form.expiresAt,
+      signaturePng,
     });
   }
 
@@ -242,7 +347,16 @@ export class DraseisFormsService {
       this.logger.log(`Έντυπο ${form.id} ανοίχτηκε (${ip ?? '-'}).`);
     }
     const isMinor = minorAt(form.participant.user.birthDate, form.drasi.dateStart);
+    const u = form.participant.user;
+    // Ό,τι ξέρει ήδη το μητρώο, προσυμπληρωμένο — ο γονέας το διορθώνει αν θέλει.
+    const prefill: Record<string, string> = {};
+    if (form.type === DrasiFormType.YGEIA) {
+      const address = [u.street, [u.postalCode, u.city].filter(Boolean).join(' '), u.area].filter(Boolean).join(', ');
+      if (address) prefill.address = address;
+      if (u.eseoId) prefill.guideId = u.eseoId;
+    }
     return {
+      prefill,
       drasi: {
         title: form.drasi.title,
         dateStart: form.drasi.dateStart.toISOString(),
@@ -264,17 +378,21 @@ export class DraseisFormsService {
     if (form.status === DrasiFormStatus.SUBMITTED) throw new ConflictException('Το έντυπο έχει ήδη υποβληθεί.');
 
     // Μόνο γνωστά πεδία, μόνο απλές τιμές — ό,τι άλλο στείλει ο client πετιέται.
+    // Τα πεδία «μόνο αν…» (π.χ. «αναγράψτε αναλυτικά») μετρούν μόνο όταν ισχύει η συνθήκη τους.
+    const isMinor = minorAt(form.participant.user.birthDate, form.drasi.dateStart);
     const fields = DRASI_FORM_FIELDS[form.type];
     const answers: Record<string, string | boolean> = {};
+    const label = (f: DrasiFormField) => (!isMinor && f.labelAdult ? f.labelAdult : f.label);
     for (const field of fields) {
+      if (!formFieldApplies(field, answers, isMinor)) continue;
       const raw = dto.answers[field.key];
       if (field.kind === 'yesno') {
         if (typeof raw === 'boolean') answers[field.key] = raw;
-        else if (field.required) throw new BadRequestException(`Απάντησε στο «${field.label}».`);
+        else if (field.required) throw new BadRequestException(`Απάντησε στο «${label(field)}».`);
       } else {
         const value = typeof raw === 'string' ? raw.trim().slice(0, 2000) : '';
-        if (field.required && !value) throw new BadRequestException(`Συμπλήρωσε το «${field.label}».`);
-        if (field.kind === 'select' && value && !field.options?.includes(value)) throw new BadRequestException(`Μη έγκυρη επιλογή στο «${field.label}».`);
+        if (field.required && !value) throw new BadRequestException(`Συμπλήρωσε το «${label(field)}».`);
+        if (field.kind === 'select' && value && !field.options?.includes(value)) throw new BadRequestException(`Μη έγκυρη επιλογή στο «${label(field)}».`);
         if (value) answers[field.key] = value;
       }
     }
@@ -333,7 +451,9 @@ export class DraseisFormsService {
       where: { tokenHash: hashToken(token) },
       include: {
         drasi: { select: { title: true, dateStart: true, dateEnd: true, location: true, topikoId: true, kladosId: true, topiko: { select: { name: true } } } },
-        participant: { include: { user: { select: { firstName: true, lastName: true, birthDate: true } } } },
+        participant: {
+          include: { user: { select: { firstName: true, lastName: true, birthDate: true, eseoId: true, street: true, postalCode: true, city: true, area: true } } },
+        },
       },
     });
     if (!form) throw new NotFoundException('Ο σύνδεσμος δεν είναι έγκυρος ή έχει ήδη χρησιμοποιηθεί.');
@@ -363,6 +483,26 @@ export class DraseisFormsService {
     return first.replace(/\/$/, '');
   }
 }
+
+const formPdfInclude = {
+  participant: {
+    include: {
+      user: { select: { firstName: true, lastName: true, birthDate: true, memberships: { where: { leftAt: null }, select: { klados: { select: { type: true } } } } } },
+    },
+  },
+  signatureFile: { select: { objectKey: true } },
+} as const;
+
+const FLAG_LABEL: Record<string, string> = {
+  epilepsy: 'επιληπτικές κρίσεις',
+  panic: 'κρίσεις πανικού',
+  claustrophobia: 'κλειστοφοβία',
+  nosebleeds: 'ρινορραγίες',
+  sleepwalking: 'υπνοβασία',
+  enuresis: 'ενούρηση',
+  lice: 'ψείρες',
+  enzymes: 'έλλειψη ενζύμων',
+};
 
 function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');

@@ -49,6 +49,8 @@ COPY --from=build /repo/apps/api/dist ./apps/api/dist
 COPY --from=build /repo/apps/api/node_modules ./apps/api/node_modules
 COPY --from=build /repo/apps/api/package.json ./apps/api/
 COPY --from=build /repo/apps/api/prisma ./apps/api/prisma
+# Τα πρωτότυπα έντυπα του Σ.Ε.Ο. και οι γραμματοσειρές για τη συμπλήρωσή τους.
+COPY --from=build /repo/apps/api/assets ./apps/api/assets
 COPY --from=build /repo/apps/api/prisma.config.ts ./apps/api/
 
 WORKDIR /repo/apps/api

@@ -604,37 +604,89 @@ export type SignerRole = (typeof SignerRole)[keyof typeof SignerRole];
 export interface DrasiFormField {
   key: string;
   label: string;
-  kind: 'text' | 'textarea' | 'yesno' | 'select' | 'phone';
+  /** Διατύπωση όταν συμπληρώνει ο ίδιος ο ενήλικος (έντυπο στελέχους) αντί για τον γονέα. */
+  labelAdult?: string;
+  kind: 'text' | 'textarea' | 'yesno' | 'select' | 'phone' | 'date';
   options?: string[];
   required?: boolean;
   hint?: string;
+  /** Επικεφαλίδα ενότητας πριν από αυτό το πεδίο. */
+  section?: string;
+  /** Εμφανίζεται (και απαιτείται) μόνο όταν ένα άλλο πεδίο έχει τη δεδομένη τιμή. */
+  showIf?: { key: string; equals: boolean };
+  /** Μόνο στο έντυπο ανηλίκου. */
+  minorOnly?: boolean;
 }
 
+/** Ισχύει το πεδίο για αυτή τη συμπλήρωση (ορατό και όχι μόνο-ανηλίκων σε ενήλικο); */
+export function formFieldApplies(field: DrasiFormField, answers: Record<string, unknown>, isMinor: boolean): boolean {
+  if (field.minorOnly && !isMinor) return false;
+  if (field.showIf && answers[field.showIf.key] !== field.showIf.equals) return false;
+  return true;
+}
+
+export const BLOOD_TYPES = ['Δεν γνωρίζω', 'O+', 'O−', 'A+', 'A−', 'B+', 'B−', 'AB+', 'AB−'];
+
 /**
- * Τα πεδία κάθε εντύπου. Ζουν εδώ (όχι στη βάση) ώστε μια αλλαγή ερωτήσεων να
- * είναι ένα commit και όχι migration· οι απαντήσεις αποθηκεύονται ως JSON με
- * κλειδί το `key`.
+ * Τα πεδία κάθε εντύπου — ένα προς ένα με τα επίσημα έντυπα του Σ.Ε.Ο. («Δήλωση
+ * Συμμετοχής σε Κατασκήνωση», «Πιστοποιητικό Υγείας» γονέα / Στελέχους), ώστε
+ * η λήψη να βγάζει το πρωτότυπο συμπληρωμένο. Ζουν εδώ (όχι στη βάση) ώστε μια
+ * αλλαγή ερωτήσεων να είναι ένα commit και όχι migration· οι απαντήσεις
+ * αποθηκεύονται ως JSON με κλειδί το `key`.
  */
 export const DRASI_FORM_FIELDS: Record<DrasiFormType, DrasiFormField[]> = {
   SYMMETOXI: [
-    { key: 'consent', label: 'Επιτρέπω τη συμμετοχή του παιδιού μου στη δράση', kind: 'yesno', required: true },
-    { key: 'emergencyName', label: 'Άτομο επικοινωνίας σε έκτακτη ανάγκη', kind: 'text', required: true },
-    { key: 'emergencyPhone', label: 'Τηλέφωνο έκτακτης ανάγκης', kind: 'phone', required: true },
+    { key: 'consent', label: 'Δέχομαι το παιδί μου / το μέλος υπό την κηδεμονία μου να συμμετάσχει στη δράση', kind: 'yesno', required: true },
+    { key: 'swim', label: 'Γνωρίζει κολύμπι', kind: 'yesno', required: true },
     { key: 'photoConsent', label: 'Επιτρέπω τη λήψη και χρήση φωτογραφιών για τους σκοπούς του Σ.Ε.Ο.', kind: 'yesno', required: true },
-    { key: 'swim', label: 'Το παιδί ξέρει κολύμπι', kind: 'yesno' },
-    { key: 'pickup', label: 'Ποιος θα παραλάβει το παιδί στην επιστροφή', kind: 'text' },
+    { key: 'contact1Name', label: 'Ονοματεπώνυμο', kind: 'text', required: true, section: 'Τηλέφωνα επικοινωνίας — 1ο άτομο' },
+    { key: 'contact1Mobile', label: 'Κινητό', kind: 'phone', required: true },
+    { key: 'contact1Home', label: 'Σπίτι', kind: 'phone' },
+    { key: 'contact1Work', label: 'Τηλ. εργασίας', kind: 'phone' },
+    { key: 'contact2Name', label: 'Ονοματεπώνυμο', kind: 'text', section: 'Τηλέφωνα επικοινωνίας — 2ο άτομο' },
+    { key: 'contact2Mobile', label: 'Κινητό', kind: 'phone' },
+    { key: 'contact2Home', label: 'Σπίτι', kind: 'phone' },
+    { key: 'contact2Work', label: 'Τηλ. εργασίας', kind: 'phone' },
+    { key: 'pickup', label: 'Ποιος θα παραλάβει το παιδί στην επιστροφή', kind: 'text', section: 'Άλλα' },
     { key: 'notes', label: 'Άλλες παρατηρήσεις', kind: 'textarea' },
   ],
   YGEIA: [
-    { key: 'allergies', label: 'Αλλεργίες (τροφές, φάρμακα, έντομα)', kind: 'textarea', required: true, hint: 'Γράψε «καμία» αν δεν υπάρχουν.' },
-    { key: 'medications', label: 'Φάρμακα που παίρνει και δοσολογία', kind: 'textarea', required: true, hint: 'Γράψε «κανένα» αν δεν παίρνει.' },
-    { key: 'conditions', label: 'Χρόνιες παθήσεις ή ιδιαιτερότητες (άσθμα, διαβήτης, επιληψία…)', kind: 'textarea', required: true },
-    { key: 'diet', label: 'Διατροφικοί περιορισμοί', kind: 'textarea' },
-    { key: 'bloodType', label: 'Ομάδα αίματος', kind: 'select', options: ['Δεν γνωρίζω', 'O+', 'O−', 'A+', 'A−', 'B+', 'B−', 'AB+', 'AB−'] },
-    { key: 'tetanus', label: 'Εμβόλιο τετάνου σε ισχύ', kind: 'yesno' },
-    { key: 'doctor', label: 'Παιδίατρος / γιατρός και τηλέφωνο', kind: 'text' },
-    { key: 'emergencyPhone', label: 'Τηλέφωνο έκτακτης ανάγκης', kind: 'phone', required: true },
-    { key: 'notes', label: 'Ό,τι άλλο πρέπει να ξέρει το στέλεχος', kind: 'textarea' },
+    { key: 'guideId', label: 'Αρ. Οδηγικής Ταυτότητας', kind: 'text', section: 'Προσωπικά στοιχεία' },
+    { key: 'amka', label: 'ΑΜΚΑ', kind: 'text', hint: '11 ψηφία' },
+    { key: 'bloodType', label: 'Ομάδα αίματος', kind: 'select', options: BLOOD_TYPES },
+    { key: 'address', label: 'Διεύθυνση', kind: 'textarea', required: true },
+    { key: 'tetanus', label: 'Καλύπτεται από αντιτετανικό εμβόλιο;', labelAdult: 'Καλύπτεσαι από αντιτετανικό εμβόλιο;', kind: 'yesno', required: true },
+    { key: 'tetanusDate', label: 'Ημερομηνία τελευταίου αντιτετανικού εμβολίου', kind: 'text', showIf: { key: 'tetanus', equals: true } },
+    { key: 'doctorName', label: 'Όνομα οικογενειακού γιατρού', kind: 'text' },
+    { key: 'doctorPhone', label: 'Τηλέφωνο οικογενειακού γιατρού', kind: 'phone' },
+    { key: 'allergies', label: 'Έχει το παιδί κάποια αλλεργία;', labelAdult: 'Γνωρίζεις αν έχεις κάποια αλλεργία;', kind: 'yesno', required: true, section: 'Γενικές πληροφορίες' },
+    { key: 'allergiesDetails', label: 'Αναγράψτε αναλυτικά', kind: 'textarea', required: true, showIf: { key: 'allergies', equals: true } },
+    { key: 'conditions', label: 'Έχει το παιδί κάποια χρόνια πάθηση ή άλλη ιδιαιτερότητα που σχετίζεται με τη συμμετοχή του στην κατασκήνωση;', labelAdult: 'Έχεις κάποια χρόνια πάθηση ή άλλη ιδιαιτερότητα που σχετίζεται με τη συμμετοχή σου στην κατασκήνωση;', kind: 'yesno', required: true },
+    { key: 'conditionsDetails', label: 'Αναγράψτε αναλυτικά', kind: 'textarea', required: true, showIf: { key: 'conditions', equals: true } },
+    { key: 'medications', label: 'Ακολουθεί το παιδί κάποια φαρμακευτική αγωγή τώρα και μέχρι την κατασκήνωση;', labelAdult: 'Ακολουθείς κάποια φαρμακευτική αγωγή τώρα και μέχρι την κατασκήνωση;', kind: 'yesno', required: true },
+    { key: 'medicationsDetails', label: 'Αναγράψτε αναλυτικά (φάρμακα, δοσολογία)', kind: 'textarea', required: true, showIf: { key: 'medications', equals: true }, hint: 'Βάλτε στα φάρμακα ετικέτα με το όνομα και ξεκάθαρες οδηγίες για τις δόσεις.' },
+    { key: 'selfMedication', label: 'Αυτοεξυπηρετείται το παιδί όσον αφορά τη φαρμακευτική αγωγή;', labelAdult: 'Αυτοεξυπηρετείσαι όσον αφορά τη φαρμακευτική αγωγή;', kind: 'yesno', required: true, showIf: { key: 'medications', equals: true } },
+    { key: 'diet', label: 'Ακολουθεί κάποια συγκεκριμένη διατροφή;', labelAdult: 'Ακολουθείς κάποια συγκεκριμένη διατροφή;', kind: 'yesno', required: true },
+    { key: 'dietDetails', label: 'Αναγράψτε αναλυτικά', kind: 'textarea', required: true, showIf: { key: 'diet', equals: true } },
+    { key: 'extraInfo', label: 'Υπάρχει κάποια επιπλέον πληροφορία που θα έπρεπε να γνωρίζει ο Αρχηγός για την υγεία και ευεξία του παιδιού στην κατασκήνωση;', labelAdult: 'Υπάρχει κάποια επιπλέον πληροφορία που θα έπρεπε να γνωρίζει ο Αρχηγός για την υγεία και ευεξία σου στην κατασκήνωση;', kind: 'yesno', required: true },
+    { key: 'extraInfoDetails', label: 'Αναγράψτε αναλυτικά', kind: 'textarea', required: true, showIf: { key: 'extraInfo', equals: true } },
+    { key: 'epilepsy', label: 'Επιληπτικές κρίσεις', kind: 'yesno', required: true, section: 'Ισχύει κάτι από τα παρακάτω;' },
+    { key: 'panic', label: 'Κρίσεις πανικού', kind: 'yesno', required: true },
+    { key: 'claustrophobia', label: 'Κλειστοφοβία', kind: 'yesno', required: true },
+    { key: 'nosebleeds', label: 'Συχνές ρινορραγίες', kind: 'yesno', required: true },
+    { key: 'sleepwalking', label: 'Υπνοβασία', kind: 'yesno', required: true },
+    { key: 'enuresis', label: 'Βραδινή ενούρηση', kind: 'yesno', required: true },
+    { key: 'lice', label: 'Ψείρες κεφαλής', kind: 'yesno', required: true },
+    { key: 'enzymes', label: 'Έλλειψη ενζύμων', kind: 'yesno', required: true, minorOnly: true },
+    { key: 'addendum', label: 'Θα ήθελα να προσθέσω ότι…', kind: 'textarea', section: 'Επιπλέον' },
+    { key: 'emergency1Name', label: 'Ονοματεπώνυμο', kind: 'text', required: true, section: 'Τηλέφωνα έκτακτης ανάγκης — 1ο άτομο' },
+    { key: 'emergency1Phone1', label: 'Τηλέφωνο 1', kind: 'phone', required: true },
+    { key: 'emergency1Phone2', label: 'Τηλέφωνο 2', kind: 'phone' },
+    { key: 'emergency1Relation', label: 'Ποια είναι η σχέση με το παιδί;', labelAdult: 'Ποια είναι η σχέση του μαζί σου;', kind: 'text', required: true },
+    { key: 'emergency2Name', label: 'Ονοματεπώνυμο', kind: 'text', section: 'Τηλέφωνα έκτακτης ανάγκης — 2ο άτομο' },
+    { key: 'emergency2Phone1', label: 'Τηλέφωνο 1', kind: 'phone' },
+    { key: 'emergency2Phone2', label: 'Τηλέφωνο 2', kind: 'phone' },
+    { key: 'emergency2Relation', label: 'Ποια είναι η σχέση με το παιδί;', labelAdult: 'Ποια είναι η σχέση του μαζί σου;', kind: 'text' },
   ],
 };
 
