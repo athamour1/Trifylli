@@ -132,3 +132,22 @@ export async function getBlob(url: string): Promise<Blob> {
   const response = await http.get(url, { responseType: 'blob' });
   return response.data as Blob;
 }
+
+/**
+ * Κατέβασμα αρχείου με το όνομα που δίνει ο server (`Content-Disposition`),
+ * αποθηκευμένο από τον browser. Για εξαγωγές (Excel, PDF).
+ */
+export async function downloadFile(url: string, fallbackName: string): Promise<void> {
+  const response = await http.get(url, { responseType: 'blob' });
+  const disposition = String(response.headers['content-disposition'] ?? '');
+  const match = /filename\*=UTF-8''([^;]+)/.exec(disposition);
+  const name = match?.[1] ? decodeURIComponent(match[1]) : fallbackName;
+  const objectUrl = URL.createObjectURL(response.data as Blob);
+  const a = document.createElement('a');
+  a.href = objectUrl;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 2000);
+}

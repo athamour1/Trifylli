@@ -1,6 +1,6 @@
 <template>
   <q-page padding>
-    <PageState :loading="loading" :error="error" :stale="stale" @retry="reload">
+    <PageState :loading="loading && !data" :error="error" :stale="stale" @retry="reload">
       <template v-if="data">
         <div class="row items-start justify-between q-gutter-sm">
           <div>
@@ -74,6 +74,7 @@
         <q-tabs v-model="tab" dense align="left" class="text-klados q-mb-md" narrow-indicator>
           <q-tab name="stats" label="Στοιχεία ανά κλάδο" />
           <q-tab name="participants" :label="`Συμμετέχοντες (${data.participants.length})`" />
+          <q-tab name="tamio" label="Ταμείο" />
           <q-tab v-if="ypiresies.length" name="ypiresies" label="Υπηρεσίες" />
           <q-tab name="yliko" :label="`Υλικό (${data.checkouts.length})`" />
           <q-tab v-if="data.syggentrwseis.length" name="programma" label="Πρόγραμμα" />
@@ -126,27 +127,29 @@
           </q-tab-panel>
 
           <q-tab-panel name="participants" class="q-pa-none">
-            <q-list bordered separator class="rounded-borders">
-              <q-item v-for="p in data.participants" :key="p.id">
-                <q-item-section>
-                  <q-item-label>{{ p.user.lastName }} {{ p.user.firstName }}</q-item-label>
-                  <q-item-label caption>
-                    {{ MEMBER_KIND_LABEL[p.kind] }}
-                    <span v-if="p.user.memberships[0]">
-                      · {{ KLADOS_LABEL[p.user.memberships[0].klados.type] }}
-                    </span>
-                  </q-item-label>
-                </q-item-section>
-                <q-item-section side>
-                  <q-icon
-                    :name="p.confirmed ? 'check_circle' : 'help_outline'"
-                    :color="p.confirmed ? 'positive' : 'grey-5'"
-                  >
-                    <q-tooltip>{{ p.confirmed ? 'Επιβεβαιωμένη' : 'Χωρίς επιβεβαίωση' }}</q-tooltip>
-                  </q-icon>
-                </q-item-section>
-              </q-item>
-            </q-list>
+            <DrasiSymmetexontes
+              :drasi-id="id"
+              :kladoi="data.kladoi"
+              :can-write="canWrite"
+              :locked="data.status === 'KLEISTI'"
+              :costs="{
+                costPerPerson: data.costPerPerson,
+                costReduced: data.costReduced,
+                costStelexos: data.costStelexos,
+                transportCost: data.transportCost,
+              }"
+              @changed="reload"
+            />
+          </q-tab-panel>
+
+          <q-tab-panel name="tamio" class="q-pa-none">
+            <DrasiTamio
+              :drasi-id="id"
+              :organiser="data.klados?.type ?? null"
+              :can-write="canWrite"
+              :locked="data.status === 'KLEISTI'"
+              @changed="reload"
+            />
           </q-tab-panel>
 
           <q-tab-panel name="ypiresies" class="q-pa-none">
@@ -228,7 +231,6 @@ import {
   DRASI_YPIRESIA_KINDS,
   KLADOS_LABEL,
   KLADOS_META,
-  MEMBER_KIND_LABEL,
   YLIKO_CATEGORY_LABEL,
   type CheckoutStatus,
   type DrasiGuestTopikoView,
@@ -242,6 +244,8 @@ import {
   type YlikoCategory,
 } from '@trifylli/shared';
 import PageState from '../components/PageState.vue';
+import DrasiSymmetexontes from '../components/drasi/DrasiSymmetexontes.vue';
+import DrasiTamio from '../components/drasi/DrasiTamio.vue';
 import { useAsyncData } from '../composables/useAsyncData';
 import { applyKladosTheme, kladosVars } from '../lib/klados-theme';
 import { get } from '../lib/api';
@@ -260,6 +264,10 @@ interface DrasiDetail {
   kladoi: KladosType[];
   guestTopika: DrasiGuestTopikoView[];
   roles: DrasiRoleView[];
+  costPerPerson: string | number | null;
+  costReduced: string | number | null;
+  costStelexos: string | number | null;
+  transportCost: string | number | null;
   participants: {
     id: string;
     kind: MemberKind;
