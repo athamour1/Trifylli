@@ -12,13 +12,14 @@
             </div>
           </div>
           <q-btn
-            v-if="canWrite && wizardRoute"
+            v-if="canWrite && wizardRoute && data.status === 'PROSXEDIO'"
             flat
             color="klados"
             icon="tune"
-            :label="data.status === 'PROSXEDIO' ? 'Συνέχεια στήσιμου' : 'Στήσιμο'"
+            label="Συνέχεια στήσιμου"
             :to="wizardRoute"
           />
+          <q-btn v-else-if="canWrite" flat color="klados" icon="settings" label="Ρυθμίσεις" @click="tab = 'rythmiseis'" />
         </div>
 
         <!-- Ποιοι έρχονται: δικοί μας κλάδοι στο χρώμα τους, φιλοξενούμενα Τοπικά ουδέτερα. -->
@@ -84,6 +85,7 @@
           <q-tab name="symvoulia" label="Συμβούλια" />
           <q-tab name="axiologisi" label="Αξιολόγηση" />
           <q-tab name="ektyposi" label="Εκτύπωση" />
+          <q-tab v-if="canWrite" name="rythmiseis" label="Ρυθμίσεις" icon="settings" />
           <q-tab v-if="ypiresies.length" name="ypiresies" label="Υπηρεσίες" />
           <q-tab v-if="data.incidents.length" name="incidents" label="Περιστατικά" />
         </q-tabs>
@@ -218,6 +220,10 @@
             <DrasiEktyposi :drasi-id="id" :title="data.title" />
           </q-tab-panel>
 
+          <q-tab-panel name="rythmiseis" class="q-pa-none">
+            <DrasiRythmiseis :data="data" @changed="reload" />
+          </q-tab-panel>
+
           <q-tab-panel name="incidents" class="q-pa-none">
             <q-list bordered separator class="rounded-borders">
               <q-item v-for="i in data.incidents" :key="i.id">
@@ -261,6 +267,7 @@ import DrasiEntypa from '../components/drasi/DrasiEntypa.vue';
 import DrasiFarmakeio from '../components/drasi/DrasiFarmakeio.vue';
 import DrasiOmades from '../components/drasi/DrasiOmades.vue';
 import DrasiProgramma from '../components/drasi/DrasiProgramma.vue';
+import DrasiRythmiseis from '../components/drasi/DrasiRythmiseis.vue';
 import DrasiSymvoulia from '../components/drasi/DrasiSymvoulia.vue';
 import DrasiYliko from '../components/drasi/DrasiYliko.vue';
 import DrasiSymmetexontes from '../components/drasi/DrasiSymmetexontes.vue';
@@ -280,6 +287,7 @@ interface DrasiDetail {
   dateEnd: string;
   location: string | null;
   klados: { type: KladosType } | null;
+  description: string | null;
   kladoi: KladosType[];
   guestTopika: DrasiGuestTopikoView[];
   roles: DrasiRoleView[];

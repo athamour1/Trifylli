@@ -107,91 +107,7 @@
           <q-separator class="q-my-md" />
 
           <div class="text-subtitle2 q-mb-xs">Άλλα Τοπικά</div>
-          <div class="text-caption text-grey-7 q-mb-sm">
-            Με τον κωδικό του Τοπικού στο e-SEO παίρνουμε το επίσημο όνομα. Αν το e-SEO δεν
-            απαντά, γράψε το όνομα με το χέρι.
-          </div>
-
-          <q-list v-if="guests.length" bordered separator class="rounded-borders q-mb-md">
-            <q-item v-for="g in guests" :key="g.topikoCode">
-              <q-item-section>
-                <q-item-label>
-                  {{ g.topikoName }}
-                  <span class="text-grey-6 text-caption">· e-SEO {{ g.topikoCode }}</span>
-                </q-item-label>
-                <q-item-label caption>
-                  <span v-if="g.kladoi.length">{{ g.kladoi.map((k) => KLADOS_LABEL[k]).join(', ') }}</span>
-                  <span v-else>χωρίς δήλωση κλάδων</span>
-                  <span v-if="g.contactName"> · {{ g.contactName }}</span>
-                  <span v-if="g.contactPhone"> · {{ g.contactPhone }}</span>
-                </q-item-label>
-              </q-item-section>
-              <q-item-section side>
-                <q-btn flat dense round icon="close" @click="removeGuest(g.topikoCode)">
-                  <q-tooltip>Αφαίρεση</q-tooltip>
-                </q-btn>
-              </q-item-section>
-            </q-item>
-          </q-list>
-
-          <q-card flat bordered class="q-pa-md">
-            <div class="row q-col-gutter-sm items-start">
-              <div class="col-6 col-sm-3">
-                <q-input
-                  v-model="guestDraft.code"
-                  label="Κωδικός e-SEO"
-                  outlined
-                  dense
-                  inputmode="numeric"
-                  maxlength="10"
-                  :loading="lookingUp"
-                  @keyup.enter="lookupGuest"
-                >
-                  <template #append>
-                    <q-btn flat dense round icon="search" :disable="!guestDraft.code" @click="lookupGuest">
-                      <q-tooltip>Αναζήτηση στο e-SEO</q-tooltip>
-                    </q-btn>
-                  </template>
-                </q-input>
-              </div>
-              <div class="col-12 col-sm-5">
-                <q-input
-                  v-model="guestDraft.name"
-                  label="Όνομα Τοπικού"
-                  outlined
-                  dense
-                  maxlength="120"
-                  :hint="guestDraft.parentName ? `Τομέας: ${guestDraft.parentName}` : lookupHint"
-                />
-              </div>
-              <div class="col-6 col-sm-2">
-                <q-input v-model="guestDraft.contactName" label="Επαφή" outlined dense maxlength="120" />
-              </div>
-              <div class="col-6 col-sm-2">
-                <q-input v-model="guestDraft.contactPhone" label="Τηλέφωνο" outlined dense maxlength="40" />
-              </div>
-              <div class="col-12">
-                <div class="text-caption text-grey-7">Ποιοι κλάδοι τους έρχονται</div>
-                <q-option-group
-                  v-model="guestDraft.kladoi"
-                  type="checkbox"
-                  color="klados"
-                  inline
-                  :options="allKladosOptions"
-                />
-              </div>
-              <div class="col-12">
-                <q-btn
-                  outline
-                  color="klados"
-                  icon="add"
-                  label="Προσθήκη Τοπικού"
-                  :disable="!guestDraft.code.trim() || !guestDraft.name.trim()"
-                  @click="addGuest"
-                />
-              </div>
-            </div>
-          </q-card>
+          <GuestTopikaEditor v-model="guests" />
 
           <q-stepper-navigation class="row q-gutter-sm">
             <q-btn
@@ -211,27 +127,14 @@
 
         <!-- ── 3. Αρχηγείο ── -->
         <q-step :name="3" title="Αρχηγείο" caption="ποιος έχει τι" icon="military_tech" :done="step > 3">
-          <div class="row items-center q-mb-sm">
-            <div class="text-caption text-grey-7 col">
-              Περισσότερα από ένα άτομα ανά ευθύνη επιτρέπονται.
-              <span v-if="templateSource"> Από «{{ templateSource.title }}».</span>
-            </div>
-            <q-btn
-              flat
-              dense
-              color="klados"
-              icon="history"
-              label="Ίδια όπως την προηγούμενη"
-              :loading="templating"
-              @click="applyTemplate('arxigeio')"
-            />
-          </div>
-
-          <div class="row q-col-gutter-md">
-            <div v-for="kind in DRASI_ARXIGEIO_KINDS" :key="kind" class="col-12 col-md-6">
-              <StelexosPicker v-model="roles[kind]" :label="DRASI_ROLE_LABEL[kind]" :options="stelexiOptions" />
-            </div>
-          </div>
+          <DrasiRolesEditor
+            section="arxigeio"
+            v-model="roles"
+            v-model:enabled="enabledServices"
+            :stelexi-options="stelexiOptions"
+            :organiser="form.organiser"
+            :exclude-drasi-id="drasiId ?? undefined"
+          />
 
           <q-stepper-navigation class="row q-gutter-sm">
             <q-btn
@@ -252,40 +155,14 @@
 
         <!-- ── 4. Υπηρεσίες ── -->
         <q-step :name="4" title="Υπηρεσίες" caption="προαιρετικό" icon="cleaning_services">
-          <div class="row items-center q-mb-sm">
-            <div class="text-caption text-grey-7 col">
-              Διάλεξε μόνο όσες ισχύουν σε αυτή τη δράση — και ποιο στέλεχος την έχει.
-            </div>
-            <q-btn
-              flat
-              dense
-              color="klados"
-              icon="history"
-              label="Ίδια όπως την προηγούμενη"
-              :loading="templating"
-              @click="applyTemplate('ypiresies')"
-            />
-          </div>
-
-          <q-list bordered separator class="rounded-borders">
-            <q-item v-for="kind in DRASI_YPIRESIA_KINDS" :key="kind" class="q-py-sm">
-              <q-item-section side top>
-                <q-toggle v-model="enabledServices" :val="kind" color="klados" />
-              </q-item-section>
-              <q-item-section>
-                <q-item-label :class="enabledServices.includes(kind) ? '' : 'text-grey-6'">
-                  {{ DRASI_ROLE_LABEL[kind] }}
-                </q-item-label>
-                <StelexosPicker
-                  v-if="enabledServices.includes(kind)"
-                  v-model="roles[kind]"
-                  label="Υπεύθυνο στέλεχος"
-                  :options="stelexiOptions"
-                  class="q-mt-xs"
-                />
-              </q-item-section>
-            </q-item>
-          </q-list>
+          <DrasiRolesEditor
+            section="ypiresies"
+            v-model="roles"
+            v-model:enabled="enabledServices"
+            :stelexi-options="stelexiOptions"
+            :organiser="form.organiser"
+            :exclude-drasi-id="drasiId ?? undefined"
+          />
 
           <q-stepper-navigation class="row q-gutter-sm">
             <q-btn
@@ -313,16 +190,13 @@ import { useRoute, useRouter } from 'vue-router';
 import { useQuasar } from 'quasar';
 import {
   DRASI_ARXIGEIO_KINDS,
-  DRASI_ROLE_LABEL,
   DRASI_TYPE_LABEL,
   DRASI_YPIRESIA_KINDS,
   DrasiRoleKind,
   KLADOI_IN_ORDER,
   KLADOS_LABEL,
-  type DrasiRolesTemplate,
   type DrasiStatus,
   type DrasiType,
-  type EseoUnitInfo,
   type KladosType,
   type MemberSummary,
   type Paginated,
@@ -330,19 +204,13 @@ import {
 import DateField from '../components/DateField.vue';
 import PageState from '../components/PageState.vue';
 import TimeField from '../components/TimeField.vue';
-import StelexosPicker from '../components/StelexosPicker.vue';
+import DrasiRolesEditor from '../components/drasi/DrasiRolesEditor.vue';
+import GuestTopikaEditor from '../components/drasi/GuestTopikaEditor.vue';
+import { emptyRoles, type GuestTopikoForm, type RolesMap } from '../components/drasi/types';
 import { useKladosScope } from '../composables/useKladosScope';
 import { ApiError, get, patch, post, put } from '../lib/api';
 import { toISODate } from '../lib/format';
 import { useAuthStore } from '../stores/auth';
-
-interface GuestTopiko {
-  topikoCode: string;
-  topikoName: string;
-  kladoi: KladosType[];
-  contactName: string;
-  contactPhone: string;
-}
 
 interface DrasiForWizard {
   id: string;
@@ -421,79 +289,16 @@ const dateError = computed(() => {
 
 // ── Βήμα 2 ──
 const kladoi = ref<KladosType[]>(routeKlados.value ? [routeKlados.value] : []);
-const guests = ref<GuestTopiko[]>([]);
+const guests = ref<GuestTopikoForm[]>([]);
 
 /** Ο διοργανωτής συμμετέχει εξ ορισμού — δεν ξετσεκάρεται. */
 const kladosOptions = computed(() =>
   KLADOI_IN_ORDER.map((k) => ({ label: KLADOS_LABEL[k], value: k, disable: k === form.organiser })),
 );
-const allKladosOptions = KLADOI_IN_ORDER.map((k) => ({ label: KLADOS_LABEL[k], value: k }));
-
-const guestDraft = reactive({
-  code: '',
-  name: '',
-  parentName: '',
-  kladoi: [] as KladosType[],
-  contactName: '',
-  contactPhone: '',
-});
-const lookingUp = ref(false);
-const lookupHint = ref<string | undefined>(undefined);
-
-async function lookupGuest(): Promise<void> {
-  const code = guestDraft.code.trim();
-  if (!/^\d{1,10}$/.test(code)) {
-    lookupHint.value = 'Ο κωδικός e-SEO είναι αριθμός.';
-    return;
-  }
-  lookingUp.value = true;
-  lookupHint.value = undefined;
-  guestDraft.parentName = '';
-  try {
-    const unit = await get<EseoUnitInfo>(`/draseis/eseo-topiko/${code}`);
-    guestDraft.name = unit.name;
-    guestDraft.parentName = unit.parentName ?? '';
-    if (unit.type && unit.type !== 'LOCAL') lookupHint.value = 'Προσοχή: ο κωδικός δεν είναι Τοπικό Τμήμα.';
-  } catch (err) {
-    lookupHint.value =
-      err instanceof ApiError && err.status === 404
-        ? 'Δεν βρέθηκε στο e-SEO — γράψε το όνομα με το χέρι.'
-        : 'Το e-SEO δεν απαντά — γράψε το όνομα με το χέρι.';
-  } finally {
-    lookingUp.value = false;
-  }
-}
-
-function addGuest(): void {
-  const code = guestDraft.code.trim();
-  if (!/^\d{1,10}$/.test(code)) {
-    lookupHint.value = 'Ο κωδικός e-SEO είναι αριθμός.';
-    return;
-  }
-  const entry: GuestTopiko = {
-    topikoCode: code,
-    topikoName: guestDraft.name.trim(),
-    kladoi: [...guestDraft.kladoi],
-    contactName: guestDraft.contactName.trim(),
-    contactPhone: guestDraft.contactPhone.trim(),
-  };
-  guests.value = [...guests.value.filter((g) => g.topikoCode !== code), entry];
-  Object.assign(guestDraft, { code: '', name: '', parentName: '', kladoi: [], contactName: '', contactPhone: '' });
-  lookupHint.value = undefined;
-}
-
-function removeGuest(code: string): void {
-  guests.value = guests.value.filter((g) => g.topikoCode !== code);
-}
-
 // ── Βήματα 3-4 ──
-const roles = reactive(
-  Object.fromEntries(Object.values(DrasiRoleKind).map((k) => [k, [] as string[]])) as Record<DrasiRoleKind, string[]>,
-);
+const roles = ref<RolesMap>(emptyRoles(Object.values(DrasiRoleKind)));
 const enabledServices = ref<DrasiRoleKind[]>([]);
 const stelexi = ref<MemberSummary[]>([]);
-const templating = ref(false);
-const templateSource = ref<DrasiRolesTemplate['source']>(null);
 
 const stelexiOptions = computed(() =>
   stelexi.value.map((s) => ({
@@ -511,34 +316,6 @@ async function loadStelexi(): Promise<void> {
     stelexi.value = page.items;
   } catch {
     // Χωρίς λίστα στελεχών τα βήματα 3-4 μένουν άδεια — ο χρήστης τα συμπληρώνει αργότερα.
-  }
-}
-
-async function applyTemplate(group: 'arxigeio' | 'ypiresies'): Promise<void> {
-  templating.value = true;
-  try {
-    const template = await get<DrasiRolesTemplate>('/draseis/roles-template', {
-      params: {
-        ...(form.organiser ? { klados: form.organiser } : {}),
-        ...(drasiId.value ? { exclude: drasiId.value } : {}),
-      },
-    });
-    if (!template.source) {
-      $q.notify({ type: 'info', message: 'Δεν υπάρχει προηγούμενη δράση με αρχηγείο για αυτόν τον φορέα.' });
-      return;
-    }
-    const kinds = group === 'arxigeio' ? DRASI_ARXIGEIO_KINDS : DRASI_YPIRESIA_KINDS;
-    for (const kind of kinds) {
-      roles[kind] = template.roles.filter((r) => r.kind === kind).map((r) => r.userId);
-    }
-    if (group === 'ypiresies') {
-      enabledServices.value = DRASI_YPIRESIA_KINDS.filter((kind) => roles[kind].length > 0);
-    }
-    templateSource.value = template.source;
-  } catch (err) {
-    notifyError(err, 'Αποτυχία ανάκτησης προηγούμενης δράσης.');
-  } finally {
-    templating.value = false;
   }
 }
 
@@ -602,10 +379,10 @@ async function saveStep2(): Promise<boolean> {
 async function saveRoles(): Promise<boolean> {
   if (!drasiId.value) return false;
   const payload: { kind: DrasiRoleKind; userId: string }[] = [];
-  for (const kind of DRASI_ARXIGEIO_KINDS) for (const userId of roles[kind]) payload.push({ kind, userId });
+  for (const kind of DRASI_ARXIGEIO_KINDS) for (const userId of roles.value[kind]) payload.push({ kind, userId });
   for (const kind of DRASI_YPIRESIA_KINDS) {
     if (!enabledServices.value.includes(kind)) continue;
-    for (const userId of roles[kind]) payload.push({ kind, userId });
+    for (const userId of roles.value[kind]) payload.push({ kind, userId });
   }
   await put(`/draseis/${drasiId.value}/roles`, { roles: payload });
   return true;
@@ -681,10 +458,12 @@ async function resume(): Promise<void> {
       contactName: g.contactName ?? '',
       contactPhone: g.contactPhone ?? '',
     }));
+    const next = emptyRoles(Object.values(DrasiRoleKind));
     for (const kind of Object.values(DrasiRoleKind)) {
-      roles[kind] = d.roles.filter((r) => r.kind === kind).map((r) => r.user.id);
+      next[kind] = d.roles.filter((r) => r.kind === kind).map((r) => r.user.id);
     }
-    enabledServices.value = DRASI_YPIRESIA_KINDS.filter((kind) => roles[kind].length > 0);
+    roles.value = next;
+    enabledServices.value = DRASI_YPIRESIA_KINDS.filter((kind) => next[kind].length > 0);
 
     // Ξεκινάμε από το πρώτο βήμα που δεν έχει συμπληρωθεί.
     const hasRoles = d.roles.length > 0;
