@@ -62,7 +62,9 @@
                 </div>
               </q-card-section>
               <q-card-actions v-if="canWrite" class="q-pt-none column items-stretch q-gutter-xs">
+                <!-- Μόνο όσο υπάρχουν αταξινόμητοι — αλλιώς δεν έχει τι να προσθέσει. -->
                 <q-select
+                  v-if="unassigned.length"
                   :model-value="null"
                   :options="unassignedOptions"
                   label="Προσθήκη μέλους"
@@ -72,7 +74,6 @@
                   emit-value
                   map-options
                   color="klados"
-                  :disable="!unassigned.length"
                   @update:model-value="(pid: string) => addMember(g, pid)"
                 />
                 <q-select
