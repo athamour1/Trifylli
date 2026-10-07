@@ -7,6 +7,7 @@ import {
   DrasiFormType,
   DrasiGroupKind,
   DrasiLedgerKind,
+  DrasiReviewKind,
   DrasiRoleKind,
   DrasiStatus,
   DrasiType,
@@ -250,6 +251,11 @@ export const SIGNER_ROLE_LABEL: Record<SignerRole, string> = {
   GONEAS: 'Γονέας',
   KIDEMONAS: 'Κηδεμόνας',
   IDIOS: 'Ο ίδιος / η ίδια',
+};
+
+export const DRASI_REVIEW_KIND_LABEL: Record<DrasiReviewKind, string> = {
+  TEXT: 'Ελεύθερο κείμενο',
+  SCALE_1_5: 'Κλίμακα 1–5',
 };
 
 export const DRASI_LEDGER_KIND_LABEL: Record<DrasiLedgerKind, string> = {

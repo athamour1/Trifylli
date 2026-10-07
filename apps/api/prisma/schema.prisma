@@ -99,6 +99,11 @@ enum SignerRole {
   IDIOS
 }
 
+enum DrasiReviewKind {
+  TEXT
+  SCALE_1_5
+}
+
 /// Ομάδες δράσης: υποομάδα κλάδου (πεντάδα/φωλιά/ενωμοτία) ή σκηνή — ανεξάρτητοι άξονες.
 enum DrasiGroupKind {
   PENTADA
@@ -323,6 +328,7 @@ model User {
   timelineExecutions TimelineBlock[]     @relation("TimelineExecutor")
   drasiShopping   DrasiShoppingItem[]    @relation("ShoppingAssignee")
   drasiExternalYliko DrasiExternalYliko[] @relation("ExternalYlikoResponsible")
+  drasiReviews    DrasiReviewAnswer[]    @relation("DrasiReviewAuthor")
   auditLogs       AuditLog[]
 
   @@index([topikoId, status])
@@ -504,10 +510,41 @@ model Drasi {
   symvoulia    Symvoulio[]
   shopping     DrasiShoppingItem[]
   externalYliko DrasiExternalYliko[]
+  reviewQuestions DrasiReviewQuestion[]
 
   @@index([topikoId, dateStart])
   @@index([kladosId, dateStart])
   @@map("drasi")
+}
+
+/// Αξιολόγηση κατ' επιλογήν: τα θέματα τα φτιάχνουν τα στελέχη. Βλ. docs/draseis.md F10.
+model DrasiReviewQuestion {
+  id      String          @id @default(uuid()) @db.Uuid
+  drasiId String          @db.Uuid
+  order   Int             @default(0)
+  text    String
+  kind    DrasiReviewKind @default(TEXT)
+
+  drasi   Drasi               @relation(fields: [drasiId], references: [id], onDelete: Cascade)
+  answers DrasiReviewAnswer[]
+
+  @@index([drasiId, order])
+  @@map("drasi_review_question")
+}
+
+/// Επώνυμη απάντηση στελέχους — μία ανά ερώτηση.
+model DrasiReviewAnswer {
+  questionId String   @db.Uuid
+  userId     String   @db.Uuid
+  value      Int?
+  text       String?
+  updatedAt  DateTime @updatedAt
+
+  question DrasiReviewQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  user     User                @relation("DrasiReviewAuthor", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([questionId, userId])
+  @@map("drasi_review_answer")
 }
 
 /// Λίστα αγορών της δράσης: δεν υπάρχει στο απόθεμα, θα αγοραστεί. Όταν αγοραστεί

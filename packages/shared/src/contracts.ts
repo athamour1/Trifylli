@@ -8,6 +8,7 @@ import type {
   DrasiFormType,
   DrasiGroupKind,
   DrasiLedgerKind,
+  DrasiReviewKind,
   DrasiRoleKind,
   DrasiType,
   KladosType,
@@ -585,4 +586,78 @@ export interface DrasiLoadingList {
   shopping: DrasiShoppingItemView[];
   checkouts: { id: string; name: string; qty: number; unit: string | null; status: CheckoutStatus; kladosType: KladosType | null }[];
   external: DrasiExternalYlikoView[];
+}
+
+// ───────────────────────── Δράσεις: αξιολόγηση (F10) & ντοσιέ (F11) ─────────────────────────
+
+export interface DrasiReviewQuestionView {
+  id: string;
+  order: number;
+  text: string;
+  kind: DrasiReviewKind;
+}
+
+export interface DrasiReviewView {
+  questions: DrasiReviewQuestionView[];
+  /** Οι απαντήσεις του συνδεδεμένου χρήστη. */
+  mine: { questionId: string; value: number | null; text: string | null }[];
+  /** Σύνοψη — μόνο για όσους διαχειρίζονται τη δράση. */
+  summary: {
+    respondents: number;
+    questions: {
+      questionId: string;
+      count: number;
+      average: number | null;
+      texts: { user: string; text: string }[];
+    }[];
+  } | null;
+}
+
+/** Ό,τι χρειάζεται το ντοσιέ, σε ένα request. */
+export interface DrasiDossier {
+  drasi: {
+    id: string;
+    title: string;
+    type: DrasiType;
+    status: string;
+    dateStart: string;
+    dateEnd: string;
+    location: string | null;
+    description: string | null;
+    topiko: string;
+    organiser: KladosType | null;
+    kladoi: KladosType[];
+    guestTopika: DrasiGuestTopikoView[];
+    roles: DrasiRoleView[];
+  };
+  days: {
+    id: string;
+    title: string | null;
+    date: string;
+    startTime: string | null;
+    location: string | null;
+    goal: string | null;
+    sections: {
+      section: TimelineSection;
+      label: string;
+      notes: string;
+      blocks: {
+        title: string;
+        description: string | null;
+        durationMin: number;
+        responsible: string | null;
+        executor: string | null;
+        yliko: string | null;
+      }[];
+    }[];
+  }[];
+  participants: (DrasiParticipantView & { groups: { kind: DrasiGroupKind; name: string }[] })[];
+  groups: DrasiGroupView[];
+  /** Μόνο όταν ζητηθεί ρητά (`health=1`) — η ανάγνωση καταγράφεται. */
+  health: HealthSummaryEntry[] | null;
+  loading: DrasiLoadingList;
+  treasury: { summary: DrasiTreasurySummary; entries: TreasuryEntryView[] } | null;
+  symvoulia: { id: string; title: string | null; date: string; agenda: string | null; minutes: string | null; finalized: boolean }[];
+  review: DrasiReviewView['summary'];
+  formsPending: { pending: number; total: number };
 }

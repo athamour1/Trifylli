@@ -642,3 +642,8 @@ export const DRASI_FORM_FIELDS: Record<DrasiFormType, DrasiFormField[]> = {
 export const HEALTH_DATA_RETENTION_DAYS = 30;
 /** Πόσες μέρες ζει ένας σύνδεσμος εντύπου αν δεν συμπληρωθεί. */
 export const FORM_LINK_TTL_DAYS = 30;
+
+// ───────────────────────── Δράσεις: αξιολόγηση (F10) ─────────────────────────
+
+export const DrasiReviewKind = { TEXT: 'TEXT', SCALE_1_5: 'SCALE_1_5' } as const;
+export type DrasiReviewKind = (typeof DrasiReviewKind)[keyof typeof DrasiReviewKind];
