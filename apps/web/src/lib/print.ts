@@ -29,6 +29,9 @@ function collectPrintCss(): string {
       if (rule instanceof CSSMediaRule && rule.conditionText.includes('print')) {
         for (const inner of Array.from(rule.cssRules)) css += `${inner.cssText}\n`;
       }
+      // Οι @font-face της εφαρμογής (self-hosted Inter): το iframe είναι άλλο
+      // έγγραφο και δεν τις κληρονομεί· τα αρχεία είναι same-origin, άρα περνούν την CSP.
+      if (rule instanceof CSSFontFaceRule) css += `${rule.cssText}\n`;
     }
   }
   return css;
@@ -75,16 +78,15 @@ export async function printElement(element: HTMLElement, title?: string): Promis
     throw new Error('Αδυναμία δημιουργίας iframe εκτύπωσης.');
   }
 
-  // Το iframe είναι ξεχωριστό έγγραφο: φορτώνουμε το ίδιο font (Inter) με την
-  // εφαρμογή, αλλιώς η εκτύπωση πέφτει στο default serif του browser.
+  // Το iframe είναι ξεχωριστό έγγραφο: οι @font-face της Inter αντιγράφονται
+  // από τα stylesheets της εφαρμογής (βλ. collectPrintCss), αλλιώς η εκτύπωση
+  // πέφτει στο default serif του browser. Google Fonts ΔΕΝ χρησιμοποιούνται —
+  // τα κόβει η CSP και δεν δουλεύουν offline.
   doc.open();
   doc.write(
     `<!doctype html><html><head><meta charset="utf-8">` +
       // Ο τίτλος του εγγράφου γίνεται το προτεινόμενο όνομα αρχείου στο «Αποθήκευση ως PDF».
       (title ? `<title>${escapeHtml(title)}</title>` : '') +
-      `<link rel="preconnect" href="https://fonts.googleapis.com">` +
-      `<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>` +
-      `<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">` +
       `<style>` +
       `html,body,.print-sheet{font-family:'Inter','Roboto',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}` +
       `${css}</style></head>` +

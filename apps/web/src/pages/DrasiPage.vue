@@ -81,6 +81,8 @@
           <q-tab name="yliko" label="Υλικό" />
           <q-tab name="tamio" label="Ταμείο" />
           <q-tab name="symvoulia" label="Συμβούλια" />
+          <q-tab name="axiologisi" label="Αξιολόγηση" />
+          <q-tab name="ektyposi" label="Εκτύπωση" />
           <q-tab v-if="ypiresies.length" name="ypiresies" label="Υπηρεσίες" />
           <q-tab v-if="data.incidents.length" name="incidents" label="Περιστατικά" />
         </q-tabs>
@@ -207,6 +209,14 @@
             <DrasiSymvoulia :drasi-id="id" :can-write="canWrite" />
           </q-tab-panel>
 
+          <q-tab-panel name="axiologisi" class="q-pa-none">
+            <DrasiAxiologisi :drasi-id="id" :can-write="canWrite" />
+          </q-tab-panel>
+
+          <q-tab-panel name="ektyposi" class="q-pa-none">
+            <DrasiEktyposi :drasi-id="id" :title="data.title" />
+          </q-tab-panel>
+
           <q-tab-panel name="incidents" class="q-pa-none">
             <q-list bordered separator class="rounded-borders">
               <q-item v-for="i in data.incidents" :key="i.id">
@@ -244,6 +254,8 @@ import {
   type MemberKind,
 } from '@trifylli/shared';
 import PageState from '../components/PageState.vue';
+import DrasiAxiologisi from '../components/drasi/DrasiAxiologisi.vue';
+import DrasiEktyposi from '../components/drasi/DrasiEktyposi.vue';
 import DrasiEntypa from '../components/drasi/DrasiEntypa.vue';
 import DrasiFarmakeio from '../components/drasi/DrasiFarmakeio.vue';
 import DrasiOmades from '../components/drasi/DrasiOmades.vue';
