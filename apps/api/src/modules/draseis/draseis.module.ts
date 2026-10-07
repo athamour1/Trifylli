@@ -4,6 +4,7 @@ import { IntegrationsModule } from '../integrations/integrations.module';
 import { YlikoModule } from '../yliko/yliko.module';
 import { DrasiAccessService } from './drasi-access.service';
 import { DraseisController } from './draseis.controller';
+import { DraseisDossierService } from './draseis-dossier.service';
 import { DraseisExportService } from './draseis-export.service';
 import { DraseisFinanceController } from './draseis-finance.controller';
 import { DraseisFinanceService } from './draseis-finance.service';
@@ -14,6 +15,8 @@ import { DraseisGroupsService } from './draseis-groups.service';
 import { DraseisPharmacyService } from './draseis-pharmacy.service';
 import { DraseisPlanController } from './draseis-plan.controller';
 import { DraseisPlanService } from './draseis-plan.service';
+import { DraseisReviewController } from './draseis-review.controller';
+import { DraseisReviewService } from './draseis-review.service';
 import { DraseisService } from './draseis.service';
 
 @Module({
@@ -27,6 +30,7 @@ import { DraseisService } from './draseis.service';
     DraseisFormsController,
     PublicFormsController,
     DraseisPlanController,
+    DraseisReviewController,
   ],
   providers: [
     DrasiAccessService,
@@ -37,6 +41,8 @@ import { DraseisService } from './draseis.service';
     DraseisFormsService,
     DraseisPharmacyService,
     DraseisPlanService,
+    DraseisReviewService,
+    DraseisDossierService,
   ],
   exports: [DraseisService],
 })
