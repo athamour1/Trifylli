@@ -496,6 +496,9 @@ model Drasi {
   costReduced   Decimal? @db.Decimal(10, 2)
   costStelexos  Decimal? @db.Decimal(10, 2)
   transportCost Decimal? @db.Decimal(10, 2)
+  /// Ώρα έναρξης ανά ημέρα του ωρολογίου, όπου διαφέρει από την ώρα του
+  /// `dateStart`: `{ "2026-11-28": "07:30" }`. Η πρώτη ημέρα ξεκινά πάντα από το `dateStart`.
+  dayStartTimes Json?
   /// Προεπιλογή `ENERGI` ώστε seed και απλές κλήσεις API να φτιάχνουν «κανονική»
   /// δράση· το wizard ζητά ρητά `PROSXEDIO` μέχρι να ολοκληρωθεί.
   status    DrasiStatus @default(ENERGI)
@@ -536,8 +539,11 @@ model Drasi {
 model DrasiScheduleItem {
   id            String             @id @default(uuid()) @db.Uuid
   drasiId       String             @db.Uuid
-  startsAt      DateTime
-  endsAt        DateTime?
+  /// Η ημέρα (YYYY-MM-DD στη ζώνη του Τοπικού). Η ώρα ΔΕΝ αποθηκεύεται:
+  /// υπολογίζεται από την έναρξη της ημέρας + τις διάρκειες των προηγούμενων.
+  date          DateTime           @db.Date
+  order         Int                @default(0)
+  durationMin   Int                @default(30)
   title         String
   kind          DrasiScheduleKind  @default(DRASTIRIOTITA)
   location      String?
@@ -557,7 +563,7 @@ model DrasiScheduleItem {
   executor    User?               @relation("ScheduleExecutor", fields: [executorId], references: [id], onDelete: SetNull)
   yliko       DrasiScheduleYliko[]
 
-  @@index([drasiId, startsAt])
+  @@index([drasiId, date, order])
   @@map("drasi_schedule_item")
 }
 

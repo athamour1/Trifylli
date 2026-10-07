@@ -537,8 +537,13 @@ export interface DrasiPharmacyView {
 /** Στοιχείο του ωρολογίου της δράσης, με το προγραμματικό του (αν έχει γραφτεί). */
 export interface DrasiScheduleItemView {
   id: string;
+  /** YYYY-MM-DD στη ζώνη του Τοπικού. */
+  date: string;
+  order: number;
+  durationMin: number;
+  /** Υπολογισμένα: έναρξη ημέρας + διάρκειες των προηγούμενων. */
   startsAt: string;
-  endsAt: string | null;
+  endsAt: string;
   title: string;
   kind: DrasiScheduleKind;
   location: string | null;
@@ -633,8 +638,8 @@ export interface DrasiDossier {
     guestTopika: DrasiGuestTopikoView[];
     roles: DrasiRoleView[];
   };
-  /** Το ωρολόγιο ανά ημέρα. */
-  days: { date: string; items: DrasiScheduleItemView[] }[];
+  /** Το ωρολόγιο ανά ημέρα, με την ώρα έναρξης της ημέρας. */
+  days: { date: string; startTime: string; items: DrasiScheduleItemView[] }[];
   participants: (DrasiParticipantView & { groups: { kind: DrasiGroupKind; name: string }[] })[];
   groups: DrasiGroupView[];
   /** Μόνο όταν ζητηθεί ρητά (`health=1`) — η ανάγνωση καταγράφεται. */
@@ -644,4 +649,9 @@ export interface DrasiDossier {
   symvoulia: { id: string; title: string | null; date: string; agenda: string | null; minutes: string | null; finalized: boolean }[];
   review: DrasiReviewView['summary'];
   formsPending: { pending: number; total: number };
+}
+
+/** Το ωρολόγιο όπως το βλέπει η καρτέλα: ημέρες με ώρα έναρξης και στοιχεία. */
+export interface DrasiScheduleView {
+  days: { date: string; startTime: string; overridden: boolean; items: DrasiScheduleItemView[] }[];
 }
