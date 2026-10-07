@@ -26,7 +26,7 @@
         </q-btn>
       </div>
 
-      <q-tab-panels v-model="tab" animated>
+      <q-tab-panels v-model="tab" animated transition-prev="slide-down" transition-next="slide-up">
         <!-- ══════════ Ερωτήσεις ══════════ -->
         <q-tab-panel name="questions" class="q-pa-none">
           <q-card flat bordered class="form-head q-mb-md">

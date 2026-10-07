@@ -64,7 +64,7 @@
             <q-tab v-for="s in sections" :key="s.name" :name="s.name" :label="s.badge ? `${s.label} (${s.badge})` : s.label" />
           </q-tabs>
 
-          <q-tab-panels :model-value="section" animated>
+          <q-tab-panels :model-value="section" animated transition-prev="slide-down" transition-next="slide-up">
             <!-- ── Επισκόπηση: το γρήγορο βλέμμα ── -->
             <q-tab-panel name="episkopisi" class="q-pa-none">
               <q-banner v-if="data.status === 'PROSXEDIO'" rounded class="bg-grey-2 q-mb-md">
