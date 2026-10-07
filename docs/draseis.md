@@ -508,28 +508,53 @@ model DrasiExternalYliko {
 θα τα φτιάχνουν τα στελέχη».
 
 ```prisma
-enum DrasiReviewKind { TEXT, SCALE_1_5 }
+enum DrasiReviewKind { TEXT, PARAGRAPH, CHOICE, CHECKBOX, SCALE_1_5, SCALE_1_10 }
 
 model DrasiReviewQuestion {
-  id      String @id @default(uuid()) @db.Uuid
-  drasiId String @db.Uuid
-  order   Int
-  text    String
-  kind    DrasiReviewKind @default(TEXT)
+  id          String @id @default(uuid()) @db.Uuid
+  drasiId     String @db.Uuid
+  order       Int
+  text        String
+  description String?
+  kind        DrasiReviewKind @default(TEXT)
+  required    Boolean @default(false)
+  options     Json?           // { choices?: string[]; low?: string; high?: string }
 }
 
 model DrasiReviewAnswer {
   questionId String @db.Uuid
   userId     String @db.Uuid
-  value      Int?            // για SCALE
-  text       String?
+  value      Int?            // κλίμακες
+  text       String?         // κείμενο ή η μία επιλογή
+  choices    String[]        // πλαίσια ελέγχου
   @@id([questionId, userId])
 }
+
+// Drasi.reviewSettings Json? → shared `DrasiReviewSettings`:
+// title, description, acceptingResponses, anonymous, audience (STELEXI|OLOI),
+// allowEdit, showSummary, confirmationMessage
 ```
 
-**UI:** καρτέλα «Αξιολόγηση» — εμφανίζεται μόνο αν ο υπεύθυνος προσθέσει
-ερωτήσεις. Τα στελέχη απαντούν, η σύνοψη δείχνει μέσους όρους και τα κείμενα
-μαζί. (Ερώτημα: ανώνυμα;)
+**UI (όπως τα Google Forms — ζητήθηκε 2026-10-07):** `DrasiAxiologisi.vue`.
+Για όποιον διαχειρίζεται τη δράση τρεις καρτέλες και προεπισκόπηση (μάτι):
+
+* **Ερωτήσεις** — κεφαλίδα φόρμας (τίτλος, περιγραφή), κάρτες ερωτήσεων με
+  είδος (σύντομη απάντηση, παράγραφος, πολλαπλή επιλογή, πλαίσια ελέγχου,
+  κλίμακα 1–5/1–10 με ετικέτες άκρων), επιλογές, περιγραφή, υποχρεωτική,
+  αντίγραφο/διαγραφή, σειρά με σύρσιμο. **Όλα autosave** (`SaveStatus`).
+* **Απαντήσεις** — πλήθος, διακόπτης «Δέχεται απαντήσεις», **Λήψη Excel**
+  (`GET review/export.xlsx`: φύλλο «Απαντήσεις» μία γραμμή ανά απαντώντα +
+  φύλλο «Σύνοψη») αντί για σύνδεση με φύλλο Google· Σύνοψη (μπάρες κατανομής,
+  μέσος όρος, κείμενα) και Ατομικά (σελιδοποίηση ανά απαντώντα, διαγραφή).
+* **Ρυθμίσεις** — αποδοχή απαντήσεων, ποιοι απαντούν (στελέχη / όλοι όσοι
+  βλέπουν τη δράση), ανώνυμη, αλλαγή απάντησης μετά την υποβολή, εμφάνιση
+  σύνοψης στους απαντώντες, μήνυμα επιβεβαίωσης.
+
+Όλοι οι άλλοι βλέπουν τη φόρμα προς συμπλήρωση: υποχρεωτικά με έλεγχο, μία
+υποβολή ανά άτομο (αντικαθίσταται αν επιτρέπεται αλλαγή), μήνυμα επιβεβαίωσης,
+και η σύνοψη αν το επιτρέπουν οι ρυθμίσεις. API: `GET review`,
+`PUT review/questions`, `PATCH review/settings`, `PUT review/answers`,
+`DELETE review/responses/:key`, `GET review/export.xlsx`.
 
 ---
 
@@ -892,7 +917,7 @@ drag-and-drop παιδιών, μετρητής και χρώμα κλάδου α
 | 5 | 30 ημέρες μετά τη λήξη (cron 03:30). Τα βλέπει όποιος έχει πρόσβαση στη δράση· κάθε ανάγνωση στο audit (`drasi.health.read`). |
 | 6 | Μειωμένη: ελεύθερη σημείωση (`feeNote`), χωρίς ροή έγκρισης. |
 | 7 | Το F2 μπήκε στη φέτα 1. |
-| 8 | Επώνυμη (ο υπεύθυνος βλέπει ποιος έγραψε τι). |
+| 8 | **Ρύθμιση της φόρμας** (προεπιλογή επώνυμη). Στην ανώνυμη τα ονόματα δεν βγαίνουν πουθενά (σύνοψη, ατομικά, Excel)· το `userId` μένει μόνο για το «μία απάντηση ανά άτομο». |
 | 9 | Όλες οι καρτέλες παντού, απλώς άδειες. |
 | 10 | **Καμία από τις δύο** — μετά από διόρθωση του χρήστη: το πρόγραμμα είναι δικό του μοντέλο (`DrasiScheduleItem`), **ανεξάρτητο από τις συγκεντρώσεις**. Η ώρα έναρξης ορίζεται στο wizard (ημερομηνία + ώρα)· κάθε προγραμματικό έχει **διάρκεια** και οι ώρες **υπολογίζονται αθροιστικά** (σειρά + διάρκειες). Κάθε επόμενη ημέρα ξεκινά από την ίδια ώρα εκτός αν οριστεί δική της (`Drasi.dayStartTimes`). Αντιγραφή ημέρας· η σειρά αλλάζει με **σύρσιμο** (λαβή στη γραμμή)· τίτλος, λεπτά, είδος γράφονται **επί τόπου** στη γραμμή και σώζονται μόνα τους (όπως η συγκέντρωση — `SaveStatus`, PATCH ανά στοιχείο), οι ώρες ξαναβγαίνουν τοπικά αμέσως. Το **προγραμματικό** έχει δική του σελίδα `/draseis/:id/programma/:itemId` (`DrasiProgrammatikoPage.vue`): markdown με εικόνες/προεπισκόπηση (`MarkdownField`, εμβέλεια εικόνων ο κλάδος), λεπτά/είδος/χώρος/υπεύθυνοι/υλικό, autosave, προηγούμενο/επόμενο στοιχείο της ημέρας, πίσω στην καρτέλα Πρόγραμμα (`?tab=programma`). Η `Syggentrwsh` έμεινε ανέγγιχτη. |
 | 11 | Μαγείρισσα ≠ μαγείρεμα (απαντήθηκε). |

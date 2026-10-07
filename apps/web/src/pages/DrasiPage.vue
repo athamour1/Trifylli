@@ -264,7 +264,7 @@
             </q-tab-panel>
 
             <q-tab-panel name="axiologisi" class="q-pa-none">
-              <DrasiAxiologisi :drasi-id="id" :can-write="canWrite" />
+              <DrasiAxiologisi :drasi-id="id" :can-write="canWrite" :drasi-title="data.title" />
             </q-tab-panel>
 
             <q-tab-panel name="ektyposi" class="q-pa-none">

@@ -9,6 +9,7 @@ import type {
   DrasiGroupKind,
   DrasiLedgerKind,
   DrasiReviewKind,
+  DrasiReviewSettings,
   DrasiRoleKind,
   DrasiScheduleKind,
   DrasiType,
@@ -602,23 +603,59 @@ export interface DrasiReviewQuestionView {
   id: string;
   order: number;
   text: string;
+  description: string | null;
   kind: DrasiReviewKind;
+  required: boolean;
+  /** CHOICE/CHECKBOX. */
+  options: string[];
+  /** Ετικέτες άκρων κλίμακας. */
+  scaleLow: string | null;
+  scaleHigh: string | null;
+}
+
+export interface DrasiReviewAnswerValue {
+  questionId: string;
+  value: number | null;
+  text: string | null;
+  choices: string[];
+}
+
+/** Μία υποβολή (ένας απαντών) — όπως τη βλέπει ο διαχειριστής στα «Ατομικά». */
+export interface DrasiReviewResponse {
+  /** Σταθερό αναγνωριστικό για διαγραφή — ακόμη και στην ανώνυμη φόρμα (είναι το userId, δεν εμφανίζεται). */
+  key: string;
+  /** Όνομα· «Απάντηση #n» όταν η φόρμα είναι ανώνυμη. */
+  user: string;
+  submittedAt: string;
+  answers: DrasiReviewAnswerValue[];
+}
+
+export interface DrasiReviewSummary {
+  respondents: number;
+  questions: {
+    questionId: string;
+    count: number;
+    /** Μέσος όρος για κλίμακες. */
+    average: number | null;
+    /** Κατανομή: τιμές κλίμακας ή επιλογές, με πλήθος. */
+    distribution: { label: string; count: number }[];
+    texts: { user: string; text: string }[];
+  }[];
+  responses: DrasiReviewResponse[];
 }
 
 export interface DrasiReviewView {
+  settings: DrasiReviewSettings;
   questions: DrasiReviewQuestionView[];
   /** Οι απαντήσεις του συνδεδεμένου χρήστη. */
-  mine: { questionId: string; value: number | null; text: string | null }[];
-  /** Σύνοψη — μόνο για όσους διαχειρίζονται τη δράση. */
-  summary: {
-    respondents: number;
-    questions: {
-      questionId: string;
-      count: number;
-      average: number | null;
-      texts: { user: string; text: string }[];
-    }[];
-  } | null;
+  mine: DrasiReviewAnswerValue[];
+  mineSubmittedAt: string | null;
+  /** Μπορεί να απαντήσει τώρα (κοινό + δέχεται απαντήσεις + δικαίωμα αλλαγής). */
+  canAnswer: boolean;
+  /** Γιατί όχι — για το μήνυμα στην οθόνη. */
+  cannotAnswerReason: string | null;
+  /** Σύνοψη — για όσους διαχειρίζονται τη δράση, ή για τους απαντώντες αν το επιτρέπουν οι ρυθμίσεις. */
+  summary: DrasiReviewSummary | null;
 }
 
 /** Ό,τι χρειάζεται το ντοσιέ, σε ένα request. */
@@ -647,7 +684,7 @@ export interface DrasiDossier {
   loading: DrasiLoadingList;
   treasury: { summary: DrasiTreasurySummary; entries: TreasuryEntryView[] } | null;
   symvoulia: { id: string; title: string | null; date: string; agenda: string | null; minutes: string | null; finalized: boolean }[];
-  review: DrasiReviewView['summary'];
+  review: DrasiReviewSummary | null;
   formsPending: { pending: number; total: number };
 }
 

@@ -110,9 +110,15 @@ enum DrasiScheduleKind {
   ALLO
 }
 
+/// Είδη ερώτησης αξιολόγησης, όπως σε μια φόρμα: σύντομο κείμενο, παράγραφος,
+/// πολλαπλή επιλογή (μία), πλαίσια ελέγχου (πολλές), γραμμική κλίμακα.
 enum DrasiReviewKind {
   TEXT
+  PARAGRAPH
+  CHOICE
+  CHECKBOX
   SCALE_1_5
+  SCALE_1_10
 }
 
 /// Ομάδες δράσης: υποομάδα κλάδου (πεντάδα/φωλιά/ενωμοτία) ή σκηνή — ανεξάρτητοι άξονες.
@@ -499,6 +505,8 @@ model Drasi {
   /// Ώρα έναρξης ανά ημέρα του ωρολογίου, όπου διαφέρει από την ώρα του
   /// `dateStart`: `{ "2026-11-28": "07:30" }`. Η πρώτη ημέρα ξεκινά πάντα από το `dateStart`.
   dayStartTimes Json?
+  /// Ρυθμίσεις της φόρμας αξιολόγησης (βλ. shared `DrasiReviewSettings`)· κενό ⇒ προεπιλογές.
+  reviewSettings Json?
   /// Προεπιλογή `ENERGI` ώστε seed και απλές κλήσεις API να φτιάχνουν «κανονική»
   /// δράση· το wizard ζητά ρητά `PROSXEDIO` μέχρι να ολοκληρωθεί.
   status    DrasiStatus @default(ENERGI)
@@ -582,11 +590,17 @@ model DrasiScheduleYliko {
 
 /// Αξιολόγηση κατ' επιλογήν: τα θέματα τα φτιάχνουν τα στελέχη. Βλ. docs/draseis.md F10.
 model DrasiReviewQuestion {
-  id      String          @id @default(uuid()) @db.Uuid
-  drasiId String          @db.Uuid
-  order   Int             @default(0)
-  text    String
-  kind    DrasiReviewKind @default(TEXT)
+  id          String          @id @default(uuid()) @db.Uuid
+  drasiId     String          @db.Uuid
+  order       Int             @default(0)
+  text        String
+  /// Βοηθητικό κείμενο κάτω από την ερώτηση.
+  description String?
+  kind        DrasiReviewKind @default(TEXT)
+  required    Boolean         @default(false)
+  /// `{ choices?: string[]; low?: string; high?: string }` — επιλογές για
+  /// CHOICE/CHECKBOX, ετικέτες άκρων για τις κλίμακες.
+  options     Json?
 
   drasi   Drasi               @relation(fields: [drasiId], references: [id], onDelete: Cascade)
   answers DrasiReviewAnswer[]
@@ -595,12 +609,17 @@ model DrasiReviewQuestion {
   @@map("drasi_review_question")
 }
 
-/// Επώνυμη απάντηση στελέχους — μία ανά ερώτηση.
+/// Απάντηση — μία ανά ερώτηση και χρήστη. Αν η φόρμα είναι ανώνυμη, το `userId`
+/// κρατιέται μόνο για το «μία απάντηση ανά άτομο» και δεν εμφανίζεται πουθενά.
 model DrasiReviewAnswer {
   questionId String   @db.Uuid
   userId     String   @db.Uuid
+  /// Κλίμακες.
   value      Int?
+  /// Κείμενο ή η μία επιλογή (CHOICE).
   text       String?
+  /// Πλαίσια ελέγχου (CHECKBOX).
+  choices    String[] @default([])
   updatedAt  DateTime @updatedAt
 
   question DrasiReviewQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)

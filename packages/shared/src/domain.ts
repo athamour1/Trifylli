@@ -657,5 +657,45 @@ export const DrasiScheduleKind = {
 } as const;
 export type DrasiScheduleKind = (typeof DrasiScheduleKind)[keyof typeof DrasiScheduleKind];
 
-export const DrasiReviewKind = { TEXT: 'TEXT', SCALE_1_5: 'SCALE_1_5' } as const;
+/** Είδη ερώτησης της φόρμας αξιολόγησης. */
+export const DrasiReviewKind = {
+  TEXT: 'TEXT',
+  PARAGRAPH: 'PARAGRAPH',
+  CHOICE: 'CHOICE',
+  CHECKBOX: 'CHECKBOX',
+  SCALE_1_5: 'SCALE_1_5',
+  SCALE_1_10: 'SCALE_1_10',
+} as const;
 export type DrasiReviewKind = (typeof DrasiReviewKind)[keyof typeof DrasiReviewKind];
+export const DRASI_REVIEW_CHOICE_KINDS: readonly DrasiReviewKind[] = ['CHOICE', 'CHECKBOX'];
+export const DRASI_REVIEW_SCALE_MAX: Partial<Record<DrasiReviewKind, number>> = { SCALE_1_5: 5, SCALE_1_10: 10 };
+
+/** Ποιοι μπορούν να απαντήσουν στην αξιολόγηση. */
+export const DrasiReviewAudience = { STELEXI: 'STELEXI', OLOI: 'OLOI' } as const;
+export type DrasiReviewAudience = (typeof DrasiReviewAudience)[keyof typeof DrasiReviewAudience];
+
+/** Οι ρυθμίσεις της φόρμας αξιολόγησης — ό,τι έχει μια φόρμα εκτός από τις ερωτήσεις. */
+export interface DrasiReviewSettings {
+  /** Τίτλος της φόρμας· κενό ⇒ «Αξιολόγηση — <δράση>». */
+  title: string;
+  description: string;
+  acceptingResponses: boolean;
+  /** Ανώνυμη: τα ονόματα δεν εμφανίζονται πουθενά (ούτε στη λήψη). */
+  anonymous: boolean;
+  audience: DrasiReviewAudience;
+  /** Μπορεί κάποιος να αλλάξει την απάντησή του αφού την υποβάλει. */
+  allowEdit: boolean;
+  /** Οι απαντώντες βλέπουν τη σύνοψη μετά την υποβολή. */
+  showSummary: boolean;
+  confirmationMessage: string;
+}
+export const DEFAULT_REVIEW_SETTINGS: DrasiReviewSettings = {
+  title: '',
+  description: '',
+  acceptingResponses: true,
+  anonymous: false,
+  audience: 'STELEXI',
+  allowEdit: true,
+  showSummary: false,
+  confirmationMessage: 'Η απάντησή σου καταχωρήθηκε. Ευχαριστούμε!',
+};

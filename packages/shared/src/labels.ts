@@ -7,6 +7,7 @@ import {
   DrasiFormType,
   DrasiGroupKind,
   DrasiLedgerKind,
+  DrasiReviewAudience,
   DrasiReviewKind,
   DrasiRoleKind,
   DrasiScheduleKind,
@@ -265,8 +266,17 @@ export const DRASI_SCHEDULE_KIND_LABEL: Record<DrasiScheduleKind, string> = {
 };
 
 export const DRASI_REVIEW_KIND_LABEL: Record<DrasiReviewKind, string> = {
-  TEXT: 'Ελεύθερο κείμενο',
+  TEXT: 'Σύντομη απάντηση',
+  PARAGRAPH: 'Παράγραφος',
+  CHOICE: 'Πολλαπλή επιλογή',
+  CHECKBOX: 'Πλαίσια ελέγχου',
   SCALE_1_5: 'Κλίμακα 1–5',
+  SCALE_1_10: 'Κλίμακα 1–10',
+};
+
+export const DRASI_REVIEW_AUDIENCE_LABEL: Record<DrasiReviewAudience, string> = {
+  STELEXI: 'Μόνο στελέχη',
+  OLOI: 'Όλοι όσοι βλέπουν τη δράση',
 };
 
 export const DRASI_LEDGER_KIND_LABEL: Record<DrasiLedgerKind, string> = {
