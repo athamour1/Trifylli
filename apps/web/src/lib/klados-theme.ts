@@ -1,3 +1,4 @@
+import { ref } from 'vue';
 import { KLADOS_META, type KladosType } from '@trifylli/shared';
 import { inkOnWhite, inkOnWhiteLarge, readableOnLarge } from './color';
 
@@ -43,7 +44,15 @@ export function kladosVars(klados: KladosType | null | undefined): Record<string
  *
  * Το `null` καθαρίζει — τότε ισχύει η εφεδρεία του `app.scss`.
  */
+/**
+ * Ο κλάδος που βάφει αυτή τη στιγμή τη σελίδα — reactive, ώστε το layout να
+ * ξέρει «πού είμαστε» και στις σελίδες λεπτομέρειας που ζουν εκτός `/k/:klados`
+ * (να ανοίγει τη σωστή ενότητα του συρταριού και να φωτίζει τον σωστό σύνδεσμο).
+ */
+export const themedKlados = ref<KladosType | null>(null);
+
 export function applyKladosTheme(klados: KladosType | null | undefined): void {
+  themedKlados.value = klados ?? null;
   if (typeof document === 'undefined') return;
 
   const vars = kladosVars(klados);

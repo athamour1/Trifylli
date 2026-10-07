@@ -85,6 +85,7 @@
             :inset-level="0.4"
             :to="{ name: link.name, params: { klados: klados.type } }"
             active-class="klados-active"
+            :class="{ 'klados-active': detailLink === link.name && contextKlados === klados.type }"
           >
             <q-item-section avatar>
               <q-icon :name="link.icon" size="20px" />
@@ -158,7 +159,7 @@ import { useRoute, useRouter } from 'vue-router';
 import type { KladosType } from '@trifylli/shared';
 import { useQuasar } from 'quasar';
 import { inkOnWhiteLarge } from '../lib/color';
-import { applyKladosTheme, kladosVars } from '../lib/klados-theme';
+import { applyKladosTheme, kladosVars, themedKlados } from '../lib/klados-theme';
 import { useAuthStore } from '../stores/auth';
 import { useOfflineStore } from '../stores/offline';
 import { useSessionStore } from '../stores/session';
@@ -199,6 +200,24 @@ watch(
 );
 
 /**
+ * Σελίδες λεπτομέρειας εκτός `/k/:klados` → ποιος σύνδεσμος του κλάδου τους
+ * «ανήκει». Ο κλάδος τους δεν είναι στη διαδρομή· τον μαθαίνουμε από το θέμα
+ * που βάφει η ίδια η σελίδα μόλις φορτώσει (`themedKlados`).
+ */
+const DETAIL_LINK: Record<string, string> = {
+  drasi: 'klados-draseis',
+  'drasi-programmatiko': 'klados-draseis',
+  syggentrwsh: 'klados-syggentrwseis',
+  parousiologio: 'klados-syggentrwseis',
+  symvoulio: 'klados-symvoulia',
+  melos: 'klados-meloi',
+  'yliko-item': 'klados-yliko',
+};
+const detailLink = computed(() => DETAIL_LINK[String(route.name)] ?? null);
+/** Ο κλάδος «πού είμαστε»: από τη διαδρομή, αλλιώς από το θέμα της σελίδας λεπτομέρειας. */
+const contextKlados = computed<KladosType | null>(() => activeKlados.value?.type ?? (detailLink.value ? themedKlados.value : null));
+
+/**
  * Το τμήμα «Τοπικό» υπάρχει μόνο για τον υπερδιαχειριστή — ο διαχειριστής
  * κλάδου δεν έχει καμία από αυτές τις σελίδες, οπότε δεν του δείχνουμε κενή
  * ενότητα.
@@ -233,7 +252,7 @@ function toggleSection(key: string, open: boolean): void {
  * παραμένουν σεβαστές.
  */
 watch(
-  () => (activeKlados.value?.type ?? (isTopikoRoute.value ? 'topiko' : null)),
+  () => (contextKlados.value ?? (isTopikoRoute.value ? 'topiko' : null)),
   (section) => {
     if (section) openSection.value = section;
   },
