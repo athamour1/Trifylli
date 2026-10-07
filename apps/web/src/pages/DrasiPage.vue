@@ -73,14 +73,15 @@
 
         <q-tabs v-model="tab" dense align="left" class="text-klados q-mb-md" narrow-indicator>
           <q-tab name="stats" label="Στοιχεία ανά κλάδο" />
+          <q-tab name="programma" label="Πρόγραμμα" />
           <q-tab name="participants" :label="`Συμμετέχοντες (${data.participants.length})`" />
           <q-tab name="omades" label="Ομάδες" />
           <q-tab name="entypa" label="Έντυπα" />
           <q-tab name="farmakeio" label="Φαρμακείο" />
+          <q-tab name="yliko" label="Υλικό" />
           <q-tab name="tamio" label="Ταμείο" />
+          <q-tab name="symvoulia" label="Συμβούλια" />
           <q-tab v-if="ypiresies.length" name="ypiresies" label="Υπηρεσίες" />
-          <q-tab name="yliko" :label="`Υλικό (${data.checkouts.length})`" />
-          <q-tab v-if="data.syggentrwseis.length" name="programma" label="Πρόγραμμα" />
           <q-tab v-if="data.incidents.length" name="incidents" label="Περιστατικά" />
         </q-tabs>
 
@@ -187,41 +188,23 @@
           </q-tab-panel>
 
           <q-tab-panel name="yliko" class="q-pa-none">
-            <q-list bordered separator class="rounded-borders">
-              <q-item v-for="c in data.checkouts" :key="c.id">
-                <q-item-section>
-                  <q-item-label>{{ c.yliko.name }}</q-item-label>
-                  <q-item-label caption>{{ YLIKO_CATEGORY_LABEL[c.yliko.category] }}</q-item-label>
-                </q-item-section>
-                <q-item-section side>
-                  <div class="row items-center q-gutter-sm">
-                    <span>{{ c.qty }} {{ c.yliko.unit ?? '' }}</span>
-                    <q-badge :label="CHECKOUT_STATUS_LABEL[c.status]" />
-                  </div>
-                </q-item-section>
-              </q-item>
-            </q-list>
+            <DrasiYliko
+              :drasi-id="id"
+              :organiser="data.klados?.type ?? null"
+              :kladoi="data.kladoi"
+              :guest-topika="data.guestTopika"
+              :date-start="data.dateStart"
+              :date-end="data.dateEnd"
+              :can-write="canWrite && data.status !== 'KLEISTI'"
+            />
           </q-tab-panel>
 
           <q-tab-panel name="programma" class="q-pa-none">
-            <q-list bordered separator class="rounded-borders">
-              <q-item
-                v-for="s in data.syggentrwseis"
-                :key="s.id"
-                clickable
-                :to="{ name: 'syggentrwsh', params: { id: s.id } }"
-              >
-                <q-item-section>
-                  <q-item-label>{{ s.title ?? formatDate(s.date) }}</q-item-label>
-                  <q-item-label caption>
-                    {{ formatDate(s.date) }} · {{ KLADOS_LABEL[s.klados.type] }}
-                  </q-item-label>
-                </q-item-section>
-                <q-item-section side>
-                  <q-badge outline :label="`${s._count.timeline} κομμάτια`" />
-                </q-item-section>
-              </q-item>
-            </q-list>
+            <DrasiProgramma :drasi-id="id" :can-write="canWrite && data.status !== 'KLEISTI'" />
+          </q-tab-panel>
+
+          <q-tab-panel name="symvoulia" class="q-pa-none">
+            <DrasiSymvoulia :drasi-id="id" :can-write="canWrite" />
           </q-tab-panel>
 
           <q-tab-panel name="incidents" class="q-pa-none">
@@ -245,15 +228,12 @@
 import { computed, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import {
-  CHECKOUT_STATUS_LABEL,
   DRASI_ARXIGEIO_KINDS,
   DRASI_ROLE_LABEL,
   DRASI_TYPE_LABEL,
   DRASI_YPIRESIA_KINDS,
   KLADOS_LABEL,
   KLADOS_META,
-  YLIKO_CATEGORY_LABEL,
-  type CheckoutStatus,
   type DrasiGuestTopikoView,
   type DrasiRoleKind,
   type DrasiRoleView,
@@ -262,18 +242,20 @@ import {
   type KataskinosiStats,
   type KladosType,
   type MemberKind,
-  type YlikoCategory,
 } from '@trifylli/shared';
 import PageState from '../components/PageState.vue';
 import DrasiEntypa from '../components/drasi/DrasiEntypa.vue';
 import DrasiFarmakeio from '../components/drasi/DrasiFarmakeio.vue';
 import DrasiOmades from '../components/drasi/DrasiOmades.vue';
+import DrasiProgramma from '../components/drasi/DrasiProgramma.vue';
+import DrasiSymvoulia from '../components/drasi/DrasiSymvoulia.vue';
+import DrasiYliko from '../components/drasi/DrasiYliko.vue';
 import DrasiSymmetexontes from '../components/drasi/DrasiSymmetexontes.vue';
 import DrasiTamio from '../components/drasi/DrasiTamio.vue';
 import { useAsyncData } from '../composables/useAsyncData';
 import { applyKladosTheme, kladosVars } from '../lib/klados-theme';
 import { get } from '../lib/api';
-import { formatDate, formatDateRange, formatDateTime } from '../lib/format';
+import { formatDateRange, formatDateTime } from '../lib/format';
 import { useAuthStore } from '../stores/auth';
 
 interface DrasiDetail {
@@ -303,12 +285,7 @@ interface DrasiDetail {
       memberships: { klados: { type: KladosType } }[];
     };
   }[];
-  checkouts: {
-    id: string;
-    qty: number;
-    status: CheckoutStatus;
-    yliko: { id: string; name: string; category: YlikoCategory; unit: string | null };
-  }[];
+  checkouts: { id: string }[];
   syggentrwseis: {
     id: string;
     title: string | null;
