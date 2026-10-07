@@ -5,6 +5,7 @@ import {
   type DrasiExternalYlikoView,
   type DrasiLoadingList,
   type DrasiScheduleItemView,
+  type DrasiScheduleView,
   type DrasiShoppingItemView,
   type DrasiSymvoulioView,
   type KladosType,
@@ -17,7 +18,9 @@ import type {
   CopyDayDto,
   CreateDrasiSymvoulioDto,
   CreateScheduleItemDto,
+  DayStartDto,
   ExternalYlikoDto,
+  ReorderScheduleDto,
   PurchaseShoppingItemDto,
   ShoppingItemDto,
   UpdateScheduleItemDto,
@@ -45,24 +48,64 @@ export class DraseisPlanService {
 
   // ───────────────────────── Ωρολόγιο & προγραμματικό ─────────────────────────
 
-  async schedule(user: RequestUser, id: string): Promise<DrasiScheduleItemView[]> {
-    await this.access.load(user, id, 'read');
+  /**
+   * Το ωρολόγιο ανά ημέρα. Οι ώρες ΔΕΝ είναι αποθηκευμένες: η πρώτη ημέρα
+   * ξεκινά από την ώρα του `dateStart` (όπως ορίστηκε στο wizard), κάθε άλλη
+   * ημέρα από την ίδια ώρα εκτός αν έχει δική της (`dayStartTimes`), και κάθε
+   * στοιχείο ξεκινά εκεί που τελείωσε το προηγούμενο.
+   */
+  async scheduleView(user: RequestUser, id: string): Promise<DrasiScheduleView> {
+    const drasi = await this.access.load(user, id, 'read');
+    const tz = await this.timezone(user);
     const rows = await this.prisma.drasiScheduleItem.findMany({
       where: { drasiId: id },
-      orderBy: [{ startsAt: 'asc' }, { createdAt: 'asc' }],
+      orderBy: [{ date: 'asc' }, { order: 'asc' }, { createdAt: 'asc' }],
       include: scheduleInclude,
     });
-    return rows.map(toScheduleView);
+
+    const baseTime = timeOfDay(drasi.dateStart, tz);
+    const overrides = (drasi.dayStartTimes as Record<string, string> | null) ?? {};
+    const firstDay = localDate(drasi.dateStart, tz);
+
+    const dates = new Set<string>();
+    for (let d = new Date(`${firstDay}T12:00:00Z`); localDate(d, tz) <= localDate(drasi.dateEnd, tz); d = new Date(d.getTime() + 86_400_000)) {
+      dates.add(d.toISOString().slice(0, 10));
+    }
+    for (const r of rows) dates.add(dayKey(r.date));
+
+    const days = [...dates].sort().map((date) => {
+      const overridden = date !== firstDay && typeof overrides[date] === 'string';
+      const startTime = date === firstDay ? baseTime : (overrides[date] ?? baseTime);
+      let cursor = atZone(date, startTime, tz);
+      const items = rows
+        .filter((r) => dayKey(r.date) === date)
+        .map((r) => {
+          const startsAt = cursor;
+          const endsAt = new Date(cursor.getTime() + r.durationMin * 60_000);
+          cursor = endsAt;
+          return toScheduleView(r, startsAt, endsAt);
+        });
+      return { date, startTime, overridden, items };
+    });
+    return { days };
+  }
+
+  /** Όλα τα στοιχεία, με υπολογισμένες ώρες — για το ντοσιέ. */
+  async schedule(user: RequestUser, id: string): Promise<DrasiScheduleItemView[]> {
+    return (await this.scheduleView(user, id)).days.flatMap((d) => d.items);
   }
 
   async addScheduleItem(user: RequestUser, id: string, dto: CreateScheduleItemDto): Promise<DrasiScheduleItemView> {
     await this.access.load(user, id, 'write');
     await this.assertScheduleRefs(user, dto);
+    const date = dateColumn(dto.date);
+    const last = await this.prisma.drasiScheduleItem.findFirst({ where: { drasiId: id, date }, orderBy: { order: 'desc' }, select: { order: true } });
     const row = await this.prisma.drasiScheduleItem.create({
       data: {
         drasiId: id,
-        startsAt: dto.startsAt,
-        endsAt: dto.endsAt ?? null,
+        date,
+        order: (last?.order ?? -1) + 1,
+        durationMin: dto.durationMin ?? 30,
         title: dto.title.trim(),
         kind: dto.kind ?? 'DRASTIRIOTITA',
         location: dto.location?.trim() || null,
@@ -74,7 +117,7 @@ export class DraseisPlanService {
       },
       include: scheduleInclude,
     });
-    return toScheduleView(row);
+    return this.itemWithTimes(user, id, row.id);
   }
 
   async updateScheduleItem(user: RequestUser, id: string, itemId: string, dto: UpdateScheduleItemDto): Promise<DrasiScheduleItemView> {
@@ -82,22 +125,27 @@ export class DraseisPlanService {
     const item = await this.prisma.drasiScheduleItem.findFirst({ where: { id: itemId, drasiId: id } });
     if (!item) throw new NotFoundException('Το στοιχείο του ωρολογίου δεν βρέθηκε.');
     await this.assertScheduleRefs(user, dto);
-    const startsAt = dto.startsAt ?? item.startsAt;
-    const endsAt = dto.endsAt === undefined ? item.endsAt : dto.endsAt;
-    if (endsAt && endsAt < startsAt) throw new BadRequestException('Η λήξη είναι πριν την έναρξη.');
 
-    const row = await this.prisma.$transaction(async (tx) => {
+    // Μεταφορά σε άλλη ημέρα: πάει στο τέλος της.
+    let move: { date: Date; order: number } | null = null;
+    if (dto.date && dayKey(item.date) !== dto.date) {
+      const date = dateColumn(dto.date);
+      const last = await this.prisma.drasiScheduleItem.findFirst({ where: { drasiId: id, date }, orderBy: { order: 'desc' }, select: { order: true } });
+      move = { date, order: (last?.order ?? -1) + 1 };
+    }
+
+    await this.prisma.$transaction(async (tx) => {
       if (dto.yliko) {
         await tx.drasiScheduleYliko.deleteMany({ where: { itemId } });
         if (dto.yliko.length) {
           await tx.drasiScheduleYliko.createMany({ data: dto.yliko.map((y) => ({ itemId, ylikoId: y.ylikoId, qty: y.qty ?? 1 })), skipDuplicates: true });
         }
       }
-      return tx.drasiScheduleItem.update({
+      await tx.drasiScheduleItem.update({
         where: { id: itemId },
         data: {
-          startsAt,
-          endsAt,
+          ...(move ?? {}),
+          ...(dto.durationMin !== undefined ? { durationMin: dto.durationMin } : {}),
           ...(dto.title !== undefined ? { title: dto.title.trim() } : {}),
           ...(dto.kind !== undefined ? { kind: dto.kind } : {}),
           ...(dto.location !== undefined ? { location: dto.location?.trim() || null } : {}),
@@ -106,10 +154,9 @@ export class DraseisPlanService {
           ...(dto.executorId !== undefined ? { executorId: dto.executorId } : {}),
           ...(dto.ylikoNotes !== undefined ? { ylikoNotes: dto.ylikoNotes?.trim() || null } : {}),
         },
-        include: scheduleInclude,
       });
     });
-    return toScheduleView(row);
+    return this.itemWithTimes(user, id, itemId);
   }
 
   async removeScheduleItem(user: RequestUser, id: string, itemId: string) {
@@ -120,23 +167,49 @@ export class DraseisPlanService {
     return { deleted: true };
   }
 
-  /**
-   * Αντιγράφει το ωρολόγιο μιας ημέρας σε άλλη (ίδιες ώρες, άλλη ημερομηνία).
-   * Μαζί και τα προγραμματικά — εγερτήριο, γεύματα και υπηρεσίες επαναλαμβάνονται.
-   */
-  async copyDay(user: RequestUser, id: string, dto: CopyDayDto): Promise<{ copied: number }> {
+  /** Νέα σειρά για τα στοιχεία μιας ημέρας — από αυτήν ξαναβγαίνουν οι ώρες. */
+  async reorder(user: RequestUser, id: string, dto: ReorderScheduleDto) {
     await this.access.load(user, id, 'write');
+    const date = dateColumn(dto.date);
+    const existing = await this.prisma.drasiScheduleItem.findMany({ where: { drasiId: id, date }, select: { id: true } });
+    const known = new Set(existing.map((e) => e.id));
+    const ids = dto.ids.filter((x) => known.has(x));
+    await this.prisma.$transaction(ids.map((itemId, order) => this.prisma.drasiScheduleItem.update({ where: { id: itemId }, data: { order } })));
+    return { reordered: ids.length };
+  }
+
+  /** Ώρα έναρξης μιας ημέρας. Η πρώτη ημέρα αλλάζει μόνο από το `dateStart` (Στήσιμο). */
+  async setDayStart(user: RequestUser, id: string, dto: DayStartDto) {
+    const drasi = await this.access.load(user, id, 'write');
     const tz = await this.timezone(user);
-    const items = await this.prisma.drasiScheduleItem.findMany({ where: { drasiId: id }, include: { yliko: true } });
-    const source = items.filter((i) => localDate(i.startsAt, tz) === dto.from);
+    if (dto.date === localDate(drasi.dateStart, tz)) {
+      throw new BadRequestException('Η πρώτη ημέρα ξεκινά από την ώρα έναρξης της δράσης — άλλαξέ την από το Στήσιμο.');
+    }
+    const overrides = { ...((drasi.dayStartTimes as Record<string, string> | null) ?? {}) };
+    if (dto.time) overrides[dto.date] = dto.time;
+    else delete overrides[dto.date];
+    await this.prisma.drasi.update({ where: { id }, data: { dayStartTimes: overrides } });
+    return { date: dto.date, time: overrides[dto.date] ?? null };
+  }
+
+  /** Αντιγραφή του ωρολογίου μιας ημέρας σε άλλη — μαζί με τα προγραμματικά και την ώρα έναρξης. */
+  async copyDay(user: RequestUser, id: string, dto: CopyDayDto): Promise<{ copied: number }> {
+    const drasi = await this.access.load(user, id, 'write');
+    const source = await this.prisma.drasiScheduleItem.findMany({
+      where: { drasiId: id, date: dateColumn(dto.from) },
+      orderBy: { order: 'asc' },
+      include: { yliko: true },
+    });
     if (source.length === 0) throw new BadRequestException('Η ημέρα προέλευσης δεν έχει στοιχεία.');
-    const shiftMs = (Date.parse(`${dto.to}T12:00:00Z`) - Date.parse(`${dto.from}T12:00:00Z`));
+    const last = await this.prisma.drasiScheduleItem.findFirst({ where: { drasiId: id, date: dateColumn(dto.to) }, orderBy: { order: 'desc' }, select: { order: true } });
+    let order = (last?.order ?? -1) + 1;
     for (const i of source) {
       await this.prisma.drasiScheduleItem.create({
         data: {
           drasiId: id,
-          startsAt: new Date(i.startsAt.getTime() + shiftMs),
-          endsAt: i.endsAt ? new Date(i.endsAt.getTime() + shiftMs) : null,
+          date: dateColumn(dto.to),
+          order: order++,
+          durationMin: i.durationMin,
           title: i.title,
           kind: i.kind,
           location: i.location,
@@ -148,6 +221,11 @@ export class DraseisPlanService {
         },
       });
     }
+    const overrides = (drasi.dayStartTimes as Record<string, string> | null) ?? {};
+    const tz = await this.timezone(user);
+    if (overrides[dto.from] && dto.to !== localDate(drasi.dateStart, tz)) {
+      await this.prisma.drasi.update({ where: { id }, data: { dayStartTimes: { ...overrides, [dto.to]: overrides[dto.from]! } } });
+    }
     return { copied: source.length };
   }
 
@@ -155,6 +233,12 @@ export class DraseisPlanService {
   async timezone(user: RequestUser): Promise<string> {
     const topiko = await this.prisma.topiko.findUnique({ where: { id: user.topikoId }, select: { timezone: true } });
     return topiko?.timezone ?? 'Europe/Athens';
+  }
+
+  private async itemWithTimes(user: RequestUser, id: string, itemId: string): Promise<DrasiScheduleItemView> {
+    const item = (await this.schedule(user, id)).find((i) => i.id === itemId);
+    if (!item) throw new NotFoundException('Το στοιχείο του ωρολογίου δεν βρέθηκε.');
+    return item;
   }
 
   private async assertScheduleRefs(user: RequestUser, dto: CreateScheduleItemDto): Promise<void> {
@@ -468,23 +552,31 @@ function toExternalView(r: {
   };
 }
 
-export function toScheduleView(r: {
-  id: string;
-  startsAt: Date;
-  endsAt: Date | null;
-  title: string;
-  kind: DrasiScheduleItemView['kind'];
-  location: string | null;
-  description: string | null;
-  responsible: { id: string; firstName: string; lastName: string } | null;
-  executor: { id: string; firstName: string; lastName: string } | null;
-  ylikoNotes: string | null;
-  yliko: { ylikoId: string; qty: number; yliko: { name: string; unit: string | null } }[];
-}): DrasiScheduleItemView {
+export function toScheduleView(
+  r: {
+    id: string;
+    date: Date;
+    order: number;
+    durationMin: number;
+    title: string;
+    kind: DrasiScheduleItemView['kind'];
+    location: string | null;
+    description: string | null;
+    responsible: { id: string; firstName: string; lastName: string } | null;
+    executor: { id: string; firstName: string; lastName: string } | null;
+    ylikoNotes: string | null;
+    yliko: { ylikoId: string; qty: number; yliko: { name: string; unit: string | null } }[];
+  },
+  startsAt: Date,
+  endsAt: Date,
+): DrasiScheduleItemView {
   return {
     id: r.id,
-    startsAt: r.startsAt.toISOString(),
-    endsAt: r.endsAt?.toISOString() ?? null,
+    date: dayKey(r.date),
+    order: r.order,
+    durationMin: r.durationMin,
+    startsAt: startsAt.toISOString(),
+    endsAt: endsAt.toISOString(),
     title: r.title,
     kind: r.kind,
     location: r.location,
@@ -495,6 +587,45 @@ export function toScheduleView(r: {
     yliko: r.yliko.map((y) => ({ ylikoId: y.ylikoId, name: y.yliko.name, unit: y.yliko.unit, qty: y.qty })),
     hasProgramma: Boolean(r.description || r.responsible || r.executor || r.ylikoNotes || r.yliko.length),
   };
+}
+
+/** Η στήλη `@db.Date`: μεσάνυχτα UTC της ημέρας. */
+function dateColumn(yyyyMmDd: string): Date {
+  return new Date(`${yyyyMmDd}T00:00:00Z`);
+}
+function dayKey(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+/** «HH:mm» ενός instant στη ζώνη ώρας. */
+export function timeOfDay(d: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat('en-GB', { timeZone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(d);
+}
+
+/** Πόσα λεπτά μπροστά από το UTC είναι η ζώνη τη δεδομένη στιγμή. */
+function tzOffsetMinutes(at: Date, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(at);
+  const n = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
+  const wall = Date.UTC(n('year'), n('month') - 1, n('day'), n('hour'), n('minute'), n('second'));
+  return Math.round((wall - at.getTime()) / 60_000);
+}
+
+/** Το instant που αντιστοιχεί σε «YYYY-MM-DD HH:mm» στη ζώνη ώρας (σωστό και γύρω από αλλαγή ώρας). */
+export function atZone(yyyyMmDd: string, hhmm: string, timeZone: string): Date {
+  const [h, m] = hhmm.split(':').map(Number);
+  const guess = Date.UTC(Number(yyyyMmDd.slice(0, 4)), Number(yyyyMmDd.slice(5, 7)) - 1, Number(yyyyMmDd.slice(8, 10)), h, m);
+  let result = new Date(guess - tzOffsetMinutes(new Date(guess), timeZone) * 60_000);
+  result = new Date(guess - tzOffsetMinutes(result, timeZone) * 60_000);
+  return result;
 }
 
 /** «YYYY-MM-DD» στη ζώνη ώρας του Τοπικού. */

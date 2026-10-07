@@ -6,7 +6,7 @@ import { DrasiAccessService } from './drasi-access.service';
 import { DraseisFinanceService } from './draseis-finance.service';
 import { DraseisFormsService } from './draseis-forms.service';
 import { DraseisGroupsService } from './draseis-groups.service';
-import { DraseisPlanService, localDate } from './draseis-plan.service';
+import { DraseisPlanService } from './draseis-plan.service';
 import { DraseisReviewService } from './draseis-review.service';
 import { DraseisService } from './draseis.service';
 
@@ -32,7 +32,7 @@ export class DraseisDossierService {
     const drasi = await this.access.load(user, id, 'read');
     const [full, schedule, participants, groups, loading, matrix, symvoulia, reviewView, topiko] = await Promise.all([
       this.draseis.findOne(user, id),
-      this.plan.schedule(user, id),
+      this.plan.scheduleView(user, id),
       this.finance.participants(user, id),
       this.groups.groups(user, id),
       this.plan.loadingList(user, id),
@@ -43,16 +43,9 @@ export class DraseisDossierService {
         select: { id: true, title: true, date: true, agenda: true, minutes: true, finalizedAt: true },
       }),
       this.review.view(user, id),
-      this.prisma.topiko.findUnique({ where: { id: user.topikoId }, select: { name: true, timezone: true } }),
+      this.prisma.topiko.findUnique({ where: { id: user.topikoId }, select: { name: true } }),
     ]);
 
-    // Ομαδοποίηση του ωρολογίου ανά ημέρα — στη ζώνη ώρας του Τοπικού.
-    const tz = topiko?.timezone ?? 'Europe/Athens';
-    const byDay = new Map<string, typeof schedule>();
-    for (const item of schedule) {
-      const key = localDate(new Date(item.startsAt), tz);
-      byDay.set(key, [...(byDay.get(key) ?? []), item]);
-    }
 
     const groupsOf = new Map<string, { kind: (typeof groups.groups)[number]['kind']; name: string }[]>();
     for (const g of groups.groups) {
@@ -93,7 +86,7 @@ export class DraseisDossierService {
         })),
         roles: full.roles.map((r) => ({ id: r.id, kind: r.kind, note: r.note, user: r.user })),
       },
-      days: [...byDay.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, items]) => ({ date, items })),
+      days: schedule.days.filter((d) => d.items.length).map((d) => ({ date: d.date, startTime: d.startTime, items: d.items })),
       participants: participants.map((p) => ({ ...p, groups: groupsOf.get(p.id) ?? [] })),
       groups: groups.groups,
       health,

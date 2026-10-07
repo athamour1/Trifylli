@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Put, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuditService } from '../../common/audit/audit.service';
 import { CapabilityGuard } from '../../common/auth/capability.guard';
@@ -9,7 +9,9 @@ import {
   CopyDayDto,
   CreateDrasiSymvoulioDto,
   CreateScheduleItemDto,
+  DayStartDto,
   ExternalYlikoDto,
+  ReorderScheduleDto,
   PurchaseShoppingItemDto,
   ShoppingItemDto,
   UpdateScheduleItemDto,
@@ -30,9 +32,23 @@ export class DraseisPlanController {
 
   @Get('schedule')
   @RequireCapability('calendar:read')
-  @ApiOperation({ summary: 'Το ωρολόγιο της δράσης με τα προγραμματικά του' })
+  @ApiOperation({ summary: 'Το ωρολόγιο ανά ημέρα — ώρες υπολογισμένες από την έναρξη και τις διάρκειες' })
   schedule(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
-    return this.plan.schedule(user, id);
+    return this.plan.scheduleView(user, id);
+  }
+
+  @Put('schedule/reorder')
+  @RequireCapability('drasi:write')
+  @ApiOperation({ summary: 'Νέα σειρά στοιχείων μιας ημέρας' })
+  reorder(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: ReorderScheduleDto) {
+    return this.plan.reorder(user, id, dto);
+  }
+
+  @Patch('schedule/day-start')
+  @RequireCapability('drasi:write')
+  @ApiOperation({ summary: 'Ώρα έναρξης μιας ημέρας (όχι της πρώτης — αυτή έρχεται από το Στήσιμο)' })
+  dayStart(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: DayStartDto) {
+    return this.plan.setDayStart(user, id, dto);
   }
 
   @Post('schedule')

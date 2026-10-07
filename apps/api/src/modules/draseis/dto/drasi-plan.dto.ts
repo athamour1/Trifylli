@@ -35,16 +35,17 @@ export class ScheduleYlikoDto {
 
 /** Το πλαίσιο (ωρολόγιο) ΚΑΙ το προγραμματικό — τα προγραμματικά πεδία είναι προαιρετικά. */
 export class CreateScheduleItemDto {
-  @ApiProperty({ type: String, format: 'date-time' })
-  @Type(() => Date)
-  @IsDate()
-  startsAt!: Date;
+  @ApiProperty({ description: 'Η ημέρα, YYYY-MM-DD.' })
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  date!: string;
 
-  @ApiPropertyOptional({ type: String, format: 'date-time', nullable: true })
+  @ApiPropertyOptional({ minimum: 1, maximum: 1440, default: 30, description: 'Διάρκεια σε λεπτά — η ώρα προκύπτει από αυτήν.' })
   @IsOptional()
-  @Type(() => Date)
-  @IsDate()
-  endsAt?: Date | null;
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(1440)
+  durationMin?: number;
 
   @ApiProperty()
   @IsString()
@@ -95,11 +96,10 @@ export class CreateScheduleItemDto {
 }
 
 export class UpdateScheduleItemDto extends CreateScheduleItemDto {
-  @ApiPropertyOptional({ type: String, format: 'date-time' })
+  @ApiPropertyOptional({ description: 'Μεταφορά σε άλλη ημέρα (YYYY-MM-DD).' })
   @IsOptional()
-  @Type(() => Date)
-  @IsDate()
-  declare startsAt: Date;
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  declare date: string;
 
   @ApiPropertyOptional()
   @IsOptional()
@@ -107,6 +107,31 @@ export class UpdateScheduleItemDto extends CreateScheduleItemDto {
   @Matches(/\S/, { message: 'Το στοιχείο του ωρολογίου θέλει τίτλο.' })
   @MaxLength(200)
   declare title: string;
+}
+
+/** Η σειρά των στοιχείων μιας ημέρας — από αυτήν προκύπτουν οι ώρες. */
+export class ReorderScheduleDto {
+  @ApiProperty({ description: 'YYYY-MM-DD' })
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  date!: string;
+
+  @ApiProperty({ type: [String], format: 'uuid', description: 'Τα ids της ημέρας με τη νέα σειρά.' })
+  @IsArray()
+  @ArrayMaxSize(200)
+  @IsUUID(undefined, { each: true })
+  ids!: string[];
+}
+
+/** Ώρα έναρξης μιας ημέρας — η πρώτη ημέρα ακολουθεί πάντα το `dateStart` της δράσης. */
+export class DayStartDto {
+  @ApiProperty({ description: 'YYYY-MM-DD' })
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  date!: string;
+
+  @ApiPropertyOptional({ description: '«HH:mm»· κενό ⇒ επαναφορά στην ώρα της δράσης.', nullable: true })
+  @IsOptional()
+  @Matches(/^\d{2}:\d{2}$/)
+  time?: string | null;
 }
 
 /** Αντιγραφή ολόκληρης ημέρας σε άλλη — η κατασκήνωση έχει ίδιο σκελετό κάθε μέρα. */
