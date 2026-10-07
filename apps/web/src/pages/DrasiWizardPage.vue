@@ -61,13 +61,19 @@
               />
             </div>
 
-            <div class="col-12 col-sm-6 col-md-4">
+            <div class="col-8 col-sm-4 col-md-3">
               <DateField v-model="form.dateStart" :label="form.type === 'MONOIMERI' ? 'Ημερομηνία' : 'Έναρξη'" />
             </div>
-            <div v-if="form.type !== 'MONOIMERI'" class="col-12 col-sm-6 col-md-4">
+            <div class="col-4 col-sm-2 col-md-2">
+              <TimeField v-model="form.timeStart" label="Ώρα" hint="Από εδώ ξεκινά το πρόγραμμα" />
+            </div>
+            <div v-if="form.type !== 'MONOIMERI'" class="col-8 col-sm-4 col-md-3">
               <DateField v-model="form.dateEnd" label="Λήξη" />
             </div>
-            <div class="col-12 col-md-4">
+            <div class="col-4 col-sm-2 col-md-2">
+              <TimeField v-model="form.timeEnd" label="Ώρα λήξης" />
+            </div>
+            <div class="col-12 col-md-2">
               <q-input v-model="form.location" label="Τόπος" outlined dense maxlength="200" />
             </div>
             <div v-if="touched && dateError" class="col-12 text-negative text-caption">{{ dateError }}</div>
@@ -323,6 +329,7 @@ import {
 } from '@trifylli/shared';
 import DateField from '../components/DateField.vue';
 import PageState from '../components/PageState.vue';
+import TimeField from '../components/TimeField.vue';
 import StelexosPicker from '../components/StelexosPicker.vue';
 import { useKladosScope } from '../composables/useKladosScope';
 import { ApiError, get, patch, post, put } from '../lib/api';
@@ -375,7 +382,10 @@ const form = reactive({
   title: '',
   type: 'MONOIMERI' as DrasiType,
   dateStart: '',
+  /** Η ώρα έναρξης — από εδώ ξεκινά το ωρολόγιο της πρώτης ημέρας. */
+  timeStart: '09:00',
   dateEnd: '',
+  timeEnd: '17:00',
   location: '',
   /** Ο κλάδος που διοργανώνει· `null` = το Τοπικό (μόνο ο υπερδιαχειριστής). */
   organiser: routeKlados.value as KladosType | null,
@@ -402,8 +412,10 @@ watch(
 
 const dateError = computed(() => {
   if (!form.dateStart) return 'Διάλεξε ημερομηνία.';
+  if (!form.timeStart) return 'Διάλεξε ώρα έναρξης.';
   if (form.type !== 'MONOIMERI' && !form.dateEnd) return 'Διάλεξε ημερομηνία λήξης.';
   if (form.dateEnd && form.dateEnd < form.dateStart) return 'Η λήξη είναι πριν την έναρξη.';
+  if (form.dateEnd === form.dateStart && form.timeEnd && form.timeEnd <= form.timeStart) return 'Η ώρα λήξης είναι πριν την έναρξη.';
   return null;
 });
 
@@ -532,9 +544,15 @@ async function applyTemplate(group: 'arxigeio' | 'ypiresies'): Promise<void> {
 
 // ── Αποθήκευση ανά βήμα ──
 
-/** Μεσημέρι τοπικής ώρας: η ημέρα μένει ίδια σε κάθε ζώνη ώρας. */
-function atNoon(date: string): string {
-  return new Date(`${date}T12:00:00`).toISOString();
+/** Τοπική ημερομηνία + «HH:mm» → ISO. Η ώρα έναρξης είναι η αρχή του ωρολογίου. */
+function at(date: string, time: string): string {
+  return new Date(`${date}T${time || '12:00'}:00`).toISOString();
+}
+
+/** «HH:mm» τοπικής ώρας ενός ISO instant. */
+function hm(iso: string): string {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
 async function saveStep1(): Promise<boolean> {
@@ -544,8 +562,8 @@ async function saveStep1(): Promise<boolean> {
   const payload = {
     title: form.title.trim(),
     type: form.type,
-    dateStart: atNoon(form.dateStart),
-    dateEnd: atNoon(form.type === 'MONOIMERI' ? form.dateStart : form.dateEnd),
+    dateStart: at(form.dateStart, form.timeStart),
+    dateEnd: at(form.type === 'MONOIMERI' ? form.dateStart : form.dateEnd, form.timeEnd || form.timeStart),
     location: form.location.trim() || undefined,
   };
 
@@ -650,7 +668,9 @@ async function resume(): Promise<void> {
     form.title = d.title;
     form.type = d.type;
     form.dateStart = toISODate(new Date(d.dateStart));
+    form.timeStart = hm(d.dateStart);
     form.dateEnd = toISODate(new Date(d.dateEnd));
+    form.timeEnd = hm(d.dateEnd);
     form.location = d.location ?? '';
     form.organiser = d.klados?.type ?? null;
     kladoi.value = d.kladoi;

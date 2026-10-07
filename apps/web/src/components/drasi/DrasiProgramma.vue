@@ -1,43 +1,58 @@
 <template>
   <!--
-    Το πρόγραμμα της δράσης σε δύο επίπεδα: πρώτα το ΩΡΟΛΟΓΙΟ (ημέρα, από–έως,
-    τίτλος, είδος) και μετά, σε κάθε στοιχείο, το ΠΡΟΓΡΑΜΜΑΤΙΚΟ — markdown,
-    υπεύθυνος διεξαγωγής & υλοποίησης, υλικό. Ανεξάρτητο από τις συγκεντρώσεις.
+    Το πρόγραμμα της δράσης: ΩΡΟΛΟΓΙΟ χωρίς ώρες — η ημέρα ξεκινά από την ώρα
+    που ορίστηκε στο Στήσιμο, κάθε προγραμματικό έχει ΔΙΑΡΚΕΙΑ, και οι ώρες
+    προκύπτουν αθροιστικά. Αλλαγή σειράς ή διάρκειας ξαναϋπολογίζει τα πάντα.
   -->
   <div>
-    <div class="row items-center q-mb-md q-gutter-sm">
-      <q-btn-toggle v-model="day" dense unelevated toggle-color="klados" toggle-text-color="klados-on" :options="dayOptions" />
+    <div class="row items-center q-mb-sm q-gutter-sm">
+      <q-btn-toggle v-model="dayKey" dense unelevated toggle-color="klados" toggle-text-color="klados-on" :options="dayOptions" />
       <q-space />
-      <q-btn v-if="canWrite && itemsOfDay.length && dayOptions.length > 1" flat color="klados" icon="content_copy" label="Αντιγραφή ημέρας σε…" @click="copyDialog = true" />
+      <q-btn v-if="canWrite && current?.items.length && dayOptions.length > 1" flat color="klados" icon="content_copy" label="Αντιγραφή ημέρας σε…" @click="copyDialog = true" />
     </div>
 
-    <!-- Γρήγορη προσθήκη στο ωρολόγιο: ώρα, τίτλος, Enter -->
+    <!-- Έναρξη ημέρας: την πρώτη την ορίζει το Στήσιμο, τις άλλες μπορείς να τις αλλάξεις -->
+    <div v-if="current" class="row items-center q-gutter-sm q-mb-md text-body2">
+      <q-icon name="play_circle" :style="{ color: 'var(--klados-ink)' }" />
+      <span>Έναρξη <b>{{ current.startTime }}</b></span>
+      <template v-if="isFirstDay">
+        <span class="text-caption text-grey-7">— από το Στήσιμο της δράσης</span>
+      </template>
+      <template v-else-if="canWrite">
+        <div style="width: 140px"><TimeField :model-value="dayStartDraft" label="Αλλαγή" @update:model-value="setDayStart" /></div>
+        <q-btn v-if="current.overridden" flat dense size="sm" label="επαναφορά" @click="setDayStart(null)" />
+      </template>
+      <q-space />
+      <span v-if="current.items.length" class="text-caption text-grey-7">
+        {{ current.items.length }} στοιχεία · {{ formatDuration(totalMin) }} · λήξη {{ hm(current.items[current.items.length - 1]!.endsAt) }}
+      </span>
+    </div>
+
+    <!-- Γρήγορη προσθήκη: τίτλος + διάρκεια, Enter -->
     <q-card v-if="canWrite" flat bordered class="q-pa-sm q-mb-md">
       <div class="row q-col-gutter-sm items-start">
-        <div class="col-6 col-sm-2"><TimeField v-model="draft.start" label="Από" /></div>
-        <div class="col-6 col-sm-2"><TimeField v-model="draft.end" label="Έως" /></div>
-        <div class="col-12 col-sm-4"><q-input v-model="draft.title" label="Τι γίνεται" outlined dense color="klados" @keyup.enter="add" /></div>
-        <div class="col-9 col-sm-3"><q-select v-model="draft.kind" :options="kindOptions" label="Είδος" outlined dense emit-value map-options color="klados" /></div>
-        <div class="col-3 col-sm-1 row items-center">
-          <q-btn round dense color="klados" text-color="klados-on" icon="add" :disable="!draft.start || !draft.title.trim()" :loading="saving" @click="add" />
+        <div class="col-12 col-sm-5"><q-input v-model="draft.title" label="Τι γίνεται" outlined dense color="klados" @keyup.enter="add" /></div>
+        <div class="col-5 col-sm-2"><q-input v-model.number="draft.durationMin" type="number" label="Λεπτά" outlined dense :min="1" :max="1440" color="klados" @keyup.enter="add" /></div>
+        <div class="col-7 col-sm-4"><q-select v-model="draft.kind" :options="kindOptions" label="Είδος" outlined dense emit-value map-options color="klados" /></div>
+        <div class="col-12 col-sm-1 row items-center">
+          <q-btn round dense color="klados" text-color="klados-on" icon="add" :disable="!draft.title.trim() || !draft.durationMin" :loading="saving" @click="add" />
         </div>
       </div>
     </q-card>
 
     <q-inner-loading :showing="loading" />
 
-    <div v-if="!loading && !itemsOfDay.length" class="text-center text-grey-6 q-pa-lg">
+    <div v-if="current && !current.items.length && !loading" class="text-center text-grey-6 q-pa-lg">
       <q-icon name="schedule" size="40px" class="block q-mb-sm" />
-      Το ωρολόγιο της ημέρας είναι άδειο. Βάλε πρώτα τα κουτάκια — εγερτήριο, πρωινό, δραστηριότητες — και
-      μετά γράψε σε καθένα το προγραμματικό του.
+      Το ωρολόγιο της ημέρας είναι άδειο. Γράψε τι γίνεται και πόσο κρατά — η ώρα βγαίνει μόνη της από την έναρξη.
     </div>
 
-    <q-list v-else bordered separator class="rounded-borders">
-      <q-expansion-item v-for="it in itemsOfDay" :key="it.id" :model-value="openId === it.id" @update:model-value="(v: boolean) => (openId = v ? it.id : null)">
+    <q-list v-else-if="current" bordered separator class="rounded-borders">
+      <q-expansion-item v-for="(it, idx) in current.items" :key="it.id" :model-value="openId === it.id" @update:model-value="(v: boolean) => (openId = v ? it.id : null)">
         <template #header>
           <q-item-section side class="clock">
-            <div class="text-weight-medium">{{ formatTime(it.startsAt) }}</div>
-            <div v-if="it.endsAt" class="text-caption text-grey-6">{{ formatTime(it.endsAt) }}</div>
+            <div class="text-weight-medium">{{ hm(it.startsAt) }}</div>
+            <div class="text-caption text-grey-6">{{ hm(it.endsAt) }}</div>
           </q-item-section>
           <q-item-section avatar>
             <q-icon :name="KIND_ICON[it.kind]" :color="KIND_COLOR[it.kind]" />
@@ -45,15 +60,21 @@
           <q-item-section>
             <q-item-label>{{ it.title }}<span v-if="it.location" class="text-grey-6"> · {{ it.location }}</span></q-item-label>
             <q-item-label caption>
-              {{ DRASI_SCHEDULE_KIND_LABEL[it.kind] }}
+              {{ formatDuration(it.durationMin) }} · {{ DRASI_SCHEDULE_KIND_LABEL[it.kind] }}
               <span v-if="it.responsible"> · διεξαγωγή: {{ it.responsible.lastName }} {{ it.responsible.firstName }}</span>
               <span v-if="it.executor"> · υλοποίηση: {{ it.executor.lastName }} {{ it.executor.firstName }}</span>
             </q-item-label>
           </q-item-section>
           <q-item-section side>
-            <q-icon :name="it.hasProgramma ? 'description' : 'note_add'" :color="it.hasProgramma ? 'klados' : 'grey-5'">
-              <q-tooltip>{{ it.hasProgramma ? 'Έχει προγραμματικό' : 'Χωρίς προγραμματικό' }}</q-tooltip>
-            </q-icon>
+            <div class="row items-center no-wrap">
+              <template v-if="canWrite">
+                <q-btn flat dense round size="sm" icon="arrow_upward" :disable="idx === 0" @click.stop="move(idx, -1)" />
+                <q-btn flat dense round size="sm" icon="arrow_downward" :disable="idx === current.items.length - 1" @click.stop="move(idx, 1)" />
+              </template>
+              <q-icon :name="it.hasProgramma ? 'description' : 'note_add'" :color="it.hasProgramma ? 'klados' : 'grey-5'" class="q-ml-xs">
+                <q-tooltip>{{ it.hasProgramma ? 'Έχει προγραμματικό' : 'Χωρίς προγραμματικό' }}</q-tooltip>
+              </q-icon>
+            </div>
           </q-item-section>
         </template>
 
@@ -61,10 +82,9 @@
         <q-card flat class="bg-grey-1">
           <q-card-section v-if="editing && editing.id === it.id" class="q-gutter-sm">
             <div class="row q-col-gutter-sm">
-              <div class="col-6 col-sm-2"><TimeField v-model="editing.start" label="Από" /></div>
-              <div class="col-6 col-sm-2"><TimeField v-model="editing.end" label="Έως" /></div>
               <div class="col-12 col-sm-5"><q-input v-model="editing.title" label="Τίτλος" outlined dense color="klados" /></div>
-              <div class="col-12 col-sm-3"><q-select v-model="editing.kind" :options="kindOptions" label="Είδος" outlined dense emit-value map-options color="klados" /></div>
+              <div class="col-5 col-sm-2"><q-input v-model.number="editing.durationMin" type="number" label="Λεπτά" outlined dense :min="1" :max="1440" color="klados" /></div>
+              <div class="col-7 col-sm-5"><q-select v-model="editing.kind" :options="kindOptions" label="Είδος" outlined dense emit-value map-options color="klados" /></div>
               <div class="col-12 col-sm-4"><q-input v-model="editing.location" label="Χώρος" outlined dense color="klados" /></div>
               <div class="col-12 col-sm-4"><StelexosPicker v-model="editing.responsible" label="Υπεύθυνος διεξαγωγής" :options="stelexiOptions" /></div>
               <div class="col-12 col-sm-4"><StelexosPicker v-model="editing.executor" label="Υπεύθυνος υλοποίησης" :options="stelexiOptions" /></div>
@@ -113,10 +133,10 @@
     <!-- ── Αντιγραφή ημέρας ── -->
     <q-dialog v-model="copyDialog">
       <q-card style="min-width: min(380px, 94vw)">
-        <q-card-section class="text-subtitle1 text-weight-medium q-pb-none">Αντιγραφή της {{ formatDate(day) }} σε…</q-card-section>
+        <q-card-section class="text-subtitle1 text-weight-medium q-pb-none">Αντιγραφή της {{ formatDate(dayKey) }} σε…</q-card-section>
         <q-card-section>
-          <q-select v-model="copyTo" :options="dayOptions.filter((d) => d.value !== day)" label="Ημέρα" outlined dense emit-value map-options color="klados" />
-          <div class="text-caption text-grey-7 q-mt-sm">Αντιγράφονται τα στοιχεία με τις ίδιες ώρες, μαζί με τα προγραμματικά τους.</div>
+          <q-select v-model="copyTo" :options="dayOptions.filter((d) => d.value !== dayKey)" label="Ημέρα" outlined dense emit-value map-options color="klados" />
+          <div class="text-caption text-grey-7 q-mt-sm">Αντιγράφονται τα στοιχεία με τις διάρκειές τους και τα προγραμματικά τους.</div>
         </q-card-section>
         <q-card-actions align="right">
           <q-btn flat label="Άκυρο" v-close-popup />
@@ -135,6 +155,7 @@ import {
   DrasiScheduleKind,
   KLADOS_LABEL,
   type DrasiScheduleItemView,
+  type DrasiScheduleView,
   type KladosType,
   type MemberSummary,
   type Paginated,
@@ -143,14 +164,12 @@ import {
 import MarkdownField from '../MarkdownField.vue';
 import StelexosPicker from '../StelexosPicker.vue';
 import TimeField from '../TimeField.vue';
-import { ApiError, del, get, patch, post } from '../../lib/api';
-import { formatDate, formatTime, toISODate } from '../../lib/format';
+import { ApiError, del, get, patch, post, put } from '../../lib/api';
+import { formatDate, formatDuration } from '../../lib/format';
 import { renderMarkdown } from '../../lib/markdown';
 
 const props = defineProps<{
   drasiId: string;
-  dateStart: string;
-  dateEnd: string;
   organiser: KladosType | null;
   canWrite: boolean;
 }>();
@@ -158,7 +177,7 @@ const props = defineProps<{
 const $q = useQuasar();
 const loading = ref(false);
 const saving = ref(false);
-const items = ref<DrasiScheduleItemView[]>([]);
+const view = ref<DrasiScheduleView | null>(null);
 const openId = ref<string | null>(null);
 
 const KIND_ICON: Record<DrasiScheduleKind, string> = {
@@ -181,23 +200,26 @@ const KIND_COLOR: Record<DrasiScheduleKind, string> = {
 };
 const kindOptions = (Object.keys(DrasiScheduleKind) as DrasiScheduleKind[]).map((k) => ({ label: DRASI_SCHEDULE_KIND_LABEL[k], value: k }));
 
-// ── Ημέρες: από την έναρξη έως τη λήξη, συν όποια έχει στοιχεία εκτός εύρους ──
-const dayOptions = computed(() => {
-  const set = new Set<string>();
-  for (let d = new Date(`${toISODate(new Date(props.dateStart))}T12:00:00`); d <= new Date(props.dateEnd); d = new Date(d.getTime() + 86_400_000)) set.add(toISODate(d));
-  for (const it of items.value) set.add(toISODate(new Date(it.startsAt)));
-  return [...set].sort().map((d) => ({ label: formatDate(d), value: d }));
-});
-const day = ref<string>(toISODate(new Date(props.dateStart)));
+/** «HH:mm» 24ωρο — ένα ωρολόγιο διαβάζεται με 24ωρο, όχι με π.μ./μ.μ. */
+const hm = (iso: string): string => {
+  const d = new Date(iso);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+};
+
+const dayOptions = computed(() => (view.value?.days ?? []).map((d) => ({ label: formatDate(d.date), value: d.date })));
+const dayKey = ref('');
 watch(dayOptions, (opts) => {
-  if (!opts.some((o) => o.value === day.value) && opts[0]) day.value = opts[0].value;
+  if (!opts.some((o) => o.value === dayKey.value) && opts[0]) dayKey.value = opts[0].value;
 });
-const itemsOfDay = computed(() => items.value.filter((it) => toISODate(new Date(it.startsAt)) === day.value));
+const current = computed(() => view.value?.days.find((d) => d.date === dayKey.value) ?? null);
+const isFirstDay = computed(() => view.value?.days[0]?.date === dayKey.value);
+const totalMin = computed(() => current.value?.items.reduce((s, i) => s + i.durationMin, 0) ?? 0);
+const dayStartDraft = computed(() => current.value?.startTime ?? '');
 
 async function reload(): Promise<void> {
   loading.value = true;
   try {
-    items.value = await get<DrasiScheduleItemView[]>(`/draseis/${props.drasiId}/schedule`);
+    view.value = await get<DrasiScheduleView>(`/draseis/${props.drasiId}/schedule`);
   } catch (err) {
     notifyError(err, 'Αποτυχία φόρτωσης προγράμματος.');
   } finally {
@@ -216,25 +238,25 @@ onMounted(async () => {
   }
 });
 
-/** Τοπική ημερομηνία + «HH:mm» → ISO. */
-function at(date: string, hhmm: string): string {
-  return new Date(`${date}T${hhmm}:00`).toISOString();
+// ── Έναρξη ημέρας ──
+async function setDayStart(time: string | null): Promise<void> {
+  if (time === current.value?.startTime) return;
+  try {
+    await patch(`/draseis/${props.drasiId}/schedule/day-start`, { date: dayKey.value, time: time || null });
+    await reload();
+  } catch (err) {
+    notifyError(err, 'Αποτυχία.');
+  }
 }
 
-// ── Ωρολόγιο: προσθήκη ──
-const draft = reactive({ start: '', end: '', title: '', kind: 'DRASTIRIOTITA' as DrasiScheduleKind });
+// ── Ωρολόγιο: προσθήκη / σειρά ──
+const draft = reactive({ title: '', durationMin: 30, kind: 'DRASTIRIOTITA' as DrasiScheduleKind });
 async function add(): Promise<void> {
-  if (!draft.start || !draft.title.trim()) return;
+  if (!draft.title.trim() || !draft.durationMin) return;
   saving.value = true;
   try {
-    await post(`/draseis/${props.drasiId}/schedule`, {
-      startsAt: at(day.value, draft.start),
-      ...(draft.end ? { endsAt: at(day.value, draft.end) } : {}),
-      title: draft.title.trim(),
-      kind: draft.kind,
-    });
-    // Η επόμενη καταχώριση ξεκινά από εκεί που τελείωσε η προηγούμενη.
-    Object.assign(draft, { start: draft.end || draft.start, end: '', title: '' });
+    await post(`/draseis/${props.drasiId}/schedule`, { date: dayKey.value, title: draft.title.trim(), durationMin: draft.durationMin, kind: draft.kind });
+    draft.title = '';
     await reload();
   } catch (err) {
     notifyError(err, 'Αποτυχία προσθήκης.');
@@ -242,13 +264,25 @@ async function add(): Promise<void> {
     saving.value = false;
   }
 }
+async function move(idx: number, delta: number): Promise<void> {
+  if (!current.value) return;
+  const ids = current.value.items.map((i) => i.id);
+  const target = idx + delta;
+  if (target < 0 || target >= ids.length) return;
+  [ids[idx], ids[target]] = [ids[target]!, ids[idx]!];
+  try {
+    await put(`/draseis/${props.drasiId}/schedule/reorder`, { date: dayKey.value, ids });
+    await reload();
+  } catch (err) {
+    notifyError(err, 'Αποτυχία.');
+  }
+}
 
-// ── Προγραμματικό: επεξεργασία ──
+// ── Προγραμματικό ──
 interface EditState {
   id: string;
-  start: string;
-  end: string;
   title: string;
+  durationMin: number;
   kind: DrasiScheduleKind;
   location: string;
   responsible: string[];
@@ -263,9 +297,8 @@ const ylikoOptions = ref<{ label: string; value: string }[]>([]);
 function startEdit(it: DrasiScheduleItemView): void {
   editing.value = {
     id: it.id,
-    start: formatTime(it.startsAt),
-    end: it.endsAt ? formatTime(it.endsAt) : '',
     title: it.title,
+    durationMin: it.durationMin,
     kind: it.kind,
     location: it.location ?? '',
     responsible: it.responsible ? [it.responsible.id] : [],
@@ -274,7 +307,6 @@ function startEdit(it: DrasiScheduleItemView): void {
     yliko: it.yliko.map((y) => y.ylikoId),
     ylikoNotes: it.ylikoNotes ?? '',
   };
-  // Οι ήδη επιλεγμένες επιλογές πρέπει να υπάρχουν στο options για να δείξουν όνομα.
   ylikoOptions.value = it.yliko.map((y) => ({ label: y.name, value: y.ylikoId }));
 }
 
@@ -295,13 +327,12 @@ async function filterYliko(needle: string, update: (fn: () => void) => void): Pr
 
 async function save(): Promise<void> {
   const e = editing.value;
-  if (!e || !e.title.trim() || !e.start) return;
+  if (!e || !e.title.trim() || !e.durationMin) return;
   saving.value = true;
   try {
     await patch(`/draseis/${props.drasiId}/schedule/${e.id}`, {
-      startsAt: at(day.value, e.start),
-      endsAt: e.end ? at(day.value, e.end) : null,
       title: e.title.trim(),
+      durationMin: e.durationMin,
       kind: e.kind,
       location: e.location || null,
       description: e.description || null,
@@ -322,7 +353,7 @@ async function save(): Promise<void> {
 function remove(it: DrasiScheduleItemView): void {
   $q.dialog({
     title: 'Διαγραφή',
-    message: `«${it.title}» στις ${formatTime(it.startsAt)} — μαζί με το προγραμματικό του. Συνέχεια;`,
+    message: `«${it.title}» (${formatDuration(it.durationMin)}) — μαζί με το προγραμματικό του. Τα επόμενα μετακινούνται νωρίτερα. Συνέχεια;`,
     cancel: { label: 'Άκυρο', flat: true },
     ok: { label: 'Διαγραφή', color: 'negative' },
   }).onOk(async () => {
@@ -343,10 +374,10 @@ async function copyDay(): Promise<void> {
   if (!copyTo.value) return;
   saving.value = true;
   try {
-    const r = await post<{ copied: number }>(`/draseis/${props.drasiId}/schedule/copy-day`, { from: day.value, to: copyTo.value });
+    const r = await post<{ copied: number }>(`/draseis/${props.drasiId}/schedule/copy-day`, { from: dayKey.value, to: copyTo.value });
     copyDialog.value = false;
     $q.notify({ type: 'positive', message: `Αντιγράφηκαν ${r.copied} στοιχεία.` });
-    day.value = copyTo.value;
+    dayKey.value = copyTo.value;
     await reload();
   } catch (err) {
     notifyError(err, 'Αποτυχία αντιγραφής.');

@@ -7,6 +7,7 @@
             <div class="page-title">{{ data.title }}</div>
             <div class="text-caption text-grey-7">
               {{ DRASI_TYPE_LABEL[data.type] }} · {{ formatDateRange(data.dateStart, data.dateEnd) }}
+              · έναρξη {{ formatTime(data.dateStart) }}
               <span v-if="data.location"> · {{ data.location }}</span>
             </div>
           </div>
@@ -202,13 +203,7 @@
           </q-tab-panel>
 
           <q-tab-panel name="programma" class="q-pa-none">
-            <DrasiProgramma
-              :drasi-id="id"
-              :date-start="data.dateStart"
-              :date-end="data.dateEnd"
-              :organiser="data.klados?.type ?? null"
-              :can-write="canWrite && data.status !== 'KLEISTI'"
-            />
+            <DrasiProgramma :drasi-id="id" :organiser="data.klados?.type ?? null" :can-write="canWrite && data.status !== 'KLEISTI'" />
           </q-tab-panel>
 
           <q-tab-panel name="symvoulia" class="q-pa-none">
@@ -273,7 +268,7 @@ import DrasiTamio from '../components/drasi/DrasiTamio.vue';
 import { useAsyncData } from '../composables/useAsyncData';
 import { applyKladosTheme, kladosVars } from '../lib/klados-theme';
 import { get } from '../lib/api';
-import { formatDateRange, formatDateTime } from '../lib/format';
+import { formatDateRange, formatDateTime, formatTime } from '../lib/format';
 import { useAuthStore } from '../stores/auth';
 
 interface DrasiDetail {
