@@ -34,6 +34,8 @@ export class TreasuryService {
       where: {
         topikoId: user.topikoId,
         kladosId: query.klados ? kladosId : null,
+        // Η δράση έχει δικό της ταμείο — οι κινήσεις της δεν μπαίνουν εδώ.
+        drasiId: null,
         ...(query.kind ? { kind: query.kind } : {}),
         ...(query.from || query.to
           ? { occurredAt: { ...(query.from ? { gte: query.from } : {}), ...(query.to ? { lte: query.to } : {}) } }
@@ -47,7 +49,7 @@ export class TreasuryService {
       },
       take: 500,
     });
-    return rows.map(toView);
+    return rows.map(toTreasuryView);
   }
 
   async summary(user: RequestUser, kladosType?: KladosType): Promise<TreasurySummary> {
@@ -55,7 +57,7 @@ export class TreasuryService {
     const kladosId = await this.resolveKladosId(user, kladosType);
     const grouped = await this.prisma.treasuryEntry.groupBy({
       by: ['kind', 'category'],
-      where: { topikoId: user.topikoId, kladosId: kladosType ? kladosId : null },
+      where: { topikoId: user.topikoId, kladosId: kladosType ? kladosId : null, drasiId: null },
       _sum: { amount: true },
     });
 
@@ -82,7 +84,7 @@ export class TreasuryService {
     assertScopeAccess(user, 'treasury:read', null);
     const grouped = await this.prisma.treasuryEntry.groupBy({
       by: ['kladosId', 'kind'],
-      where: { topikoId: user.topikoId },
+      where: { topikoId: user.topikoId, drasiId: null },
       _sum: { amount: true },
     });
     const kladoi = await this.prisma.klados.findMany({
@@ -153,7 +155,7 @@ export class TreasuryService {
         createdBy: { select: { firstName: true, lastName: true } },
       },
     });
-    return toView(entry);
+    return toTreasuryView(entry);
   }
 
   async remove(user: RequestUser, id: string) {
@@ -179,7 +181,7 @@ export class TreasuryService {
   }
 }
 
-function toView(e: {
+export function toTreasuryView(e: {
   id: string;
   kind: string;
   category: string;

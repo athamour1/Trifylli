@@ -54,12 +54,33 @@ export class CreateDrasiDto {
   @IsString()
   description?: string;
 
-  @ApiPropertyOptional({ minimum: 0, description: 'Κόστος συμμετοχής ανά άτομο σε ευρώ.' })
+  @ApiPropertyOptional({ minimum: 0, description: 'Κόστος συμμετοχής ανά άτομο σε ευρώ (πλήρης).' })
   @IsOptional()
   @Type(() => Number)
   @IsNumber()
   @Min(0)
   costPerPerson?: number;
+
+  @ApiPropertyOptional({ minimum: 0, description: 'Μειωμένη συμμετοχή.' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  costReduced?: number;
+
+  @ApiPropertyOptional({ minimum: 0, description: 'Συμμετοχή στελέχους.' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  costStelexos?: number;
+
+  @ApiPropertyOptional({ minimum: 0, description: 'Μεταφορικά ανά άτομο.' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  transportCost?: number;
 
   @ApiPropertyOptional({
     description:
@@ -112,6 +133,27 @@ export class UpdateDrasiDto {
   @IsNumber()
   @Min(0)
   costPerPerson?: number;
+
+  @ApiPropertyOptional({ minimum: 0 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  costReduced?: number;
+
+  @ApiPropertyOptional({ minimum: 0 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  costStelexos?: number;
+
+  @ApiPropertyOptional({ minimum: 0 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  transportCost?: number;
 
   @ApiPropertyOptional({
     enum: DrasiStatus,

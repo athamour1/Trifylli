@@ -39,7 +39,8 @@ async function bootstrap(): Promise<void> {
   app.use(helmet());
   // Χωρίς `credentials`: η αυθεντικοποίηση είναι Bearer, όχι cookies — δεν
   // υπάρχει λόγος ο browser να στέλνει credentials cross-origin.
-  app.enableCors({ origin: corsOrigins(config) });
+  // `exposedHeaders`: το όνομα αρχείου των εξαγωγών (Excel) διαβάζεται από τον browser.
+  app.enableCors({ origin: corsOrigins(config), exposedHeaders: ['Content-Disposition'] });
 
   // Το API σερβίρει δυναμικά δεδομένα — όχι HTTP caching. Χωρίς αυτό, ο browser
   // κρατά παλιές απαντήσεις (ETag → 304) και οι λίστες «κολλάνε» μετά από

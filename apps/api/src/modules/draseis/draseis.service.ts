@@ -13,6 +13,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
 import { assertKladosAccess, scopedKladoi } from '../../common/util/klados-scope';
 import { EseoClient } from '../integrations/eseo.client';
+import { defaultFee, defaultFeeKind } from './draseis-finance.service';
 import type {
   AddParticipantsDto,
   CreateDrasiDto,
@@ -152,6 +153,9 @@ export class DraseisService {
         location: dto.location,
         description: dto.description,
         costPerPerson: dto.costPerPerson,
+        costReduced: dto.costReduced,
+        costStelexos: dto.costStelexos,
+        transportCost: dto.transportCost,
         status: dto.draft ? DrasiStatus.PROSXEDIO : DrasiStatus.ENERGI,
         // Ο διοργανωτής συμμετέχει εξ ορισμού — το «ποιοι έρχονται» ξεκινά από εδώ.
         ...(kladosId ? { kladoi: { create: { kladosId } } } : {}),
@@ -315,7 +319,7 @@ export class DraseisService {
   // ───────────────────────── Συμμετέχοντες ─────────────────────────
 
   async addParticipants(user: RequestUser, id: string, dto: AddParticipantsDto) {
-    await this.assertAccess(user, id);
+    const drasi = await this.assertAccess(user, id);
 
     // Τα ids ελέγχονται απέναντι στο Τοπικό: ένα λάθος id δεν πρέπει να
     // δημιουργεί συμμετοχή-φάντασμα.
@@ -328,21 +332,27 @@ export class DraseisService {
     if (unknown.length > 0) throw new BadRequestException(`Άγνωστα μέλη: ${unknown.join(', ')}`);
 
     await this.prisma.$transaction(
-      valid.map((member) =>
-        this.prisma.drasiParticipant.upsert({
+      valid.map((member) => {
+        // Προεπιλογές κόστους από τη δράση: 40 παιδιά δεν ζητούν 40 φορές το ποσό.
+        const feeKind = defaultFeeKind(dto.kind ?? member.kind);
+        const feeAmount = defaultFee(drasi, feeKind);
+        return this.prisma.drasiParticipant.upsert({
           where: { drasiId_userId: { drasiId: id, userId: member.id } },
           create: {
             drasiId: id,
             userId: member.id,
             kind: dto.kind ?? member.kind,
             confirmed: dto.confirmed ?? false,
+            feeKind,
+            feeAmount: feeAmount === null ? null : new Prisma.Decimal(feeAmount),
+            transportAmount: drasi.transportCost,
           },
           update: {
             kind: dto.kind ?? member.kind,
             ...(dto.confirmed !== undefined ? { confirmed: dto.confirmed } : {}),
           },
-        }),
-      ),
+        });
+      }),
     );
 
     return { added: valid.length };
