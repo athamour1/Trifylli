@@ -529,3 +529,60 @@ export interface DrasiPharmacyView {
   assigned: { id: string; name: string; kladosType: KladosType | null; ouchtrackerKitId: string }[];
   candidates: { id: string; name: string; kladosType: KladosType | null; borrowed: boolean }[];
 }
+
+// ───────────────────────── Δράσεις: πρόγραμμα (F7), συμβούλια (F8), υλικό (F9) ─────────────────────────
+
+/** Μία ημέρα δράσης = μία συγκέντρωση με `drasiId`. */
+export interface DrasiDayView {
+  id: string;
+  title: string | null;
+  date: string;
+  startTime: string | null;
+  endTime: string | null;
+  location: string | null;
+  kladosType: KladosType | null;
+  blocks: number;
+  /** Ονόματα υπευθύνων διεξαγωγής και υλοποίησης, χωρίς διπλά. */
+  responsibles: string[];
+  totalDurationMin: number;
+}
+
+export interface DrasiSymvoulioView {
+  id: string;
+  type: SymvoulioType;
+  title: string | null;
+  date: string;
+  finalized: boolean;
+  participants: number;
+}
+
+export interface DrasiShoppingItemView {
+  id: string;
+  name: string;
+  qty: number;
+  estimatedCost: number | null;
+  assignee: { id: string; firstName: string; lastName: string } | null;
+  purchasedAt: string | null;
+  treasuryEntry: { id: string; amount: number; category: string } | null;
+  yliko: { id: string; name: string } | null;
+  note: string | null;
+  order: number;
+}
+
+export interface DrasiExternalYlikoView {
+  id: string;
+  name: string;
+  qty: number;
+  /** Ποιος το φέρνει: δικός μας κλάδος ή φιλοξενούμενο Τοπικό. */
+  owner: { kladosType: KladosType | null; guestTopiko: { id: string; name: string } | null };
+  responsible: { id: string; firstName: string; lastName: string } | null;
+  returnedAt: string | null;
+  note: string | null;
+}
+
+/** Η λίστα φόρτωσης: τα πάντα, και τα ξένα, σε ένα χαρτί. */
+export interface DrasiLoadingList {
+  shopping: DrasiShoppingItemView[];
+  checkouts: { id: string; name: string; qty: number; unit: string | null; status: CheckoutStatus; kladosType: KladosType | null }[];
+  external: DrasiExternalYlikoView[];
+}

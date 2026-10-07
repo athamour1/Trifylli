@@ -241,6 +241,7 @@ model Klados {
   kitLoansReceived KitLoan[]  @relation("KitLoanToKlados")
   drasiSymmetoxes DrasiKlados[]
   drasiGroups  DrasiGroup[]
+  drasiExternalYliko DrasiExternalYliko[]
 
   @@unique([topikoId, type])
   @@map("klados")
@@ -319,6 +320,9 @@ model User {
   drasiPaymentsCollected DrasiPayment[]  @relation("DrasiPaymentCollector")
   drasiLedger     DrasiLedgerEntry[]     @relation("DrasiLedgerUser")
   drasiLedgerAuthored DrasiLedgerEntry[] @relation("DrasiLedgerAuthor")
+  timelineExecutions TimelineBlock[]     @relation("TimelineExecutor")
+  drasiShopping   DrasiShoppingItem[]    @relation("ShoppingAssignee")
+  drasiExternalYliko DrasiExternalYliko[] @relation("ExternalYlikoResponsible")
   auditLogs       AuditLog[]
 
   @@index([topikoId, status])
@@ -497,10 +501,61 @@ model Drasi {
   groups       DrasiGroup[]
   forms        DrasiForm[]
   pharmacyKits DrasiPharmacyKit[]
+  symvoulia    Symvoulio[]
+  shopping     DrasiShoppingItem[]
+  externalYliko DrasiExternalYliko[]
 
   @@index([topikoId, dateStart])
   @@index([kladosId, dateStart])
   @@map("drasi")
+}
+
+/// Λίστα αγορών της δράσης: δεν υπάρχει στο απόθεμα, θα αγοραστεί. Όταν αγοραστεί
+/// γίνεται κίνηση εξόδου· αν μετά μείνει στην αποθήκη, δείχνει το είδος. Βλ. F9(α).
+model DrasiShoppingItem {
+  id              String    @id @default(uuid()) @db.Uuid
+  drasiId         String    @db.Uuid
+  name            String
+  qty             Int       @default(1)
+  estimatedCost   Decimal?  @db.Decimal(10, 2)
+  assigneeId      String?   @db.Uuid
+  purchasedAt     DateTime?
+  treasuryEntryId String?   @unique @db.Uuid
+  ylikoId         String?   @db.Uuid
+  note            String?
+  order           Int       @default(0)
+  createdAt       DateTime  @default(now())
+
+  drasi         Drasi          @relation(fields: [drasiId], references: [id], onDelete: Cascade)
+  assignee      User?          @relation("ShoppingAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  treasuryEntry TreasuryEntry? @relation(fields: [treasuryEntryId], references: [id], onDelete: SetNull)
+  yliko         Yliko?         @relation(fields: [ylikoId], references: [id], onDelete: SetNull)
+
+  @@index([drasiId])
+  @@map("drasi_shopping_item")
+}
+
+/// Υλικό που ΔΕΝ είναι δικό μας: το φέρνει φιλοξενούμενο Τοπικό ή άλλος κλάδος.
+/// Σκόπιμα εκτός `Yliko` — μία μόνο υποχρέωση: να γυρίσει. Βλ. F9(γ).
+model DrasiExternalYliko {
+  id            String    @id @default(uuid()) @db.Uuid
+  drasiId       String    @db.Uuid
+  name          String
+  qty           Int       @default(1)
+  kladosId      String?   @db.Uuid
+  guestTopikoId String?   @db.Uuid
+  responsibleId String?   @db.Uuid
+  returnedAt    DateTime?
+  note          String?
+  createdAt     DateTime  @default(now())
+
+  drasi       Drasi             @relation(fields: [drasiId], references: [id], onDelete: Cascade)
+  klados      Klados?           @relation(fields: [kladosId], references: [id], onDelete: SetNull)
+  guestTopiko DrasiGuestTopiko? @relation(fields: [guestTopikoId], references: [id], onDelete: SetNull)
+  responsible User?             @relation("ExternalYlikoResponsible", fields: [responsibleId], references: [id], onDelete: SetNull)
+
+  @@index([drasiId])
+  @@map("drasi_external_yliko")
 }
 
 /// Έντυπο ανά συμμετέχοντα: δήλωση συμμετοχής ή κατάσταση υγείας. Βλ. docs/draseis.md F5.
@@ -674,7 +729,8 @@ model DrasiGuestTopiko {
   contactPhone String?
   createdAt    DateTime     @default(now())
 
-  drasi Drasi @relation(fields: [drasiId], references: [id], onDelete: Cascade)
+  drasi         Drasi                @relation(fields: [drasiId], references: [id], onDelete: Cascade)
+  externalYliko DrasiExternalYliko[]
 
   @@unique([drasiId, topikoCode])
   @@map("drasi_guest_topiko")
@@ -735,7 +791,8 @@ model DrasiParticipant {
 /// (`drasiId`) — π.χ. η κάθε μέρα μιας κατασκήνωσης.
 model Syggentrwsh {
   id       String    @id @default(uuid()) @db.Uuid
-  kladosId String    @db.Uuid
+  /// `null` ⇒ ημέρα δράσης Τοπικού (πολλοί κλάδοι μαζί). Μόνο μέσω `drasiId`.
+  kladosId String?   @db.Uuid
   drasiId  String?   @db.Uuid
   title    String?
   date     DateTime
@@ -750,7 +807,7 @@ model Syggentrwsh {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  klados         Klados                 @relation(fields: [kladosId], references: [id], onDelete: Cascade)
+  klados         Klados?                @relation(fields: [kladosId], references: [id], onDelete: Cascade)
   drasi          Drasi?                 @relation(fields: [drasiId], references: [id], onDelete: SetNull)
   timeline       TimelineBlock[]
   parts          SyggentrwshSection[]
@@ -774,10 +831,14 @@ model TimelineBlock {
   title         String
   description   String?
   durationMin   Int             @default(15)
+  /// Υπεύθυνος ΔΙΕΞΑΓΩΓΗΣ — ποιος το τρέχει τη στιγμή που γίνεται.
   responsibleId String?         @db.Uuid
+  /// Υπεύθυνος ΥΛΟΠΟΙΗΣΗΣ — ποιος το ετοιμάζει πριν (υλικά, εκτυπώσεις, στήσιμο).
+  executorId    String?         @db.Uuid
 
   syggentrwsh Syggentrwsh          @relation(fields: [syggentrwshId], references: [id], onDelete: Cascade)
   responsible User?                @relation("TimelineResponsible", fields: [responsibleId], references: [id], onDelete: SetNull)
+  executor    User?                @relation("TimelineExecutor", fields: [executorId], references: [id], onDelete: SetNull)
   yliko       TimelineBlockYliko[]
 
   @@unique([syggentrwshId, section, order])
@@ -949,6 +1010,8 @@ model Symvoulio {
   topikoId String        @db.Uuid
   /// `null` για συμβούλια Τοπικού/Στελεχών.
   kladosId String?       @db.Uuid
+  /// Συμβούλιο προετοιμασίας μιας δράσης (βλ. docs/draseis.md F8).
+  drasiId  String?       @db.Uuid
   type     SymvoulioType
   title    String?
   date     DateTime
@@ -967,10 +1030,12 @@ model Symvoulio {
   topiko Topiko       @relation(fields: [topikoId], references: [id], onDelete: Cascade)
   klados Klados?      @relation(fields: [kladosId], references: [id], onDelete: SetNull)
   chair  User?        @relation("SymvoulioChair", fields: [chairId], references: [id], onDelete: SetNull)
+  drasi  Drasi?       @relation(fields: [drasiId], references: [id], onDelete: SetNull)
   participants SymvoulioParticipant[]
 
   @@index([topikoId, date])
   @@index([kladosId, date])
+  @@index([drasiId])
   @@map("symvoulio")
 }
 
@@ -1021,6 +1086,7 @@ model Yliko {
   checkouts YlikoCheckout[]
   maintenance YlikoMaintenance[]
   timelineUses TimelineBlockYliko[]
+  fromShopping DrasiShoppingItem[]
 
   @@unique([topikoId, externalId])
   @@index([topikoId, category])
@@ -1289,6 +1355,7 @@ model TreasuryEntry {
   receiptFile StoredFile? @relation(fields: [receiptFileId], references: [id], onDelete: SetNull)
   createdBy   User?       @relation("TreasuryAuthor", fields: [createdById], references: [id], onDelete: SetNull)
   ylikoMaintenance YlikoMaintenance? @relation("MaintenanceExpense")
+  shoppingItem DrasiShoppingItem?
 
   @@index([topikoId, kladosId, occurredAt])
   @@index([drasiId, occurredAt])
