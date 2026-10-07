@@ -278,16 +278,20 @@
                   <div v-else class="row items-center q-col-gutter-sm">
                     <div v-if="q.scaleLow" class="col-auto text-caption text-grey-7">{{ q.scaleLow }}</div>
                     <div class="col">
+                      <!-- Όχι `outline`: στο επιλεγμένο κουμπί το χρώμα κειμένου (λευκό) γινόταν και χρώμα περιγράμματος — αόρατο πάνω σε λευκό. -->
                       <q-btn-toggle
                         v-model="mine[q.id]!.value"
                         :options="Array.from({ length: scaleMax(q.kind) }, (_, i) => ({ label: String(i + 1), value: i + 1 }))"
-                        outline
+                        unelevated
                         dense
                         spread
+                        no-caps
+                        color="grey-2"
+                        text-color="grey-9"
                         toggle-color="klados"
                         toggle-text-color="klados-on"
-                        color="klados"
                         clearable
+                        class="scale-toggle"
                         :disable="!view.canAnswer"
                       />
                     </div>
@@ -674,6 +678,9 @@ function notifyError(err: unknown, fallback: string): void {
 }
 .answer-ghost--long {
   max-width: 85%;
+}
+.scale-toggle {
+  border: 1px solid rgba(0, 0, 0, 0.12);
 }
 .scale-dot {
   display: inline-block;
