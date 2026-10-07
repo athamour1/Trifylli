@@ -165,6 +165,20 @@ const routes: RouteRecordRaw[] = [
   },
 
   {
+    // Το έντυπο του γονέα: χωρίς συνεδρία, χωρίς μενού — μόνο το token του συνδέσμου.
+    path: '/forms',
+    component: () => import('../layouts/BlankLayout.vue'),
+    children: [
+      {
+        path: ':token',
+        name: 'form-fill',
+        component: () => import('../pages/FormFillPage.vue'),
+        meta: { title: 'Έντυπο', public: true },
+      },
+    ],
+  },
+
+  {
     path: '/',
     component: () => import('../layouts/MainLayout.vue'),
     children: [

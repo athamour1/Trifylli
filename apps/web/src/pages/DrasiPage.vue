@@ -75,6 +75,8 @@
           <q-tab name="stats" label="Στοιχεία ανά κλάδο" />
           <q-tab name="participants" :label="`Συμμετέχοντες (${data.participants.length})`" />
           <q-tab name="omades" label="Ομάδες" />
+          <q-tab name="entypa" label="Έντυπα" />
+          <q-tab name="farmakeio" label="Φαρμακείο" />
           <q-tab name="tamio" label="Ταμείο" />
           <q-tab v-if="ypiresies.length" name="ypiresies" label="Υπηρεσίες" />
           <q-tab name="yliko" :label="`Υλικό (${data.checkouts.length})`" />
@@ -151,6 +153,14 @@
               :organiser="data.klados?.type ?? null"
               :can-write="canWrite && data.status !== 'KLEISTI'"
             />
+          </q-tab-panel>
+
+          <q-tab-panel name="entypa" class="q-pa-none">
+            <DrasiEntypa :drasi-id="id" :can-write="canWrite && data.status !== 'KLEISTI'" />
+          </q-tab-panel>
+
+          <q-tab-panel name="farmakeio" class="q-pa-none">
+            <DrasiFarmakeio :drasi-id="id" :can-write="canWrite && data.status !== 'KLEISTI'" />
           </q-tab-panel>
 
           <q-tab-panel name="tamio" class="q-pa-none">
@@ -255,6 +265,8 @@ import {
   type YlikoCategory,
 } from '@trifylli/shared';
 import PageState from '../components/PageState.vue';
+import DrasiEntypa from '../components/drasi/DrasiEntypa.vue';
+import DrasiFarmakeio from '../components/drasi/DrasiFarmakeio.vue';
 import DrasiOmades from '../components/drasi/DrasiOmades.vue';
 import DrasiSymmetexontes from '../components/drasi/DrasiSymmetexontes.vue';
 import DrasiTamio from '../components/drasi/DrasiTamio.vue';
