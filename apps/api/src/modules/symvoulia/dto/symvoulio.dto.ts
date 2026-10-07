@@ -44,6 +44,11 @@ export class CreateSymvoulioDto {
   @IsOptional()
   @IsUUID()
   chairId?: string;
+
+  @ApiPropertyOptional({ format: 'uuid', description: 'Συμβούλιο προετοιμασίας δράσης.' })
+  @IsOptional()
+  @IsUUID()
+  drasiId?: string;
 }
 
 export class UpdateSymvoulioDto {

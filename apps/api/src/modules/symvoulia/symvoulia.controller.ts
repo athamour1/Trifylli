@@ -38,12 +38,14 @@ export class SymvouliaController {
   @RequireCapability('calendar:read')
   @ApiQuery({ name: 'type', enum: SymvoulioType, required: false })
   @ApiQuery({ name: 'klados', enum: KladosType, required: false })
+  @ApiQuery({ name: 'drasiId', required: false })
   list(
     @CurrentUser() user: RequestUser,
     @Query('type') type?: SymvoulioType,
     @Query('klados') klados?: KladosType,
+    @Query('drasiId') drasiId?: string,
   ) {
-    return this.symvoulia.list(user, type, klados);
+    return this.symvoulia.list(user, type, klados, drasiId);
   }
 
   @Get(':id')

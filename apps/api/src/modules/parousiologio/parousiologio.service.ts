@@ -19,12 +19,15 @@ export class ParousiologioService {
   async sheet(user: RequestUser, syggentrwshId: string) {
     const syggentrwsh = await this.loadSyggentrwsh(user, syggentrwshId);
 
+    // Ημέρα δράσης: το παρουσιολόγιο είναι οι συμμετέχοντες της δράσης (και οι
+    // φιλοξενούμενοι), όχι το μητρώο του κλάδου.
     const members = await this.prisma.user.findMany({
       where: {
         topikoId: user.topikoId,
         archivedAt: null,
-        status: MemberStatus.ENERGO,
-        memberships: { some: { kladosId: syggentrwsh.kladosId, leftAt: null } },
+        ...(syggentrwsh.drasiId
+          ? { participations: { some: { drasiId: syggentrwsh.drasiId } } }
+          : { status: MemberStatus.ENERGO, memberships: { some: { kladosId: syggentrwsh.kladosId ?? '', leftAt: null } } }),
       },
       orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
       select: {
@@ -33,7 +36,7 @@ export class ParousiologioService {
         lastName: true,
         kind: true,
         memberships: {
-          where: { kladosId: syggentrwsh.kladosId, leftAt: null },
+          where: { kladosId: syggentrwsh.kladosId ?? '', leftAt: null },
           select: { subUnit: true, kind: true },
         },
       },
@@ -50,7 +53,7 @@ export class ParousiologioService {
         id: syggentrwsh.id,
         date: syggentrwsh.date,
         title: syggentrwsh.title,
-        kladosType: syggentrwsh.klados.type as KladosType,
+        kladosType: (syggentrwsh.klados?.type as KladosType | undefined) ?? null,
       },
       entries: members.map((member) => {
         const recorded = byUser.get(member.id);
@@ -80,13 +83,14 @@ export class ParousiologioService {
       throw new BadRequestException('Το `recordedAt` είναι στο μέλλον — ελέγξτε το ρολόι της συσκευής.');
     }
 
-    // Επιτρέπουμε μόνο μέλη του κλάδου: ένα λάθος id από την offline ουρά δεν
-    // πρέπει να δημιουργεί παρουσία σε άλλον κλάδο.
-    const memberships = await this.prisma.membership.findMany({
-      where: { kladosId: syggentrwsh.kladosId, leftAt: null },
-      select: { userId: true },
-    });
-    const validIds = new Set(memberships.map((m) => m.userId));
+    // Επιτρέπουμε μόνο μέλη του κλάδου (ή, σε ημέρα δράσης, συμμετέχοντες της
+    // δράσης): ένα λάθος id από την offline ουρά δεν πρέπει να δημιουργεί
+    // παρουσία σε άλλον κλάδο.
+    const validIds = new Set(
+      syggentrwsh.drasiId
+        ? (await this.prisma.drasiParticipant.findMany({ where: { drasiId: syggentrwsh.drasiId }, select: { userId: true } })).map((p) => p.userId)
+        : (await this.prisma.membership.findMany({ where: { kladosId: syggentrwsh.kladosId ?? '', leftAt: null }, select: { userId: true } })).map((m) => m.userId),
+    );
 
     const unknown = dto.entries.filter((e) => !validIds.has(e.memberId)).map((e) => e.memberId);
     if (unknown.length > 0) {
@@ -219,12 +223,12 @@ export class ParousiologioService {
 
   private async loadSyggentrwsh(user: RequestUser, id: string) {
     const syggentrwsh = await this.prisma.syggentrwsh.findFirst({
-      where: { id, klados: { topikoId: user.topikoId } },
+      where: { id, OR: [{ klados: { topikoId: user.topikoId } }, { drasi: { topikoId: user.topikoId } }] },
       include: { klados: { select: { type: true } } },
     });
     if (!syggentrwsh) throw new NotFoundException('Η συγκέντρωση δεν βρέθηκε.');
 
-    const kladosType = syggentrwsh.klados.type as KladosType;
+    const kladosType = (syggentrwsh.klados?.type as KladosType | undefined) ?? null;
     assertKladosAccess(user, kladosType);
     if (syggentrwsh.archivedAt) throw new ForbiddenException('Η συγκέντρωση έχει αρχειοθετηθεί.');
 

@@ -125,10 +125,15 @@ export class TimelineBlockDto {
   @Min(1)
   durationMin!: number;
 
-  @ApiPropertyOptional({ format: 'uuid' })
+  @ApiPropertyOptional({ format: 'uuid', description: 'Υπεύθυνος διεξαγωγής.' })
   @IsOptional()
   @IsUUID()
   responsibleId?: string;
+
+  @ApiPropertyOptional({ format: 'uuid', description: 'Υπεύθυνος υλοποίησης (προετοιμασία).' })
+  @IsOptional()
+  @IsUUID()
+  executorId?: string;
 
   @ApiPropertyOptional({ type: [String], format: 'uuid', description: 'Απαιτούμενο υλικό.' })
   @IsOptional()

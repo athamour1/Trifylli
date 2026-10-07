@@ -12,13 +12,22 @@ import { DraseisFormsService } from './draseis-forms.service';
 import { DraseisGroupsController } from './draseis-groups.controller';
 import { DraseisGroupsService } from './draseis-groups.service';
 import { DraseisPharmacyService } from './draseis-pharmacy.service';
+import { DraseisPlanController } from './draseis-plan.controller';
+import { DraseisPlanService } from './draseis-plan.service';
 import { DraseisService } from './draseis.service';
 
 @Module({
   // IntegrationsModule: το e-SEO δίνει το όνομα φιλοξενούμενου Τοπικού από τον κωδικό του.
   // FilesModule: αποδείξεις του ταμείου δράσης.
   imports: [YlikoModule, IntegrationsModule, FilesModule],
-  controllers: [DraseisController, DraseisFinanceController, DraseisGroupsController, DraseisFormsController, PublicFormsController],
+  controllers: [
+    DraseisController,
+    DraseisFinanceController,
+    DraseisGroupsController,
+    DraseisFormsController,
+    PublicFormsController,
+    DraseisPlanController,
+  ],
   providers: [
     DrasiAccessService,
     DraseisService,
@@ -27,6 +36,7 @@ import { DraseisService } from './draseis.service';
     DraseisGroupsService,
     DraseisFormsService,
     DraseisPharmacyService,
+    DraseisPlanService,
   ],
   exports: [DraseisService],
 })

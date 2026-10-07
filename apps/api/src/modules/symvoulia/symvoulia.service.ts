@@ -28,13 +28,14 @@ export class SymvouliaService {
     private readonly files: FilesService,
   ) {}
 
-  async list(user: RequestUser, type?: SymvoulioType, klados?: KladosType) {
+  async list(user: RequestUser, type?: SymvoulioType, klados?: KladosType, drasiId?: string) {
     if (klados) assertKladosAccess(user, klados);
 
     const where: Prisma.SymvoulioWhereInput = {
       topikoId: user.topikoId,
       archivedAt: null,
       ...(type ? { type } : {}),
+      ...(drasiId ? { drasiId } : {}),
       ...(klados
         ? { klados: { type: klados } }
         : scopedKladoi(user)
@@ -104,6 +105,7 @@ export class SymvouliaService {
       data: {
         topikoId: user.topikoId,
         kladosId,
+        drasiId: dto.drasiId,
         type: dto.type,
         title: dto.title,
         date: dto.date,
