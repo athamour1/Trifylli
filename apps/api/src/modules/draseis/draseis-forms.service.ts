@@ -364,6 +364,7 @@ export class DraseisFormsService {
         dateEnd: form.drasi.dateEnd.toISOString(),
         location: form.drasi.location,
         topiko: form.drasi.topiko.name,
+        klados: (form.drasi.klados?.type as KladosType | undefined) ?? null,
       },
       participant: { firstName: form.participant.user.firstName, lastName: form.participant.user.lastName },
       type: form.type,
@@ -463,7 +464,7 @@ export class DraseisFormsService {
     const form = await this.prisma.drasiForm.findUnique({
       where: { tokenHash: hashToken(token) },
       include: {
-        drasi: { select: { title: true, dateStart: true, dateEnd: true, location: true, topikoId: true, kladosId: true, topiko: { select: { name: true } } } },
+        drasi: { select: { title: true, dateStart: true, dateEnd: true, location: true, topikoId: true, kladosId: true, topiko: { select: { name: true } }, klados: { select: { type: true } } } },
         participant: {
           include: {
             user: {

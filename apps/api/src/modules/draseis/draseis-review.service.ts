@@ -377,7 +377,7 @@ export class DraseisReviewService {
   private async byToken(token: string): Promise<PublicContext> {
     if (!/^[A-Za-z0-9_-]{30,60}$/.test(token)) throw new NotFoundException('Ο σύνδεσμος δεν είναι έγκυρος.');
     const hash = hashToken(token);
-    const drasiSelect = { id: true, title: true, dateStart: true, dateEnd: true, reviewSettings: true, topiko: { select: { name: true } } } as const;
+    const drasiSelect = { id: true, title: true, dateStart: true, dateEnd: true, reviewSettings: true, topiko: { select: { name: true } }, klados: { select: { type: true } } } as const;
     const inv = await this.prisma.drasiReviewInvite.findUnique({
       where: { tokenHash: hash },
       include: { drasi: { select: drasiSelect }, participant: { select: { userId: true, user: { select: { firstName: true, lastName: true } } } } },
@@ -409,7 +409,13 @@ export class DraseisReviewService {
     else if (mineSubmittedAt && !settings.allowEdit) cannotAnswerReason = 'Έχεις ήδη απαντήσει — η φόρμα δεν επιτρέπει αλλαγή.';
     return {
       mode: ctx.invite ? 'personal' : 'shared',
-      drasi: { title: ctx.drasi.title, dateStart: ctx.drasi.dateStart.toISOString(), dateEnd: ctx.drasi.dateEnd.toISOString(), topiko: ctx.drasi.topiko.name },
+      drasi: {
+        title: ctx.drasi.title,
+        dateStart: ctx.drasi.dateStart.toISOString(),
+        dateEnd: ctx.drasi.dateEnd.toISOString(),
+        topiko: ctx.drasi.topiko.name,
+        klados: (ctx.drasi.klados?.type as KladosType | undefined) ?? null,
+      },
       participant: ctx.invite ? ctx.invite.participant.user : null,
       askName: !ctx.invite && !settings.anonymous,
       guestId: guest?.id ?? null,
@@ -543,7 +549,7 @@ export class DraseisReviewService {
 
 /** Τι βρήκε ο δημόσιος σύνδεσμος: πρόσκληση συμμετέχοντα ή μόνο τη δράση (κοινός σύνδεσμος). */
 interface PublicContext {
-  drasi: { id: string; title: string; dateStart: Date; dateEnd: Date; reviewSettings: Prisma.JsonValue | null; topiko: { name: string } };
+  drasi: { id: string; title: string; dateStart: Date; dateEnd: Date; reviewSettings: Prisma.JsonValue | null; topiko: { name: string }; klados: { type: string } | null };
   invite: { id: string; status: DrasiFormStatus; participant: { userId: string; user: { firstName: string; lastName: string } } } | null;
 }
 

@@ -7,7 +7,7 @@
   <q-page class="form-page flex flex-center q-pa-md">
     <q-card flat bordered class="form-card">
       <q-card-section v-if="loading" class="text-center q-pa-xl">
-        <q-spinner size="40px" color="primary" />
+        <q-spinner size="40px" color="klados" />
       </q-card-section>
 
       <template v-else-if="error">
@@ -50,7 +50,7 @@
                 v-model="answers[field.key]"
                 dense
                 unelevated
-                toggle-color="primary"
+                toggle-color="klados"
                 color="grey-3"
                 text-color="grey-9"
                 class="q-mt-xs"
@@ -122,7 +122,7 @@
         </q-card-section>
 
         <q-card-actions align="right" class="q-pa-md">
-          <q-btn color="primary" unelevated label="Υποβολή" :loading="submitting" :disable="!canSubmit" @click="submit" />
+          <q-btn color="klados" text-color="klados-on" unelevated label="Υποβολή" :loading="submitting" :disable="!canSubmit" @click="submit" />
         </q-card-actions>
 
         <q-card-section class="text-caption text-grey-6 q-pt-none">
@@ -135,7 +135,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import {
   HEALTH_DATA_RETENTION_DAYS,
@@ -148,6 +148,7 @@ import {
 import SignaturePad from '../components/SignaturePad.vue';
 import { ApiError, get, post } from '../lib/api';
 import { formatDate, formatDateRange } from '../lib/format';
+import { applyKladosTheme } from '../lib/klados-theme';
 
 const route = useRoute();
 const token = String(route.params.token ?? '');
@@ -167,6 +168,13 @@ const consent = ref(false);
 const submitting = ref(false);
 const submitError = ref<string | null>(null);
 const done = ref(false);
+
+// Η σελίδα ζει εκτός layout κλάδου· βάφεται μόλις μάθει ποιος διοργανώνει.
+watch(
+  () => form.value?.drasi.klados ?? null,
+  (klados) => applyKladosTheme(klados),
+  { immediate: true },
+);
 
 const title = computed(() => {
   if (!form.value) return '';

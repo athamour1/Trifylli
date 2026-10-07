@@ -504,7 +504,7 @@ export interface IssuedFormLink {
 
 /** Τι βλέπει ο γονέας: μόνο αυτό το έντυπο, αυτού του παιδιού. */
 export interface PublicFormView {
-  drasi: { title: string; dateStart: string; dateEnd: string; location: string | null; topiko: string };
+  drasi: { title: string; dateStart: string; dateEnd: string; location: string | null; topiko: string; klados: KladosType | null };
   participant: { firstName: string; lastName: string };
   type: DrasiFormType;
   status: DrasiFormStatus;
@@ -681,7 +681,8 @@ export interface DrasiReviewShareView {
 /** Τι βλέπει όποιος ανοίγει σύνδεσμο αξιολόγησης — προσωπικό (συμμετέχων) ή κοινό (οποιοσδήποτε). */
 export interface PublicReviewView {
   mode: 'personal' | 'shared';
-  drasi: { title: string; dateStart: string; dateEnd: string; topiko: string };
+  /** Ο κλάδος που διοργανώνει — η σελίδα βάφεται στα χρώματά του. */
+  drasi: { title: string; dateStart: string; dateEnd: string; topiko: string; klados: KladosType | null };
   /** Μόνο στον προσωπικό σύνδεσμο. */
   participant: { firstName: string; lastName: string } | null;
   /** Κοινός σύνδεσμος χωρίς ανωνυμία ⇒ ζητείται όνομα. */

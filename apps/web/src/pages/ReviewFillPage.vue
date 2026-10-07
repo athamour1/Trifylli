@@ -5,7 +5,7 @@
   -->
   <q-page class="review-page flex flex-center q-pa-md">
     <div class="review-card">
-      <div v-if="loading" class="text-center q-pa-xl"><q-spinner size="40px" color="primary" /></div>
+      <div v-if="loading" class="text-center q-pa-xl"><q-spinner size="40px" color="klados" /></div>
 
       <q-card v-else-if="error" flat bordered>
         <q-card-section class="text-center q-pa-xl">
@@ -45,13 +45,14 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { onMounted, ref, watch } from 'vue';
 import { useQuasar } from 'quasar';
 import { useRoute } from 'vue-router';
 import type { PublicReviewView } from '@trifylli/shared';
 import ReviewQuestionsForm, { type ReviewAnswerPayload } from '../components/drasi/ReviewQuestionsForm.vue';
 import { ApiError, get, post } from '../lib/api';
 import { formatDateRange } from '../lib/format';
+import { applyKladosTheme } from '../lib/klados-theme';
 
 const route = useRoute();
 const $q = useQuasar();
@@ -62,6 +63,13 @@ const view = ref<PublicReviewView | null>(null);
 const submitting = ref(false);
 const justSubmitted = ref(false);
 const guestName = ref('');
+
+// Η σελίδα ζει εκτός layout κλάδου· βάφεται μόλις μάθει ποιος διοργανώνει.
+watch(
+  () => view.value?.drasi.klados ?? null,
+  (klados) => applyKladosTheme(klados),
+  { immediate: true },
+);
 // Ο κοινός σύνδεσμος δεν ξέρει ποιος είσαι· ο browser θυμάται τον «επισκέπτη» σου για να αλλάξεις την απάντησή σου.
 const guestStorageKey = `trifylli:review-guest:${token}`;
 const rememberedGuest = (): string | null => {
