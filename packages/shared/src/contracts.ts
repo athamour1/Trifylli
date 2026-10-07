@@ -671,10 +671,24 @@ export interface IssuedReviewLink {
   expiresAt: string;
 }
 
-/** Τι βλέπει το παιδί/ο γονέας με τον σύνδεσμο αξιολόγησης. */
+/** Ο κοινός σύνδεσμος αξιολόγησης μιας δράσης: υπάρχει; πόσοι απάντησαν μέσω αυτού; */
+export interface DrasiReviewShareView {
+  active: boolean;
+  createdAt: string | null;
+  guestResponses: number;
+}
+
+/** Τι βλέπει όποιος ανοίγει σύνδεσμο αξιολόγησης — προσωπικό (συμμετέχων) ή κοινό (οποιοσδήποτε). */
 export interface PublicReviewView {
+  mode: 'personal' | 'shared';
   drasi: { title: string; dateStart: string; dateEnd: string; topiko: string };
-  participant: { firstName: string; lastName: string };
+  /** Μόνο στον προσωπικό σύνδεσμο. */
+  participant: { firstName: string; lastName: string } | null;
+  /** Κοινός σύνδεσμος χωρίς ανωνυμία ⇒ ζητείται όνομα. */
+  askName: boolean;
+  /** Ο επισκέπτης του κοινού συνδέσμου (ο browser τον θυμάται για αλλαγή απάντησης). */
+  guestId: string | null;
+  guestName: string | null;
   settings: Pick<DrasiReviewSettings, 'title' | 'description' | 'anonymous' | 'allowEdit' | 'showSummary' | 'confirmationMessage'>;
   questions: DrasiReviewQuestionView[];
   mine: DrasiReviewAnswerValue[];

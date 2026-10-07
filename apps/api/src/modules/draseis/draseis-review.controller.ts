@@ -50,9 +50,30 @@ export class DraseisReviewController {
 
   @Delete('review/responses/:key')
   @RequireCapability('drasi:write')
-  @ApiOperation({ summary: 'Διαγραφή μιας υποβολής' })
-  removeResponse(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Param('key', ParseUUIDPipe) key: string) {
+  @ApiOperation({ summary: 'Διαγραφή μιας υποβολής (key: `user:<id>` ή `guest:<id>`)' })
+  removeResponse(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Param('key') key: string) {
     return this.review.removeResponse(user, id, key);
+  }
+
+  @Get('review/share')
+  @RequireCapability('calendar:read')
+  @ApiOperation({ summary: 'Υπάρχει κοινός σύνδεσμος αξιολόγησης;' })
+  shareStatus(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.review.shareStatus(user, id);
+  }
+
+  @Post('review/share')
+  @RequireCapability('drasi:write')
+  @ApiOperation({ summary: 'Νέος κοινός σύνδεσμος (ο προηγούμενος παύει) — επιστρέφεται μία φορά' })
+  createShare(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.review.createShareLink(user, id);
+  }
+
+  @Delete('review/share')
+  @RequireCapability('drasi:write')
+  @ApiOperation({ summary: 'Απενεργοποίηση του κοινού συνδέσμου' })
+  revokeShare(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.review.revokeShareLink(user, id);
   }
 
   @Get('review/invites')
@@ -112,8 +133,9 @@ export class PublicReviewController {
   @Public()
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @ApiOperation({ summary: 'Η φόρμα αξιολόγησης όπως τη βλέπει ο προσκεκλημένος' })
-  open(@Param('token') token: string, @Ip() ip: string) {
-    return this.review.openPublic(token, ip);
+  @ApiQuery({ name: 'guest', required: false, description: 'Κοινός σύνδεσμος: το guestId που θυμάται ο browser.' })
+  open(@Param('token') token: string, @Ip() ip: string, @Query('guest') guest?: string) {
+    return this.review.openPublic(token, ip, guest || undefined);
   }
 
   @Post(':token')

@@ -41,6 +41,34 @@
             Κάθε σύνδεσμος ανοίγει τη φόρμα για <b>έναν</b> συμμετέχοντα, χωρίς λογαριασμό, και μετρά ως η δική του απάντηση. Λήγει σε
             {{ FORM_LINK_TTL_DAYS }} ημέρες. Οι σύνδεσμοι φαίνονται <b>μόνο τη στιγμή της έκδοσης</b> — μετά μόνο νέος σύνδεσμος.
           </q-card-section>
+          <!-- Κοινός σύνδεσμος: ένας για όλους — για ομάδα WhatsApp/ανακοίνωση -->
+          <q-card-section class="q-pt-none">
+            <q-card flat bordered class="q-pa-sm">
+              <div class="row items-center q-gutter-sm">
+                <q-icon name="public" color="klados" />
+                <div class="col">
+                  <div class="text-body2 text-weight-medium">Κοινός σύνδεσμος (ένας για όλους)</div>
+                  <div class="text-caption text-grey-7">
+                    <template v-if="share?.active">Ενεργός από {{ share.createdAt ? formatDate(share.createdAt) : '' }} · {{ share.guestResponses }} απαντήσεις μέσω αυτού. Όποιος τον έχει μπορεί να απαντήσει{{ settings.anonymous ? ' ανώνυμα' : ' δίνοντας το όνομά του' }}.</template>
+                    <template v-else>Για ομάδα ή ανακοίνωση — δεν ξέρει ποιος απαντά{{ settings.anonymous ? '' : ', ζητά όνομα' }}· δεν περιορίζει σε μία απάντηση ανά άτομο.</template>
+                  </div>
+                </div>
+                <q-btn v-if="!share?.active" color="klados" text-color="klados-on" unelevated dense icon="add_link" label="Δημιουργία" :loading="sharing" @click="createShare" />
+                <template v-else>
+                  <q-btn flat dense color="klados" icon="refresh" label="Νέος" :loading="sharing" @click="createShare"><q-tooltip>Νέος σύνδεσμος — ο προηγούμενος παύει να ισχύει</q-tooltip></q-btn>
+                  <q-btn flat dense color="negative" icon="link_off" label="Απενεργοποίηση" :loading="sharing" @click="revokeShare" />
+                </template>
+              </div>
+              <div v-if="shareUrl" class="row items-center no-wrap q-gutter-xs q-mt-sm bg-grey-2 rounded-borders q-pa-xs">
+                <div class="col ellipsis text-caption q-pl-xs">{{ shareUrl }}</div>
+                <q-btn flat dense round icon="content_copy" @click="copyText(shareUrl)"><q-tooltip>Αντιγραφή</q-tooltip></q-btn>
+                <q-btn flat dense round icon="share" :href="whatsappShare(shareUrl)" target="_blank" rel="noopener"><q-tooltip>WhatsApp</q-tooltip></q-btn>
+              </div>
+              <div v-if="shareUrl" class="text-caption text-grey-7 q-mt-xs">Φαίνεται μόνο τώρα — αντίγραψέ τον. Αργότερα μπορείς μόνο να βγάλεις νέο.</div>
+            </q-card>
+          </q-card-section>
+
+          <q-card-section class="q-pt-none text-subtitle2">Προσωπικοί σύνδεσμοι (ένας ανά συμμετέχοντα)</q-card-section>
           <q-card-section class="q-pt-none row q-gutter-sm">
             <q-btn color="klados" text-color="klados-on" unelevated icon="link" label="Έκδοση σε όσους δεν έχουν" :loading="issuing" @click="issueInvites({})" />
             <q-btn flat color="klados" icon="refresh" label="Νέοι σύνδεσμοι σε όσους εκκρεμούν" :loading="issuing" @click="issueInvites({ reissue: true })" />
@@ -339,6 +367,7 @@ import {
   type DrasiReviewQuestionView,
   type DrasiReviewResponse,
   type DrasiReviewSettings,
+  type DrasiReviewShareView,
   type DrasiReviewView,
   type IssuedReviewLink,
 } from '@trifylli/shared';
@@ -623,8 +652,48 @@ async function loadInvites(): Promise<void> {
 async function openSend(): Promise<void> {
   await saveNow();
   issued.value = [];
-  await loadInvites();
+  shareUrl.value = '';
+  await Promise.all([loadInvites(), loadShare()]);
   sendDialog.value = true;
+}
+
+// ── Κοινός σύνδεσμος ──
+const share = ref<DrasiReviewShareView | null>(null);
+const shareUrl = ref('');
+const sharing = ref(false);
+async function loadShare(): Promise<void> {
+  try {
+    share.value = await get<DrasiReviewShareView>(`/draseis/${props.drasiId}/review/share`);
+  } catch {
+    share.value = null;
+  }
+}
+async function createShare(): Promise<void> {
+  sharing.value = true;
+  try {
+    shareUrl.value = (await post<{ url: string }>(`/draseis/${props.drasiId}/review/share`)).url;
+    await copyText(shareUrl.value);
+    await loadShare();
+  } catch (err) {
+    notifyError(err, 'Αποτυχία δημιουργίας συνδέσμου.');
+  } finally {
+    sharing.value = false;
+  }
+}
+async function revokeShare(): Promise<void> {
+  sharing.value = true;
+  try {
+    share.value = await del<DrasiReviewShareView>(`/draseis/${props.drasiId}/review/share`);
+    shareUrl.value = '';
+  } catch (err) {
+    notifyError(err, 'Αποτυχία.');
+  } finally {
+    sharing.value = false;
+  }
+}
+function whatsappShare(url: string): string {
+  const text = `Γεια σας! Θα θέλαμε τη γνώμη σας για τη δράση «${props.drasiTitle ?? ''}» — συμπληρώστε την αξιολόγηση εδώ: ${url}`;
+  return `https://wa.me/?text=${encodeURIComponent(text)}`;
 }
 async function issueInvites(body: { participantIds?: string[]; reissue?: boolean }): Promise<void> {
   issuing.value = true;

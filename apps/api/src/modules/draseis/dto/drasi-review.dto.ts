@@ -171,7 +171,7 @@ export class IssueReviewInvitesDto {
   reissue?: boolean;
 }
 
-/** Η υποβολή μέσω δημόσιου συνδέσμου — μόνο οι απαντήσεις. */
+/** Η υποβολή μέσω δημόσιου συνδέσμου. Στον κοινό σύνδεσμο: όνομα (αν δεν είναι ανώνυμη) και το guestId για αλλαγή. */
 export class PublicReviewAnswersDto {
   @ApiProperty({ type: [ReviewAnswerDto] })
   @IsArray()
@@ -179,4 +179,15 @@ export class PublicReviewAnswersDto {
   @ValidateNested({ each: true })
   @Type(() => ReviewAnswerDto)
   answers!: ReviewAnswerDto[];
+
+  @ApiPropertyOptional({ description: 'Όνομα του απαντώντα (κοινός σύνδεσμος, μη ανώνυμη φόρμα).' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  name?: string;
+
+  @ApiPropertyOptional({ format: 'uuid', description: 'Ο επισκέπτης που θυμάται ο browser — για αλλαγή της απάντησής του.' })
+  @IsOptional()
+  @IsUUID()
+  guestId?: string;
 }

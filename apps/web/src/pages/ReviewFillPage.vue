@@ -16,9 +16,15 @@
 
       <template v-else-if="view">
         <div class="text-caption text-grey-7 q-mb-xs">{{ view.drasi.topiko }} · Σ.Ε.Ο. · {{ view.drasi.title }} · {{ formatDateRange(view.drasi.dateStart, view.drasi.dateEnd) }}</div>
-        <div class="text-body2 q-mb-md">
+        <div v-if="view.participant" class="text-body2 q-mb-md">
           Για: <b>{{ view.participant.firstName }} {{ view.participant.lastName }}</b>
         </div>
+        <!-- Κοινός σύνδεσμος χωρίς ανωνυμία: ποιος απαντά -->
+        <q-card v-if="view.askName && !justSubmitted" flat bordered class="q-mb-md">
+          <q-card-section>
+            <q-input v-model="guestName" label="Το όνομά σου *" outlined dense color="klados" maxlength="120" hint="Φαίνεται στο στέλεχος μαζί με τις απαντήσεις σου." />
+          </q-card-section>
+        </q-card>
         <ReviewQuestionsForm
           v-model:just-submitted="justSubmitted"
           :questions="view.questions"
@@ -55,10 +61,22 @@ const error = ref<string | null>(null);
 const view = ref<PublicReviewView | null>(null);
 const submitting = ref(false);
 const justSubmitted = ref(false);
+const guestName = ref('');
+// Ο κοινός σύνδεσμος δεν ξέρει ποιος είσαι· ο browser θυμάται τον «επισκέπτη» σου για να αλλάξεις την απάντησή σου.
+const guestStorageKey = `trifylli:review-guest:${token}`;
+const rememberedGuest = (): string | null => {
+  try {
+    return localStorage.getItem(guestStorageKey);
+  } catch {
+    return null;
+  }
+};
 
 onMounted(async () => {
   try {
-    view.value = await get<PublicReviewView>(`/review/${token}`);
+    const guest = rememberedGuest();
+    view.value = await get<PublicReviewView>(`/review/${token}`, { params: guest ? { guest } : {} });
+    guestName.value = view.value.guestName ?? '';
   } catch (err) {
     error.value = err instanceof ApiError ? err.message : 'Ο σύνδεσμος δεν είναι διαθέσιμος.';
   } finally {
@@ -67,9 +85,25 @@ onMounted(async () => {
 });
 
 async function submit(answers: ReviewAnswerPayload[]): Promise<void> {
+  if (view.value?.askName && !guestName.value.trim()) {
+    $q.notify({ type: 'warning', message: 'Γράψε το όνομά σου.' });
+    return;
+  }
   submitting.value = true;
   try {
-    view.value = await post<PublicReviewView>(`/review/${token}`, { answers });
+    const guest = view.value?.guestId ?? rememberedGuest();
+    view.value = await post<PublicReviewView>(`/review/${token}`, {
+      answers,
+      ...(view.value?.askName ? { name: guestName.value.trim() } : {}),
+      ...(guest ? { guestId: guest } : {}),
+    });
+    if (view.value.guestId) {
+      try {
+        localStorage.setItem(guestStorageKey, view.value.guestId);
+      } catch {
+        // Χωρίς αποθήκευση απλώς δεν θα μπορεί να αλλάξει την απάντηση από αυτόν τον browser.
+      }
+    }
     justSubmitted.value = true;
   } catch (err) {
     $q.notify({ type: 'negative', message: err instanceof ApiError ? err.message : 'Αποτυχία υποβολής — δοκιμάστε ξανά.' });

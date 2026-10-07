@@ -507,6 +507,9 @@ model Drasi {
   dayStartTimes Json?
   /// Ρυθμίσεις της φόρμας αξιολόγησης (βλ. shared `DrasiReviewSettings`)· κενό ⇒ προεπιλογές.
   reviewSettings Json?
+  /// Κοινός σύνδεσμος αξιολόγησης (ένας για όλους, χωρίς λογαριασμό): μόνο το hash του token.
+  reviewShareTokenHash String?   @unique
+  reviewShareCreatedAt DateTime?
   /// Προεπιλογή `ENERGI` ώστε seed και απλές κλήσεις API να φτιάχνουν «κανονική»
   /// δράση· το wizard ζητά ρητά `PROSXEDIO` μέχρι να ολοκληρωθεί.
   status    DrasiStatus @default(ENERGI)
@@ -535,6 +538,7 @@ model Drasi {
   externalYliko DrasiExternalYliko[]
   reviewQuestions DrasiReviewQuestion[]
   reviewInvites   DrasiReviewInvite[]
+  reviewGuests    DrasiReviewGuest[]
   schedule     DrasiScheduleItem[]
 
   @@index([topikoId, dateStart])
@@ -633,24 +637,45 @@ model DrasiReviewQuestion {
   @@map("drasi_review_question")
 }
 
-/// Απάντηση — μία ανά ερώτηση και χρήστη. Αν η φόρμα είναι ανώνυμη, το `userId`
-/// κρατιέται μόνο για το «μία απάντηση ανά άτομο» και δεν εμφανίζεται πουθενά.
+/// Απάντηση — μία ανά ερώτηση και απαντώντα. Ο απαντών είναι είτε χρήστης του
+/// μητρώου (`user:<id>` — λογαριασμός ή προσωπικός σύνδεσμος) είτε «επισκέπτης»
+/// από τον κοινό σύνδεσμο (`guest:<id>`). Στην ανώνυμη φόρμα το κλειδί κρατιέται
+/// μόνο για το «μία απάντηση ανά άτομο» και δεν εμφανίζεται πουθενά.
 model DrasiReviewAnswer {
-  questionId String   @db.Uuid
-  userId     String   @db.Uuid
+  questionId    String   @db.Uuid
+  respondentKey String
+  userId        String?  @db.Uuid
+  guestId       String?  @db.Uuid
   /// Κλίμακες.
-  value      Int?
+  value         Int?
   /// Κείμενο ή η μία επιλογή (CHOICE).
-  text       String?
+  text          String?
   /// Πλαίσια ελέγχου (CHECKBOX).
-  choices    String[] @default([])
-  updatedAt  DateTime @updatedAt
+  choices       String[] @default([])
+  updatedAt     DateTime @updatedAt
 
   question DrasiReviewQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  user     User                @relation("DrasiReviewAuthor", fields: [userId], references: [id], onDelete: Cascade)
+  user     User?               @relation("DrasiReviewAuthor", fields: [userId], references: [id], onDelete: Cascade)
+  guest    DrasiReviewGuest?   @relation(fields: [guestId], references: [id], onDelete: Cascade)
 
-  @@id([questionId, userId])
+  @@id([questionId, respondentKey])
+  @@index([userId])
   @@map("drasi_review_answer")
+}
+
+/// Απαντών από τον ΚΟΙΝΟ σύνδεσμο αξιολόγησης (χωρίς μητρώο). Το όνομα είναι
+/// προαιρετικό (κενό στην ανώνυμη φόρμα).
+model DrasiReviewGuest {
+  id        String   @id @default(uuid()) @db.Uuid
+  drasiId   String   @db.Uuid
+  name      String?
+  createdAt DateTime @default(now())
+
+  drasi   Drasi               @relation(fields: [drasiId], references: [id], onDelete: Cascade)
+  answers DrasiReviewAnswer[]
+
+  @@index([drasiId])
+  @@map("drasi_review_guest")
 }
 
 /// Λίστα αγορών της δράσης: δεν υπάρχει στο απόθεμα, θα αγοραστεί. Όταν αγοραστεί

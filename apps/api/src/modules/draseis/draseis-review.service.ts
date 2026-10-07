@@ -12,13 +12,14 @@ import {
   isSuperAdmin,
   type DrasiReviewAnswerValue,
   type DrasiReviewInviteView,
-  type IssuedReviewLink,
-  type PublicReviewView,
   type DrasiReviewQuestionView,
   type DrasiReviewSettings,
+  type DrasiReviewShareView,
   type DrasiReviewSummary,
   type DrasiReviewView,
+  type IssuedReviewLink,
   type KladosType,
+  type PublicReviewView,
 } from '@trifylli/shared';
 import { AuditService } from '../../common/audit/audit.service';
 import { AppConfigToken } from '../../common/config/config.module';
@@ -28,21 +29,32 @@ import type { RequestUser } from '../../common/auth/types';
 import { DrasiAccessService } from './drasi-access.service';
 import type { IssueReviewInvitesDto, PublicReviewAnswersDto, SetReviewAnswersDto, SetReviewQuestionsDto, UpdateReviewSettingsDto } from './dto/drasi-review.dto';
 
-type QuestionRow = Prisma.DrasiReviewQuestionGetPayload<{ include: { answers: { include: { user: { select: { id: true; firstName: true; lastName: true } } } } } }>;
+const answerInclude = {
+  answers: { include: { user: { select: { id: true, firstName: true, lastName: true } }, guest: { select: { id: true, name: true } } } },
+} as const;
+type QuestionRow = Prisma.DrasiReviewQuestionGetPayload<{ include: typeof answerInclude }>;
 type AnswerRow = QuestionRow['answers'][number];
 interface QuestionOptions {
   choices?: string[];
   low?: string;
   high?: string;
 }
-
-const answerInclude = { answers: { include: { user: { select: { id: true, firstName: true, lastName: true } } } } } as const;
+/** Ποιος απαντά: χρήστης του μητρώου ή επισκέπτης του κοινού συνδέσμου. */
+interface Respondent {
+  key: string;
+  userId?: string;
+  guestId?: string;
+}
+const userKey = (userId: string): string => `user:${userId}`;
+const guestKey = (guestId: string): string => `guest:${guestId}`;
 
 /**
  * Αξιολόγηση δράσης (F10) σαν φόρμα: ερωτήσεις πολλών ειδών, ρυθμίσεις (κοινό,
  * ανωνυμία, αποδοχή απαντήσεων…), σύνοψη και ατομικές απαντήσεις για τον
- * διαχειριστή, λήψη σε Excel. Μία απάντηση ανά άτομο — και στην ανώνυμη φόρμα
- * το `userId` κρατιέται μόνο γι' αυτό και δεν βγαίνει ποτέ προς τα έξω.
+ * διαχειριστή, λήψη σε Excel. Απαντούν (α) συνδεδεμένοι χρήστες, (β) συμμετέχοντες
+ * με ΠΡΟΣΩΠΙΚΟ σύνδεσμο (παιδιά χωρίς λογαριασμό), (γ) οποιοσδήποτε με τον ΚΟΙΝΟ
+ * σύνδεσμο της δράσης. Μία απάντηση ανά άτομο όπου το άτομο είναι γνωστό· στην
+ * ανώνυμη φόρμα το κλειδί του απαντώντα δεν βγαίνει ποτέ προς τα έξω.
  */
 @Injectable()
 export class DraseisReviewService {
@@ -73,16 +85,17 @@ export class DraseisReviewService {
     return this.view(user, id);
   }
 
-  // ── Προβολή ──
+  // ── Προβολή (συνδεδεμένος) ──
 
   async view(user: RequestUser, id: string): Promise<DrasiReviewView> {
     const drasi = await this.access.load(user, id, 'read');
     const settings = this.settingsOf(drasi.reviewSettings);
-    const questions = await this.prisma.drasiReviewQuestion.findMany({ where: { drasiId: id }, orderBy: { order: 'asc' }, include: answerInclude });
+    const questions = await this.questions(id);
 
     const manages = this.manages(user, drasi.klados?.type as KladosType | undefined);
-    const mineRows = questions.flatMap((q) => q.answers.filter((a) => a.userId === user.id));
-    const mineSubmittedAt = mineRows.length ? new Date(Math.max(...mineRows.map((a) => a.updatedAt.getTime()))).toISOString() : null;
+    const key = userKey(user.id);
+    const mineRows = questions.flatMap((q) => q.answers.filter((a) => a.respondentKey === key));
+    const mineSubmittedAt = latest(mineRows);
 
     let cannotAnswerReason: string | null = null;
     if (!settings.acceptingResponses) cannotAnswerReason = 'Η φόρμα δεν δέχεται πλέον απαντήσεις.';
@@ -99,6 +112,10 @@ export class DraseisReviewService {
       cannotAnswerReason,
       summary: showSummary ? this.summarize(questions, settings, manages) : null,
     };
+  }
+
+  private questions(drasiId: string): Promise<QuestionRow[]> {
+    return this.prisma.drasiReviewQuestion.findMany({ where: { drasiId }, orderBy: { order: 'asc' }, include: answerInclude });
   }
 
   private manages(user: RequestUser, organiser: KladosType | undefined): boolean {
@@ -165,25 +182,23 @@ export class DraseisReviewService {
   async setAnswers(user: RequestUser, id: string, dto: SetReviewAnswersDto): Promise<DrasiReviewView> {
     const current = await this.view(user, id);
     if (!current.canAnswer) throw new ForbiddenException(current.cannotAnswerReason ?? 'Δεν μπορείς να απαντήσεις.');
-    const byId = new Map(current.questions.map((q) => [q.id, q]));
-    for (const a of dto.answers) if (!byId.has(a.questionId)) throw new BadRequestException('Άγνωστη ερώτηση.');
-
-    await this.writeAnswers(id, user.id, current.questions, dto.answers);
+    await this.writeAnswers(id, { key: userKey(user.id), userId: user.id }, current.questions, dto.answers);
     return this.view(user, id);
   }
 
-  /** Γράφει ΟΛΕΣ τις απαντήσεις ενός ατόμου μαζί (αντικαθιστώντας τις προηγούμενες), με έλεγχο υποχρεωτικών. */
+  /** Γράφει ΟΛΕΣ τις απαντήσεις ενός απαντώντα μαζί (αντικαθιστώντας τις προηγούμενες), με έλεγχο υποχρεωτικών. */
   private async writeAnswers(
     drasiId: string,
-    userId: string,
+    who: Respondent,
     questions: DrasiReviewQuestionView[],
     answers: { questionId: string; value?: number | null; text?: string | null; choices?: string[] }[],
   ): Promise<void> {
+    const known = new Set(questions.map((q) => q.id));
+    for (const a of answers) if (!known.has(a.questionId)) throw new BadRequestException('Άγνωστη ερώτηση.');
     const given = new Map(answers.map((a) => [a.questionId, a]));
     const writes: { questionId: string; value: number | null; text: string | null; choices: string[] }[] = [];
     for (const q of questions) {
-      const a = given.get(q.id);
-      const norm = this.normalize(q, a);
+      const norm = this.normalize(q, given.get(q.id));
       if (!norm) {
         if (q.required) throw new BadRequestException(`Η ερώτηση «${q.text}» είναι υποχρεωτική.`);
         continue;
@@ -191,8 +206,12 @@ export class DraseisReviewService {
       writes.push({ questionId: q.id, ...norm });
     }
     await this.prisma.$transaction(async (tx) => {
-      await tx.drasiReviewAnswer.deleteMany({ where: { userId, question: { drasiId } } });
-      if (writes.length) await tx.drasiReviewAnswer.createMany({ data: writes.map((w) => ({ ...w, userId })) });
+      await tx.drasiReviewAnswer.deleteMany({ where: { respondentKey: who.key, question: { drasiId } } });
+      if (writes.length) {
+        await tx.drasiReviewAnswer.createMany({
+          data: writes.map((w) => ({ ...w, respondentKey: who.key, userId: who.userId ?? null, guestId: who.guestId ?? null })),
+        });
+      }
     });
   }
 
@@ -224,15 +243,17 @@ export class DraseisReviewService {
     return t ? { value: null, text: t, choices: [] } : null;
   }
 
-  /** Διαγραφή μιας υποβολής (διαχειριστής) — το key είναι το userId της. */
+  /** Διαγραφή μιας υποβολής (διαχειριστής) — το key είναι το `respondentKey` της. */
   async removeResponse(user: RequestUser, id: string, key: string): Promise<DrasiReviewView> {
     await this.access.load(user, id, 'write', { allowClosed: true });
-    const r = await this.prisma.drasiReviewAnswer.deleteMany({ where: { userId: key, question: { drasiId: id } } });
+    if (!/^(user|guest):[0-9a-f-]{36}$/.test(key)) throw new BadRequestException('Μη έγκυρο κλειδί απάντησης.');
+    const r = await this.prisma.drasiReviewAnswer.deleteMany({ where: { respondentKey: key, question: { drasiId: id } } });
     if (!r.count) throw new NotFoundException('Η απάντηση δεν βρέθηκε.');
+    if (key.startsWith('guest:')) await this.prisma.drasiReviewGuest.deleteMany({ where: { id: key.slice(6), drasiId: id } });
     return this.view(user, id);
   }
 
-  // ── Προσκλήσεις: δημόσιοι σύνδεσμοι προς συμμετέχοντες χωρίς λογαριασμό (παιδιά) ──
+  // ── Προσωπικοί σύνδεσμοι: προς συμμετέχοντες χωρίς λογαριασμό (παιδιά) ──
 
   /** Ποιος συμμετέχων έχει σύνδεσμο και σε τι κατάσταση — όπως ο πίνακας των εντύπων. */
   async invites(user: RequestUser, id: string): Promise<DrasiReviewInviteView[]> {
@@ -271,7 +292,13 @@ export class DraseisReviewService {
       const invite = await this.prisma.drasiReviewInvite.upsert({
         where: { participantId: p.id },
         create: { drasiId: id, participantId: p.id, status: DrasiFormStatus.SENT, tokenHash: hashToken(token), expiresAt, sentAt: new Date() },
-        update: { status: existing?.status === DrasiFormStatus.SUBMITTED ? DrasiFormStatus.SUBMITTED : DrasiFormStatus.SENT, tokenHash: hashToken(token), expiresAt, sentAt: new Date(), openedAt: null },
+        update: {
+          status: existing?.status === DrasiFormStatus.SUBMITTED ? DrasiFormStatus.SUBMITTED : DrasiFormStatus.SENT,
+          tokenHash: hashToken(token),
+          expiresAt,
+          sentAt: new Date(),
+          openedAt: null,
+        },
       });
       links.push({ participantId: p.id, inviteId: invite.id, url: `${this.appUrl()}/review/${token}`, expiresAt: expiresAt.toISOString() });
     }
@@ -287,55 +314,106 @@ export class DraseisReviewService {
     return { voided: true };
   }
 
-  /** Η φόρμα όπως τη βλέπει το παιδί (ή ο γονέας του) με τον σύνδεσμο — χωρίς συνεδρία. */
-  async openPublic(token: string, ip: string | undefined): Promise<PublicReviewView> {
-    const inv = await this.byToken(token);
-    if (inv.status === DrasiFormStatus.SENT) {
-      await this.prisma.drasiReviewInvite.update({ where: { id: inv.id }, data: { status: DrasiFormStatus.OPENED, openedAt: new Date() } });
-      this.logger.log(`Αξιολόγηση ${inv.id} ανοίχτηκε (${ip ?? '-'}).`);
+  // ── Κοινός σύνδεσμος: ένας για όλους, για ομάδα/ανακοίνωση ──
+
+  async shareStatus(user: RequestUser, id: string): Promise<DrasiReviewShareView> {
+    const drasi = await this.access.load(user, id, 'read');
+    const guests = await this.prisma.drasiReviewGuest.count({ where: { drasiId: id, answers: { some: {} } } });
+    return { active: !!drasi.reviewShareTokenHash, createdAt: drasi.reviewShareCreatedAt?.toISOString() ?? null, guestResponses: guests };
+  }
+
+  /** Νέος κοινός σύνδεσμος (ο προηγούμενος, αν υπήρχε, παύει). Το token επιστρέφεται ΜΙΑ φορά. */
+  async createShareLink(user: RequestUser, id: string): Promise<{ url: string }> {
+    await this.access.load(user, id, 'write', { allowClosed: true });
+    const token = randomBytes(32).toString('base64url');
+    await this.prisma.drasi.update({ where: { id }, data: { reviewShareTokenHash: hashToken(token), reviewShareCreatedAt: new Date() } });
+    await this.audit.record(user, 'drasi.review.share', 'drasi', id, {});
+    return { url: `${this.appUrl()}/review/${token}` };
+  }
+
+  async revokeShareLink(user: RequestUser, id: string): Promise<DrasiReviewShareView> {
+    await this.access.load(user, id, 'write', { allowClosed: true });
+    await this.prisma.drasi.update({ where: { id }, data: { reviewShareTokenHash: null, reviewShareCreatedAt: null } });
+    return this.shareStatus(user, id);
+  }
+
+  // ── Δημόσια πλευρά (χωρίς συνεδρία): προσωπικός ή κοινός σύνδεσμος ──
+
+  async openPublic(token: string, ip: string | undefined, guestId: string | undefined): Promise<PublicReviewView> {
+    const ctx = await this.byToken(token);
+    if (ctx.invite?.status === DrasiFormStatus.SENT) {
+      await this.prisma.drasiReviewInvite.update({ where: { id: ctx.invite.id }, data: { status: DrasiFormStatus.OPENED, openedAt: new Date() } });
+      this.logger.log(`Αξιολόγηση ${ctx.invite.id} ανοίχτηκε (${ip ?? '-'}).`);
     }
-    return this.publicView(inv);
+    return this.publicView(ctx, await this.guestOf(ctx, guestId));
   }
 
   async submitPublic(token: string, dto: PublicReviewAnswersDto, ip: string | undefined): Promise<PublicReviewView> {
-    const inv = await this.byToken(token);
-    const view = await this.publicView(inv);
-    if (!view.canAnswer) throw new ForbiddenException(view.cannotAnswerReason ?? 'Η φόρμα δεν δέχεται απαντήσεις.');
-    const known = new Set(view.questions.map((q) => q.id));
-    for (const a of dto.answers) if (!known.has(a.questionId)) throw new BadRequestException('Άγνωστη ερώτηση.');
-    await this.writeAnswers(inv.drasiId, inv.participant.userId, view.questions, dto.answers);
-    await this.prisma.drasiReviewInvite.update({ where: { id: inv.id }, data: { status: DrasiFormStatus.SUBMITTED, answeredAt: new Date() } });
-    this.logger.log(`Αξιολόγηση ${inv.id} υποβλήθηκε (${ip ?? '-'}).`);
-    return this.publicView({ ...inv, status: DrasiFormStatus.SUBMITTED });
+    const ctx = await this.byToken(token);
+    let guest = await this.guestOf(ctx, dto.guestId);
+    const before = await this.publicView(ctx, guest);
+    if (!before.canAnswer) throw new ForbiddenException(before.cannotAnswerReason ?? 'Η φόρμα δεν δέχεται απαντήσεις.');
+
+    let who: Respondent;
+    if (ctx.invite) {
+      who = { key: userKey(ctx.invite.participant.userId), userId: ctx.invite.participant.userId };
+    } else {
+      // Κοινός σύνδεσμος: ο επισκέπτης φτιάχνεται στην πρώτη υποβολή· με το guestId ξαναβρίσκεται για αλλαγή.
+      const name = dto.name?.trim() || null;
+      if (before.askName && !name) throw new BadRequestException('Γράψε το όνομά σου.');
+      guest = guest
+        ? await this.prisma.drasiReviewGuest.update({ where: { id: guest.id }, data: { name } })
+        : await this.prisma.drasiReviewGuest.create({ data: { drasiId: ctx.drasi.id, name } });
+      who = { key: guestKey(guest.id), guestId: guest.id };
+    }
+    await this.writeAnswers(ctx.drasi.id, who, before.questions, dto.answers);
+    if (ctx.invite) {
+      await this.prisma.drasiReviewInvite.update({ where: { id: ctx.invite.id }, data: { status: DrasiFormStatus.SUBMITTED, answeredAt: new Date() } });
+    }
+    this.logger.log(`Αξιολόγηση ${ctx.invite ? ctx.invite.id : 'κοινός σύνδεσμος'} υποβλήθηκε (${ip ?? '-'}).`);
+    return this.publicView(ctx, guest);
   }
 
-  private async byToken(token: string) {
+  private async byToken(token: string): Promise<PublicContext> {
     if (!/^[A-Za-z0-9_-]{30,60}$/.test(token)) throw new NotFoundException('Ο σύνδεσμος δεν είναι έγκυρος.');
+    const hash = hashToken(token);
+    const drasiSelect = { id: true, title: true, dateStart: true, dateEnd: true, reviewSettings: true, topiko: { select: { name: true } } } as const;
     const inv = await this.prisma.drasiReviewInvite.findUnique({
-      where: { tokenHash: hashToken(token) },
-      include: {
-        drasi: { select: { id: true, title: true, dateStart: true, dateEnd: true, reviewSettings: true, topiko: { select: { name: true } } } },
-        participant: { select: { userId: true, user: { select: { firstName: true, lastName: true } } } },
-      },
+      where: { tokenHash: hash },
+      include: { drasi: { select: drasiSelect }, participant: { select: { userId: true, user: { select: { firstName: true, lastName: true } } } } },
     });
-    if (!inv) throw new NotFoundException('Ο σύνδεσμος δεν είναι έγκυρος ή έχει ακυρωθεί.');
-    if (inv.status === DrasiFormStatus.VOID) throw new GoneException('Ο σύνδεσμος ακυρώθηκε — ζητήστε νέο από το στέλεχος.');
-    if (inv.expiresAt && inv.expiresAt < new Date()) throw new GoneException('Ο σύνδεσμος έληξε — ζητήστε νέο από το στέλεχος.');
-    return inv;
+    if (inv) {
+      if (inv.status === DrasiFormStatus.VOID) throw new GoneException('Ο σύνδεσμος ακυρώθηκε — ζητήστε νέο από το στέλεχος.');
+      if (inv.expiresAt && inv.expiresAt < new Date()) throw new GoneException('Ο σύνδεσμος έληξε — ζητήστε νέο από το στέλεχος.');
+      return { drasi: inv.drasi, invite: inv };
+    }
+    const drasi = await this.prisma.drasi.findUnique({ where: { reviewShareTokenHash: hash }, select: drasiSelect });
+    if (!drasi) throw new NotFoundException('Ο σύνδεσμος δεν είναι έγκυρος ή έχει ακυρωθεί.');
+    return { drasi, invite: null };
   }
 
-  private async publicView(inv: Awaited<ReturnType<DraseisReviewService['byToken']>>): Promise<PublicReviewView> {
-    const settings = this.settingsOf(inv.drasi.reviewSettings);
-    const questions = await this.prisma.drasiReviewQuestion.findMany({ where: { drasiId: inv.drasiId }, orderBy: { order: 'asc' }, include: answerInclude });
-    const userId = inv.participant.userId;
-    const mineRows = questions.flatMap((q) => q.answers.filter((a) => a.userId === userId));
-    const mineSubmittedAt = mineRows.length ? new Date(Math.max(...mineRows.map((a) => a.updatedAt.getTime()))).toISOString() : null;
+  /** Ο επισκέπτης του κοινού συνδέσμου, αν ο browser θυμάται το guestId του — και μόνο αν ανήκει σε αυτή τη δράση. */
+  private async guestOf(ctx: PublicContext, guestId: string | undefined) {
+    if (ctx.invite || !guestId || !/^[0-9a-f-]{36}$/.test(guestId)) return null;
+    return this.prisma.drasiReviewGuest.findFirst({ where: { id: guestId, drasiId: ctx.drasi.id } });
+  }
+
+  private async publicView(ctx: PublicContext, guest: { id: string; name: string | null } | null): Promise<PublicReviewView> {
+    const settings = this.settingsOf(ctx.drasi.reviewSettings);
+    const questions = await this.questions(ctx.drasi.id);
+    const key = ctx.invite ? userKey(ctx.invite.participant.userId) : guest ? guestKey(guest.id) : null;
+    const mineRows = key ? questions.flatMap((q) => q.answers.filter((a) => a.respondentKey === key)) : [];
+    const mineSubmittedAt = latest(mineRows);
     let cannotAnswerReason: string | null = null;
     if (!settings.acceptingResponses) cannotAnswerReason = 'Η φόρμα δεν δέχεται πλέον απαντήσεις.';
     else if (mineSubmittedAt && !settings.allowEdit) cannotAnswerReason = 'Έχεις ήδη απαντήσει — η φόρμα δεν επιτρέπει αλλαγή.';
     return {
-      drasi: { title: inv.drasi.title, dateStart: inv.drasi.dateStart.toISOString(), dateEnd: inv.drasi.dateEnd.toISOString(), topiko: inv.drasi.topiko.name },
-      participant: inv.participant.user,
+      mode: ctx.invite ? 'personal' : 'shared',
+      drasi: { title: ctx.drasi.title, dateStart: ctx.drasi.dateStart.toISOString(), dateEnd: ctx.drasi.dateEnd.toISOString(), topiko: ctx.drasi.topiko.name },
+      participant: ctx.invite ? ctx.invite.participant.user : null,
+      askName: !ctx.invite && !settings.anonymous,
+      guestId: guest?.id ?? null,
+      guestName: guest?.name ?? null,
       settings: {
         title: settings.title,
         description: settings.description,
@@ -361,18 +439,18 @@ export class DraseisReviewService {
   // ── Σύνοψη ──
 
   summarize(questions: QuestionRow[], settings: DrasiReviewSettings, withNames: boolean): DrasiReviewSummary {
-    const names = settings.anonymous ? null : withNames;
+    const names = settings.anonymous ? false : withNames;
     // Σταθερή αρίθμηση των απαντώντων κατά πρώτη υποβολή — ίδια σε σύνοψη, ατομικά και Excel.
-    const firstSeen = new Map<string, { at: number; user: string }>();
+    const firstSeen = new Map<string, { at: number; name: string }>();
     for (const q of questions) {
       for (const a of q.answers) {
-        const prev = firstSeen.get(a.userId);
+        const prev = firstSeen.get(a.respondentKey);
         const at = a.updatedAt.getTime();
-        if (!prev || at < prev.at) firstSeen.set(a.userId, { at, user: `${a.user.lastName} ${a.user.firstName}` });
+        if (!prev || at < prev.at) firstSeen.set(a.respondentKey, { at, name: respondentName(a) });
       }
     }
     const ordered = [...firstSeen.entries()].sort((x, y) => x[1].at - y[1].at);
-    const label = new Map(ordered.map(([uid, info], i) => [uid, names ? info.user : `Απάντηση #${i + 1}`]));
+    const label = new Map(ordered.map(([k, info], i) => [k, names && info.name ? info.name : `Απάντηση #${i + 1}`]));
 
     return {
       respondents: ordered.length,
@@ -393,14 +471,14 @@ export class DraseisReviewService {
           count: q.answers.length,
           average: values.length ? Math.round((values.reduce((s, v) => s + v, 0) / values.length) * 10) / 10 : null,
           distribution,
-          texts: q.kind === 'TEXT' || q.kind === 'PARAGRAPH' ? q.answers.filter((a) => a.text).map((a) => ({ user: label.get(a.userId) ?? '', text: a.text! })) : [],
+          texts: q.kind === 'TEXT' || q.kind === 'PARAGRAPH' ? q.answers.filter((a) => a.text).map((a) => ({ user: label.get(a.respondentKey) ?? '', text: a.text! })) : [],
         };
       }),
-      responses: ordered.map(([uid]) => ({
-        key: uid,
-        user: label.get(uid) ?? '',
-        submittedAt: new Date(Math.max(...questions.flatMap((q) => q.answers.filter((a) => a.userId === uid).map((a) => a.updatedAt.getTime())))).toISOString(),
-        answers: questions.flatMap((q) => q.answers.filter((a) => a.userId === uid).map((a) => this.toAnswerValue(a))),
+      responses: ordered.map(([k]) => ({
+        key: k,
+        user: label.get(k) ?? '',
+        submittedAt: latest(questions.flatMap((q) => q.answers.filter((a) => a.respondentKey === k))) ?? '',
+        answers: questions.flatMap((q) => q.answers.filter((a) => a.respondentKey === k).map((a) => this.toAnswerValue(a))),
       })),
     };
   }
@@ -412,7 +490,7 @@ export class DraseisReviewService {
     const drasi = await this.access.load(user, id, 'read');
     if (!this.manages(user, drasi.klados?.type as KladosType | undefined)) throw new ForbiddenException('Μόνο όποιος διαχειρίζεται τη δράση κατεβάζει τις απαντήσεις.');
     const settings = this.settingsOf(drasi.reviewSettings);
-    const questions = await this.prisma.drasiReviewQuestion.findMany({ where: { drasiId: id }, orderBy: { order: 'asc' }, include: answerInclude });
+    const questions = await this.questions(id);
     const summary = this.summarize(questions, settings, true);
 
     const wb = new ExcelJS.Workbook();
@@ -461,6 +539,21 @@ export class DraseisReviewService {
     const buffer = Buffer.from(await wb.xlsx.writeBuffer());
     return { filename: `Αξιολόγηση - ${drasi.title}.xlsx`, buffer };
   }
+}
+
+/** Τι βρήκε ο δημόσιος σύνδεσμος: πρόσκληση συμμετέχοντα ή μόνο τη δράση (κοινός σύνδεσμος). */
+interface PublicContext {
+  drasi: { id: string; title: string; dateStart: Date; dateEnd: Date; reviewSettings: Prisma.JsonValue | null; topiko: { name: string } };
+  invite: { id: string; status: DrasiFormStatus; participant: { userId: string; user: { firstName: string; lastName: string } } } | null;
+}
+
+function respondentName(a: AnswerRow): string {
+  if (a.user) return `${a.user.lastName} ${a.user.firstName}`.trim();
+  return a.guest?.name?.trim() ?? '';
+}
+
+function latest(rows: { updatedAt: Date }[]): string | null {
+  return rows.length ? new Date(Math.max(...rows.map((a) => a.updatedAt.getTime()))).toISOString() : null;
 }
 
 function hashToken(token: string): string {
