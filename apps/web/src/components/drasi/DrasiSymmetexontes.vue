@@ -162,6 +162,7 @@
       v-model="addDialog"
       :drasi-id="drasiId"
       :kladoi="kladoi"
+      :guest-topika="guestTopika"
       :existing-ids="rows.map((r) => r.user.id)"
       @added="onAdded"
     />
@@ -268,6 +269,7 @@ import {
   PAYMENT_HANDLING_FLOW,
   PAYMENT_HANDLING_SHORT,
   type DrasiCollectorView,
+  type DrasiGuestTopikoView,
   type DrasiParticipantView,
   type DrasiPaymentView,
   type KladosType,
@@ -285,6 +287,7 @@ import { kladosVars } from '../../lib/klados-theme';
 const props = defineProps<{
   drasiId: string;
   kladoi: KladosType[];
+  guestTopika: DrasiGuestTopikoView[];
   canWrite: boolean;
   /** Κλειστή δράση: τα οικονομικά δεν αλλάζουν. */
   locked: boolean;

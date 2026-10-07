@@ -74,6 +74,7 @@
         <q-tabs v-model="tab" dense align="left" class="text-klados q-mb-md" narrow-indicator>
           <q-tab name="stats" label="Στοιχεία ανά κλάδο" />
           <q-tab name="participants" :label="`Συμμετέχοντες (${data.participants.length})`" />
+          <q-tab name="omades" label="Ομάδες" />
           <q-tab name="tamio" label="Ταμείο" />
           <q-tab v-if="ypiresies.length" name="ypiresies" label="Υπηρεσίες" />
           <q-tab name="yliko" :label="`Υλικό (${data.checkouts.length})`" />
@@ -130,6 +131,7 @@
             <DrasiSymmetexontes
               :drasi-id="id"
               :kladoi="data.kladoi"
+              :guest-topika="data.guestTopika"
               :can-write="canWrite"
               :locked="data.status === 'KLEISTI'"
               :costs="{
@@ -139,6 +141,15 @@
                 transportCost: data.transportCost,
               }"
               @changed="reload"
+            />
+          </q-tab-panel>
+
+          <q-tab-panel name="omades" class="q-pa-none">
+            <DrasiOmades
+              :drasi-id="id"
+              :kladoi="data.kladoi"
+              :organiser="data.klados?.type ?? null"
+              :can-write="canWrite && data.status !== 'KLEISTI'"
             />
           </q-tab-panel>
 
@@ -244,6 +255,7 @@ import {
   type YlikoCategory,
 } from '@trifylli/shared';
 import PageState from '../components/PageState.vue';
+import DrasiOmades from '../components/drasi/DrasiOmades.vue';
 import DrasiSymmetexontes from '../components/drasi/DrasiSymmetexontes.vue';
 import DrasiTamio from '../components/drasi/DrasiTamio.vue';
 import { useAsyncData } from '../composables/useAsyncData';
