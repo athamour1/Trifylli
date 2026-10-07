@@ -189,9 +189,12 @@ const neighbours = computed(() => {
   return { prev: items[idx - 1]?.id ?? null, next: items[idx + 1]?.id ?? null };
 });
 
+// Και στην αλλαγή διαδρομής: το layout καθαρίζει το θέμα σε κάθε πλοήγηση, άρα
+// και όταν αλλάζει μόνο η ενότητα/το στοιχείο μέσα στην ίδια σελίδα — ο κλάδος
+// δεν άλλαξε, οπότε μόνο η διαδρομή μάς ξυπνά να το ξαναβάψουμε.
 watch(
-  () => drasi.value?.klados?.type,
-  (klados) => applyKladosTheme(klados ?? null),
+  [() => drasi.value?.klados?.type, () => route.fullPath],
+  ([klados]) => applyKladosTheme(klados ?? null),
   { immediate: true },
 );
 

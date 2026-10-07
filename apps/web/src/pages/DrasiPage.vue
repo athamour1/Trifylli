@@ -411,9 +411,12 @@ const { data, loading, error, stale, reload } = useAsyncData(
 
 // Η σελίδα ζει εκτός `/k/:klados`, οπότε το layout δεν ξέρει τον κλάδο της· τον
 // δηλώνει μόνη της ώστε τα κουμπιά της να πάρουν το χρώμα του.
+// Και στην αλλαγή διαδρομής: το layout καθαρίζει το θέμα σε κάθε πλοήγηση, άρα
+// και όταν αλλάζει μόνο η ενότητα/το στοιχείο μέσα στην ίδια σελίδα — ο κλάδος
+// δεν άλλαξε, οπότε μόνο η διαδρομή μάς ξυπνά να το ξαναβάψουμε.
 watch(
-  () => data.value?.klados?.type,
-  (klados) => applyKladosTheme(klados ?? null),
+  [() => data.value?.klados?.type, () => route.fullPath],
+  ([klados]) => applyKladosTheme(klados ?? null),
   { immediate: true },
 );
 
