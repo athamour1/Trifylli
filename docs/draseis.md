@@ -593,6 +593,17 @@ model DrasiReviewAnswer {
 `PUT review/questions`, `PATCH review/settings`, `PUT review/answers`,
 `DELETE review/responses/:key`, `GET review/export.xlsx`.
 
+**Αποστολή σε παιδιά χωρίς λογαριασμό (2026-10-07):** κουμπί «Αποστολή» στη
+φόρμα → διάλογος με όλους τους συμμετέχοντες και κατάσταση (Δεν στάλθηκε /
+Στάλθηκε / Ανοίχτηκε / Απάντησε), έκδοση συνδέσμων (όλοι ή ένας-ένας με
+αντιγραφή, WhatsApp), ακύρωση. Ίδιο μοντέλο με τα έντυπα F5: `DrasiReviewInvite`
+(μία ανά συμμετέχοντα, στη βάση μόνο το hash του token, λήγει σε
+`FORM_LINK_TTL_DAYS`), δημόσια σελίδα `/review/:token` (`ReviewFillPage.vue`,
+χωρίς μενού/συνεδρία), `GET|POST /review/:token` με throttle. Οι απαντήσεις
+γράφονται στο `DrasiReviewAnswer` με το `userId` του συμμετέχοντα, άρα μετρούν
+κανονικά στη σύνοψη/Excel και ισχύει το «μία απάντηση ανά άτομο». Η συμπλήρωση
+είναι κοινό component (`ReviewQuestionsForm.vue`) για συνδεδεμένους και σύνδεσμο.
+
 ---
 
 ## F11 — Ντοσιέ σε PDF

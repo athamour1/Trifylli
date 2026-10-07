@@ -534,6 +534,7 @@ model Drasi {
   shopping     DrasiShoppingItem[]
   externalYliko DrasiExternalYliko[]
   reviewQuestions DrasiReviewQuestion[]
+  reviewInvites   DrasiReviewInvite[]
   schedule     DrasiScheduleItem[]
 
   @@index([topikoId, dateStart])
@@ -586,6 +587,29 @@ model DrasiScheduleYliko {
 
   @@id([itemId, ylikoId])
   @@map("drasi_schedule_yliko")
+}
+
+/// Πρόσκληση αξιολόγησης προς συμμετέχοντα ΧΩΡΙΣ λογαριασμό (παιδιά): δημόσιος
+/// σύνδεσμος όπως τα έντυπα — στη βάση μόνο το hash του token, μία ανά συμμετέχοντα.
+/// Οι απαντήσεις γράφονται κανονικά στο `DrasiReviewAnswer` με το `userId` του.
+model DrasiReviewInvite {
+  id            String          @id @default(uuid()) @db.Uuid
+  drasiId       String          @db.Uuid
+  participantId String          @unique @db.Uuid
+  status        DrasiFormStatus @default(SENT)
+  tokenHash     String?         @unique
+  expiresAt     DateTime?
+  sentAt        DateTime?
+  openedAt      DateTime?
+  answeredAt    DateTime?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  drasi       Drasi            @relation(fields: [drasiId], references: [id], onDelete: Cascade)
+  participant DrasiParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@index([drasiId, status])
+  @@map("drasi_review_invite")
 }
 
 /// Αξιολόγηση κατ' επιλογήν: τα θέματα τα φτιάχνουν τα στελέχη. Βλ. docs/draseis.md F10.
@@ -900,6 +924,7 @@ model DrasiParticipant {
   groups    DrasiGroupMember[]
   leads     DrasiGroup[]     @relation("DrasiGroupLeader")
   forms     DrasiForm[]
+  reviewInvite DrasiReviewInvite?
 
   @@unique([drasiId, userId])
   @@index([drasiId, kind])

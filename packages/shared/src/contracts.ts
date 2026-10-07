@@ -652,6 +652,38 @@ export interface DrasiReviewSummary {
   responses: DrasiReviewResponse[];
 }
 
+/** Πρόσκληση αξιολόγησης προς συμμετέχοντα (δημόσιος σύνδεσμος, χωρίς λογαριασμό). */
+export interface DrasiReviewInviteView {
+  participantId: string;
+  user: { firstName: string; lastName: string; kind: MemberKind; birthDate: string | null };
+  inviteId: string | null;
+  status: DrasiFormStatus;
+  sentAt: string | null;
+  expiresAt: string | null;
+  answeredAt: string | null;
+}
+
+/** Ο σύνδεσμος αξιολόγησης που βγαίνει ΜΙΑ φορά — στη βάση μένει μόνο το hash. */
+export interface IssuedReviewLink {
+  participantId: string;
+  inviteId: string;
+  url: string;
+  expiresAt: string;
+}
+
+/** Τι βλέπει το παιδί/ο γονέας με τον σύνδεσμο αξιολόγησης. */
+export interface PublicReviewView {
+  drasi: { title: string; dateStart: string; dateEnd: string; topiko: string };
+  participant: { firstName: string; lastName: string };
+  settings: Pick<DrasiReviewSettings, 'title' | 'description' | 'anonymous' | 'allowEdit' | 'showSummary' | 'confirmationMessage'>;
+  questions: DrasiReviewQuestionView[];
+  mine: DrasiReviewAnswerValue[];
+  mineSubmittedAt: string | null;
+  canAnswer: boolean;
+  cannotAnswerReason: string | null;
+  summary: DrasiReviewSummary | null;
+}
+
 export interface DrasiReviewView {
   settings: DrasiReviewSettings;
   questions: DrasiReviewQuestionView[];

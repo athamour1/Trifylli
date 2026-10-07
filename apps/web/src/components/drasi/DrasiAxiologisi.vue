@@ -24,7 +24,75 @@
         <q-btn flat round dense :color="tab === 'fill' ? 'klados' : 'grey-7'" icon="visibility" @click="tab = 'fill'">
           <q-tooltip>Προεπισκόπηση — όπως τη βλέπει όποιος απαντά</q-tooltip>
         </q-btn>
+        <q-btn color="klados" text-color="klados-on" unelevated dense icon="send" label="Αποστολή" class="q-ml-sm" :disable="!view.questions.length" @click="openSend">
+          <q-tooltip>Σύνδεσμοι προς τους συμμετέχοντες — χωρίς λογαριασμό</q-tooltip>
+        </q-btn>
       </div>
+
+      <!-- ══════════ Αποστολή: δημόσιοι σύνδεσμοι ανά συμμετέχοντα ══════════ -->
+      <q-dialog v-model="sendDialog">
+        <q-card style="min-width: min(720px, 96vw); max-height: 90vh" class="column no-wrap">
+          <q-card-section class="row items-center q-pb-sm">
+            <div class="text-subtitle1 text-weight-medium">Αποστολή αξιολόγησης</div>
+            <q-space />
+            <q-btn flat round dense icon="close" v-close-popup />
+          </q-card-section>
+          <q-card-section class="text-caption text-grey-7 q-pt-none">
+            Κάθε σύνδεσμος ανοίγει τη φόρμα για <b>έναν</b> συμμετέχοντα, χωρίς λογαριασμό, και μετρά ως η δική του απάντηση. Λήγει σε
+            {{ FORM_LINK_TTL_DAYS }} ημέρες. Οι σύνδεσμοι φαίνονται <b>μόνο τη στιγμή της έκδοσης</b> — μετά μόνο νέος σύνδεσμος.
+          </q-card-section>
+          <q-card-section class="q-pt-none row q-gutter-sm">
+            <q-btn color="klados" text-color="klados-on" unelevated icon="link" label="Έκδοση σε όσους δεν έχουν" :loading="issuing" @click="issueInvites({})" />
+            <q-btn flat color="klados" icon="refresh" label="Νέοι σύνδεσμοι σε όσους εκκρεμούν" :loading="issuing" @click="issueInvites({ reissue: true })" />
+            <q-space />
+            <span v-if="invites.length" class="text-caption text-grey-7 self-center">{{ invites.filter((i) => i.status === 'SUBMITTED').length }} / {{ invites.length }} απάντησαν</span>
+          </q-card-section>
+          <q-card-section v-if="issued.length" class="q-pt-none">
+            <q-banner rounded class="bg-grey-2">
+              <div class="text-caption text-grey-7 q-mb-xs">Νέοι σύνδεσμοι ({{ issued.length }}) — αντίγραψέ τους τώρα:</div>
+              <q-list dense separator>
+                <q-item v-for="l in issued" :key="l.inviteId" class="q-px-none">
+                  <q-item-section>
+                    <q-item-label>{{ inviteName(l.participantId) }}</q-item-label>
+                    <q-item-label caption class="ellipsis">{{ l.url }}</q-item-label>
+                  </q-item-section>
+                  <q-item-section side>
+                    <div class="row no-wrap">
+                      <q-btn flat dense round icon="content_copy" @click="copyText(l.url)"><q-tooltip>Αντιγραφή</q-tooltip></q-btn>
+                      <q-btn flat dense round icon="share" :href="whatsapp(l)" target="_blank" rel="noopener"><q-tooltip>WhatsApp</q-tooltip></q-btn>
+                    </div>
+                  </q-item-section>
+                </q-item>
+              </q-list>
+              <q-btn flat dense no-caps color="klados" label="Αντιγραφή όλων" class="q-mt-xs" @click="copyText(issued.map((l) => `${inviteName(l.participantId)}: ${l.url}`).join('\n'))" />
+            </q-banner>
+          </q-card-section>
+          <q-card-section class="col scroll q-pt-none">
+            <q-markup-table flat bordered dense>
+              <thead>
+                <tr><th class="text-left">Συμμετέχων</th><th class="text-left">Κατάσταση</th><th /></tr>
+              </thead>
+              <tbody>
+                <tr v-for="i in invites" :key="i.participantId">
+                  <td>{{ i.user.lastName }} {{ i.user.firstName }} <span class="text-caption text-grey-6">{{ i.user.kind === 'STELEXOS' ? '· στέλεχος' : '' }}</span></td>
+                  <td>
+                    <q-chip dense :color="inviteColor(i.status)" text-color="white" :label="i.status === 'SUBMITTED' ? 'Απάντησε' : DRASI_FORM_STATUS_LABEL[i.status]" />
+                    <span v-if="i.answeredAt" class="text-caption text-grey-7">{{ formatDate(i.answeredAt) }}</span>
+                    <span v-else-if="i.expiresAt" class="text-caption text-grey-7">έως {{ formatDate(i.expiresAt) }}</span>
+                  </td>
+                  <td class="text-right no-wrap">
+                    <q-btn v-if="i.status === 'SENT' || i.status === 'OPENED' || (i.status === 'SUBMITTED' && settings.allowEdit)" flat dense round size="sm" icon="content_copy" color="klados" :loading="copying === i.participantId" @click="copyInvite(i)">
+                      <q-tooltip>Αντιγραφή συνδέσμου — εκδίδεται νέος (ο προηγούμενος παύει να ισχύει)</q-tooltip>
+                    </q-btn>
+                    <q-btn v-if="i.inviteId && (i.status === 'SENT' || i.status === 'OPENED')" flat dense round size="sm" icon="link_off" color="negative" @click="voidInvite(i)"><q-tooltip>Ακύρωση συνδέσμου</q-tooltip></q-btn>
+                    <q-btn v-if="i.status === 'PENDING' || i.status === 'VOID'" flat dense round size="sm" icon="link" color="klados" :loading="copying === i.participantId" @click="copyInvite(i)"><q-tooltip>Έκδοση & αντιγραφή συνδέσμου</q-tooltip></q-btn>
+                  </td>
+                </tr>
+              </tbody>
+            </q-markup-table>
+          </q-card-section>
+        </q-card>
+      </q-dialog>
 
       <q-tab-panels v-model="tab" animated>
         <!-- ══════════ Ερωτήσεις ══════════ -->
@@ -233,98 +301,20 @@
         <!-- ══════════ Η φόρμα προς συμπλήρωση ══════════ -->
         <q-tab-panel name="fill" class="q-pa-none">
           <div v-if="!view.questions.length" class="text-center text-grey-6 q-pa-lg">Δεν έχει οριστεί αξιολόγηση για αυτή τη δράση.</div>
-
-          <template v-else>
-            <q-card flat bordered class="form-head q-mb-md">
-              <q-card-section>
-                <div class="form-title">{{ settings.title || defaultTitle }}</div>
-                <div v-if="settings.description" class="text-body2 text-grey-8 pre-line q-mt-xs">{{ settings.description }}</div>
-                <div v-if="view.questions.some((q) => q.required)" class="text-caption text-negative q-mt-sm">* Υποχρεωτική</div>
-              </q-card-section>
-            </q-card>
-
-            <!-- Μετά την υποβολή -->
-            <q-card v-if="justSubmitted" flat bordered class="q-mb-md">
-              <q-card-section class="row items-center no-wrap q-gutter-sm">
-                <q-icon name="check_circle" color="positive" size="28px" />
-                <div class="col">
-                  <div class="text-body1">{{ settings.confirmationMessage || 'Η απάντησή σου καταχωρήθηκε.' }}</div>
-                  <div class="text-caption text-grey-7">{{ formatDateTime(view.mineSubmittedAt ?? new Date().toISOString()) }}</div>
-                </div>
-                <q-btn v-if="view.canAnswer" flat color="klados" label="Αλλαγή απάντησης" @click="justSubmitted = false" />
-              </q-card-section>
-            </q-card>
-
-            <template v-else>
-              <q-banner v-if="!view.canAnswer" rounded class="bg-grey-2 q-mb-md">
-                <template #avatar><q-icon name="lock" color="grey-7" /></template>
-                {{ view.cannotAnswerReason }}
-                <span v-if="view.mineSubmittedAt"> Απάντησες στις {{ formatDateTime(view.mineSubmittedAt) }}.</span>
-              </q-banner>
-              <q-banner v-else-if="view.mineSubmittedAt" rounded class="bg-grey-2 q-mb-md">
-                <template #avatar><q-icon name="history" color="grey-7" /></template>
-                Έχεις απαντήσει στις {{ formatDateTime(view.mineSubmittedAt) }} — μπορείς να αλλάξεις την απάντησή σου.
-              </q-banner>
-
-              <q-card v-for="q in view.questions" :key="q.id" flat bordered class="q-mb-md" :class="{ 'question-card--error': errors.has(q.id) }">
-                <q-card-section>
-                  <div class="text-body1">{{ q.text }}<span v-if="q.required" class="text-negative"> *</span></div>
-                  <div v-if="q.description" class="text-caption text-grey-7 q-mb-sm">{{ q.description }}</div>
-
-                  <q-input v-if="q.kind === 'TEXT'" v-model="mine[q.id]!.text" dense placeholder="Η απάντησή σου" color="klados" :readonly="!view.canAnswer" maxlength="4000" />
-                  <q-input v-else-if="q.kind === 'PARAGRAPH'" v-model="mine[q.id]!.text" type="textarea" autogrow dense placeholder="Η απάντησή σου" color="klados" :readonly="!view.canAnswer" maxlength="4000" />
-                  <q-option-group v-else-if="q.kind === 'CHOICE'" v-model="mine[q.id]!.text" :options="q.options.map((o) => ({ label: o, value: o }))" color="klados" :disable="!view.canAnswer" />
-                  <q-option-group v-else-if="q.kind === 'CHECKBOX'" v-model="mine[q.id]!.choices" type="checkbox" :options="q.options.map((o) => ({ label: o, value: o }))" color="klados" :disable="!view.canAnswer" />
-                  <div v-else class="row items-center q-col-gutter-sm">
-                    <div v-if="q.scaleLow" class="col-auto text-caption text-grey-7">{{ q.scaleLow }}</div>
-                    <div class="col">
-                      <!-- Όχι `outline`: στο επιλεγμένο κουμπί το χρώμα κειμένου (λευκό) γινόταν και χρώμα περιγράμματος — αόρατο πάνω σε λευκό. -->
-                      <q-btn-toggle
-                        v-model="mine[q.id]!.value"
-                        :options="Array.from({ length: scaleMax(q.kind) }, (_, i) => ({ label: String(i + 1), value: i + 1 }))"
-                        unelevated
-                        dense
-                        spread
-                        no-caps
-                        color="grey-2"
-                        text-color="grey-9"
-                        toggle-color="klados"
-                        toggle-text-color="klados-on"
-                        clearable
-                        class="scale-toggle"
-                        :disable="!view.canAnswer"
-                      />
-                    </div>
-                    <div v-if="q.scaleHigh" class="col-auto text-caption text-grey-7">{{ q.scaleHigh }}</div>
-                  </div>
-                  <div v-if="errors.has(q.id)" class="text-caption text-negative q-mt-xs">Η ερώτηση είναι υποχρεωτική.</div>
-                </q-card-section>
-              </q-card>
-
-              <div v-if="view.canAnswer" class="row items-center q-gutter-sm">
-                <q-btn color="klados" text-color="klados-on" unelevated label="Υποβολή" :loading="submitting" @click="submit" />
-                <q-btn flat color="grey-7" label="Καθαρισμός" @click="clearMine" />
-              </div>
-            </template>
-
-            <!-- Σύνοψη για τους απαντώντες, αν το επιτρέπουν οι ρυθμίσεις -->
-            <template v-if="!canWrite && view.summary">
-              <div class="text-subtitle2 q-mt-lg q-mb-sm">Σύνοψη απαντήσεων ({{ view.summary.respondents }})</div>
-              <q-card v-for="q in view.questions" :key="q.id" flat bordered class="q-mb-md">
-                <q-card-section>
-                  <div class="text-body2 text-weight-medium q-mb-xs">{{ q.text }}</div>
-                  <template v-if="summaryOf(q.id)?.distribution.length">
-                    <div v-for="d in summaryOf(q.id)!.distribution" :key="d.label" class="row items-center no-wrap q-mb-xs">
-                      <div class="dist-label ellipsis">{{ d.label }}</div>
-                      <div class="col dist-track"><div class="dist-bar" :style="{ width: pct(d.count, summaryOf(q.id)!.count, q.kind) }" /></div>
-                      <div class="dist-count text-caption text-grey-8">{{ d.count }}</div>
-                    </div>
-                  </template>
-                  <div v-for="(t, i) in summaryOf(q.id)?.texts ?? []" :key="i" class="text-body2 pre-line q-mb-xs">«{{ t.text }}»<span v-if="t.user && !settings.anonymous" class="text-caption text-grey-6"> — {{ t.user }}</span></div>
-                </q-card-section>
-              </q-card>
-            </template>
-          </template>
+          <ReviewQuestionsForm
+            v-else
+            v-model:just-submitted="justSubmitted"
+            :questions="view.questions"
+            :settings="settings"
+            :default-title="defaultTitle"
+            :mine-answers="view.mine"
+            :mine-submitted-at="view.mineSubmittedAt"
+            :can-answer="view.canAnswer"
+            :cannot-answer-reason="view.cannotAnswerReason"
+            :summary="canWrite ? null : view.summary"
+            :submitting="submitting"
+            @submit="submit"
+          />
         </q-tab-panel>
       </q-tab-panels>
     </template>
@@ -336,20 +326,27 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useQuasar } from 'quasar';
 import {
   DEFAULT_REVIEW_SETTINGS,
+  DRASI_FORM_STATUS_LABEL,
   DRASI_REVIEW_AUDIENCE_LABEL,
+  FORM_LINK_TTL_DAYS,
   DRASI_REVIEW_CHOICE_KINDS,
   DRASI_REVIEW_KIND_LABEL,
   DRASI_REVIEW_SCALE_MAX,
   DrasiReviewAudience,
   DrasiReviewKind,
+  type DrasiFormStatus,
+  type DrasiReviewInviteView,
   type DrasiReviewQuestionView,
   type DrasiReviewResponse,
   type DrasiReviewSettings,
   type DrasiReviewView,
+  type IssuedReviewLink,
 } from '@trifylli/shared';
+import { copyToClipboard } from 'quasar';
 import SaveStatus from '../SaveStatus.vue';
-import { ApiError, OfflineError, del, downloadFile, get, patch, put } from '../../lib/api';
-import { formatDateTime } from '../../lib/format';
+import ReviewQuestionsForm, { type ReviewAnswerPayload } from './ReviewQuestionsForm.vue';
+import { ApiError, OfflineError, del, downloadFile, get, patch, post, put } from '../../lib/api';
+import { formatDate, formatDateTime } from '../../lib/format';
 import type { SaveState } from '../../lib/save-state';
 
 const props = defineProps<{ drasiId: string; canWrite: boolean; drasiTitle?: string }>();
@@ -392,10 +389,6 @@ function apply(v: DrasiReviewView): void {
   else editor.splice(0, editor.length, ...v.questions.map(toEditorRow));
   lastSaved.questions = serializeQuestions();
   lastSaved.settings = JSON.stringify(settings);
-  for (const q of v.questions) {
-    const a = v.mine.find((x) => x.questionId === q.id);
-    mine[q.id] = { value: a?.value ?? null, text: a?.text ?? '', choices: [...(a?.choices ?? [])] };
-  }
 }
 onMounted(reload);
 
@@ -498,7 +491,6 @@ async function saveNow(): Promise<void> {
       if (saved.length === sent.length) saved.forEach((sq, i) => (sent[i]!.id = sq.id));
       lastSaved.questions = serializeQuestions();
       lastSaved.settings = JSON.stringify(settings);
-      for (const qq of v.questions) if (!mine[qq.id]) mine[qq.id] = { value: null, text: '', choices: [] };
     }
     saveStatus.value = serializeQuestions() !== lastSaved.questions || JSON.stringify(settings) !== lastSaved.settings ? 'pending' : 'saved';
   } catch (err) {
@@ -593,47 +585,96 @@ function removeResponse(r: DrasiReviewResponse): void {
   });
 }
 
-// ── Η δική μου απάντηση ──
-const mine = reactive<Record<string, { value: number | null; text: string; choices: string[] }>>({});
-const errors = ref(new Set<string>());
+// ── Η δική μου απάντηση (το component κρατά τις τιμές· εδώ μόνο η αποστολή) ──
 const submitting = ref(false);
 const justSubmitted = ref(false);
-function isEmpty(q: DrasiReviewQuestionView): boolean {
-  const a = mine[q.id];
-  if (!a) return true;
-  if (DRASI_REVIEW_SCALE_MAX[q.kind]) return a.value === null;
-  if (q.kind === 'CHECKBOX') return !a.choices.length;
-  return !a.text?.trim();
-}
-function clearMine(): void {
-  for (const id of Object.keys(mine)) mine[id] = { value: null, text: '', choices: [] };
-  errors.value = new Set();
-}
-async function submit(): Promise<void> {
-  if (!view.value) return;
-  const missing = view.value.questions.filter((q) => q.required && isEmpty(q)).map((q) => q.id);
-  errors.value = new Set(missing);
-  if (missing.length) {
-    $q.notify({ type: 'warning', message: 'Συμπλήρωσε τις υποχρεωτικές ερωτήσεις.' });
-    return;
-  }
+async function submit(answers: ReviewAnswerPayload[]): Promise<void> {
   submitting.value = true;
   try {
-    apply(
-      await put<DrasiReviewView>(`/draseis/${props.drasiId}/review/answers`, {
-        answers: view.value.questions.map((q) => {
-          const a = mine[q.id]!;
-          if (DRASI_REVIEW_SCALE_MAX[q.kind]) return { questionId: q.id, value: a.value };
-          if (q.kind === 'CHECKBOX') return { questionId: q.id, choices: a.choices };
-          return { questionId: q.id, text: a.text || null };
-        }),
-      }),
-    );
+    apply(await put<DrasiReviewView>(`/draseis/${props.drasiId}/review/answers`, { answers }));
     justSubmitted.value = true;
   } catch (err) {
     notifyError(err, 'Αποτυχία υποβολής.');
   } finally {
     submitting.value = false;
+  }
+}
+
+// ── Αποστολή: δημόσιοι σύνδεσμοι ανά συμμετέχοντα (παιδιά χωρίς λογαριασμό) ──
+const sendDialog = ref(false);
+const invites = ref<DrasiReviewInviteView[]>([]);
+const issued = ref<IssuedReviewLink[]>([]);
+const issuing = ref(false);
+const copying = ref<string | null>(null);
+const inviteName = (pid: string): string => {
+  const i = invites.value.find((x) => x.participantId === pid);
+  return i ? `${i.user.lastName} ${i.user.firstName}` : '';
+};
+function inviteColor(s: DrasiFormStatus): string {
+  return { PENDING: 'grey-6', SENT: 'blue-7', OPENED: 'orange-7', SUBMITTED: 'positive', VOID: 'grey-8' }[s];
+}
+async function loadInvites(): Promise<void> {
+  try {
+    invites.value = await get<DrasiReviewInviteView[]>(`/draseis/${props.drasiId}/review/invites`);
+  } catch (err) {
+    notifyError(err, 'Αποτυχία φόρτωσης.');
+  }
+}
+async function openSend(): Promise<void> {
+  await saveNow();
+  issued.value = [];
+  await loadInvites();
+  sendDialog.value = true;
+}
+async function issueInvites(body: { participantIds?: string[]; reissue?: boolean }): Promise<void> {
+  issuing.value = true;
+  try {
+    issued.value = await post<IssuedReviewLink[]>(`/draseis/${props.drasiId}/review/invites`, body);
+    if (!issued.value.length) $q.notify({ type: 'info', message: 'Δεν υπάρχει κανείς για αποστολή.' });
+    await loadInvites();
+  } catch (err) {
+    notifyError(err, 'Αποτυχία έκδοσης.');
+  } finally {
+    issuing.value = false;
+  }
+}
+/** Έκδοση (ή επανέκδοση) για ένα άτομο και αντιγραφή κατευθείαν — για «χάθηκε ο σύνδεσμος». */
+async function copyInvite(i: DrasiReviewInviteView): Promise<void> {
+  copying.value = i.participantId;
+  try {
+    const links = await post<IssuedReviewLink[]>(`/draseis/${props.drasiId}/review/invites`, { participantIds: [i.participantId], reissue: true });
+    const link = links[0];
+    if (!link) {
+      $q.notify({ type: 'info', message: 'Δεν εκδόθηκε σύνδεσμος.' });
+      return;
+    }
+    await copyText(link.url);
+    await loadInvites();
+  } catch (err) {
+    notifyError(err, 'Αποτυχία έκδοσης.');
+  } finally {
+    copying.value = null;
+  }
+}
+async function voidInvite(i: DrasiReviewInviteView): Promise<void> {
+  if (!i.inviteId) return;
+  try {
+    await del(`/draseis/${props.drasiId}/review/invites/${i.inviteId}`);
+    await loadInvites();
+  } catch (err) {
+    notifyError(err, 'Αποτυχία.');
+  }
+}
+function whatsapp(l: IssuedReviewLink): string {
+  const text = `Γεια σου! Θα θέλαμε τη γνώμη σου για τη δράση «${props.drasiTitle ?? ''}» — συμπλήρωσε την αξιολόγηση εδώ: ${l.url}`;
+  return `https://wa.me/?text=${encodeURIComponent(text)}`;
+}
+async function copyText(text: string): Promise<void> {
+  try {
+    await copyToClipboard(text);
+    $q.notify({ type: 'positive', message: 'Αντιγράφηκε.' });
+  } catch {
+    $q.notify({ type: 'warning', message: 'Δεν επιτρέπεται η αντιγραφή — επίλεξέ το με το χέρι.' });
   }
 }
 

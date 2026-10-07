@@ -15,7 +15,7 @@ import { DraseisGroupsService } from './draseis-groups.service';
 import { DraseisPharmacyService } from './draseis-pharmacy.service';
 import { DraseisPlanController } from './draseis-plan.controller';
 import { DraseisPlanService } from './draseis-plan.service';
-import { DraseisReviewController } from './draseis-review.controller';
+import { DraseisReviewController, PublicReviewController } from './draseis-review.controller';
 import { DraseisReviewService } from './draseis-review.service';
 import { DraseisService } from './draseis.service';
 
@@ -31,6 +31,7 @@ import { DraseisService } from './draseis.service';
     PublicFormsController,
     DraseisPlanController,
     DraseisReviewController,
+    PublicReviewController,
   ],
   providers: [
     DrasiAccessService,

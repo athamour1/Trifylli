@@ -1,12 +1,13 @@
-import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Put, Query, Res, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Ip, Param, ParseUUIDPipe, Patch, Post, Put, Query, Res, UseGuards } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { CapabilityGuard } from '../../common/auth/capability.guard';
-import { CurrentUser, RequireCapability } from '../../common/auth/decorators';
+import { CurrentUser, Public, RequireCapability } from '../../common/auth/decorators';
 import type { RequestUser } from '../../common/auth/types';
 import { DraseisDossierService } from './draseis-dossier.service';
 import { DraseisReviewService } from './draseis-review.service';
-import { SetReviewAnswersDto, SetReviewQuestionsDto, UpdateReviewSettingsDto } from './dto/drasi-review.dto';
+import { IssueReviewInvitesDto, PublicReviewAnswersDto, SetReviewAnswersDto, SetReviewQuestionsDto, UpdateReviewSettingsDto } from './dto/drasi-review.dto';
 
 /** Αξιολόγηση (φόρμα) και ντοσιέ μιας δράσης. */
 @ApiTags('Δράσεις — αξιολόγηση & ντοσιέ')
@@ -54,6 +55,27 @@ export class DraseisReviewController {
     return this.review.removeResponse(user, id, key);
   }
 
+  @Get('review/invites')
+  @RequireCapability('calendar:read')
+  @ApiOperation({ summary: 'Ποιος συμμετέχων έχει σύνδεσμο αξιολόγησης και αν απάντησε' })
+  invites(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.review.invites(user, id);
+  }
+
+  @Post('review/invites')
+  @RequireCapability('drasi:write')
+  @ApiOperation({ summary: 'Έκδοση δημόσιων συνδέσμων αξιολόγησης — το token επιστρέφεται μία φορά' })
+  issueInvites(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: IssueReviewInvitesDto) {
+    return this.review.issueInvites(user, id, dto);
+  }
+
+  @Delete('review/invites/:inviteId')
+  @RequireCapability('drasi:write')
+  @ApiOperation({ summary: 'Ακύρωση συνδέσμου αξιολόγησης' })
+  voidInvite(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Param('inviteId', ParseUUIDPipe) inviteId: string) {
+    return this.review.voidInvite(user, id, inviteId);
+  }
+
   @Get('review/export.xlsx')
   @RequireCapability('drasi:write')
   @ApiOperation({ summary: 'Οι απαντήσεις σε Excel (μία γραμμή ανά απαντώντα + σύνοψη)' })
@@ -77,5 +99,29 @@ export class DraseisReviewController {
     @Query('treasury') treasury?: string,
   ) {
     return this.dossiers.build(user, id, { health: health === '1', treasury: treasury !== '0' });
+  }
+}
+
+/** Η δημόσια πλευρά της αξιολόγησης: το παιδί (ή ο γονέας) με τον σύνδεσμό του, χωρίς συνεδρία. */
+@ApiTags('Αξιολόγηση (δημόσια)')
+@Controller('review')
+export class PublicReviewController {
+  constructor(private readonly review: DraseisReviewService) {}
+
+  @Get(':token')
+  @Public()
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Η φόρμα αξιολόγησης όπως τη βλέπει ο προσκεκλημένος' })
+  open(@Param('token') token: string, @Ip() ip: string) {
+    return this.review.openPublic(token, ip);
+  }
+
+  @Post(':token')
+  @Public()
+  @HttpCode(200)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Υποβολή απαντήσεων μέσω συνδέσμου' })
+  submit(@Param('token') token: string, @Body() dto: PublicReviewAnswersDto, @Ip() ip: string) {
+    return this.review.submitPublic(token, dto, ip);
   }
 }

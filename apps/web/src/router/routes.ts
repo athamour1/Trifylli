@@ -177,6 +177,19 @@ const routes: RouteRecordRaw[] = [
       },
     ],
   },
+  {
+    // Η αξιολόγηση με δημόσιο σύνδεσμο (παιδιά χωρίς λογαριασμό) — ίδιο μοντέλο με τα έντυπα.
+    path: '/review',
+    component: () => import('../layouts/BlankLayout.vue'),
+    children: [
+      {
+        path: ':token',
+        name: 'review-fill',
+        component: () => import('../pages/ReviewFillPage.vue'),
+        meta: { title: 'Αξιολόγηση', public: true },
+      },
+    ],
+  },
 
   {
     path: '/',

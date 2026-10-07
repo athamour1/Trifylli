@@ -155,3 +155,28 @@ export class SetReviewAnswersDto {
   @Type(() => ReviewAnswerDto)
   answers!: ReviewAnswerDto[];
 }
+
+/** Έκδοση συνδέσμων αξιολόγησης προς συμμετέχοντες (χωρίς λογαριασμό). */
+export class IssueReviewInvitesDto {
+  @ApiPropertyOptional({ type: [String], format: 'uuid', description: 'ids συμμετεχόντων (participant)· κενό ⇒ όλοι.' })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(300)
+  @IsUUID(undefined, { each: true })
+  participantIds?: string[];
+
+  @ApiPropertyOptional({ description: 'true ⇒ και όσοι έχουν ήδη σύνδεσμο παίρνουν νέο (ο παλιός ακυρώνεται).' })
+  @IsOptional()
+  @IsBoolean()
+  reissue?: boolean;
+}
+
+/** Η υποβολή μέσω δημόσιου συνδέσμου — μόνο οι απαντήσεις. */
+export class PublicReviewAnswersDto {
+  @ApiProperty({ type: [ReviewAnswerDto] })
+  @IsArray()
+  @ArrayMaxSize(60)
+  @ValidateNested({ each: true })
+  @Type(() => ReviewAnswerDto)
+  answers!: ReviewAnswerDto[];
+}
