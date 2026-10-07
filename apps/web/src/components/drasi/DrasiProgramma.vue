@@ -52,8 +52,8 @@
     <!--
       Κάθε στοιχείο μία γραμμή: λαβή (σύρε για αλλαγή σειράς), ώρες (υπολογισμένες),
       είδος (πάτα το εικονίδιο), τίτλος και λεπτά γράφονται ΕΠΙ ΤΟΠΟΥ — όπως ο
-      τίτλος της συγκέντρωσης — και σώζονται μόνα τους. Το προγραμματικό ανοίγει
-      από το εικονίδιο στα δεξιά.
+      τίτλος της συγκέντρωσης — και σώζονται μόνα τους. Το προγραμματικό έχει
+      δική του σελίδα (εικονίδιο στα δεξιά) — εκεί γράφεται το markdown.
     -->
     <q-list v-else-if="current" bordered class="rounded-borders">
       <div
@@ -92,11 +92,11 @@
           </q-item-section>
           <q-item-section>
             <q-input v-model="row.title" :readonly="!canWrite" borderless dense class="row-title" placeholder="Τι γίνεται" />
-            <div v-if="!expanded.has(row.id)" class="text-caption text-grey-6 ellipsis">
+            <div class="text-caption text-grey-6 ellipsis">
               {{ DRASI_SCHEDULE_KIND_LABEL[row.kind] }}
               <span v-if="row.location"> · {{ row.location }}</span>
-              <span v-if="row.responsible[0]"> · διεξαγωγή: {{ nameOf(row.responsible[0]) }}</span>
-              <span v-if="row.executor[0]"> · υλοποίηση: {{ nameOf(row.executor[0]) }}</span>
+              <span v-if="row.responsible"> · διεξαγωγή: {{ row.responsible }}</span>
+              <span v-if="row.executor"> · υλοποίηση: {{ row.executor }}</span>
             </div>
           </q-item-section>
           <q-item-section side>
@@ -120,59 +120,14 @@
               dense
               round
               size="sm"
-              :icon="expanded.has(row.id) ? 'expand_less' : row.description ? 'description' : 'note_add'"
-              :color="expanded.has(row.id) || row.description ? 'klados' : 'grey-5'"
-              @click="toggleExpanded(row.id)"
+              :icon="row.hasProgramma ? 'description' : 'note_add'"
+              :color="row.hasProgramma ? 'klados' : 'grey-5'"
+              :to="{ name: 'drasi-programmatiko', params: { id: drasiId, itemId: row.id } }"
             >
-              <q-tooltip>{{ expanded.has(row.id) ? 'Κλείσιμο' : row.description ? 'Προγραμματικό' : 'Χωρίς προγραμματικό — γράψε' }}</q-tooltip>
+              <q-tooltip>{{ row.hasProgramma ? 'Άνοιγμα προγραμματικού' : 'Χωρίς προγραμματικό — γράψε' }}</q-tooltip>
             </q-btn>
           </q-item-section>
         </q-item>
-
-        <!-- ── Το προγραμματικό — επίσης επί τόπου, χωρίς κουμπί αποθήκευσης ── -->
-        <q-slide-transition>
-          <div v-show="expanded.has(row.id)" class="bg-grey-1 q-px-md q-py-sm">
-            <template v-if="canWrite">
-              <div class="row q-col-gutter-sm q-mb-sm">
-                <div class="col-12 col-sm-4"><q-input v-model="row.location" label="Χώρος" outlined dense color="klados" /></div>
-                <div class="col-12 col-sm-4"><StelexosPicker v-model="row.responsible" label="Υπεύθυνος διεξαγωγής" :options="stelexiOptions" /></div>
-                <div class="col-12 col-sm-4"><StelexosPicker v-model="row.executor" label="Υπεύθυνος υλοποίησης" :options="stelexiOptions" /></div>
-              </div>
-              <MarkdownField v-model="row.description" label="Προγραμματικό" placeholder="Markdown: στόχος, οδηγίες, κανόνες, εναλλακτική αν βρέξει…" :min-height="120" />
-              <div class="row q-col-gutter-sm q-mt-xs">
-                <div class="col-12 col-sm-6">
-                  <q-select
-                    v-model="row.yliko"
-                    :options="ylikoOptions"
-                    label="Υλικό από τις αποθήκες"
-                    outlined
-                    dense
-                    multiple
-                    use-chips
-                    use-input
-                    emit-value
-                    map-options
-                    color="klados"
-                    input-debounce="300"
-                    @filter="filterYliko"
-                  />
-                </div>
-                <div class="col-12 col-sm-6"><q-input v-model="row.ylikoNotes" label="Άλλο υλικό (ελεύθερο κείμενο)" outlined dense color="klados" /></div>
-              </div>
-              <div class="row q-mt-sm">
-                <q-space />
-                <q-btn flat dense color="negative" icon="delete" label="Διαγραφή" @click="remove(row)" />
-              </div>
-            </template>
-            <template v-else>
-              <div v-if="row.description" class="markdown-body q-mb-sm" v-html="renderMarkdown(row.description, () => null)" />
-              <div v-else class="text-caption text-grey-6 q-mb-sm">Δεν έχει γραφτεί προγραμματικό.</div>
-              <div v-if="row.yliko.length || row.ylikoNotes" class="text-caption">
-                <b>Υλικό:</b> {{ [...row.yliko.map((id) => ylikoName(id)), row.ylikoNotes].filter(Boolean).join(', ') }}
-              </div>
-            </template>
-          </div>
-        </q-slide-transition>
       </div>
     </q-list>
 
@@ -199,21 +154,14 @@ import { useQuasar } from 'quasar';
 import {
   DRASI_SCHEDULE_KIND_LABEL,
   DrasiScheduleKind,
-  KLADOS_LABEL,
   type DrasiScheduleItemView,
   type DrasiScheduleView,
   type KladosType,
-  type MemberSummary,
-  type Paginated,
-  type YlikoAvailability,
 } from '@trifylli/shared';
-import MarkdownField from '../MarkdownField.vue';
 import SaveStatus from '../SaveStatus.vue';
-import StelexosPicker from '../StelexosPicker.vue';
 import TimeField from '../TimeField.vue';
-import { ApiError, OfflineError, del, get, patch, post, put } from '../../lib/api';
+import { ApiError, OfflineError, get, patch, post, put } from '../../lib/api';
 import { formatDate, formatDuration } from '../../lib/format';
-import { renderMarkdown } from '../../lib/markdown';
 import type { SaveState } from '../../lib/save-state';
 
 const props = defineProps<{
@@ -267,16 +215,7 @@ async function reload(): Promise<void> {
   }
 }
 
-const stelexi = ref<MemberSummary[]>([]);
-const stelexiOptions = computed(() => stelexi.value.map((s) => ({ label: `${s.lastName} ${s.firstName}`.trim(), value: s.id, caption: s.leaderTitle ?? '' })));
-onMounted(async () => {
-  await reload();
-  try {
-    stelexi.value = (await get<Paginated<MemberSummary>>('/meloi', { params: { kind: 'STELEXOS', pageSize: 500 } })).items;
-  } catch {
-    // Χωρίς στελέχη, οι pickers μένουν άδειοι.
-  }
-});
+onMounted(reload);
 
 // ── Έναρξη ημέρας ──
 async function setDayStart(time: string | null): Promise<void> {
@@ -296,18 +235,13 @@ interface Row {
   title: string;
   durationMin: number;
   kind: DrasiScheduleKind;
-  location: string;
-  responsible: string[];
-  executor: string[];
-  description: string;
-  yliko: string[];
-  ylikoNotes: string;
+  /** Μόνο για τη λεζάντα — αλλάζουν από τη σελίδα του προγραμματικού. */
+  location: string | null;
+  responsible: string | null;
+  executor: string | null;
+  hasProgramma: boolean;
 }
 const rows = ref<Row[]>([]);
-const expanded = ref(new Set<string>());
-/** Ονόματα που ήρθαν με τα στοιχεία — για να μη χρειάζεται η λίστα στελεχών/υλικού για να διαβάσεις. */
-const knownNames = ref(new Map<string, string>());
-const ylikoOptions = ref<{ label: string; value: string }[]>([]);
 
 function toRow(it: DrasiScheduleItemView): Row {
   return {
@@ -315,12 +249,10 @@ function toRow(it: DrasiScheduleItemView): Row {
     title: it.title,
     durationMin: it.durationMin,
     kind: it.kind,
-    location: it.location ?? '',
-    responsible: it.responsible ? [it.responsible.id] : [],
-    executor: it.executor ? [it.executor.id] : [],
-    description: it.description ?? '',
-    yliko: it.yliko.map((y) => y.ylikoId),
-    ylikoNotes: it.ylikoNotes ?? '',
+    location: it.location,
+    responsible: it.responsible ? `${it.responsible.lastName} ${it.responsible.firstName}` : null,
+    executor: it.executor ? `${it.executor.lastName} ${it.executor.firstName}` : null,
+    hasProgramma: it.hasProgramma,
   };
 }
 
@@ -329,28 +261,12 @@ function toRow(it: DrasiScheduleItemView): Row {
 watch(
   current,
   (day) => {
-    const items = day?.items ?? [];
-    for (const it of items) {
-      if (it.responsible) knownNames.value.set(it.responsible.id, `${it.responsible.lastName} ${it.responsible.firstName}`);
-      if (it.executor) knownNames.value.set(it.executor.id, `${it.executor.lastName} ${it.executor.firstName}`);
-      for (const y of it.yliko) knownNames.value.set(y.ylikoId, y.name);
-    }
-    const seen = new Set(ylikoOptions.value.map((o) => o.value));
-    for (const it of items) for (const y of it.yliko) if (!seen.has(y.ylikoId)) ylikoOptions.value.push({ label: y.name, value: y.ylikoId });
-    rows.value = items.map(toRow);
+    rows.value = (day?.items ?? []).map(toRow);
     snapshots.clear();
     for (const r of rows.value) snapshots.set(r.id, JSON.stringify(r));
-    for (const id of [...expanded.value]) if (!items.some((i) => i.id === id)) expanded.value.delete(id);
   },
   { immediate: true },
 );
-
-const nameOf = (id: string): string => stelexiOptions.value.find((o) => o.value === id)?.label ?? knownNames.value.get(id) ?? '';
-const ylikoName = (id: string): string => ylikoOptions.value.find((o) => o.value === id)?.label ?? knownNames.value.get(id) ?? '';
-function toggleExpanded(id: string): void {
-  if (expanded.value.has(id)) expanded.value.delete(id);
-  else expanded.value.add(id);
-}
 
 /** Οι ώρες βγαίνουν εδώ, από την έναρξη της ημέρας και τις διάρκειες — ίδια πράξη με τον server. */
 const clampMin = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? Math.min(1440, Math.max(1, Math.round(v))) : 1);
@@ -409,12 +325,6 @@ async function saveNow(): Promise<void> {
         ...(r.title.trim() ? { title: r.title.trim() } : {}),
         durationMin: clampMin(r.durationMin),
         kind: r.kind,
-        location: r.location.trim() || null,
-        description: r.description || null,
-        responsibleId: r.responsible[0] ?? null,
-        executorId: r.executor[0] ?? null,
-        ylikoNotes: r.ylikoNotes.trim() || null,
-        yliko: r.yliko.map((ylikoId) => ({ ylikoId, qty: 1 })),
       });
     }
     saveStatus.value = dirty.size ? 'pending' : 'saved';
@@ -481,40 +391,6 @@ async function onDrop(targetId: string): Promise<void> {
     notifyError(err, 'Αποτυχία αλλαγής σειράς.');
     await reload();
   }
-}
-
-// ── Υλικό ──
-async function filterYliko(needle: string, update: (fn: () => void) => void): Promise<void> {
-  try {
-    const page = await get<Paginated<YlikoAvailability>>('/yliko', {
-      params: { pageSize: 50, ...(props.organiser ? { klados: props.organiser } : {}), ...(needle ? { q: needle } : {}) },
-    });
-    update(() => {
-      const used = new Set(rows.value.flatMap((r) => r.yliko));
-      const chosen = ylikoOptions.value.filter((o) => used.has(o.value));
-      const fresh = page.items.map((y) => ({ label: `${y.name}${y.ownerKladosType ? ` (${KLADOS_LABEL[y.ownerKladosType]})` : ''}`, value: y.ylikoId }));
-      ylikoOptions.value = [...chosen, ...fresh.filter((f) => !chosen.some((c) => c.value === f.value))];
-    });
-  } catch {
-    update(() => undefined);
-  }
-}
-
-function remove(row: Row): void {
-  $q.dialog({
-    title: 'Διαγραφή',
-    message: `«${row.title}» (${formatDuration(clampMin(row.durationMin))}) — μαζί με το προγραμματικό του. Τα επόμενα μετακινούνται νωρίτερα. Συνέχεια;`,
-    cancel: { label: 'Άκυρο', flat: true },
-    ok: { label: 'Διαγραφή', color: 'negative' },
-  }).onOk(async () => {
-    try {
-      dirty.delete(row.id);
-      await del(`/draseis/${props.drasiId}/schedule/${row.id}`);
-      await reload();
-    } catch (err) {
-      notifyError(err, 'Αποτυχία διαγραφής.');
-    }
-  });
 }
 
 // ── Αντιγραφή ημέρας ──

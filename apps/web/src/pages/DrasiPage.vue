@@ -320,7 +320,7 @@ interface DrasiDetail {
 const route = useRoute();
 const auth = useAuthStore();
 const id = String(route.params.id);
-const tab = ref('stats');
+const tab = ref(typeof route.query.tab === 'string' ? route.query.tab : 'stats');
 
 const { data, loading, error, stale, reload } = useAsyncData(
   () => get<DrasiDetail>(`/draseis/${id}`),

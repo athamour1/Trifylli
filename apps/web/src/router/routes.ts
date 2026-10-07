@@ -212,6 +212,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: 'Δράση' },
       },
       {
+        path: 'draseis/:id/programma/:itemId',
+        name: 'drasi-programmatiko',
+        component: () => import('../pages/DrasiProgrammatikoPage.vue'),
+        meta: { title: 'Προγραμματικό' },
+      },
+      {
         path: 'symvoulia/:id',
         name: 'symvoulio',
         component: () => import('../pages/SymvoulioPage.vue'),
