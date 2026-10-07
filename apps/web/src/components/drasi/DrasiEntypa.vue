@@ -54,6 +54,9 @@
               <q-btn v-if="formOf(p, type)!.hasData" flat dense round size="sm" icon="visibility" color="klados" @click="view(formOf(p, type)!)"><q-tooltip>Προβολή</q-tooltip></q-btn>
               <q-btn v-if="formOf(p, type)!.hasData && formOf(p, type)!.status === 'SUBMITTED'" flat dense round size="sm" icon="picture_as_pdf" color="klados" @click="downloadOne(formOf(p, type)!, p)"><q-tooltip>Λήψη — το έντυπο του Σ.Ε.Ο. συμπληρωμένο</q-tooltip></q-btn>
               <q-btn v-if="canWrite && formOf(p, type)!.id && formOf(p, type)!.status !== 'SUBMITTED' && formOf(p, type)!.status !== 'VOID'" flat dense round size="sm" icon="link_off" color="negative" @click="voidForm(formOf(p, type)!)"><q-tooltip>Ακύρωση συνδέσμου</q-tooltip></q-btn>
+              <q-btn v-if="canWrite && formOf(p, type)!.id && (formOf(p, type)!.status === 'SENT' || formOf(p, type)!.status === 'OPENED')" flat dense round size="sm" icon="content_copy" color="klados" :loading="copying === `${p.participantId}:${type}`" @click="copyLink(p, type)">
+                <q-tooltip>Αντιγραφή συνδέσμου — εκδίδεται νέος (ο προηγούμενος παύει να ισχύει)</q-tooltip>
+              </q-btn>
               <q-btn v-if="canWrite && formOf(p, type)!.status !== 'SUBMITTED'" flat dense round size="sm" icon="refresh" color="klados" @click="issue({ participantIds: [p.participantId], types: [type], reissue: true })"><q-tooltip>Νέος σύνδεσμος</q-tooltip></q-btn>
             </template>
             <span v-else class="text-grey-5">—</span>
@@ -210,6 +213,28 @@ async function issue(body: { participantIds?: string[]; types?: DrasiFormType[];
     notifyError(err, 'Αποτυχία έκδοσης.');
   } finally {
     issuing.value = false;
+  }
+}
+/**
+ * «Έχασα τον σύνδεσμο»: στη βάση υπάρχει μόνο το αποτύπωμά του, οπότε δεν ξαναδιαβάζεται.
+ * Εκδίδεται νέος (ο παλιός ακυρώνεται) και πάει κατευθείαν στο πρόχειρο — χωρίς διάλογο.
+ */
+const copying = ref<string | null>(null);
+async function copyLink(p: Row, type: DrasiFormType): Promise<void> {
+  copying.value = `${p.participantId}:${type}`;
+  try {
+    const issued = await post<IssuedFormLink[]>(`/draseis/${props.drasiId}/forms/issue`, { participantIds: [p.participantId], types: [type], reissue: true });
+    const link = issued[0];
+    if (!link) {
+      $q.notify({ type: 'info', message: 'Δεν εκδόθηκε σύνδεσμος — ίσως το έντυπο έχει ήδη συμπληρωθεί.' });
+      return;
+    }
+    await copy(link.url);
+    await reload();
+  } catch (err) {
+    notifyError(err, 'Αποτυχία έκδοσης συνδέσμου.');
+  } finally {
+    copying.value = null;
   }
 }
 function whatsapp(l: IssuedFormLink): string {
