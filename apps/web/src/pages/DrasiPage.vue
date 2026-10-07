@@ -202,7 +202,13 @@
           </q-tab-panel>
 
           <q-tab-panel name="programma" class="q-pa-none">
-            <DrasiProgramma :drasi-id="id" :can-write="canWrite && data.status !== 'KLEISTI'" />
+            <DrasiProgramma
+              :drasi-id="id"
+              :date-start="data.dateStart"
+              :date-end="data.dateEnd"
+              :organiser="data.klados?.type ?? null"
+              :can-write="canWrite && data.status !== 'KLEISTI'"
+            />
           </q-tab-panel>
 
           <q-tab-panel name="symvoulia" class="q-pa-none">

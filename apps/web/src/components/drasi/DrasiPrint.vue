@@ -35,31 +35,27 @@
       </dl>
     </section>
 
-    <!-- ── Πρόγραμμα ── -->
+    <!-- ── Πρόγραμμα: ωρολόγιο ανά ημέρα, με το προγραμματικό κάθε στοιχείου ── -->
     <section v-if="mode === 'full' && d.days.length" class="ds-section">
       <h2 :style="{ color: accent }">Πρόγραμμα</h2>
-      <div v-for="(day, i) in d.days" :key="day.id" class="ds-day">
-        <h3>{{ i + 1 }}. {{ day.title ?? formatDate(day.date) }} <small>{{ formatDate(day.date) }}<span v-if="day.startTime"> · {{ formatTime(day.startTime) }}</span><span v-if="day.location"> · {{ day.location }}</span></small></h3>
-        <p v-if="day.goal" class="ds-goal">{{ day.goal }}</p>
-        <div v-for="s in day.sections" :key="s.section" class="ds-part">
-          <div class="ds-part-label">{{ s.label }}</div>
-          <div v-if="s.notes" class="markdown-body ds-md" v-html="md(s.notes)" />
-          <table v-if="s.blocks.length" class="ds-table">
-            <thead><tr><th style="width: 34%">Κομμάτι</th><th style="width: 10%">Διάρκεια</th><th style="width: 18%">Διεξαγωγή</th><th style="width: 18%">Υλοποίηση</th><th>Υλικό</th></tr></thead>
-            <tbody>
-              <tr v-for="(b, j) in s.blocks" :key="j">
-                <td>
-                  <b>{{ b.title }}</b>
-                  <div v-if="b.description" class="markdown-body ds-md" v-html="md(b.description)" />
-                </td>
-                <td>{{ formatDuration(b.durationMin) }}</td>
-                <td>{{ b.responsible ?? '—' }}</td>
-                <td>{{ b.executor ?? '—' }}</td>
-                <td>{{ b.yliko ?? '' }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+      <div v-for="(day, i) in d.days" :key="day.date" class="ds-day">
+        <h3>Ημέρα {{ i + 1 }} <small>{{ formatDate(day.date) }}</small></h3>
+        <table class="ds-table">
+          <thead><tr><th style="width: 11%">Ώρα</th><th style="width: 35%">Τι γίνεται</th><th style="width: 16%">Διεξαγωγή</th><th style="width: 16%">Υλοποίηση</th><th>Υλικό</th></tr></thead>
+          <tbody>
+            <tr v-for="it in day.items" :key="it.id">
+              <td>{{ formatTime(it.startsAt) }}<span v-if="it.endsAt">–{{ formatTime(it.endsAt) }}</span></td>
+              <td>
+                <b>{{ it.title }}</b><span v-if="it.location" class="ds-muted"> · {{ it.location }}</span>
+                <span class="ds-tag">{{ DRASI_SCHEDULE_KIND_LABEL[it.kind] }}</span>
+                <div v-if="it.description" class="markdown-body ds-md" v-html="md(it.description)" />
+              </td>
+              <td>{{ it.responsible ? `${it.responsible.lastName} ${it.responsible.firstName}` : '—' }}</td>
+              <td>{{ it.executor ? `${it.executor.lastName} ${it.executor.firstName}` : '—' }}</td>
+              <td>{{ [...it.yliko.map((y) => `${y.name}${y.qty > 1 ? ` ×${y.qty}` : ''}`), it.ylikoNotes ?? ''].filter(Boolean).join(', ') }}</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </section>
 
@@ -221,6 +217,7 @@ import {
   DRASI_FEE_KIND_LABEL,
   DRASI_GROUP_KIND_LABEL,
   DRASI_ROLE_LABEL,
+  DRASI_SCHEDULE_KIND_LABEL,
   DRASI_TYPE_LABEL,
   DRASI_YPIRESIA_KINDS,
   KLADOS_LABEL,
@@ -230,7 +227,7 @@ import {
   type DrasiRoleKind,
 } from '@trifylli/shared';
 import { renderMarkdown } from '../../lib/markdown';
-import { formatDate, formatDateRange, formatDateTime, formatDuration, formatEuro, formatTime } from '../../lib/format';
+import { formatDate, formatDateRange, formatDateTime, formatEuro, formatTime } from '../../lib/format';
 
 export type DossierMode = 'full' | 'participants' | 'skines';
 const props = defineProps<{ dossier: DrasiDossier; mode: DossierMode }>();
