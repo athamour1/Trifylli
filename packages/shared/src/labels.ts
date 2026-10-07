@@ -9,6 +9,7 @@ import {
   DrasiLedgerKind,
   DrasiReviewKind,
   DrasiRoleKind,
+  DrasiScheduleKind,
   DrasiStatus,
   DrasiType,
   KladosType,
@@ -251,6 +252,16 @@ export const SIGNER_ROLE_LABEL: Record<SignerRole, string> = {
   GONEAS: 'Γονέας',
   KIDEMONAS: 'Κηδεμόνας',
   IDIOS: 'Ο ίδιος / η ίδια',
+};
+
+export const DRASI_SCHEDULE_KIND_LABEL: Record<DrasiScheduleKind, string> = {
+  DRASTIRIOTITA: 'Δραστηριότητα',
+  GEVMA: 'Γεύμα',
+  XEKOURASI: 'Ξεκούραση',
+  METAKINISI: 'Μετακίνηση',
+  TELETI: 'Τελετή',
+  YPIRESIA: 'Υπηρεσία',
+  ALLO: 'Άλλο',
 };
 
 export const DRASI_REVIEW_KIND_LABEL: Record<DrasiReviewKind, string> = {

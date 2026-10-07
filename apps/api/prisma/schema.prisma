@@ -99,6 +99,17 @@ enum SignerRole {
   IDIOS
 }
 
+/// Είδος στοιχείου στο ωρολόγιο της δράσης — για χρώμα και γρήγορη ανάγνωση.
+enum DrasiScheduleKind {
+  DRASTIRIOTITA
+  GEVMA
+  XEKOURASI
+  METAKINISI
+  TELETI
+  YPIRESIA
+  ALLO
+}
+
 enum DrasiReviewKind {
   TEXT
   SCALE_1_5
@@ -325,7 +336,8 @@ model User {
   drasiPaymentsCollected DrasiPayment[]  @relation("DrasiPaymentCollector")
   drasiLedger     DrasiLedgerEntry[]     @relation("DrasiLedgerUser")
   drasiLedgerAuthored DrasiLedgerEntry[] @relation("DrasiLedgerAuthor")
-  timelineExecutions TimelineBlock[]     @relation("TimelineExecutor")
+  scheduleResponsible DrasiScheduleItem[] @relation("ScheduleResponsible")
+  scheduleExecutor    DrasiScheduleItem[] @relation("ScheduleExecutor")
   drasiShopping   DrasiShoppingItem[]    @relation("ShoppingAssignee")
   drasiExternalYliko DrasiExternalYliko[] @relation("ExternalYlikoResponsible")
   drasiReviews    DrasiReviewAnswer[]    @relation("DrasiReviewAuthor")
@@ -511,10 +523,55 @@ model Drasi {
   shopping     DrasiShoppingItem[]
   externalYliko DrasiExternalYliko[]
   reviewQuestions DrasiReviewQuestion[]
+  schedule     DrasiScheduleItem[]
 
   @@index([topikoId, dateStart])
   @@index([kladosId, dateStart])
   @@map("drasi")
+}
+
+/// Το ωρολόγιο της δράσης (F7): ανεξάρτητο από τις συγκεντρώσεις. Πρώτα το
+/// πλαίσιο (ημέρα, από–έως, τίτλος) και μετά, πάνω σε κάθε στοιχείο, το
+/// «προγραμματικό»: markdown, υπεύθυνος διεξαγωγής & υλοποίησης, υλικό.
+model DrasiScheduleItem {
+  id            String             @id @default(uuid()) @db.Uuid
+  drasiId       String             @db.Uuid
+  startsAt      DateTime
+  endsAt        DateTime?
+  title         String
+  kind          DrasiScheduleKind  @default(DRASTIRIOTITA)
+  location      String?
+  /// Το προγραμματικό: οδηγίες, κανόνες, εναλλακτική — Markdown.
+  description   String?
+  /// Ποιος το τρέχει τη στιγμή που γίνεται.
+  responsibleId String?            @db.Uuid
+  /// Ποιος το ετοιμάζει πριν: υλικά, εκτυπώσεις, στήσιμο.
+  executorId    String?            @db.Uuid
+  /// Υλικό σε ελεύθερο κείμενο (ό,τι δεν είναι είδος αποθήκης).
+  ylikoNotes    String?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  drasi       Drasi               @relation(fields: [drasiId], references: [id], onDelete: Cascade)
+  responsible User?               @relation("ScheduleResponsible", fields: [responsibleId], references: [id], onDelete: SetNull)
+  executor    User?               @relation("ScheduleExecutor", fields: [executorId], references: [id], onDelete: SetNull)
+  yliko       DrasiScheduleYliko[]
+
+  @@index([drasiId, startsAt])
+  @@map("drasi_schedule_item")
+}
+
+/// Απαιτούμενο υλικό ανά στοιχείο ωρολογίου (πρόθεση, όχι δέσμευση).
+model DrasiScheduleYliko {
+  itemId  String @db.Uuid
+  ylikoId String @db.Uuid
+  qty     Int    @default(1)
+
+  item  DrasiScheduleItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  yliko Yliko             @relation(fields: [ylikoId], references: [id], onDelete: Cascade)
+
+  @@id([itemId, ylikoId])
+  @@map("drasi_schedule_yliko")
 }
 
 /// Αξιολόγηση κατ' επιλογήν: τα θέματα τα φτιάχνουν τα στελέχη. Βλ. docs/draseis.md F10.
@@ -828,8 +885,7 @@ model DrasiParticipant {
 /// (`drasiId`) — π.χ. η κάθε μέρα μιας κατασκήνωσης.
 model Syggentrwsh {
   id       String    @id @default(uuid()) @db.Uuid
-  /// `null` ⇒ ημέρα δράσης Τοπικού (πολλοί κλάδοι μαζί). Μόνο μέσω `drasiId`.
-  kladosId String?   @db.Uuid
+  kladosId String    @db.Uuid
   drasiId  String?   @db.Uuid
   title    String?
   date     DateTime
@@ -844,7 +900,7 @@ model Syggentrwsh {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  klados         Klados?                @relation(fields: [kladosId], references: [id], onDelete: Cascade)
+  klados         Klados                 @relation(fields: [kladosId], references: [id], onDelete: Cascade)
   drasi          Drasi?                 @relation(fields: [drasiId], references: [id], onDelete: SetNull)
   timeline       TimelineBlock[]
   parts          SyggentrwshSection[]
@@ -868,14 +924,10 @@ model TimelineBlock {
   title         String
   description   String?
   durationMin   Int             @default(15)
-  /// Υπεύθυνος ΔΙΕΞΑΓΩΓΗΣ — ποιος το τρέχει τη στιγμή που γίνεται.
   responsibleId String?         @db.Uuid
-  /// Υπεύθυνος ΥΛΟΠΟΙΗΣΗΣ — ποιος το ετοιμάζει πριν (υλικά, εκτυπώσεις, στήσιμο).
-  executorId    String?         @db.Uuid
 
   syggentrwsh Syggentrwsh          @relation(fields: [syggentrwshId], references: [id], onDelete: Cascade)
   responsible User?                @relation("TimelineResponsible", fields: [responsibleId], references: [id], onDelete: SetNull)
-  executor    User?                @relation("TimelineExecutor", fields: [executorId], references: [id], onDelete: SetNull)
   yliko       TimelineBlockYliko[]
 
   @@unique([syggentrwshId, section, order])
@@ -1124,6 +1176,7 @@ model Yliko {
   maintenance YlikoMaintenance[]
   timelineUses TimelineBlockYliko[]
   fromShopping DrasiShoppingItem[]
+  scheduleUses DrasiScheduleYliko[]
 
   @@unique([topikoId, externalId])
   @@index([topikoId, category])

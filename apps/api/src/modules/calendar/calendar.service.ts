@@ -120,8 +120,7 @@ export class CalendarService {
         };
       }),
       ...syggentrwseis.map((s) => {
-        // Ημέρα δράσης Τοπικού: χωρίς κλάδο — παίρνει το χρώμα του Τοπικού.
-        const kladosType = (s.klados?.type as KladosType | undefined) ?? null;
+        const kladosType = s.klados.type as KladosType;
         const start = s.startTime ?? s.date;
         const end = s.endTime ?? addHours(start, 2);
         return {
@@ -132,7 +131,7 @@ export class CalendarService {
           allDay: !s.startTime,
           kind: 'SYGGENTRWSH' as const,
           kladosType,
-          color: kladosType ? KLADOS_META[kladosType].color : TOPIKO_COLOR,
+          color: KLADOS_META[kladosType].color,
           href: `/syggentrwseis/${s.id}`,
         };
       }),

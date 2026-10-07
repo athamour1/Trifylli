@@ -645,5 +645,17 @@ export const FORM_LINK_TTL_DAYS = 30;
 
 // ───────────────────────── Δράσεις: αξιολόγηση (F10) ─────────────────────────
 
+/** Είδος στοιχείου ωρολογίου δράσης. */
+export const DrasiScheduleKind = {
+  DRASTIRIOTITA: 'DRASTIRIOTITA',
+  GEVMA: 'GEVMA',
+  XEKOURASI: 'XEKOURASI',
+  METAKINISI: 'METAKINISI',
+  TELETI: 'TELETI',
+  YPIRESIA: 'YPIRESIA',
+  ALLO: 'ALLO',
+} as const;
+export type DrasiScheduleKind = (typeof DrasiScheduleKind)[keyof typeof DrasiScheduleKind];
+
 export const DrasiReviewKind = { TEXT: 'TEXT', SCALE_1_5: 'SCALE_1_5' } as const;
 export type DrasiReviewKind = (typeof DrasiReviewKind)[keyof typeof DrasiReviewKind];

@@ -18,7 +18,7 @@
               placeholder="Συγκέντρωση χωρίς τίτλο"
             />
             <div class="text-caption text-grey-7">
-              {{ formatDate(data.date) }} · {{ data.klados ? KLADOS_LABEL[data.klados.type] : 'Τοπικό' }}
+              {{ formatDate(data.date) }} · {{ KLADOS_LABEL[data.klados.type] }}
               <span v-if="data.drasi"> · {{ data.drasi.title }}</span>
             </div>
           </div>
@@ -94,7 +94,7 @@
               <q-card-section class="q-py-sm">
                 <MarkdownField
                   v-model="part.notes"
-                  :klados="data.klados?.type ?? null"
+                  :klados="data.klados.type"
                   :readonly="!editable"
                   :label="`Σημειώσεις — ${part.label}`"
                   :placeholder="SECTION_PLACEHOLDER[part.section]"
@@ -180,7 +180,7 @@
                     <div class="q-mt-sm">
                       <MarkdownField
                         v-model="block.description"
-                        :klados="data.klados?.type ?? null"
+                        :klados="data.klados.type"
                         :readonly="!editable"
                         label="Περιγραφή"
                         placeholder="Markdown: οδηγίες, κανόνες, εναλλακτική…"
@@ -194,25 +194,12 @@
                         v-model="block.responsibleId"
                         :options="stelexiOptions"
                         :readonly="!editable"
-                        label="Υπεύθυνος διεξαγωγής"
+                        label="Υπεύθυνος"
                         dense
                         outlined
                         emit-value
                         map-options
                         clearable
-                      />
-                      <!-- Ποιος το ετοιμάζει πριν — διαφορετικό από ποιος το τρέχει. -->
-                      <q-select
-                        v-model="block.executorId"
-                        :options="stelexiOptions"
-                        :readonly="!editable"
-                        label="Υπεύθυνος υλοποίησης"
-                        dense
-                        outlined
-                        emit-value
-                        map-options
-                        clearable
-                        class="q-mt-xs"
                       />
                     </div>
 
@@ -505,7 +492,6 @@ interface PlanBlock {
   description: string;
   durationMin: number;
   responsibleId: string | null;
-  executorId: string | null;
   yliko: BlockYlikoUse[];
 }
 
@@ -532,7 +518,7 @@ interface Detail {
   startTime: string | null;
   location: string | null;
   goal: string | null;
-  klados: { id: string; type: KladosType; name: string | null } | null;
+  klados: { id: string; type: KladosType; name: string | null };
   drasi: { id: string; title: string } | null;
   totalDurationMin: number;
   sections: {
@@ -548,7 +534,6 @@ interface Detail {
       description: string | null;
       durationMin: number;
       responsible: { id: string; firstName: string; lastName: string } | null;
-      executor: { id: string; firstName: string; lastName: string } | null;
       yliko: { qty: number; yliko: { id: string; name: string } }[];
     }[];
   }[];
@@ -600,7 +585,7 @@ const { data, loading, error, stale, reload } = useAsyncData(
 // Η σελίδα ζει εκτός `/k/:klados`, οπότε το layout δεν ξέρει τον κλάδο της· τον
 // δηλώνει μόνη της ώστε τα κουμπιά της να πάρουν το χρώμα του.
 watch(
-  () => data.value?.klados?.type,
+  () => data.value?.klados.type,
   (klados) => applyKladosTheme(klados ?? null),
   { immediate: true },
 );
@@ -664,7 +649,6 @@ function hydrate(value: Detail): void {
         description: block.description ?? '',
         durationMin: block.durationMin,
         responsibleId: block.responsible?.id ?? null,
-        executorId: block.executor?.id ?? null,
         yliko: block.yliko.map((use) => ({
           id: use.yliko.id,
           name: use.yliko.name,
@@ -845,7 +829,7 @@ const printRef = ref<{ prepare: () => Promise<void> } | null>(null);
 const pdfLoading = ref(false);
 
 const printSheet = computed<PrintSheet>(() => {
-  const klados = data.value?.klados?.type ?? null;
+  const klados = data.value?.klados.type ?? null;
   const duration = totalDurationMin.value;
 
   const facts: PrintFact[] = [];
@@ -960,7 +944,6 @@ function addBlock(part: PlanPart): void {
     description: '',
     durationMin: DEFAULT_DURATION_MIN,
     responsibleId: null,
-    executorId: null,
     yliko: [],
   });
 }
@@ -1026,7 +1009,6 @@ async function saveNow(): Promise<void> {
           description: block.description || undefined,
           durationMin: clampDuration(block.durationMin),
           responsibleId: block.responsibleId ?? undefined,
-          executorId: block.executorId ?? undefined,
           ylikoIds: block.yliko.length ? block.yliko.map((use) => use.id) : undefined,
         })),
       ),

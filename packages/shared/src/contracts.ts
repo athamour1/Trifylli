@@ -10,6 +10,7 @@ import type {
   DrasiLedgerKind,
   DrasiReviewKind,
   DrasiRoleKind,
+  DrasiScheduleKind,
   DrasiType,
   KladosType,
   MemberKind,
@@ -533,19 +534,21 @@ export interface DrasiPharmacyView {
 
 // ───────────────────────── Δράσεις: πρόγραμμα (F7), συμβούλια (F8), υλικό (F9) ─────────────────────────
 
-/** Μία ημέρα δράσης = μία συγκέντρωση με `drasiId`. */
-export interface DrasiDayView {
+/** Στοιχείο του ωρολογίου της δράσης, με το προγραμματικό του (αν έχει γραφτεί). */
+export interface DrasiScheduleItemView {
   id: string;
-  title: string | null;
-  date: string;
-  startTime: string | null;
-  endTime: string | null;
+  startsAt: string;
+  endsAt: string | null;
+  title: string;
+  kind: DrasiScheduleKind;
   location: string | null;
-  kladosType: KladosType | null;
-  blocks: number;
-  /** Ονόματα υπευθύνων διεξαγωγής και υλοποίησης, χωρίς διπλά. */
-  responsibles: string[];
-  totalDurationMin: number;
+  description: string | null;
+  responsible: { id: string; firstName: string; lastName: string } | null;
+  executor: { id: string; firstName: string; lastName: string } | null;
+  ylikoNotes: string | null;
+  yliko: { ylikoId: string; name: string; unit: string | null; qty: number }[];
+  /** Έχει γραφτεί προγραμματικό (περιγραφή ή υπεύθυνος ή υλικό). */
+  hasProgramma: boolean;
 }
 
 export interface DrasiSymvoulioView {
@@ -630,27 +633,8 @@ export interface DrasiDossier {
     guestTopika: DrasiGuestTopikoView[];
     roles: DrasiRoleView[];
   };
-  days: {
-    id: string;
-    title: string | null;
-    date: string;
-    startTime: string | null;
-    location: string | null;
-    goal: string | null;
-    sections: {
-      section: TimelineSection;
-      label: string;
-      notes: string;
-      blocks: {
-        title: string;
-        description: string | null;
-        durationMin: number;
-        responsible: string | null;
-        executor: string | null;
-        yliko: string | null;
-      }[];
-    }[];
-  }[];
+  /** Το ωρολόγιο ανά ημέρα. */
+  days: { date: string; items: DrasiScheduleItemView[] }[];
   participants: (DrasiParticipantView & { groups: { kind: DrasiGroupKind; name: string }[] })[];
   groups: DrasiGroupView[];
   /** Μόνο όταν ζητηθεί ρητά (`health=1`) — η ανάγνωση καταγράφεται. */

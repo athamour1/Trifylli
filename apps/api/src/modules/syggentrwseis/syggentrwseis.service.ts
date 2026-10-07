@@ -25,8 +25,6 @@ export class SyggentrwseisService {
   async list(user: RequestUser, klados: KladosType | undefined, from?: Date, to?: Date) {
     if (klados) assertKladosAccess(user, klados);
 
-    // Οι ημέρες δράσης Τοπικού (χωρίς κλάδο) δεν εμφανίζονται στις λίστες κλάδου —
-    // ζουν στη σελίδα της δράσης τους.
     const where: Prisma.SyggentrwshWhereInput = {
       archivedAt: null,
       klados: {
@@ -54,8 +52,7 @@ export class SyggentrwseisService {
    */
   async findOne(user: RequestUser, id: string) {
     const syggentrwsh = await this.prisma.syggentrwsh.findFirst({
-      // Μέσω κλάδου ή μέσω δράσης: η ημέρα δράσης Τοπικού δεν έχει κλάδο.
-      where: { id, OR: [{ klados: { topikoId: user.topikoId } }, { drasi: { topikoId: user.topikoId } }] },
+      where: { id, klados: { topikoId: user.topikoId } },
       include: {
         klados: { select: { id: true, type: true, name: true } },
         drasi: { select: { id: true, title: true, type: true, dateStart: true, dateEnd: true } },
@@ -63,7 +60,6 @@ export class SyggentrwseisService {
           orderBy: [{ section: 'asc' }, { order: 'asc' }],
           include: {
             responsible: { select: { id: true, firstName: true, lastName: true } },
-            executor: { select: { id: true, firstName: true, lastName: true } },
             yliko: { include: { yliko: { select: { id: true, name: true, category: true, unit: true } } } },
           },
         },
@@ -80,7 +76,7 @@ export class SyggentrwseisService {
       },
     });
     if (!syggentrwsh) throw new NotFoundException('Η συγκέντρωση δεν βρέθηκε.');
-    assertKladosAccess(user, syggentrwsh.klados?.type as KladosType | undefined);
+    assertKladosAccess(user, syggentrwsh.klados.type as KladosType);
 
     const parts = new Map(syggentrwsh.parts.map((p) => [p.section, p]));
 
@@ -189,7 +185,6 @@ export class SyggentrwseisService {
             description: block.description,
             durationMin: block.durationMin,
             responsibleId: block.responsibleId,
-            executorId: block.executorId,
             ...(block.ylikoIds?.length
               ? { yliko: { create: block.ylikoIds.map((ylikoId) => ({ ylikoId, qty: 1 })) } }
               : {}),
@@ -280,11 +275,7 @@ export class SyggentrwseisService {
           archivedAt: null,
           status: MemberStatus.ENERGO,
           kind: MemberKind.STELEXOS,
-          // Ημέρα δράσης: τα στελέχη που συμμετέχουν στη δράση (από όλους τους
-          // κλάδους και τα φιλοξενούμενα Τοπικά) — όχι μόνο του κλάδου.
-          ...(syggentrwsh.drasiId
-            ? { participations: { some: { drasiId: syggentrwsh.drasiId } } }
-            : { memberships: { some: { kladosId: syggentrwsh.kladosId ?? '', leftAt: null } } }),
+          memberships: { some: { kladosId: syggentrwsh.kladosId, leftAt: null } },
         },
         orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
         select: { id: true, firstName: true, lastName: true },
@@ -300,11 +291,11 @@ export class SyggentrwseisService {
 
   private async assertAccess(user: RequestUser, id: string) {
     const syggentrwsh = await this.prisma.syggentrwsh.findFirst({
-      where: { id, OR: [{ klados: { topikoId: user.topikoId } }, { drasi: { topikoId: user.topikoId } }] },
+      where: { id, klados: { topikoId: user.topikoId } },
       include: { klados: { select: { type: true } } },
     });
     if (!syggentrwsh) throw new NotFoundException('Η συγκέντρωση δεν βρέθηκε.');
-    assertKladosAccess(user, syggentrwsh.klados?.type as KladosType | undefined);
+    assertKladosAccess(user, syggentrwsh.klados.type as KladosType);
     return syggentrwsh;
   }
 
