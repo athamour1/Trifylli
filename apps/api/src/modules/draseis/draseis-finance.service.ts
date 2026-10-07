@@ -1,10 +1,4 @@
-import {
-  BadRequestException,
-  ConflictException,
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { DrasiFeeKind, DrasiStatus, MemberKind, PaymentHandlingStatus, Prisma } from '@prisma/client';
 import {
   DRASI_EXPENSE_CATEGORIES,
@@ -23,9 +17,9 @@ import {
 } from '@trifylli/shared';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
-import { assertKladosAccess, scopedKladoi } from '../../common/util/klados-scope';
 import { FilesService } from '../files/files.service';
 import { toTreasuryView } from '../treasury/treasury.service';
+import { DrasiAccessService } from './drasi-access.service';
 import type {
   CreateDrasiPaymentDto,
   CreateDrasiTreasuryEntryDto,
@@ -47,12 +41,13 @@ export class DraseisFinanceService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly files: FilesService,
+    private readonly access: DrasiAccessService,
   ) {}
 
   // ───────────────────────── Ταμείο ─────────────────────────
 
   async entries(user: RequestUser, id: string): Promise<TreasuryEntryView[]> {
-    await this.load(user, id, 'read');
+    await this.access.load(user, id, 'read');
     const rows = await this.prisma.treasuryEntry.findMany({
       where: { drasiId: id },
       orderBy: [{ occurredAt: 'desc' }, { createdAt: 'desc' }],
@@ -66,7 +61,7 @@ export class DraseisFinanceService {
   }
 
   async createEntry(user: RequestUser, id: string, dto: CreateDrasiTreasuryEntryDto): Promise<TreasuryEntryView> {
-    const drasi = await this.load(user, id, 'write');
+    const drasi = await this.access.load(user, id, 'write');
     const allowed = dto.kind === 'INCOME' ? DRASI_INCOME_CATEGORIES : DRASI_EXPENSE_CATEGORIES;
     if (!allowed.includes(dto.category as TreasuryCategory)) {
       throw new BadRequestException('Μη έγκυρη κατηγορία για το ταμείο δράσης.');
@@ -96,7 +91,7 @@ export class DraseisFinanceService {
   }
 
   async removeEntry(user: RequestUser, id: string, entryId: string) {
-    await this.load(user, id, 'write');
+    await this.access.load(user, id, 'write');
     const entry = await this.prisma.treasuryEntry.findFirst({
       where: { id: entryId, drasiId: id },
       include: { receiptFile: true },
@@ -108,7 +103,7 @@ export class DraseisFinanceService {
   }
 
   async budget(user: RequestUser, id: string): Promise<DrasiBudgetView[]> {
-    await this.load(user, id, 'read');
+    await this.access.load(user, id, 'read');
     const rows = await this.prisma.drasiBudget.findMany({ where: { drasiId: id } });
     return rows.map((r) => ({
       category: r.category,
@@ -118,7 +113,7 @@ export class DraseisFinanceService {
   }
 
   async setBudget(user: RequestUser, id: string, dto: SetBudgetDto): Promise<DrasiBudgetView[]> {
-    await this.load(user, id, 'write');
+    await this.access.load(user, id, 'write');
     const byCategory = new Map(dto.items.map((i) => [i.category, i]));
     await this.prisma.$transaction([
       this.prisma.drasiBudget.deleteMany({ where: { drasiId: id } }),
@@ -136,7 +131,7 @@ export class DraseisFinanceService {
 
   /** Η σύνοψη: έσοδα (κινήσεις + εισπράξεις), έξοδα ανά κατηγορία vs προϋπολογισμός, εισπράξεις, λογαριασμοί. */
   async summary(user: RequestUser, id: string): Promise<DrasiTreasurySummary> {
-    const drasi = await this.load(user, id, 'read');
+    const drasi = await this.access.load(user, id, 'read');
 
     const [grouped, budget, participants, ledger] = await Promise.all([
       this.prisma.treasuryEntry.groupBy({
@@ -247,7 +242,7 @@ export class DraseisFinanceService {
   // ───────────────────────── Συμμετέχοντες: κόστη & πληρωμές ─────────────────────────
 
   async participants(user: RequestUser, id: string): Promise<DrasiParticipantView[]> {
-    await this.load(user, id, 'read');
+    await this.access.load(user, id, 'read');
     const rows = await this.prisma.drasiParticipant.findMany({
       where: { drasiId: id },
       include: {
@@ -278,7 +273,7 @@ export class DraseisFinanceService {
   }
 
   async updateFees(user: RequestUser, id: string, memberId: string, dto: UpdateParticipantFeesDto) {
-    const drasi = await this.load(user, id, 'write');
+    const drasi = await this.access.load(user, id, 'write');
     const participant = await this.participant(id, memberId);
 
     if (dto.collectorId) {
@@ -313,7 +308,7 @@ export class DraseisFinanceService {
   }
 
   async addPayment(user: RequestUser, id: string, memberId: string, dto: CreateDrasiPaymentDto): Promise<DrasiPaymentView> {
-    const drasi = await this.load(user, id, 'write');
+    const drasi = await this.access.load(user, id, 'write');
     const participant = await this.participant(id, memberId);
     if (dto.receiptFileId) await this.assertReceipt(user, drasi.kladosId, dto.receiptFileId);
 
@@ -337,7 +332,7 @@ export class DraseisFinanceService {
   }
 
   async deletePayment(user: RequestUser, id: string, paymentId: string) {
-    await this.load(user, id, 'write');
+    await this.access.load(user, id, 'write');
     const payment = await this.prisma.drasiPayment.findFirst({
       where: { id: paymentId, participant: { drasiId: id } },
       include: { receiptFile: true },
@@ -349,7 +344,7 @@ export class DraseisFinanceService {
   }
 
   async updateHandling(user: RequestUser, id: string, paymentId: string, status: PaymentHandlingStatus) {
-    await this.load(user, id, 'write');
+    await this.access.load(user, id, 'write');
     const payment = await this.prisma.drasiPayment.findFirst({ where: { id: paymentId, participant: { drasiId: id } } });
     if (!payment) throw new NotFoundException('Η πληρωμή δεν βρέθηκε.');
     return this.prisma.drasiPayment.update({ where: { id: paymentId }, data: { handlingStatus: status } });
@@ -357,7 +352,7 @@ export class DraseisFinanceService {
 
   /** «Παραδόθηκαν στον Έφορο»: όλα τα μετρητά που κρατά το στέλεχος, με ένα κλικ. */
   async handover(user: RequestUser, id: string, collectorId: string) {
-    await this.load(user, id, 'write');
+    await this.access.load(user, id, 'write');
     const result = await this.prisma.drasiPayment.updateMany({
       where: {
         participant: { drasiId: id },
@@ -371,7 +366,7 @@ export class DraseisFinanceService {
 
   /** Η όψη ανά υπεύθυνο στέλεχος — αυτή που λύνει το «ποιος κρατά τι». */
   async collectors(user: RequestUser, id: string): Promise<DrasiCollectorView[]> {
-    await this.load(user, id, 'read');
+    await this.access.load(user, id, 'read');
     const rows = await this.prisma.drasiParticipant.findMany({
       where: { drasiId: id },
       include: {
@@ -433,7 +428,7 @@ export class DraseisFinanceService {
   // ───────────────────────── Λογαριασμοί στελεχών ─────────────────────────
 
   async ledger(user: RequestUser, id: string): Promise<DrasiLedgerAccount[]> {
-    await this.load(user, id, 'read');
+    await this.access.load(user, id, 'read');
     const rows = await this.prisma.drasiLedgerEntry.findMany({
       where: { drasiId: id },
       include: { user: { select: { id: true, firstName: true, lastName: true } } },
@@ -471,7 +466,7 @@ export class DraseisFinanceService {
   }
 
   async addLedger(user: RequestUser, id: string, dto: CreateLedgerEntryDto): Promise<DrasiLedgerView> {
-    await this.load(user, id, 'write');
+    await this.access.load(user, id, 'write');
     const stelexos = await this.prisma.user.findFirst({
       where: { id: dto.userId, topikoId: user.topikoId, archivedAt: null },
       select: { id: true },
@@ -494,7 +489,7 @@ export class DraseisFinanceService {
   }
 
   async removeLedger(user: RequestUser, id: string, entryId: string) {
-    await this.load(user, id, 'write');
+    await this.access.load(user, id, 'write');
     const entry = await this.prisma.drasiLedgerEntry.findFirst({ where: { id: entryId, drasiId: id } });
     if (!entry) throw new NotFoundException('Η κίνηση δεν βρέθηκε.');
     await this.prisma.drasiLedgerEntry.delete({ where: { id: entryId } });
@@ -503,7 +498,7 @@ export class DraseisFinanceService {
 
   /** Κλείνει τον λογαριασμό ενός στελέχους: ό,τι μένει καλύφθηκε από αποδείξεις. */
   async settleLedger(user: RequestUser, id: string, userId: string) {
-    await this.load(user, id, 'write');
+    await this.access.load(user, id, 'write');
     const result = await this.prisma.drasiLedgerEntry.updateMany({
       where: { drasiId: id, userId, settledAt: null },
       data: { settledAt: new Date() },
@@ -513,31 +508,9 @@ export class DraseisFinanceService {
 
   // ───────────────────────── Εσωτερικά ─────────────────────────
 
-  /**
-   * Φορτώνει τη δράση και ελέγχει εμβέλεια. Εγγραφή: ο διοργανωτής, και μόνο αν
-   * η δράση είναι ανοιχτή. Ανάγνωση: και κλάδος που απλώς συμμετέχει.
-   */
-  async load(user: RequestUser, id: string, mode: 'read' | 'write') {
-    const drasi = await this.prisma.drasi.findFirst({
-      where: { id, topikoId: user.topikoId },
-      include: { klados: { select: { type: true } }, kladoi: { select: { klados: { select: { type: true } } } } },
-    });
-    if (!drasi) throw new NotFoundException('Η δράση δεν βρέθηκε.');
-
-    const organiser = drasi.klados?.type as KladosType | undefined;
-    if (mode === 'write') {
-      assertKladosAccess(user, organiser);
-      if (drasi.status === DrasiStatus.KLEISTI) {
-        throw new ConflictException('Η δράση είναι κλειστή — τα οικονομικά της δεν αλλάζουν πια.');
-      }
-    } else {
-      const scope = scopedKladoi(user);
-      const participating = drasi.kladoi.map((k) => k.klados.type as KladosType);
-      if (scope && organiser && !scope.includes(organiser) && !participating.some((k) => scope.includes(k))) {
-        throw new ForbiddenException(`Δεν έχετε πρόσβαση στα δεδομένα του κλάδου ${organiser}.`);
-      }
-    }
-    return drasi;
+  /** Βλ. `DrasiAccessService` — εδώ μόνο για όσους καλούν `finance.load`. */
+  load(user: RequestUser, id: string, mode: 'read' | 'write') {
+    return this.access.load(user, id, mode);
   }
 
   private async participant(drasiId: string, memberId: string) {

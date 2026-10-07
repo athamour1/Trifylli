@@ -17,7 +17,9 @@ import { CapabilityGuard } from '../../common/auth/capability.guard';
 import { CurrentUser, RequireCapability } from '../../common/auth/decorators';
 import type { RequestUser } from '../../common/auth/types';
 import { CheckoutService } from '../yliko/checkout.service';
+import { DraseisGroupsService } from './draseis-groups.service';
 import { DraseisService } from './draseis.service';
+import { QueryGuestsDto } from './dto/drasi-groups.dto';
 import {
   AddParticipantsDto,
   CreateDrasiDto,
@@ -38,6 +40,7 @@ export class DraseisController {
   constructor(
     private readonly draseis: DraseisService,
     private readonly checkouts: CheckoutService,
+    private readonly groups: DraseisGroupsService,
     private readonly audit: AuditService,
   ) {}
 
@@ -64,6 +67,13 @@ export class DraseisController {
   })
   rolesTemplate(@CurrentUser() user: RequestUser, @Query() query: RolesTemplateQueryDto) {
     return this.draseis.rolesTemplate(user, query);
+  }
+
+  @Get('guests')
+  @RequireCapability('drasi:write')
+  @ApiOperation({ summary: 'Φιλοξενούμενοι άλλων Τοπικών που έχουν ξανάρθει' })
+  guests(@CurrentUser() user: RequestUser, @Query() query: QueryGuestsDto) {
+    return this.groups.guests(user, query.q);
   }
 
   @Get('eseo-topiko/:code')

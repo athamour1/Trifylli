@@ -35,6 +35,8 @@ export class MeloiService {
     const where: Prisma.UserWhereInput = {
       topikoId: user.topikoId,
       archivedAt: null,
+      // Φιλοξενούμενοι δράσεων (άλλα Τοπικά) δεν είναι μέλη του μητρώου μας.
+      guestTopikoCode: null,
       status: { in: query.status?.length ? query.status : [MemberStatus.ENERGO] },
       ...(query.kind?.length ? { kind: { in: query.kind } } : {}),
       ...(query.idiotita?.length ? { idiotita: { in: query.idiotita } } : {}),

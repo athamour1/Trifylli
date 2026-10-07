@@ -1,0 +1,82 @@
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Put, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { AuditService } from '../../common/audit/audit.service';
+import { CapabilityGuard } from '../../common/auth/capability.guard';
+import { CurrentUser, RequireCapability } from '../../common/auth/decorators';
+import type { RequestUser } from '../../common/auth/types';
+import { DraseisGroupsService } from './draseis-groups.service';
+import { AutoGroupsDto, CreateGroupDto, CreateGuestDto, SetGroupMembersDto, UpdateGroupDto } from './dto/drasi-groups.dto';
+
+/** Φιλοξενούμενοι και ομάδες μιας δράσης. */
+@ApiTags('Δράσεις — ομάδες')
+@ApiBearerAuth()
+@UseGuards(CapabilityGuard)
+@Controller('draseis/:id')
+export class DraseisGroupsController {
+  constructor(
+    private readonly groups: DraseisGroupsService,
+    private readonly audit: AuditService,
+  ) {}
+
+  @Post('guests')
+  @RequireCapability('drasi:write')
+  @ApiOperation({ summary: 'Νέος φιλοξενούμενος από άλλο Τοπικό — μπαίνει κατευθείαν στη δράση' })
+  async createGuest(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: CreateGuestDto) {
+    const guest = await this.groups.createGuest(user, id, dto);
+    await this.audit.record(user, 'drasi.guest.create', 'user', guest.id, { drasiId: id, topikoCode: dto.topikoCode });
+    return guest;
+  }
+
+  @Get('groups')
+  @RequireCapability('calendar:read')
+  @ApiOperation({ summary: 'Ομάδες (πεντάδες/φωλιές/ενωμοτίες/σκηνές) με τα μέλη τους' })
+  list(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.groups.groups(user, id);
+  }
+
+  @Post('groups')
+  @RequireCapability('drasi:write')
+  create(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: CreateGroupDto) {
+    return this.groups.createGroup(user, id, dto);
+  }
+
+  @Post('groups/auto')
+  @RequireCapability('drasi:write')
+  @ApiOperation({ summary: 'Αυτόματη κατανομή των αταξινόμητων, με ανάμειξη ηλικιών' })
+  auto(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: AutoGroupsDto) {
+    return this.groups.autoGroups(user, id, dto);
+  }
+
+  @Patch('groups/:groupId')
+  @RequireCapability('drasi:write')
+  update(
+    @CurrentUser() user: RequestUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Body() dto: UpdateGroupDto,
+  ) {
+    return this.groups.updateGroup(user, id, groupId, dto);
+  }
+
+  @Delete('groups/:groupId')
+  @RequireCapability('drasi:write')
+  remove(
+    @CurrentUser() user: RequestUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+  ) {
+    return this.groups.deleteGroup(user, id, groupId);
+  }
+
+  @Put('groups/:groupId/members')
+  @RequireCapability('drasi:write')
+  @ApiOperation({ summary: 'Τα μέλη της ομάδας (αντικατάσταση)· μεταφέρει όποιον ήταν σε άλλη του ίδιου είδους' })
+  setMembers(
+    @CurrentUser() user: RequestUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Body() dto: SetGroupMembersDto,
+  ) {
+    return this.groups.setMembers(user, id, groupId, dto);
+  }
+}

@@ -65,7 +65,7 @@ export class SyndromesService {
 
       if (dto.generateForAllMembers) {
         const members = await tx.user.findMany({
-          where: { topikoId: user.topikoId, archivedAt: null, status: 'ENERGO' },
+          where: { topikoId: user.topikoId, archivedAt: null, status: 'ENERGO', guestTopikoCode: null },
           select: { id: true },
         });
 
