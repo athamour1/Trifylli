@@ -513,6 +513,12 @@ export interface PublicFormView {
   fields: DrasiFormField[];
   /** Προσυμπληρωμένες τιμές από το μητρώο (διεύθυνση, αρ. ταυτότητας) — ο γονέας τις διορθώνει. */
   prefill: Record<string, string>;
+  /**
+   * Ποιοι μπορούν να υπογράψουν: οι γονείς/κηδεμόνες του μητρώου (ανήλικος) ή ο
+   * ίδιος (ενήλικος). Όταν υπάρχουν, το ονοματεπώνυμο ΔΕΝ γράφεται ελεύθερα —
+   * διαλέγεται από εδώ και ο server δέχεται μόνο αυτά.
+   */
+  signers: { name: string; role: SignerRole }[];
 }
 
 export interface HealthSummaryEntry {

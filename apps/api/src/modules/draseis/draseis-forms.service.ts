@@ -357,6 +357,7 @@ export class DraseisFormsService {
     }
     return {
       prefill,
+      signers: allowedSigners(u, isMinor),
       drasi: {
         title: form.drasi.title,
         dateStart: form.drasi.dateStart.toISOString(),
@@ -400,6 +401,18 @@ export class DraseisFormsService {
       throw new BadRequestException('Η δήλωση συμμετοχής χρειάζεται τη συναίνεση του γονέα/κηδεμόνα.');
     }
 
+    // Ο υπογράφων: από το μητρώο (γονείς/κηδεμόνες του παιδιού ή ο ίδιος ο ενήλικος) όταν υπάρχει εκεί·
+    // ελεύθερο κείμενο μόνο αν το μητρώο δεν ξέρει κανέναν.
+    const signers = allowedSigners(form.participant.user, isMinor);
+    let signerName = dto.signerName.trim();
+    let signerRole = dto.signerRole;
+    if (signers.length) {
+      const match = signers.find((x) => x.name === signerName);
+      if (!match) throw new BadRequestException('Το ονοματεπώνυμο του υπογράφοντος πρέπει να είναι ένα από αυτά του μητρώου.');
+      signerName = match.name;
+      signerRole = match.role;
+    }
+
     const signatureFileId = dto.signatureDataUrl ? await this.storeSignature(form.drasi.topikoId, form.drasi.kladosId, form.id, dto.signatureDataUrl) : null;
 
     await this.prisma.drasiForm.update({
@@ -407,8 +420,8 @@ export class DraseisFormsService {
       data: {
         status: DrasiFormStatus.SUBMITTED,
         data: answers,
-        signerName: dto.signerName.trim(),
-        signerRole: dto.signerRole,
+        signerName,
+        signerRole,
         signatureFileId,
         submittedAt: new Date(),
         submittedIp: ip ?? null,
@@ -452,7 +465,21 @@ export class DraseisFormsService {
       include: {
         drasi: { select: { title: true, dateStart: true, dateEnd: true, location: true, topikoId: true, kladosId: true, topiko: { select: { name: true } } } },
         participant: {
-          include: { user: { select: { firstName: true, lastName: true, birthDate: true, eseoId: true, street: true, postalCode: true, city: true, area: true } } },
+          include: {
+            user: {
+              select: {
+                firstName: true,
+                lastName: true,
+                birthDate: true,
+                eseoId: true,
+                street: true,
+                postalCode: true,
+                city: true,
+                area: true,
+                guardians: { select: { fullName: true, kind: true } },
+              },
+            },
+          },
         },
       },
     });
@@ -503,6 +530,29 @@ const FLAG_LABEL: Record<string, string> = {
   lice: 'ψείρες',
   enzymes: 'έλλειψη ενζύμων',
 };
+
+/**
+ * Οι επιτρεπτοί υπογράφοντες από το μητρώο: γονείς/κηδεμόνες για ανήλικο, ο ίδιος για ενήλικο.
+ * Το e-SEO δίνει για τον γονέα συνήθως ΜΟΝΟ το μικρό όνομα («ΙΩΑΝΝΗΣ»)· τότε το
+ * ονοματεπώνυμο σχηματίζεται με το επώνυμο του παιδιού. Αν έχει ήδη δύο λέξεις, μένει ως έχει.
+ */
+function allowedSigners(
+  u: { firstName: string; lastName: string; guardians?: { fullName: string | null; kind: string }[] },
+  isMinor: boolean,
+): PublicFormView['signers'] {
+  if (!isMinor) return [{ name: `${u.firstName} ${u.lastName}`.trim(), role: 'IDIOS' }];
+  const seen = new Set<string>();
+  const out: PublicFormView['signers'] = [];
+  for (const g of u.guardians ?? []) {
+    const raw = g.fullName?.trim().replace(/\s+/g, ' ');
+    if (!raw) continue;
+    const name = raw.includes(' ') ? raw : `${raw} ${u.lastName}`.trim();
+    if (seen.has(name)) continue;
+    seen.add(name);
+    out.push({ name, role: g.kind === 'FATHER' || g.kind === 'MOTHER' ? 'GONEAS' : 'KIDEMONAS' });
+  }
+  return out;
+}
 
 function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');

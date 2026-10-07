@@ -89,8 +89,24 @@
 
         <q-card-section class="q-gutter-md">
           <div class="text-subtitle2">Υπογραφή</div>
-          <q-input v-model="signerName" label="Ονοματεπώνυμο υπογράφοντος *" outlined dense />
-          <q-select v-model="signerRole" :options="roleOptions" label="Ιδιότητα *" outlined dense emit-value map-options />
+          <!-- Το όνομα έρχεται από το μητρώο και δεν αλλάζει· αν είναι πάνω από ένας γονέας/κηδεμόνας, διαλέγεις ποιος υπογράφει. -->
+          <template v-if="form.signers.length">
+            <q-select
+              v-if="form.signers.length > 1"
+              v-model="signerName"
+              :options="form.signers.map((s) => ({ label: `${s.name} (${SIGNER_ROLE_LABEL[s.role]})`, value: s.name }))"
+              label="Ποιος υπογράφει *"
+              outlined
+              dense
+              emit-value
+              map-options
+            />
+            <q-input v-else :model-value="signerName" :label="form.isMinor ? 'Γονέας/κηδεμόνας' : 'Ονοματεπώνυμο'" outlined dense readonly :hint="form.isMinor ? 'Όπως είναι δηλωμένο στο μητρώο του Σ.Ε.Ο.' : ''" />
+          </template>
+          <template v-else>
+            <q-input v-model="signerName" label="Ονοματεπώνυμο υπογράφοντος *" outlined dense />
+            <q-select v-model="signerRole" :options="roleOptions" label="Ιδιότητα *" outlined dense emit-value map-options />
+          </template>
           <SignaturePad v-model="signature" />
           <q-checkbox v-model="consent" dense>
             <span class="text-body2">
@@ -98,7 +114,7 @@
                 Δηλώνω υπεύθυνα ότι γνωστοποίησα όλα τα προβλήματα υγείας, ότι τα παραπάνω στοιχεία είναι αληθή, και εξουσιοδοτώ τον/την Αρχηγό και
                 τους υπεύθυνους Α΄ Βοηθειών να τα κοινοποιήσουν σε λειτουργούς υγείας σε περίπτωση ανάγκης.
               </template>
-              <template v-else>Δηλώνω ότι τα στοιχεία είναι αληθή και ότι υπογράφω ως {{ signerRole ? SIGNER_ROLE_LABEL[signerRole].toLowerCase() : 'γονέας/κηδεμόνας' }}.</template>
+              <template v-else>Δηλώνω ότι τα στοιχεία είναι αληθή και ότι υπογράφω ως {{ effectiveRole ? SIGNER_ROLE_LABEL[effectiveRole].toLowerCase() : 'γονέας/κηδεμόνας' }}.</template>
               Η καταχώριση γίνεται με ημερομηνία και ώρα.
             </span>
           </q-checkbox>
@@ -168,8 +184,11 @@ const roleOptions = computed(() =>
     .map((r) => ({ label: SIGNER_ROLE_LABEL[r], value: r })),
 );
 
+/** Ο ρόλος που θα σταλεί: του επιλεγμένου υπογράφοντος, αλλιώς ό,τι διάλεξε ο χρήστης. */
+const effectiveRole = computed<SignerRole | null>(() => form.value?.signers.find((s) => s.name === signerName.value)?.role ?? signerRole.value);
+
 const canSubmit = computed(() => {
-  if (!form.value || !consent.value || !signerName.value.trim() || !signerRole.value) return false;
+  if (!form.value || !consent.value || !signerName.value.trim() || !effectiveRole.value) return false;
   return visibleFields.value.every((f) => {
     if (!f.required) return true;
     const v = answers[f.key];
@@ -181,6 +200,8 @@ onMounted(async () => {
   try {
     form.value = await get<PublicFormView>(`/forms/${token}`);
     signerRole.value = form.value.isMinor ? 'GONEAS' : 'IDIOS';
+    // Ένας μόνο δυνατός υπογράφων ⇒ προσυμπληρωμένος και κλειδωμένος.
+    if (form.value.signers.length === 1) signerName.value = form.value.signers[0]!.name;
     for (const [k, v] of Object.entries(form.value.prefill ?? {})) answers[k] = v;
   } catch (err) {
     error.value = err instanceof ApiError ? err.message : 'Ο σύνδεσμος δεν είναι διαθέσιμος.';
@@ -199,7 +220,7 @@ async function submit(): Promise<void> {
     await post(`/forms/${token}`, {
       answers: payload,
       signerName: signerName.value.trim(),
-      signerRole: signerRole.value,
+      signerRole: effectiveRole.value,
       consent: consent.value,
       ...(signature.value ? { signatureDataUrl: signature.value } : {}),
     });
