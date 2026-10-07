@@ -2,9 +2,9 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { CheckoutStatus, Prisma, SymvoulioType, YlikoCategory } from '@prisma/client';
 import {
   DRASI_EXPENSE_CATEGORIES,
-  type DrasiDayView,
   type DrasiExternalYlikoView,
   type DrasiLoadingList,
+  type DrasiScheduleItemView,
   type DrasiShoppingItemView,
   type DrasiSymvoulioView,
   type KladosType,
@@ -13,14 +13,28 @@ import {
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
 import { DrasiAccessService } from './drasi-access.service';
-import type { CreateDrasiSymvoulioDto, ExternalYlikoDto, PurchaseShoppingItemDto, ShoppingItemDto } from './dto/drasi-plan.dto';
+import type {
+  CopyDayDto,
+  CreateDrasiSymvoulioDto,
+  CreateScheduleItemDto,
+  ExternalYlikoDto,
+  PurchaseShoppingItemDto,
+  ShoppingItemDto,
+  UpdateScheduleItemDto,
+} from './dto/drasi-plan.dto';
+
+const scheduleInclude = {
+  responsible: { select: { id: true, firstName: true, lastName: true } },
+  executor: { select: { id: true, firstName: true, lastName: true } },
+  yliko: { include: { yliko: { select: { id: true, name: true, unit: true } } } },
+} as const;
 
 /**
  * Πρόγραμμα (F7), συμβούλια (F8) και υλικό (F9) μιας δράσης.
  *
- * Το πρόγραμμα ΔΕΝ είναι νέο μοντέλο: κάθε ημέρα δράσης είναι μία `Syggentrwsh`
- * με `drasiId` — αυτό που το schema είχε ήδη σχεδιάσει. Τα κομμάτια, οι
- * υπεύθυνοι και το απαιτούμενο υλικό δουλεύουν όπως σε κάθε συγκέντρωση.
+ * Το πρόγραμμα είναι ΔΙΚΟ του μοντέλο, ανεξάρτητο από τις συγκεντρώσεις: πρώτα
+ * το ωρολόγιο (ημέρα, από–έως, τίτλος) και μετά, πάνω σε κάθε στοιχείο, το
+ * προγραμματικό (markdown, υπεύθυνοι διεξαγωγής/υλοποίησης, υλικό).
  */
 @Injectable()
 export class DraseisPlanService {
@@ -29,68 +43,127 @@ export class DraseisPlanService {
     private readonly access: DrasiAccessService,
   ) {}
 
-  // ───────────────────────── Πρόγραμμα ─────────────────────────
+  // ───────────────────────── Ωρολόγιο & προγραμματικό ─────────────────────────
 
-  async days(user: RequestUser, id: string): Promise<DrasiDayView[]> {
+  async schedule(user: RequestUser, id: string): Promise<DrasiScheduleItemView[]> {
     await this.access.load(user, id, 'read');
-    const rows = await this.prisma.syggentrwsh.findMany({
-      where: { drasiId: id, archivedAt: null },
-      orderBy: { date: 'asc' },
-      include: {
-        klados: { select: { type: true } },
-        timeline: {
-          select: {
-            durationMin: true,
-            responsible: { select: { firstName: true, lastName: true } },
-            executor: { select: { firstName: true, lastName: true } },
-          },
-        },
-      },
+    const rows = await this.prisma.drasiScheduleItem.findMany({
+      where: { drasiId: id },
+      orderBy: [{ startsAt: 'asc' }, { createdAt: 'asc' }],
+      include: scheduleInclude,
     });
-    return rows.map((s) => ({
-      id: s.id,
-      title: s.title,
-      date: s.date.toISOString(),
-      startTime: s.startTime?.toISOString() ?? null,
-      endTime: s.endTime?.toISOString() ?? null,
-      location: s.location,
-      kladosType: (s.klados?.type as KladosType | undefined) ?? null,
-      blocks: s.timeline.length,
-      responsibles: [
-        ...new Set(
-          s.timeline.flatMap((b) => [b.responsible, b.executor]).filter((u): u is NonNullable<typeof u> => !!u).map((u) => `${u.lastName} ${u.firstName}`),
-        ),
-      ],
-      totalDurationMin: s.timeline.reduce((sum, b) => sum + b.durationMin, 0),
-    }));
+    return rows.map(toScheduleView);
+  }
+
+  async addScheduleItem(user: RequestUser, id: string, dto: CreateScheduleItemDto): Promise<DrasiScheduleItemView> {
+    await this.access.load(user, id, 'write');
+    await this.assertScheduleRefs(user, dto);
+    const row = await this.prisma.drasiScheduleItem.create({
+      data: {
+        drasiId: id,
+        startsAt: dto.startsAt,
+        endsAt: dto.endsAt ?? null,
+        title: dto.title.trim(),
+        kind: dto.kind ?? 'DRASTIRIOTITA',
+        location: dto.location?.trim() || null,
+        description: dto.description?.trim() || null,
+        responsibleId: dto.responsibleId ?? null,
+        executorId: dto.executorId ?? null,
+        ylikoNotes: dto.ylikoNotes?.trim() || null,
+        ...(dto.yliko?.length ? { yliko: { create: dto.yliko.map((y) => ({ ylikoId: y.ylikoId, qty: y.qty ?? 1 })) } } : {}),
+      },
+      include: scheduleInclude,
+    });
+    return toScheduleView(row);
+  }
+
+  async updateScheduleItem(user: RequestUser, id: string, itemId: string, dto: UpdateScheduleItemDto): Promise<DrasiScheduleItemView> {
+    await this.access.load(user, id, 'write');
+    const item = await this.prisma.drasiScheduleItem.findFirst({ where: { id: itemId, drasiId: id } });
+    if (!item) throw new NotFoundException('Το στοιχείο του ωρολογίου δεν βρέθηκε.');
+    await this.assertScheduleRefs(user, dto);
+    const startsAt = dto.startsAt ?? item.startsAt;
+    const endsAt = dto.endsAt === undefined ? item.endsAt : dto.endsAt;
+    if (endsAt && endsAt < startsAt) throw new BadRequestException('Η λήξη είναι πριν την έναρξη.');
+
+    const row = await this.prisma.$transaction(async (tx) => {
+      if (dto.yliko) {
+        await tx.drasiScheduleYliko.deleteMany({ where: { itemId } });
+        if (dto.yliko.length) {
+          await tx.drasiScheduleYliko.createMany({ data: dto.yliko.map((y) => ({ itemId, ylikoId: y.ylikoId, qty: y.qty ?? 1 })), skipDuplicates: true });
+        }
+      }
+      return tx.drasiScheduleItem.update({
+        where: { id: itemId },
+        data: {
+          startsAt,
+          endsAt,
+          ...(dto.title !== undefined ? { title: dto.title.trim() } : {}),
+          ...(dto.kind !== undefined ? { kind: dto.kind } : {}),
+          ...(dto.location !== undefined ? { location: dto.location?.trim() || null } : {}),
+          ...(dto.description !== undefined ? { description: dto.description?.trim() || null } : {}),
+          ...(dto.responsibleId !== undefined ? { responsibleId: dto.responsibleId } : {}),
+          ...(dto.executorId !== undefined ? { executorId: dto.executorId } : {}),
+          ...(dto.ylikoNotes !== undefined ? { ylikoNotes: dto.ylikoNotes?.trim() || null } : {}),
+        },
+        include: scheduleInclude,
+      });
+    });
+    return toScheduleView(row);
+  }
+
+  async removeScheduleItem(user: RequestUser, id: string, itemId: string) {
+    await this.access.load(user, id, 'write');
+    const item = await this.prisma.drasiScheduleItem.findFirst({ where: { id: itemId, drasiId: id } });
+    if (!item) throw new NotFoundException('Το στοιχείο του ωρολογίου δεν βρέθηκε.');
+    await this.prisma.drasiScheduleItem.delete({ where: { id: itemId } });
+    return { deleted: true };
   }
 
   /**
-   * Μία ημέρα για κάθε ημερομηνία της δράσης που δεν έχει ακόμη. Η μονοήμερη
-   * παίρνει μία — ο χρήστης δεν βλέπει ποτέ τη λέξη «συγκέντρωση».
+   * Αντιγράφει το ωρολόγιο μιας ημέρας σε άλλη (ίδιες ώρες, άλλη ημερομηνία).
+   * Μαζί και τα προγραμματικά — εγερτήριο, γεύματα και υπηρεσίες επαναλαμβάνονται.
    */
-  async createDays(user: RequestUser, id: string): Promise<{ created: number }> {
-    const drasi = await this.access.load(user, id, 'write');
-    const existing = await this.prisma.syggentrwsh.findMany({ where: { drasiId: id, archivedAt: null }, select: { date: true } });
-    const taken = new Set(existing.map((s) => dayKey(s.date)));
-
-    const dates: Date[] = [];
-    for (let d = startOfDay(drasi.dateStart); d <= drasi.dateEnd; d = new Date(d.getTime() + 86_400_000)) {
-      if (!taken.has(dayKey(d))) dates.push(new Date(d.getTime() + 12 * 3_600_000));
+  async copyDay(user: RequestUser, id: string, dto: CopyDayDto): Promise<{ copied: number }> {
+    await this.access.load(user, id, 'write');
+    const tz = await this.timezone(user);
+    const items = await this.prisma.drasiScheduleItem.findMany({ where: { drasiId: id }, include: { yliko: true } });
+    const source = items.filter((i) => localDate(i.startsAt, tz) === dto.from);
+    if (source.length === 0) throw new BadRequestException('Η ημέρα προέλευσης δεν έχει στοιχεία.');
+    const shiftMs = (Date.parse(`${dto.to}T12:00:00Z`) - Date.parse(`${dto.from}T12:00:00Z`));
+    for (const i of source) {
+      await this.prisma.drasiScheduleItem.create({
+        data: {
+          drasiId: id,
+          startsAt: new Date(i.startsAt.getTime() + shiftMs),
+          endsAt: i.endsAt ? new Date(i.endsAt.getTime() + shiftMs) : null,
+          title: i.title,
+          kind: i.kind,
+          location: i.location,
+          description: i.description,
+          responsibleId: i.responsibleId,
+          executorId: i.executorId,
+          ylikoNotes: i.ylikoNotes,
+          ...(i.yliko.length ? { yliko: { create: i.yliko.map((y) => ({ ylikoId: y.ylikoId, qty: y.qty })) } } : {}),
+        },
+      });
     }
-    if (dates.length === 0) return { created: 0 };
+    return { copied: source.length };
+  }
 
-    const multi = dates.length + existing.length > 1;
-    await this.prisma.syggentrwsh.createMany({
-      data: dates.map((date, i) => ({
-        kladosId: drasi.kladosId,
-        drasiId: id,
-        date,
-        title: multi ? `Ημέρα ${existing.length + i + 1}` : drasi.title,
-        location: drasi.location,
-      })),
-    });
-    return { created: dates.length };
+  /** Η ζώνη ώρας του Τοπικού — οι «ημέρες» του ωρολογίου κόβονται εκεί, όχι στο UTC του server. */
+  async timezone(user: RequestUser): Promise<string> {
+    const topiko = await this.prisma.topiko.findUnique({ where: { id: user.topikoId }, select: { timezone: true } });
+    return topiko?.timezone ?? 'Europe/Athens';
+  }
+
+  private async assertScheduleRefs(user: RequestUser, dto: CreateScheduleItemDto): Promise<void> {
+    for (const uid of [dto.responsibleId, dto.executorId]) if (uid) await this.assertStelexos(user, uid);
+    if (dto.yliko?.length) {
+      const ids = [...new Set(dto.yliko.map((y) => y.ylikoId))];
+      const found = await this.prisma.yliko.count({ where: { id: { in: ids }, topikoId: user.topikoId, archivedAt: null } });
+      if (found !== ids.length) throw new BadRequestException('Κάποιο είδος υλικού δεν βρέθηκε.');
+    }
   }
 
   // ───────────────────────── Συμβούλια ─────────────────────────
@@ -395,10 +468,36 @@ function toExternalView(r: {
   };
 }
 
-function startOfDay(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+export function toScheduleView(r: {
+  id: string;
+  startsAt: Date;
+  endsAt: Date | null;
+  title: string;
+  kind: DrasiScheduleItemView['kind'];
+  location: string | null;
+  description: string | null;
+  responsible: { id: string; firstName: string; lastName: string } | null;
+  executor: { id: string; firstName: string; lastName: string } | null;
+  ylikoNotes: string | null;
+  yliko: { ylikoId: string; qty: number; yliko: { name: string; unit: string | null } }[];
+}): DrasiScheduleItemView {
+  return {
+    id: r.id,
+    startsAt: r.startsAt.toISOString(),
+    endsAt: r.endsAt?.toISOString() ?? null,
+    title: r.title,
+    kind: r.kind,
+    location: r.location,
+    description: r.description,
+    responsible: r.responsible,
+    executor: r.executor,
+    ylikoNotes: r.ylikoNotes,
+    yliko: r.yliko.map((y) => ({ ylikoId: y.ylikoId, name: y.yliko.name, unit: y.yliko.unit, qty: y.qty })),
+    hasProgramma: Boolean(r.description || r.responsible || r.executor || r.ylikoNotes || r.yliko.length),
+  };
 }
 
-function dayKey(d: Date): string {
-  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+/** «YYYY-MM-DD» στη ζώνη ώρας του Τοπικού. */
+export function localDate(d: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
 }

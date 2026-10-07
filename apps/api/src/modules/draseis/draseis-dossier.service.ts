@@ -1,12 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { TIMELINE_SECTION_LABEL, TIMELINE_SECTION_ORDER, type DrasiDossier, type KladosType } from '@trifylli/shared';
+import { type DrasiDossier, type KladosType } from '@trifylli/shared';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
 import { DrasiAccessService } from './drasi-access.service';
 import { DraseisFinanceService } from './draseis-finance.service';
 import { DraseisFormsService } from './draseis-forms.service';
 import { DraseisGroupsService } from './draseis-groups.service';
-import { DraseisPlanService } from './draseis-plan.service';
+import { DraseisPlanService, localDate } from './draseis-plan.service';
 import { DraseisReviewService } from './draseis-review.service';
 import { DraseisService } from './draseis.service';
 
@@ -30,23 +30,9 @@ export class DraseisDossierService {
 
   async build(user: RequestUser, id: string, options: { health: boolean; treasury: boolean }): Promise<DrasiDossier> {
     const drasi = await this.access.load(user, id, 'read');
-    const [full, days, participants, groups, loading, matrix, symvoulia, reviewView, topiko] = await Promise.all([
+    const [full, schedule, participants, groups, loading, matrix, symvoulia, reviewView, topiko] = await Promise.all([
       this.draseis.findOne(user, id),
-      this.prisma.syggentrwsh.findMany({
-        where: { drasiId: id, archivedAt: null },
-        orderBy: { date: 'asc' },
-        include: {
-          parts: { select: { section: true, notes: true } },
-          timeline: {
-            orderBy: [{ section: 'asc' }, { order: 'asc' }],
-            include: {
-              responsible: { select: { firstName: true, lastName: true } },
-              executor: { select: { firstName: true, lastName: true } },
-              yliko: { include: { yliko: { select: { name: true } } } },
-            },
-          },
-        },
-      }),
+      this.plan.schedule(user, id),
       this.finance.participants(user, id),
       this.groups.groups(user, id),
       this.plan.loadingList(user, id),
@@ -57,8 +43,16 @@ export class DraseisDossierService {
         select: { id: true, title: true, date: true, agenda: true, minutes: true, finalizedAt: true },
       }),
       this.review.view(user, id),
-      this.prisma.topiko.findUnique({ where: { id: user.topikoId }, select: { name: true } }),
+      this.prisma.topiko.findUnique({ where: { id: user.topikoId }, select: { name: true, timezone: true } }),
     ]);
+
+    // Ομαδοποίηση του ωρολογίου ανά ημέρα — στη ζώνη ώρας του Τοπικού.
+    const tz = topiko?.timezone ?? 'Europe/Athens';
+    const byDay = new Map<string, typeof schedule>();
+    for (const item of schedule) {
+      const key = localDate(new Date(item.startsAt), tz);
+      byDay.set(key, [...(byDay.get(key) ?? []), item]);
+    }
 
     const groupsOf = new Map<string, { kind: (typeof groups.groups)[number]['kind']; name: string }[]>();
     for (const g of groups.groups) {
@@ -75,8 +69,6 @@ export class DraseisDossierService {
         ? Promise.all([this.finance.summary(user, id), this.finance.entries(user, id)]).then(([summary, entries]) => ({ summary, entries }))
         : Promise.resolve(null),
     ]);
-
-    const name = (u: { firstName: string; lastName: string } | null) => (u ? `${u.lastName} ${u.firstName}` : null);
 
     return {
       drasi: {
@@ -101,29 +93,7 @@ export class DraseisDossierService {
         })),
         roles: full.roles.map((r) => ({ id: r.id, kind: r.kind, note: r.note, user: r.user })),
       },
-      days: days.map((d) => ({
-        id: d.id,
-        title: d.title,
-        date: d.date.toISOString(),
-        startTime: d.startTime?.toISOString() ?? null,
-        location: d.location,
-        goal: d.goal,
-        sections: TIMELINE_SECTION_ORDER.map((section) => ({
-          section,
-          label: TIMELINE_SECTION_LABEL[section],
-          notes: d.parts.find((p) => p.section === section)?.notes ?? '',
-          blocks: d.timeline
-            .filter((b) => b.section === section)
-            .map((b) => ({
-              title: b.title,
-              description: b.description,
-              durationMin: b.durationMin,
-              responsible: name(b.responsible),
-              executor: name(b.executor),
-              yliko: b.yliko.length ? b.yliko.map((y) => `${y.yliko.name}${y.qty > 1 ? ` ×${y.qty}` : ''}`).join(', ') : null,
-            })),
-        })).filter((s) => s.blocks.length > 0 || s.notes),
-      })),
+      days: [...byDay.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, items]) => ({ date, items })),
       participants: participants.map((p) => ({ ...p, groups: groupsOf.get(p.id) ?? [] })),
       groups: groups.groups,
       health,

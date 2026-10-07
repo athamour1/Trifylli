@@ -5,7 +5,15 @@ import { CapabilityGuard } from '../../common/auth/capability.guard';
 import { CurrentUser, RequireCapability } from '../../common/auth/decorators';
 import type { RequestUser } from '../../common/auth/types';
 import { DraseisPlanService } from './draseis-plan.service';
-import { CreateDrasiSymvoulioDto, ExternalYlikoDto, PurchaseShoppingItemDto, ShoppingItemDto } from './dto/drasi-plan.dto';
+import {
+  CopyDayDto,
+  CreateDrasiSymvoulioDto,
+  CreateScheduleItemDto,
+  ExternalYlikoDto,
+  PurchaseShoppingItemDto,
+  ShoppingItemDto,
+  UpdateScheduleItemDto,
+} from './dto/drasi-plan.dto';
 
 /** Πρόγραμμα, συμβούλια και υλικό μιας δράσης. */
 @ApiTags('Δράσεις — πρόγραμμα & υλικό')
@@ -18,20 +26,44 @@ export class DraseisPlanController {
     private readonly audit: AuditService,
   ) {}
 
-  // ── Πρόγραμμα ──
+  // ── Ωρολόγιο & προγραμματικό ──
 
-  @Get('days')
+  @Get('schedule')
   @RequireCapability('calendar:read')
-  @ApiOperation({ summary: 'Οι ημέρες της δράσης (μία συγκέντρωση η καθεμία)' })
-  days(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
-    return this.plan.days(user, id);
+  @ApiOperation({ summary: 'Το ωρολόγιο της δράσης με τα προγραμματικά του' })
+  schedule(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.plan.schedule(user, id);
   }
 
-  @Post('days')
-  @RequireCapability('syggentrwsh:write')
-  @ApiOperation({ summary: 'Δημιουργία μίας ημέρας για κάθε ημερομηνία που λείπει' })
-  createDays(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
-    return this.plan.createDays(user, id);
+  @Post('schedule')
+  @RequireCapability('drasi:write')
+  addScheduleItem(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: CreateScheduleItemDto) {
+    return this.plan.addScheduleItem(user, id, dto);
+  }
+
+  @Patch('schedule/:itemId')
+  @RequireCapability('drasi:write')
+  @ApiOperation({ summary: 'Αλλαγή πλαισίου ή/και προγραμματικού ενός στοιχείου' })
+  updateScheduleItem(
+    @CurrentUser() user: RequestUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('itemId', ParseUUIDPipe) itemId: string,
+    @Body() dto: UpdateScheduleItemDto,
+  ) {
+    return this.plan.updateScheduleItem(user, id, itemId, dto);
+  }
+
+  @Delete('schedule/:itemId')
+  @RequireCapability('drasi:write')
+  removeScheduleItem(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Param('itemId', ParseUUIDPipe) itemId: string) {
+    return this.plan.removeScheduleItem(user, id, itemId);
+  }
+
+  @Post('schedule/copy-day')
+  @RequireCapability('drasi:write')
+  @ApiOperation({ summary: 'Αντιγραφή του ωρολογίου μιας ημέρας σε άλλη' })
+  copyDay(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: CopyDayDto) {
+    return this.plan.copyDay(user, id, dto);
   }
 
   // ── Συμβούλια ──
