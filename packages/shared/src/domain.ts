@@ -429,6 +429,28 @@ export const DrasiLedgerKind = {
 } as const;
 export type DrasiLedgerKind = (typeof DrasiLedgerKind)[keyof typeof DrasiLedgerKind];
 
+/**
+ * Ομάδες μέσα σε δράση. Δύο ανεξάρτητοι άξονες πάνω στα ίδια παιδιά: η
+ * υποομάδα του κλάδου (πεντάδα/φωλιά/ενωμοτία) και η σκηνή. Ένα παιδί είναι σε
+ * ΜΙΑ ομάδα ανά είδος. Βλ. docs/draseis.md F14.
+ */
+export const DrasiGroupKind = {
+  PENTADA: 'PENTADA',
+  FOLIA: 'FOLIA',
+  ENOMOTIA: 'ENOMOTIA',
+  SKINI: 'SKINI',
+  ALLO: 'ALLO',
+} as const;
+export type DrasiGroupKind = (typeof DrasiGroupKind)[keyof typeof DrasiGroupKind];
+
+/** Ποιο είδος υποομάδας έχει κάθε κλάδος (οι Μεγάλοι «έχουν άλλα» — προς το παρόν `ALLO`). */
+export const DRASI_GROUP_KIND_BY_KLADOS: Record<KladosType, DrasiGroupKind> = {
+  ASTERIA: 'PENTADA',
+  POULIA: 'FOLIA',
+  ODIGOI: 'ENOMOTIA',
+  MEGALOI_ODIGOI: 'ALLO',
+};
+
 /** Ποιες κατηγορίες προτείνονται ανά είδος κίνησης. */
 export const TREASURY_INCOME_CATEGORIES: readonly TreasuryCategory[] = [
   'SYNDROMI',

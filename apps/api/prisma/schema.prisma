@@ -80,6 +80,15 @@ enum DrasiLedgerKind {
   APODOSI
 }
 
+/// Ομάδες δράσης: υποομάδα κλάδου (πεντάδα/φωλιά/ενωμοτία) ή σκηνή — ανεξάρτητοι άξονες.
+enum DrasiGroupKind {
+  PENTADA
+  FOLIA
+  ENOMOTIA
+  SKINI
+  ALLO
+}
+
 /// Ευθύνες μέσα σε δράση: αρχηγείο + υπηρεσίες σε ΕΝΑ enum (βλ. shared `DrasiRoleKind`).
 enum DrasiRoleKind {
   ARXIGOS
@@ -212,6 +221,7 @@ model Klados {
   pharmacyKits PharmacyKit[]
   kitLoansReceived KitLoan[]  @relation("KitLoanToKlados")
   drasiSymmetoxes DrasiKlados[]
+  drasiGroups  DrasiGroup[]
 
   @@unique([topikoId, type])
   @@map("klados")
@@ -465,10 +475,49 @@ model Drasi {
   treasuryEntries TreasuryEntry[]
   budget       DrasiBudget[]
   ledger       DrasiLedgerEntry[]
+  groups       DrasiGroup[]
 
   @@index([topikoId, dateStart])
   @@index([kladosId, dateStart])
   @@map("drasi")
+}
+
+/// Ομάδα μέσα σε δράση: «Αετοί» (ενωμοτία), «Σκηνή 3». Βλ. docs/draseis.md F14.
+model DrasiGroup {
+  id        String         @id @default(uuid()) @db.Uuid
+  drasiId   String         @db.Uuid
+  kind      DrasiGroupKind
+  name      String
+  /// Σε ποιον κλάδο ανήκει η κατάταξη· `null` για σκηνές (συχνά μεικτές).
+  kladosId  String?        @db.Uuid
+  /// Ομαδάρχης/ενωμοτάρχης — παιδί, όχι στέλεχος.
+  leaderParticipantId String? @db.Uuid
+  order     Int            @default(0)
+  createdAt DateTime       @default(now())
+
+  drasi   Drasi             @relation(fields: [drasiId], references: [id], onDelete: Cascade)
+  klados  Klados?           @relation(fields: [kladosId], references: [id], onDelete: SetNull)
+  leader  DrasiParticipant? @relation("DrasiGroupLeader", fields: [leaderParticipantId], references: [id], onDelete: SetNull)
+  members DrasiGroupMember[]
+
+  @@unique([drasiId, kind, name])
+  @@map("drasi_group")
+}
+
+/// Το `kind` επαναλαμβάνεται εδώ ώστε η βάση να επιβάλλει «ένα παιδί σε ΜΙΑ ομάδα
+/// ανά είδος» με απλό unique — δύο στελέχη που σέρνουν ταυτόχρονα το ίδιο παιδί
+/// δεν θα το βάλουν σε δύο ενωμοτίες.
+model DrasiGroupMember {
+  groupId       String         @db.Uuid
+  participantId String         @db.Uuid
+  kind          DrasiGroupKind
+
+  group       DrasiGroup       @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  participant DrasiParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@id([groupId, participantId])
+  @@unique([participantId, kind])
+  @@map("drasi_group_member")
 }
 
 /// Πληρωμή συμμετοχής — καθρέφτης του `Payment` των συνδρομών: ίδια πορεία μετρητών.
@@ -602,6 +651,8 @@ model DrasiParticipant {
   user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   collector User?          @relation("DrasiFeeCollector", fields: [collectorId], references: [id], onDelete: SetNull)
   payments  DrasiPayment[]
+  groups    DrasiGroupMember[]
+  leads     DrasiGroup[]     @relation("DrasiGroupLeader")
 
   @@unique([drasiId, userId])
   @@index([drasiId, kind])

@@ -3,6 +3,7 @@ import {
   AccountRole,
   CheckoutStatus,
   DrasiFeeKind,
+  DrasiGroupKind,
   DrasiLedgerKind,
   DrasiRoleKind,
   DrasiStatus,
@@ -214,6 +215,21 @@ export const DRASI_FEE_KIND_LABEL: Record<DrasiFeeKind, string> = {
   MEIOMENI: 'Μειωμένη',
   STELEXOS: 'Στέλεχος',
   DOREAN: 'Δωρεάν',
+};
+
+export const DRASI_GROUP_KIND_LABEL: Record<DrasiGroupKind, string> = {
+  PENTADA: 'Πεντάδα',
+  FOLIA: 'Φωλιά',
+  ENOMOTIA: 'Ενωμοτία',
+  SKINI: 'Σκηνή',
+  ALLO: 'Ομάδα',
+};
+export const DRASI_GROUP_KIND_PLURAL: Record<DrasiGroupKind, string> = {
+  PENTADA: 'Πεντάδες',
+  FOLIA: 'Φωλιές',
+  ENOMOTIA: 'Ενωμοτίες',
+  SKINI: 'Σκηνές',
+  ALLO: 'Ομάδες',
 };
 
 export const DRASI_LEDGER_KIND_LABEL: Record<DrasiLedgerKind, string> = {

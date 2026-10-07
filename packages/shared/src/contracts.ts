@@ -3,6 +3,7 @@ import type {
   AccountRole,
   CheckoutStatus,
   DrasiFeeKind,
+  DrasiGroupKind,
   DrasiLedgerKind,
   DrasiRoleKind,
   DrasiType,
@@ -417,4 +418,43 @@ export interface DrasiCollectorView {
   /** Εισπραγμένα μετρητά που δεν έχουν παραδοθεί ακόμη (στάδιο ΕΙΣΠΡΑΧΘΗΚΕ). */
   holding: number;
   outstanding: number;
+}
+
+// ───────────────────────── Δράσεις: φιλοξενούμενοι (F3) & ομάδες (F14) ─────────────────────────
+
+/** Μέλος άλλου Τοπικού — εγγραφή `User` με `guestTopikoCode`, ορατή μόνο στις δράσεις. */
+export interface GuestMemberView {
+  id: string;
+  firstName: string;
+  lastName: string;
+  kind: MemberKind;
+  birthDate: string | null;
+  phone: string | null;
+  guestTopikoCode: string;
+  guestTopikoName: string;
+  guardianName: string | null;
+  guardianPhone: string | null;
+  /** Σε πόσες δράσεις έχει συμμετάσχει (για το «ήρθε και πέρσι»). */
+  participations: number;
+}
+
+export interface DrasiGroupMemberView {
+  participantId: string;
+  user: { id: string; firstName: string; lastName: string; kind: MemberKind; birthDate: string | null; kladosType: KladosType | null };
+}
+
+export interface DrasiGroupView {
+  id: string;
+  kind: DrasiGroupKind;
+  name: string;
+  kladosType: KladosType | null;
+  leaderParticipantId: string | null;
+  order: number;
+  members: DrasiGroupMemberView[];
+}
+
+export interface DrasiGroupsView {
+  groups: DrasiGroupView[];
+  /** Όλοι οι συμμετέχοντες (για τους «αταξινόμητους» ανά είδος). */
+  participants: DrasiGroupMemberView[];
 }
