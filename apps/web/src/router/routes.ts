@@ -206,7 +206,7 @@ const routes: RouteRecordRaw[] = [
         meta: { title: 'Παρουσιολόγιο' },
       },
       {
-        path: 'draseis/:id',
+        path: 'draseis/:id/:section?',
         name: 'drasi',
         component: () => import('../pages/DrasiPage.vue'),
         meta: { title: 'Δράση' },

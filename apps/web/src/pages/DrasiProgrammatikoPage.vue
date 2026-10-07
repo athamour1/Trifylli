@@ -335,7 +335,7 @@ onBeforeRouteLeave(() => {
 
 // ── Πλοήγηση ──
 function goBack(): void {
-  void router.push({ name: 'drasi', params: { id: drasiId }, query: { tab: 'programma' } });
+  void router.push({ name: 'drasi', params: { id: drasiId, section: 'programma' } });
 }
 async function goTo(id: string | null): Promise<void> {
   if (!id) return;
