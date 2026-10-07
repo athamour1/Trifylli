@@ -24,6 +24,9 @@ const PURPOSE_CAPS: Record<string, { read: Capability; write: Capability }> = {
   // Εικόνες Markdown: δένονται στην εμβέλεια του περιεχομένου· όποιος έχει
   // πρόσβαση στον κλάδο (ή ο υπερδιαχειριστής στο Τοπικό) ανεβάζει και βλέπει.
   [FilePurpose.MARKDOWN]: { read: 'calendar:read', write: 'calendar:read' },
+  // Υπογραφές εντύπων: τις βλέπει όποιος βλέπει τη δράση· δεν ανεβαίνουν από εδώ
+  // (δεν έχουν PURPOSE_LIMITS), μόνο από την υποβολή του δημόσιου εντύπου.
+  [FilePurpose.SIGNATURE]: { read: 'calendar:read', write: 'drasi:write' },
 };
 
 /** Όρια τύπου/μεγέθους ανά σκοπό. */

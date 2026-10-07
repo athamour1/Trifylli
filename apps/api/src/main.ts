@@ -33,6 +33,9 @@ async function bootstrap(): Promise<void> {
   const config = app.get<AppConfig>(AppConfigToken);
   const logger = new Logger('Bootstrap');
 
+  // Τα έντυπα των δράσεων στέλνουν την υπογραφή ως εικόνα (data URL) — το
+  // προεπιλεγμένο όριο των 100 KB δεν φτάνει. Το `rawBody` παραμένει για το webhook.
+  app.useBodyParser('json', { limit: '2mb' });
   app.setGlobalPrefix(config.API_PREFIX);
   app.set('trust proxy', config.TRUST_PROXY_HOPS);
   app.disable('x-powered-by');
