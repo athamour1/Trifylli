@@ -17,6 +17,10 @@ DOMAIN=${DOMAIN:-trifylli.gr}
 
 while IFS= read -r line || [ -n "$line" ]; do
   case "$line" in
+    *'# GK + openssl rand -hex '*)
+      # Κλειδί Garage: το πρόθεμα GK είναι υποχρεωτικό.
+      key=${line%%=*}; n=$(echo "$line" | sed 's/.*openssl rand -hex \([0-9]*\).*/\1/')
+      echo "$key=GK$(rand_hex "$n")" ;;
     *'# openssl rand -hex '*)
       key=${line%%=*}; n=$(echo "$line" | sed 's/.*openssl rand -hex \([0-9]*\).*/\1/')
       echo "$key=$(rand_hex "$n")" ;;
