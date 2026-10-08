@@ -156,8 +156,23 @@ export class AuthentikClient {
     return `${this.config.AUTHENTIK_API_URL!.replace(/\/$/, '')}${path}`;
   }
 
+  /**
+   * Το API μιλά στο Authentik από την εσωτερική διεύθυνση (`authentik-server:9000`),
+   * αλλά το Authentik χτίζει τους συνδέσμους των email (ορισμός κωδικού) από
+   * τον Host του αιτήματος — και το στέλεχος έπαιρνε σύνδεσμο που δεν ανοίγει
+   * έξω από το Docker. Δηλώνουμε τη δημόσια διεύθυνση (αυτή του `OIDC_ISSUER`)
+   * όπως θα έκανε ένας reverse proxy.
+   */
   private get headers(): Record<string, string> {
-    return { Authorization: `Bearer ${this.config.AUTHENTIK_API_TOKEN}` };
+    const headers: Record<string, string> = { Authorization: `Bearer ${this.config.AUTHENTIK_API_TOKEN}` };
+    try {
+      const pub = new URL(this.config.OIDC_ISSUER);
+      headers['X-Forwarded-Host'] = pub.host;
+      headers['X-Forwarded-Proto'] = pub.protocol.replace(':', '');
+    } catch {
+      // Χωρίς έγκυρο issuer δεν θα είχε ξεκινήσει το API· τίποτα να κάνουμε.
+    }
+    return headers;
   }
 
   private async get<S extends z.ZodTypeAny>(
