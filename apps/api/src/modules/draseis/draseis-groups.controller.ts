@@ -5,7 +5,7 @@ import { CapabilityGuard } from '../../common/auth/capability.guard';
 import { CurrentUser, RequireCapability } from '../../common/auth/decorators';
 import type { RequestUser } from '../../common/auth/types';
 import { DraseisGroupsService } from './draseis-groups.service';
-import { AutoGroupsDto, CreateGroupDto, CreateGuestDto, SetGroupMembersDto, UpdateGroupDto } from './dto/drasi-groups.dto';
+import { CreateGroupDto, CreateGuestDto, SetGroupMembersDto, UpdateGroupDto } from './dto/drasi-groups.dto';
 
 /** Φιλοξενούμενοι και ομάδες μιας δράσης. */
 @ApiTags('Δράσεις — ομάδες')
@@ -38,13 +38,6 @@ export class DraseisGroupsController {
   @RequireCapability('drasi:write')
   create(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: CreateGroupDto) {
     return this.groups.createGroup(user, id, dto);
-  }
-
-  @Post('groups/auto')
-  @RequireCapability('drasi:write')
-  @ApiOperation({ summary: 'Αυτόματη κατανομή των αταξινόμητων, με ανάμειξη ηλικιών' })
-  auto(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: AutoGroupsDto) {
-    return this.groups.autoGroups(user, id, dto);
   }
 
   @Patch('groups/:groupId')

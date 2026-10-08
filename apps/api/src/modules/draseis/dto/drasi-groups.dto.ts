@@ -10,7 +10,6 @@ import {
   IsString,
   IsUUID,
   Matches,
-  Max,
   MaxLength,
   Min,
 } from 'class-validator';
@@ -137,23 +136,4 @@ export class SetGroupMembersDto {
   @ArrayMaxSize(200)
   @IsUUID(undefined, { each: true })
   participantIds!: string[];
-}
-
-export class AutoGroupsDto {
-  @ApiProperty({ enum: DrasiGroupKind })
-  @IsEnum(DrasiGroupKind)
-  kind!: DrasiGroupKind;
-
-  @ApiPropertyOptional({ enum: KladosType, description: 'Ποιου κλάδου τα παιδιά μοιράζονται· κενό ⇒ όλοι (σκηνές).' })
-  @IsOptional()
-  @IsEnum(KladosType)
-  kladosType?: KladosType;
-
-  @ApiPropertyOptional({ minimum: 1, maximum: 40, description: 'Πόσες ομάδες να φτιαχτούν αν δεν υπάρχουν.' })
-  @IsOptional()
-  @Type(() => Number)
-  @IsInt()
-  @Min(1)
-  @Max(40)
-  count?: number;
 }

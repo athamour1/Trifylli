@@ -2,7 +2,7 @@
   <div>
     <!-- Ένα είδος ανά υποκαρτέλα: η υποομάδα κάθε κλάδου που συμμετέχει. Οι σκηνές
          ζουν στη δική τους ενότητα (mode="skines"), οπότε εκεί δεν υπάρχει επιλογή. -->
-    <div class="row items-center q-mb-md q-gutter-sm">
+    <div class="tf-toolbar q-mb-md">
       <SegmentedToggle
         v-if="kindOptions.length > 1"
         v-model="kind"
@@ -12,12 +12,9 @@
         toggle-text-color="klados-on"
         :options="kindOptions"
       />
-      <q-space />
-      <template v-if="canWrite">
-        <!-- Οι επιτροπές φτιάχνονται γύρω από προγραμματικά, όχι με κλήρωση ηλικιών. -->
-        <q-btn v-if="kind !== 'EPITROPI'" flat color="klados" icon="auto_awesome" label="Αυτόματη κατανομή" :disable="!unassignedKids.length" @click="openAuto" />
+      <div v-if="canWrite" class="tf-actions">
         <q-btn color="klados" text-color="klados-on" unelevated icon="add" :label="`Νέα ${kindLower(kind)}`" @click="openCreate" />
-      </template>
+      </div>
     </div>
 
     <q-inner-loading :showing="loading" />
@@ -26,7 +23,7 @@
       <!-- Ομάδες -->
       <div class="tf-main">
         <div v-if="!currentGroups.length" class="text-center text-grey-6 q-pa-lg">
-          <q-icon :name="kind === 'SKINI' ? 'night_shelter' : 'groups_3'" size="40px" class="block q-mb-sm" />
+          <q-icon :name="kind === 'SKINI' ? 'night_shelter' : 'groups_3'" size="40px" class="block q-mx-auto q-mb-sm" />
           Καμία {{ kindLower(kind) }} ακόμη.
         </div>
         <!-- Όσες κάρτες χωρούν στον ΧΩΡΟ της στήλης (όχι του παραθύρου). -->
@@ -195,34 +192,6 @@
       </q-card>
     </q-dialog>
 
-    <!-- ── Αυτόματη κατανομή ── -->
-    <q-dialog v-model="autoDialog">
-      <q-card style="min-width: min(380px, 94vw)">
-        <q-card-section class="text-subtitle1 text-weight-medium q-pb-none">Αυτόματη κατανομή</q-card-section>
-        <q-card-section class="text-caption text-grey-7">
-          Τα {{ unassignedKids.length }} αταξινόμητα παιδιά μοιράζονται με ανάμειξη ηλικιών.<span v-if="unassignedKids.length < unassigned.length"> Τα στελέχη μπαίνουν με το χέρι.</span>
-          <span v-if="currentGroups.length"> Γεμίζουν οι υπάρχουσες ομάδες, οι μικρότερες πρώτα.</span>
-        </q-card-section>
-        <q-card-section v-if="!currentGroups.length" class="q-pt-none q-gutter-sm">
-          <q-input v-model.number="autoForm.count" type="number" label="Πόσες ομάδες" outlined dense :min="1" :max="40" color="klados" />
-          <q-select
-            v-if="kind !== 'SKINI'"
-            v-model="autoForm.kladosType"
-            :options="kladosOptions"
-            label="Κλάδος"
-            outlined
-            dense
-            emit-value
-            map-options
-            color="klados"
-          />
-        </q-card-section>
-        <q-card-actions align="right">
-          <q-btn flat label="Άκυρο" v-close-popup />
-          <q-btn color="klados" text-color="klados-on" label="Κατανομή" :loading="saving" @click="submitAuto" />
-        </q-card-actions>
-      </q-card>
-    </q-dialog>
   </div>
 </template>
 
@@ -310,7 +279,6 @@ const unassigned = computed<DrasiGroupMemberView[]>(() => {
   });
 });
 /** Η αυτόματη κατανομή μοιράζει μόνο παιδιά· τα στελέχη μπαίνουν με το χέρι (συνήθως στη δική τους σκηνή). */
-const unassignedKids = computed(() => unassigned.value.filter((p) => p.user.kind !== 'STELEXOS'));
 const unassignedOptions = computed(() =>
   unassigned.value.map((m) => ({ label: `${m.user.lastName} ${m.user.firstName}`, value: m.participantId })),
 );
@@ -484,32 +452,6 @@ function remove(g: DrasiGroupView): void {
       notifyError(err, 'Αποτυχία.');
     }
   });
-}
-
-// ── Αυτόματη κατανομή ──
-const autoDialog = ref(false);
-const autoForm = reactive({ count: 3, kladosType: null as KladosType | null });
-function openAuto(): void {
-  autoForm.count = Math.max(1, Math.ceil(unassignedKids.value.length / 6));
-  autoForm.kladosType = kladoiForKind.value[0] ?? null;
-  autoDialog.value = true;
-}
-async function submitAuto(): Promise<void> {
-  saving.value = true;
-  try {
-    const r = await post<{ created: number; assigned: number }>(`/draseis/${props.drasiId}/groups/auto`, {
-      kind: kind.value,
-      ...(kind.value !== 'SKINI' && autoForm.kladosType ? { kladosType: autoForm.kladosType } : {}),
-      ...(autoForm.count ? { count: autoForm.count } : {}),
-    });
-    autoDialog.value = false;
-    $q.notify({ type: 'positive', message: `${r.assigned} παιδιά τοποθετήθηκαν${r.created ? ` σε ${r.created} νέες ομάδες` : ''}.` });
-    await reload();
-  } catch (err) {
-    notifyError(err, 'Αποτυχία κατανομής.');
-  } finally {
-    saving.value = false;
-  }
 }
 
 function notifyError(err: unknown, fallback: string): void {

@@ -14,7 +14,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
 import { DrasiAccessService } from './drasi-access.service';
 import { defaultFee } from './draseis-finance.service';
-import type { AutoGroupsDto, CreateGroupDto, CreateGuestDto, SetGroupMembersDto, UpdateGroupDto } from './dto/drasi-groups.dto';
+import type { CreateGroupDto, CreateGuestDto, SetGroupMembersDto, UpdateGroupDto } from './dto/drasi-groups.dto';
 
 const memberUserSelect = {
   id: true,
@@ -244,76 +244,6 @@ export class DraseisGroupsService {
         : []),
     ]);
     return { members: ids.length };
-  }
-
-  /**
-   * Αυτόματη κατανομή των αταξινόμητων: ταξινόμηση κατά ηλικία και μοίρασμα
-   * κυκλικά, ώστε κάθε ομάδα να έχει μεγάλα και μικρά παιδιά. Αν υπάρχουν ήδη
-   * ομάδες του είδους, γεμίζουν οι μικρότερες· αλλιώς φτιάχνονται `count`.
-   */
-  async autoGroups(user: RequestUser, id: string, dto: AutoGroupsDto) {
-    const drasi = await this.access.load(user, id, 'write');
-    this.assertKindAvailable(drasi, dto.kind);
-    const kladosId = dto.kladosType ? await this.kladosId(user, dto.kladosType) : null;
-
-    const participants = await this.prisma.drasiParticipant.findMany({
-      where: {
-        drasiId: id,
-        kind: MemberKind.MELOS,
-        groups: { none: { kind: dto.kind } },
-        ...(kladosId
-          ? {
-              user: {
-                OR: [
-                  { memberships: { some: { kladosId, leftAt: null } } },
-                  // Φιλοξενούμενοι χωρίς κλάδο στη βάση μας: μπαίνουν όπου τους βάλει το στέλεχος.
-                  { guestTopikoCode: { not: null }, memberships: { none: {} } },
-                ],
-              },
-            }
-          : {}),
-      },
-      include: { user: { select: { birthDate: true } } },
-    });
-    if (participants.length === 0) return { created: 0, assigned: 0 };
-
-    let groups = await this.prisma.drasiGroup.findMany({
-      where: { drasiId: id, kind: dto.kind, ...(kladosId ? { kladosId } : {}) },
-      include: { _count: { select: { members: true } } },
-      orderBy: { order: 'asc' },
-    });
-
-    let created = 0;
-    if (groups.length === 0) {
-      const count = Math.max(1, Math.min(dto.count ?? Math.ceil(participants.length / 6), participants.length));
-      const label = DRASI_GROUP_KIND_LABEL[dto.kind];
-      for (let i = 1; i <= count; i += 1) {
-        await this.prisma.drasiGroup.create({
-          data: { drasiId: id, kind: dto.kind, name: `${label} ${i}`, kladosId, order: i - 1 },
-        });
-        created += 1;
-      }
-      groups = await this.prisma.drasiGroup.findMany({
-        where: { drasiId: id, kind: dto.kind, ...(kladosId ? { kladosId } : {}) },
-        include: { _count: { select: { members: true } } },
-        orderBy: { order: 'asc' },
-      });
-    }
-
-    // Μεγαλύτεροι πρώτοι, κυκλικά: η πρώτη «στροφή» δίνει σε κάθε ομάδα ένα μεγάλο παιδί.
-    const sorted = [...participants].sort(
-      (a, b) => (a.user.birthDate?.getTime() ?? 0) - (b.user.birthDate?.getTime() ?? 0),
-    );
-    const sizes = groups.map((g) => g._count.members);
-    const data: { groupId: string; participantId: string; kind: DrasiGroupKind }[] = [];
-    for (const p of sorted) {
-      let target = 0;
-      for (let i = 1; i < sizes.length; i += 1) if ((sizes[i] ?? 0) < (sizes[target] ?? 0)) target = i;
-      sizes[target] = (sizes[target] ?? 0) + 1;
-      data.push({ groupId: groups[target]!.id, participantId: p.id, kind: dto.kind });
-    }
-    await this.prisma.drasiGroupMember.createMany({ data, skipDuplicates: true });
-    return { created, assigned: data.length };
   }
 
   // ───────────────────────── Εσωτερικά ─────────────────────────
