@@ -132,7 +132,7 @@
               </template>
             </q-select>
           </div>
-          <div class="col-6 col-sm-2"><DateField v-model="entry.occurredAt" label="Ημερομηνία" /></div>
+          <div class="col-6 col-sm-3"><DateField v-model="entry.occurredAt" label="Ημερομηνία" /></div>
           <div class="col-12 col-sm-4">
             <q-select
               v-model="entry.description"
@@ -149,7 +149,7 @@
               @keyup.enter="submitEntry(defaultKind)"
             />
           </div>
-          <div class="col-12 col-sm-3">
+          <div class="col-12 col-sm-2">
             <q-input v-model.number="entry.amount" type="number" label="Ποσό €" outlined dense step="0.01" :min="0" color="klados" @keyup.enter="submitEntry(defaultKind)" />
           </div>
           <div class="col-12">
@@ -186,28 +186,30 @@
         ]"
       />
 
-      <div v-if="!filteredEntries.length" class="text-center text-grey-6 q-pa-lg">Καμία κίνηση.</div>
+      <div v-if="!filteredRows.length" class="text-center text-grey-6 q-pa-lg">Καμία κίνηση.</div>
       <q-list v-else bordered separator class="rounded-borders">
-        <q-item v-for="e in filteredEntries" :key="e.id">
+        <!-- Κινήσεις ταμείου και εισπράξεις συμμετοχής μαζί, κατά ημερομηνία. Οι
+             εισπράξεις διαχειρίζονται από τους Συμμετέχοντες — εδώ μόνο φαίνονται. -->
+        <q-item v-for="r in filteredRows" :key="r.key">
           <q-item-section avatar>
-            <q-avatar :color="e.kind === 'INCOME' ? 'positive' : 'negative'" text-color="white" size="30px">
-              <span class="text-caption">{{ serial(e) }}</span>
+            <q-avatar :color="r.kind === 'INCOME' ? 'positive' : 'negative'" text-color="white" size="30px">
+              <span class="text-caption">{{ r.serial }}</span>
             </q-avatar>
           </q-item-section>
-          <q-item-section>
-            <q-item-label>{{ e.description || (TREASURY_CATEGORY_LABEL[e.category] ?? e.category) }}</q-item-label>
-            <q-item-label caption>
-              {{ TREASURY_CATEGORY_LABEL[e.category] ?? e.category }} · {{ formatDate(e.occurredAt) }}
-              <span v-if="e.createdBy"> · {{ e.createdBy.lastName }} {{ e.createdBy.firstName }}</span>
-            </q-item-label>
+          <q-item-section style="min-width: 0">
+            <q-item-label class="ellipsis">{{ r.title }}</q-item-label>
+            <q-item-label caption>{{ r.caption }}</q-item-label>
           </q-item-section>
           <q-item-section side>
             <div class="row items-center no-wrap">
-              <q-btn v-if="e.receipt" flat dense round icon="receipt_long" color="klados" @click="viewReceipt(e)"><q-tooltip>Απόδειξη</q-tooltip></q-btn>
-              <div class="text-weight-bold q-mx-sm" :class="e.kind === 'INCOME' ? 'text-positive' : 'text-negative'">
-                {{ e.kind === 'INCOME' ? '+' : '−' }}{{ formatEuro(e.amount) }}
+              <q-btn v-if="r.receipt" flat dense round icon="receipt_long" color="klados" @click="viewReceipt(r)"><q-tooltip>Απόδειξη</q-tooltip></q-btn>
+              <div class="text-weight-bold q-mx-sm" :class="r.kind === 'INCOME' ? 'text-positive' : 'text-negative'">
+                {{ r.kind === 'INCOME' ? '+' : '−' }}{{ formatEuro(r.amount) }}
               </div>
-              <q-btn v-if="canWrite && !locked" flat dense round icon="delete" color="negative" size="sm" @click="removeEntry(e)" />
+              <q-btn v-if="r.entry && canWrite && !locked" flat dense round icon="delete" color="negative" size="sm" @click="removeEntry(r.entry)" />
+              <q-icon v-else-if="r.payment" name="groups" color="grey-6" size="18px" class="q-mx-xs">
+                <q-tooltip>Είσπραξη συμμετοχής — αλλάζει από τους Συμμετέχοντες</q-tooltip>
+              </q-icon>
             </div>
           </q-item-section>
         </q-item>
@@ -338,6 +340,7 @@ import {
   type DrasiBudgetView,
   type DrasiLedgerAccount,
   type DrasiLedgerView,
+  type DrasiParticipantView,
   type DrasiTreasurySummary,
   type KladosType,
   type MemberSummary,
@@ -373,14 +376,16 @@ const pct = (v: number) => `${Math.round(v * 1000) / 10}%`;
 async function reload(): Promise<void> {
   loading.value = true;
   try {
-    const [s, list, led, bud] = await Promise.all([
+    const [s, list, led, bud, parts] = await Promise.all([
       get<DrasiTreasurySummary>(`/draseis/${props.drasiId}/treasury/summary`),
       get<TreasuryEntryView[]>(`/draseis/${props.drasiId}/treasury`),
       get<DrasiLedgerAccount[]>(`/draseis/${props.drasiId}/ledger`),
       get<DrasiBudgetView[]>(`/draseis/${props.drasiId}/budget`),
+      get<DrasiParticipantView[]>(`/draseis/${props.drasiId}/participants`),
     ]);
     summary.value = s;
     entries.value = list;
+    participants.value = parts;
     ledger.value = led;
     budgetLines.value = DRASI_EXPENSE_CATEGORIES.map((category) => {
       const b = bud.find((x) => x.category === category);
@@ -410,7 +415,61 @@ onMounted(async () => {
 
 // ── Κινήσεις ──
 const entryFilter = ref<'' | 'INCOME' | 'EXPENSE'>('');
-const filteredEntries = computed(() => entries.value.filter((e) => !entryFilter.value || e.kind === entryFilter.value));
+const participants = ref<DrasiParticipantView[]>([]);
+
+/** Μία γραμμή της λίστας: κίνηση ταμείου ή είσπραξη συμμετοχής. */
+interface TamioRow {
+  key: string;
+  kind: 'INCOME' | 'EXPENSE';
+  title: string;
+  caption: string;
+  occurredAt: string;
+  amount: number;
+  serial: string;
+  receipt: TreasuryEntryView['receipt'];
+  entry?: TreasuryEntryView;
+  payment?: true;
+}
+
+/**
+ * Τα έσοδα της δράσης είναι και οι εισπράξεις του κόστους συμμετοχής — η
+ * σύνοψη τις μετρούσε, η λίστα όχι, και τα «Έσοδα» έδειχναν λιγότερα από το
+ * σύνολο. Εδώ μπαίνουν μαζί, με Α/Α «Σ1, Σ2…» κατά ημερομηνία είσπραξης.
+ */
+const rows = computed<TamioRow[]>(() => {
+  const fromEntries: TamioRow[] = entries.value.map((e) => ({
+    key: `e:${e.id}`,
+    kind: e.kind,
+    title: e.description || categoryLabel(e.category),
+    caption: [categoryLabel(e.category), formatDate(e.occurredAt), e.createdBy ? `${e.createdBy.lastName} ${e.createdBy.firstName}` : null].filter(Boolean).join(' · '),
+    occurredAt: e.occurredAt,
+    amount: e.amount,
+    serial: serial(e),
+    receipt: e.receipt,
+    entry: e,
+  }));
+  const payments = participants.value
+    .flatMap((p) => p.payments.map((pay) => ({ p, pay })))
+    .sort((a, b) => a.pay.paidAt.localeCompare(b.pay.paidAt));
+  const fromPayments: TamioRow[] = payments.map(({ p, pay }, i) => ({
+    key: `p:${pay.id}`,
+    kind: 'INCOME',
+    title: `Συμμετοχή — ${p.user.lastName} ${p.user.firstName}`,
+    caption: [
+      'Κόστος συμμετοχής',
+      formatDate(pay.paidAt),
+      pay.method === 'BANK' ? 'τράπεζα' : pay.method === 'CASH' ? 'μετρητά' : null,
+      pay.collectedBy ? `από ${pay.collectedBy.lastName} ${pay.collectedBy.firstName}` : null,
+    ].filter(Boolean).join(' · '),
+    occurredAt: pay.paidAt,
+    amount: pay.amount,
+    serial: `Σ${i + 1}`,
+    receipt: pay.receipt,
+    payment: true,
+  }));
+  return [...fromEntries, ...fromPayments].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
+});
+const filteredRows = computed(() => rows.value.filter((r) => !entryFilter.value || r.kind === entryFilter.value));
 const entry = reactive({
   category: DRASI_EXPENSE_CATEGORIES[0] as string,
   occurredAt: toISODate(new Date()),
@@ -623,7 +682,7 @@ const receiptDialog = ref(false);
 const receiptUrl = ref('');
 const receiptName = ref('');
 const receiptType = ref('');
-async function viewReceipt(e: TreasuryEntryView): Promise<void> {
+async function viewReceipt(e: { receipt: TreasuryEntryView['receipt'] }): Promise<void> {
   if (!e.receipt) return;
   try {
     const blob = await getBlob(`/files/${e.receipt.id}`);
