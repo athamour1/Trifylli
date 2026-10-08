@@ -1,7 +1,5 @@
 <template>
   <q-page padding>
-    <div class="page-title q-mb-md">{{ inKlados ? 'Ταμείο' : 'Ταμείο Τοπικού' }}</div>
-
     <!-- Επισκόπηση όλων των ταμείων (μόνο υπερδιαχειριστής, στην προβολή Τοπικού) -->
     <div v-if="!inKlados && overview.length" class="row q-col-gutter-md q-mb-lg">
       <div v-for="o in overview" :key="o.label" class="col-6 col-sm-4 col-md-3">

@@ -1,7 +1,5 @@
 <template>
   <q-page padding>
-    <div class="page-title q-mb-md">Κλάδοι</div>
-
     <PageState :loading="loading" :error="error" :stale="stale" :empty="!data?.length" @retry="reload">
       <div class="row q-col-gutter-md">
         <div v-for="k in data" :key="k.type" class="col-12 col-md-6">

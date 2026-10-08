@@ -1,8 +1,7 @@
 <template>
   <q-page padding>
-    <div class="row items-center justify-between q-mb-md">
-      <div class="page-title">{{ inKlados ? 'Υλικό' : 'Κεντρική αποθήκη' }}</div>
-      <div class="q-gutter-sm" v-if="canManage">
+    <div v-if="canManage" class="row items-center justify-end q-mb-md">
+      <div class="q-gutter-sm">
         <q-btn outline no-caps color="klados" icon="warehouse" label="Σημεία αποθήκευσης" @click="openStorageSettings" />
         <q-btn color="klados" text-color="klados-on" no-caps icon="add" label="Νέο υλικό" @click="openCreate" />
       </div>

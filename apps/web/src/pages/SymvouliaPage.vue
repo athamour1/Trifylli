@@ -1,8 +1,6 @@
 <template>
   <q-page padding>
-    <div class="row items-center justify-between q-mb-md">
-      <div class="page-title">Συμβούλια</div>
-
+    <div class="row items-center justify-end q-mb-md">
       <q-btn
         v-if="inKlados && canWriteKlados"
         color="klados"
@@ -66,7 +64,7 @@
             <q-item-label>{{ s.title ?? s.typeLabel }}</q-item-label>
             <q-item-label caption>
               {{ s.typeLabel }} · {{ formatDate(s.date) }}
-              <span v-if="s.klados"> · {{ KLADOS_LABEL[s.klados.type] }}</span>
+              <span v-if="s.klados && !inKlados"> · {{ KLADOS_LABEL[s.klados.type] }}</span>
             </q-item-label>
           </q-item-section>
           <q-item-section side>

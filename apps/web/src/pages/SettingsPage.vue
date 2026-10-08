@@ -1,6 +1,5 @@
 <template>
   <q-page padding class="settings">
-    <div class="page-title q-mb-xs">Ρυθμίσεις</div>
     <div class="text-grey-7 q-mb-lg">Προτιμήσεις αυτής της συσκευής και τα στοιχεία του λογαριασμού σου.</div>
 
     <!-- ── Εμφάνιση ── -->

@@ -1,7 +1,6 @@
 <template>
   <q-page padding>
-    <div class="row items-center justify-between q-mb-md">
-      <div class="page-title">Ατομική πρόοδος</div>
+    <div v-if="!inKlados" class="row items-center justify-end q-mb-md">
       <q-select
         v-if="!inKlados"
         v-model="picked"

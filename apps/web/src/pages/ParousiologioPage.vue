@@ -4,8 +4,7 @@
       <template v-if="sheet">
         <div class="row items-start justify-between q-mb-sm">
           <div>
-            <div class="page-title">Παρουσιολόγιο</div>
-            <div class="text-caption text-grey-7">
+            <div class="text-subtitle1 text-weight-medium">
               {{ formatDate(sheet.syggentrwsh.date) }} · {{ KLADOS_LABEL[sheet.syggentrwsh.kladosType] }}
             </div>
           </div>

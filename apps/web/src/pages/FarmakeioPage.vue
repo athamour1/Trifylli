@@ -1,7 +1,6 @@
 <template>
   <q-page padding>
-    <div class="row items-center justify-between q-mb-md">
-      <div class="page-title">Φαρμακείο</div>
+    <div class="row items-center justify-end q-mb-md">
       <q-btn
         v-if="auth.can('farmakeio:write')"
         color="primary"

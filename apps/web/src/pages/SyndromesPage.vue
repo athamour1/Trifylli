@@ -1,7 +1,5 @@
 <template>
   <q-page padding>
-    <div class="page-title q-mb-md">Συνδρομές</div>
-
     <q-tabs v-model="tab" dense align="left" class="text-klados q-mb-md" narrow-indicator active-color="klados">
       <q-tab name="report" label="Εικόνα" />
       <q-tab name="members" label="Εισπράξεις" />
@@ -88,7 +86,7 @@
               <q-item-section>
                 <q-item-label>{{ m.name }}</q-item-label>
                 <q-item-label caption>
-                  <span v-if="m.kladosType">{{ KLADOS_LABEL[m.kladosType] }} · </span>
+                  <span v-if="m.kladosType && !inKlados">{{ KLADOS_LABEL[m.kladosType] }} · </span>
                   {{ formatEuro(m.amountPaid) }} / {{ formatEuro(m.amountDue) }}
                 </q-item-label>
               </q-item-section>
@@ -134,7 +132,7 @@
                 <q-item-section>
                   <q-item-label>{{ p.memberName }} · {{ formatEuro(p.amount) }}</q-item-label>
                   <q-item-label caption>
-                    <span v-if="p.kladosType">{{ KLADOS_LABEL[p.kladosType] }} · </span>
+                    <span v-if="p.kladosType && !inKlados">{{ KLADOS_LABEL[p.kladosType] }} · </span>
                     {{ formatDate(p.paidAt) }}
                     <span v-if="p.collectedBy"> · από {{ p.collectedBy }}</span>
                   </q-item-label>
@@ -175,8 +173,7 @@
               <q-item-section>
                 <q-item-label>{{ d.name }}</q-item-label>
                 <q-item-label caption>
-                  <span v-if="d.kladosType">{{ KLADOS_LABEL[d.kladosType] }}</span>
-                  <span v-if="d.phone"> · {{ d.phone }}</span>
+                  {{ [!inKlados && d.kladosType ? KLADOS_LABEL[d.kladosType] : null, d.phone].filter(Boolean).join(' · ') }}
                 </q-item-label>
               </q-item-section>
               <q-item-section side>
@@ -251,7 +248,7 @@ import DateField from '../components/DateField.vue';
 
 const $q = useQuasar();
 const auth = useAuthStore();
-const { klados } = useKladosScope();
+const { klados, inKlados } = useKladosScope();
 const canManage = computed(() => (klados.value ? auth.can('syndromes:manage', klados.value) : auth.isSuperAdmin));
 const scopeParams = computed(() => (klados.value ? { klados: klados.value } : {}));
 

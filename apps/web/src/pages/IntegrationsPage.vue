@@ -1,7 +1,6 @@
 <template>
   <q-page padding>
     <div class="q-mb-md">
-      <div class="page-title">Ενσωματώσεις</div>
       <div class="text-caption text-grey-7">
         Συγχρονισμός μητρώου από το e-SEO και σύνδεση με το Ouchtracker.
       </div>

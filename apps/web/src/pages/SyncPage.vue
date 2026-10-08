@@ -1,7 +1,5 @@
 <template>
   <q-page padding>
-    <div class="page-title q-mb-md">Συγχρονισμός</div>
-
     <q-card flat bordered class="q-mb-md">
       <q-card-section class="row items-center">
         <q-icon

@@ -1,7 +1,6 @@
 <template>
   <q-page padding>
-    <div class="row items-center justify-between q-mb-md q-gutter-sm">
-      <div class="page-title">Δράσεις</div>
+    <div class="row items-center justify-end q-mb-md q-gutter-sm">
       <div class="row items-center q-gutter-sm">
         <SegmentedToggle
           v-model="typeFilter"
@@ -58,9 +57,8 @@
                 <div class="text-caption text-grey-7">
                   {{ formatDateRange(d.dateStart, d.dateEnd) }}
                   <span v-if="d.location"> · {{ d.location }}</span>
-                  <span v-if="d.kladoi.length > 1 || d.guestTopika.length">
-                    · {{ [...d.kladoi.map((k) => KLADOS_LABEL[k]), ...d.guestTopika.map((g) => g.topikoName)].join(', ') }}
-                  </span>
+                  <!-- Ποιοι άλλοι έρχονται — ο κλάδος της σελίδας εννοείται (είναι στη μπάρα). -->
+                  <span v-if="others(d).length"> · {{ others(d).join(', ') }}</span>
                 </div>
               </div>
               <div class="column items-end q-gutter-xs">
@@ -85,7 +83,7 @@
                 <div class="text-h6">{{ d._count.syggentrwseis }}</div>
                 <div class="text-caption text-grey-7">Πρόγραμμα</div>
               </div>
-              <div class="col">
+              <div v-if="!inKlados || d.klados?.type !== klados" class="col">
                 <div class="text-body2 q-pt-xs">
                   {{ d.klados ? KLADOS_LABEL[d.klados.type] : 'Τοπικό' }}
                 </div>
@@ -136,6 +134,15 @@ const auth = useAuthStore();
 const { klados, inKlados } = useKladosScope();
 const typeFilter = ref<DrasiType | null>(null);
 const canWrite = computed(() => auth.can('drasi:write', klados.value ?? undefined));
+
+/**
+ * Οι υπόλοιποι συμμετέχοντες (κλάδοι, άλλα Τοπικά): χωρίς τον κλάδο της σελίδας
+ * (είναι στη μπάρα) και χωρίς τον διοργανωτή (είναι στο «Φορέας»).
+ */
+function others(d: DrasiRow): string[] {
+  const kladoi = d.kladoi.filter((k) => k !== klados.value && k !== d.klados?.type).map((k) => KLADOS_LABEL[k]);
+  return [...kladoi, ...d.guestTopika.map((g) => g.topikoName)];
+}
 
 /** Προσχέδιο → πίσω στο wizard· αλλιώς η σελίδα της δράσης. */
 function open(d: DrasiRow): void {

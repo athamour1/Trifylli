@@ -2,7 +2,6 @@
   <q-page padding>
     <div class="row items-center justify-between q-mb-md">
       <div>
-        <div class="page-title">Λογαριασμοί</div>
         <div class="text-caption text-grey-7">
           Ποιος μπαίνει στην εφαρμογή. Τα μέλη και τα στελέχη του μητρώου δεν χρειάζονται λογαριασμό.
         </div>

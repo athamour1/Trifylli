@@ -1,7 +1,5 @@
 <template>
   <q-page padding>
-    <div class="page-title q-mb-md">{{ inKlados ? 'Μέλη' : 'Μητρώο μελών' }}</div>
-
     <!-- Κλικ σε μέλος (μέσα σε κλάδο): κρύβεται ο πίνακας, εμφανίζονται inline τα
          στοιχεία με back button πάνω-αριστερά (βλ. openMember). -->
     <MemberDetailInline v-if="selectedId" :member-id="selectedId" @back="selectedId = null" />

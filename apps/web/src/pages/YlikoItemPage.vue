@@ -1,8 +1,7 @@
 <template>
   <q-page padding>
     <div class="row items-center q-mb-md">
-      <q-btn flat dense round icon="arrow_back" @click="goBack" class="q-mr-sm" />
-      <div class="page-title">Καρτέλα υλικού</div>
+      <q-btn flat dense no-caps icon="arrow_back" label="Πίσω" @click="goBack" />
     </div>
 
     <q-card flat bordered class="rounded-borders">

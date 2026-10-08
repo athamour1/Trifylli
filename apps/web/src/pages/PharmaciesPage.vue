@@ -1,7 +1,6 @@
 <template>
   <q-page padding>
     <div class="row items-center q-mb-md">
-      <div class="page-title">{{ inKlados ? 'Φαρμακεία' : 'Φαρμακεία Τοπικού' }}</div>
       <q-space />
       <q-btn
         v-if="canSetup"

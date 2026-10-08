@@ -1,7 +1,6 @@
 <template>
   <q-page padding>
-    <div class="row items-center justify-between q-mb-md">
-      <div class="page-title">{{ inKlados ? 'Ημερολόγιο' : 'Κεντρικό ημερολόγιο' }}</div>
+    <div class="row items-center justify-end q-mb-md">
       <SegmentedToggle
         v-model="view"
         dense
