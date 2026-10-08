@@ -218,6 +218,38 @@
 
     <!-- ── Προϋπολογισμός ── -->
     <template v-else-if="view === 'budget'">
+      <!-- Από πού έρχονται τα χρήματα: κυρίως από τις συμμετοχές. Δίπλα στα
+           προγραμματισμένα έξοδα, για να φαίνεται αν ο προϋπολογισμός «βγαίνει». -->
+      <q-card v-if="summary" flat bordered class="q-mb-md">
+        <q-card-section class="q-pb-sm">
+          <div class="text-subtitle2">Έσοδα</div>
+        </q-card-section>
+        <q-card-section class="q-pt-none">
+          <div class="budget-income">
+            <div>
+              <div class="text-caption text-grey-7">Από συμμετοχές (αναμενόμενα)</div>
+              <div class="text-h6">{{ formatEuro(summary.fees.expected) }}</div>
+              <div class="text-caption">
+                <span class="text-positive">εισπράχθηκαν {{ formatEuro(summary.fees.collected) }}</span>
+                <span v-if="summary.fees.outstanding > 0" class="text-negative"> · λείπουν {{ formatEuro(summary.fees.outstanding) }}</span>
+              </div>
+            </div>
+            <div>
+              <div class="text-caption text-grey-7">Άλλα έσοδα</div>
+              <div class="text-h6">{{ formatEuro(summary.incomeFromEntries) }}</div>
+              <div class="text-caption text-grey-7">επιχορηγήσεις, δωρεές κ.ά.</div>
+            </div>
+            <div>
+              <div class="text-caption text-grey-7">Σύνολο εσόδων</div>
+              <div class="text-h6">{{ formatEuro(expectedIncome) }}</div>
+              <div class="text-caption" :class="budgetGap >= 0 ? 'text-positive' : 'text-negative'">
+                {{ budgetGap >= 0 ? 'περισσεύουν' : 'λείπουν' }} {{ formatEuro(Math.abs(budgetGap)) }} από τον προϋπολογισμό
+              </div>
+            </div>
+          </div>
+        </q-card-section>
+      </q-card>
+
       <q-markup-table flat bordered dense>
         <thead>
           <tr><th class="text-left">Κατηγορία</th><th class="text-right">Ποσό €</th><th class="text-right">Στόχος %</th><th class="text-right">Πραγματικό</th></tr>
@@ -233,9 +265,9 @@
             </td>
             <td class="text-right text-grey-7">{{ formatEuro(actualFor(line.category)) }}</td>
           </tr>
-          <tr class="bg-grey-2 text-weight-bold">
+          <tr class="budget-total text-weight-bold">
             <td>Σύνολο</td>
-            <td class="text-right">{{ formatEuro(budgetLines.reduce((s, l) => s + (l.planned || 0), 0)) }}</td>
+            <td class="text-right">{{ formatEuro(plannedTotal) }}</td>
             <td class="text-right">{{ budgetLines.reduce((s, l) => s + (l.targetPct || 0), 0) }}%</td>
             <td class="text-right">{{ formatEuro(summary?.expense ?? 0) }}</td>
           </tr>
@@ -567,6 +599,11 @@ function removeEntry(e: TreasuryEntryView): void {
 }
 
 // ── Προϋπολογισμός ──
+const plannedTotal = computed(() => budgetLines.value.reduce((sum, l) => sum + (l.planned || 0), 0));
+/** Τα έσοδα που περιμένουμε: ό,τι οφείλουν οι συμμετοχές (όχι μόνο όσα μπήκαν) + οι υπόλοιπες κινήσεις εσόδων. */
+const expectedIncome = computed(() => (summary.value ? summary.value.fees.expected + summary.value.incomeFromEntries : 0));
+/** Θετικό ⇒ τα έσοδα καλύπτουν τον προϋπολογισμό εξόδων. */
+const budgetGap = computed(() => Math.round((expectedIncome.value - plannedTotal.value) * 100) / 100);
 function actualFor(category: string): number {
   return summary.value?.expenses.find((e) => e.category === category)?.actual ?? 0;
 }
@@ -710,6 +747,14 @@ defineExpose({ reload });
 </script>
 
 <style scoped>
+.budget-income {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px 24px;
+}
+.budget-total {
+  background: var(--surface-2, #f5f5f5);
+}
 /* Τα δύο κουμπιά καταχώρησης: ίσα, και στο κινητό μοιράζονται το πλάτος. */
 .entry-btn {
   min-width: 120px;
