@@ -12,14 +12,14 @@
 
       <template v-else-if="error">
         <q-card-section class="text-center q-pa-xl">
-          <q-icon name="link_off" size="48px" color="grey-6" class="block q-mb-md" />
+          <q-icon name="link_off" size="48px" color="grey-6" class="block q-mx-auto q-mb-md" />
           <div class="text-subtitle1">{{ error }}</div>
         </q-card-section>
       </template>
 
       <template v-else-if="done || form?.status === 'SUBMITTED'">
         <q-card-section class="text-center q-pa-xl">
-          <q-icon name="check_circle" size="56px" color="positive" class="block q-mb-md" />
+          <q-icon name="check_circle" size="56px" color="positive" class="block q-mx-auto q-mb-md" />
           <div class="text-h6">Ευχαριστούμε!</div>
           <div class="text-body2 text-grey-7 q-mt-sm">Το έντυπο καταχωρήθηκε. Ο σύνδεσμος αυτός δεν ισχύει πια.</div>
         </q-card-section>

@@ -62,16 +62,16 @@
               <div class="text-caption text-grey-7">Χωρίς σκηνές η κατάταξη σε σκηνές κρύβεται από τις Ομάδες και την Εκτύπωση. Ό,τι υπάρχει δεν σβήνεται — επιστρέφει αν το ξανανοίξεις.</div>
             </div>
 
-            <div class="col-8 col-sm-4 col-md-3">
+            <div class="col-7 col-sm-4 col-md-3">
               <DateField v-model="form.dateStart" :label="form.type === 'MONOIMERI' ? 'Ημερομηνία' : 'Έναρξη'" />
             </div>
-            <div class="col-4 col-sm-2 col-md-2">
+            <div class="col-5 col-sm-2 col-md-2">
               <TimeField v-model="form.timeStart" label="Ώρα" hint="Από εδώ ξεκινά το πρόγραμμα" />
             </div>
-            <div v-if="form.type !== 'MONOIMERI'" class="col-8 col-sm-4 col-md-3">
+            <div v-if="form.type !== 'MONOIMERI'" class="col-7 col-sm-4 col-md-3">
               <DateField v-model="form.dateEnd" label="Λήξη" />
             </div>
-            <div class="col-4 col-sm-2 col-md-2">
+            <div class="col-5 col-sm-2 col-md-2">
               <TimeField v-model="form.timeEnd" label="Ώρα λήξης" />
             </div>
             <div class="col-12 col-md-2">

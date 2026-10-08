@@ -275,7 +275,7 @@
             </template>
           </template>
           <div v-else class="text-center text-grey-6 q-pa-lg">
-            <q-icon name="inbox" size="40px" class="block q-mb-sm" />
+            <q-icon name="inbox" size="40px" class="block q-mx-auto q-mb-sm" />
             Καμία απάντηση ακόμη.
           </div>
         </q-tab-panel>

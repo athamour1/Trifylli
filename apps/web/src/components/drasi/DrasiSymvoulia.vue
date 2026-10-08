@@ -8,7 +8,7 @@
     <q-inner-loading :showing="loading" />
 
     <div v-if="!loading && !rows.length" class="text-center text-grey-6 q-pa-lg">
-      <q-icon name="forum" size="40px" class="block q-mb-sm" />
+      <q-icon name="forum" size="40px" class="block q-mx-auto q-mb-sm" />
       Κανένα συμβούλιο για αυτή τη δράση.
     </div>
 

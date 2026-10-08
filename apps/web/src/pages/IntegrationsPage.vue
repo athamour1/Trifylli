@@ -9,22 +9,24 @@
     <PageState :loading="loading" :error="error" :stale="stale" @retry="reload">
       <!-- ── e-SEO ── -->
       <q-card flat bordered class="q-mb-md">
-        <q-card-section class="row items-center no-wrap">
-          <q-icon name="cloud_sync" size="36px" color="primary" class="q-mr-md" />
+        <q-card-section class="int-head">
+          <q-icon name="cloud_sync" size="36px" color="primary" class="int-head__icon" />
           <div class="col">
             <div class="text-subtitle1">e-SEO · Μητρώο μελών</div>
             <div class="text-caption text-grey-7">
               Αντλεί μέλη, στελέχη και στοιχεία επικοινωνίας από το eseo.seo.gr.
             </div>
           </div>
-          <q-btn
-            color="primary"
-            icon="sync"
-            label="Συγχρονισμός τώρα"
-            :loading="syncing"
-            :disable="!data?.eseo.configured || !offline.online"
-            @click="runSync"
-          />
+          <div class="int-head__actions">
+            <q-btn
+              color="primary"
+              icon="sync"
+              label="Συγχρονισμός τώρα"
+              :loading="syncing"
+              :disable="!data?.eseo.configured || !offline.online"
+              @click="runSync"
+            />
+          </div>
         </q-card-section>
 
         <q-separator />
@@ -78,14 +80,15 @@
 
       <!-- ── Ouchtracker ── -->
       <q-card flat bordered class="q-mb-md">
-        <q-card-section class="row items-center no-wrap">
-          <q-icon name="medical_services" size="36px" color="grey-7" class="q-mr-md" />
+        <q-card-section class="int-head">
+          <q-icon name="medical_services" size="36px" color="grey-7" class="int-head__icon" />
           <div class="col">
             <div class="text-subtitle1">Ouchtracker · Φαρμακείο</div>
             <div class="text-caption text-grey-7">
               Απόθεμα φαρμακευτικού υλικού και ιατρικά περιστατικά.
             </div>
           </div>
+          <div class="int-head__actions">
           <q-chip
             :color="data?.ouchtracker.configured ? 'positive' : 'grey-5'"
             text-color="white"
@@ -103,6 +106,7 @@
             :disable="!ouchBase"
             @click="openOuchtracker"
           />
+          </div>
         </q-card-section>
 
         <q-card-section v-if="!ouchBase" class="text-caption text-grey-7 q-pt-none">
@@ -238,3 +242,32 @@ function describeCron(cron: string | undefined): string {
   return hour ? `κάθε μέρα στις ${hour.padStart(2, '0')}:00` : cron;
 }
 </script>
+
+<style scoped lang="scss">
+// Κεφαλίδα κάρτας: εικονίδιο + τίτλος, και οι ενέργειες δίπλα όταν χωρούν —
+// αλλιώς πέφτουν από κάτω, αντί να στριμώχνουν τον τίτλο λέξη-λέξη.
+.int-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  > .col {
+    flex: 1 1 220px;
+    min-width: 0;
+  }
+}
+.int-head__icon {
+  flex: none;
+}
+.int-head__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-left: auto;
+  .q-chip {
+    margin: 0;
+  }
+}
+</style>

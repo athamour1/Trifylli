@@ -1207,3 +1207,42 @@ body.body--dark .tf-seg--flat .tf-seg__thumb {
     font-size: 0.8rem;
   }
 }
+
+// ── Γραμμή ενεργειών σελίδας (φίλτρα + κουμπιά, δεξιά) ──
+// Γραμμή `justify-end` με gutters ξεχείλιζε προς τα **αριστερά** όταν δεν χωρούσε
+// (στο κινητό το φίλτρο και το «Νέα δράση» κόβονταν). Εδώ αναδιπλώνεται: ό,τι
+// δεν χωρά πέφτει στην επόμενη γραμμή, πάντα μέσα στη σελίδα. Εμφωλευμένη
+// `.tf-actions` (ομάδα μέσα στη γραμμή) δεν προσθέτει δεύτερο κάτω περιθώριο.
+.tf-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-bottom: 16px;
+  > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .tf-actions {
+    margin-bottom: 0;
+  }
+}
+
+// ── Μπάρα εργαλείων ενότητας: σύνοψη αριστερά, ενέργειες δεξιά ──
+// Όταν δεν χωρούν, οι ενέργειες πέφτουν από κάτω (δεξιά) — όχι κομμένες.
+.tf-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  > * {
+    min-width: 0;
+    max-width: 100%;
+  }
+  > .tf-actions {
+    margin-bottom: 0;
+    margin-left: auto;
+  }
+}

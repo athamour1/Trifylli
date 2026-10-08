@@ -1,6 +1,6 @@
 <template>
   <q-page padding>
-    <div v-if="!inKlados" class="row items-center justify-end q-mb-md">
+    <div v-if="!inKlados" class="tf-actions">
       <q-select
         v-if="!inKlados"
         v-model="picked"

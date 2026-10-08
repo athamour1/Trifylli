@@ -12,27 +12,25 @@
     outlined
     color="klados"
     :hint="hint"
+    :class="{ 'cursor-pointer': editable }"
   >
     <template #prepend>
       <q-icon name="event" :style="{ color: 'var(--klados-ink)' }" />
     </template>
-    <template v-if="editable" #append>
-      <q-icon name="edit_calendar" class="cursor-pointer" :style="{ color: 'var(--klados-ink)' }">
-        <q-popup-proxy cover transition-show="scale" transition-hide="scale">
-          <q-date
-            :model-value="modelValue || null"
-            mask="YYYY-MM-DD"
-            color="klados"
-            today-btn
-            @update:model-value="(v: string | null) => $emit('update:modelValue', v ?? '')"
-          >
-            <div class="row items-center justify-end">
-              <q-btn v-close-popup label="Κλείσιμο" color="klados" flat no-caps />
-            </div>
-          </q-date>
-        </q-popup-proxy>
-      </q-icon>
-    </template>
+    <!-- Πάτημα οπουδήποτε ανοίγει το ημερολόγιο· ένα εικονίδιο αρκεί (βλ. TimeField). -->
+    <q-popup-proxy v-if="editable" cover transition-show="scale" transition-hide="scale">
+      <q-date
+        :model-value="modelValue || null"
+        mask="YYYY-MM-DD"
+        color="klados"
+        today-btn
+        @update:model-value="(v: string | null) => $emit('update:modelValue', v ?? '')"
+      >
+        <div class="row items-center justify-end">
+          <q-btn v-close-popup label="Κλείσιμο" color="klados" flat no-caps />
+        </div>
+      </q-date>
+    </q-popup-proxy>
   </q-input>
 </template>
 

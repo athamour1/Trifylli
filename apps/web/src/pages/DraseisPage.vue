@@ -1,7 +1,7 @@
 <template>
   <q-page padding>
-    <div class="row items-center justify-end q-mb-md q-gutter-sm">
-      <div class="row items-center q-gutter-sm">
+    <div class="tf-actions">
+      <div class="tf-actions">
         <SegmentedToggle
           v-model="typeFilter"
           dense

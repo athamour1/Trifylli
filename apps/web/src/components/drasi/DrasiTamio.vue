@@ -121,26 +121,19 @@
       <!-- Γρήγορη καταχώριση: μία γραμμή, Enter, επόμενη — η κατηγορία μένει. -->
       <q-card v-if="canWrite && !locked" flat bordered class="q-pa-sm q-mb-md">
         <div class="row q-col-gutter-sm items-start">
-          <div class="col-6 col-sm-2">
-            <SegmentedToggle
-              v-model="entry.kind"
-              dense
-              unelevated
-              spread
-              toggle-color="klados"
-              toggle-text-color="klados-on"
-              :options="[
-                { label: 'Έξοδο', value: 'EXPENSE' },
-                { label: 'Έσοδο', value: 'INCOME' },
-              ]"
-              @update:model-value="entry.category = (entry.kind === 'INCOME' ? DRASI_INCOME_CATEGORIES : DRASI_EXPENSE_CATEGORIES)[0] ?? 'ALLO'"
-            />
-          </div>
-          <div class="col-6 col-sm-2">
-            <q-select v-model="entry.category" :options="categoryOptions" label="Κατηγορία" outlined dense emit-value map-options color="klados" />
+          <!-- Καμία εναλλαγή «έξοδο/έσοδο»: το είδος το λέει το κουμπί στο τέλος (− / +). -->
+          <div class="col-6 col-sm-3">
+            <q-select v-model="entry.category" :options="categoryOptions" label="Κατηγορία" outlined dense emit-value map-options color="klados">
+              <template #option="scope">
+                <q-item-label v-if="scope.opt.header" header class="q-py-xs text-weight-medium">{{ scope.opt.label }}</q-item-label>
+                <q-item v-else v-bind="scope.itemProps" dense>
+                  <q-item-section>{{ scope.opt.label }}</q-item-section>
+                </q-item>
+              </template>
+            </q-select>
           </div>
           <div class="col-6 col-sm-2"><DateField v-model="entry.occurredAt" label="Ημερομηνία" /></div>
-          <div class="col-12 col-sm-3">
+          <div class="col-12 col-sm-4">
             <q-select
               v-model="entry.description"
               :options="descriptionOptions"
@@ -153,19 +146,28 @@
               input-debounce="0"
               color="klados"
               @filter="filterDescriptions"
-              @keyup.enter="submitEntry"
+              @keyup.enter="submitEntry(defaultKind)"
             />
           </div>
-          <div class="col-6 col-sm-2">
-            <q-input v-model.number="entry.amount" type="number" label="Ποσό €" outlined dense step="0.01" :min="0" color="klados" @keyup.enter="submitEntry" />
-          </div>
-          <div class="col-6 col-sm-1 row items-center">
-            <q-btn round dense color="klados" text-color="klados-on" icon="add" :loading="saving" @click="submitEntry"><q-tooltip>Καταχώρηση (Enter)</q-tooltip></q-btn>
+          <div class="col-12 col-sm-3">
+            <q-input v-model.number="entry.amount" type="number" label="Ποσό €" outlined dense step="0.01" :min="0" color="klados" @keyup.enter="submitEntry(defaultKind)" />
           </div>
           <div class="col-12">
             <q-file v-model="entry.file" label="Απόδειξη (φωτογραφία ή PDF)" outlined dense clearable accept="image/*,application/pdf" :max-file-size="MAX_RECEIPT_BYTES" color="klados">
               <template #prepend><q-icon name="photo_camera" /></template>
             </q-file>
+          </div>
+          <div class="col-12 row no-wrap q-gutter-sm justify-end">
+            <q-btn
+              unelevated no-caps color="negative" icon="remove" label="Έξοδο"
+              class="entry-btn" :disable="!kindAllowed('EXPENSE')" :loading="saving && savingKind === 'EXPENSE'"
+              @click="submitEntry('EXPENSE')"
+            />
+            <q-btn
+              unelevated no-caps color="positive" icon="add" label="Έσοδο"
+              class="entry-btn" :disable="!kindAllowed('INCOME')" :loading="saving && savingKind === 'INCOME'"
+              @click="submitEntry('INCOME')"
+            />
           </div>
         </div>
       </q-card>
@@ -410,16 +412,29 @@ onMounted(async () => {
 const entryFilter = ref<'' | 'INCOME' | 'EXPENSE'>('');
 const filteredEntries = computed(() => entries.value.filter((e) => !entryFilter.value || e.kind === entryFilter.value));
 const entry = reactive({
-  kind: 'EXPENSE' as 'INCOME' | 'EXPENSE',
   category: DRASI_EXPENSE_CATEGORIES[0] as string,
   occurredAt: toISODate(new Date()),
   description: '' as string | null,
   amount: null as number | null,
   file: null as File | null,
 });
-const categoryOptions = computed(() =>
-  (entry.kind === 'INCOME' ? DRASI_INCOME_CATEGORIES : DRASI_EXPENSE_CATEGORIES).map((c) => ({ value: c, label: TREASURY_CATEGORY_LABEL[c] ?? c })),
-);
+type EntryKind = 'INCOME' | 'EXPENSE';
+const categoryLabel = (c: string): string => TREASURY_CATEGORY_LABEL[c as keyof typeof TREASURY_CATEGORY_LABEL] ?? c;
+/** Όλες οι κατηγορίες, σε δύο ομάδες· το «Άλλο» μία φορά, στο τέλος (ισχύει και για τα δύο). */
+const categoryOptions = computed(() => [
+  { header: true, label: 'Έξοδα', value: '__expense', disable: true },
+  ...DRASI_EXPENSE_CATEGORIES.filter((c) => c !== 'ALLO').map((c) => ({ value: c, label: categoryLabel(c) })),
+  { header: true, label: 'Έσοδα', value: '__income', disable: true },
+  ...DRASI_INCOME_CATEGORIES.filter((c) => c !== 'ALLO').map((c) => ({ value: c, label: categoryLabel(c) })),
+  { header: true, label: 'Γενικά', value: '__any', disable: true },
+  { value: 'ALLO', label: categoryLabel('ALLO') },
+]);
+/** Ταιριάζει η κατηγορία με το είδος; (Έσοδο με «Μετακίνηση» δεν έχει νόημα.) */
+const kindAllowed = (kind: EntryKind): boolean =>
+  (kind === 'INCOME' ? DRASI_INCOME_CATEGORIES : DRASI_EXPENSE_CATEGORIES).includes(entry.category as never);
+/** Με Enter: το είδος που ταιριάζει στην κατηγορία — έξοδο όταν ταιριάζουν και τα δύο. */
+const defaultKind = computed<EntryKind>(() => (kindAllowed('EXPENSE') ? 'EXPENSE' : 'INCOME'));
+const savingKind = ref<EntryKind | null>(null);
 /** Οι αιτιολογίες που έχουν ήδη γραφτεί — «Διόδια» πληκτρολογείται μία φορά. */
 const knownDescriptions = computed(() => [...new Set(entries.value.map((e) => e.description).filter((d): d is string => !!d))]);
 const descriptionOptions = ref<string[]>([]);
@@ -439,12 +454,14 @@ function serial(e: TreasuryEntryView): string {
   return `${label.charAt(0)}${same.findIndex((x) => x.id === e.id) + 1}`;
 }
 
-async function submitEntry(): Promise<void> {
+async function submitEntry(kind: EntryKind): Promise<void> {
   if (!entry.amount || entry.amount <= 0) {
     $q.notify({ type: 'warning', message: 'Συμπλήρωσε ποσό.' });
     return;
   }
+  if (!kindAllowed(kind)) return;
   saving.value = true;
+  savingKind.value = kind;
   try {
     let receiptFileId: string | undefined;
     if (entry.file) {
@@ -455,7 +472,7 @@ async function submitEntry(): Promise<void> {
       receiptFileId = ref.id;
     }
     await post(`/draseis/${props.drasiId}/treasury`, {
-      kind: entry.kind,
+      kind,
       category: entry.category,
       amount: entry.amount,
       occurredAt: new Date(`${entry.occurredAt}T12:00:00`).toISOString(),
@@ -470,6 +487,7 @@ async function submitEntry(): Promise<void> {
     notifyError(err, 'Αποτυχία καταχώρησης.');
   } finally {
     saving.value = false;
+    savingKind.value = null;
   }
 }
 
@@ -548,6 +566,7 @@ async function submitLedger(): Promise<void> {
     notifyError(err, 'Αποτυχία καταχώρησης.');
   } finally {
     saving.value = false;
+    savingKind.value = null;
   }
 }
 async function removeLedger(e: DrasiLedgerView): Promise<void> {
@@ -630,3 +649,15 @@ function notifyError(err: unknown, fallback: string): void {
 
 defineExpose({ reload });
 </script>
+
+<style scoped>
+/* Τα δύο κουμπιά καταχώρησης: ίσα, και στο κινητό μοιράζονται το πλάτος. */
+.entry-btn {
+  min-width: 120px;
+}
+@media (max-width: 599px) {
+  .entry-btn {
+    flex: 1 1 0;
+  }
+}
+</style>

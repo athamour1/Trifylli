@@ -33,7 +33,7 @@
                     <router-link :to="{ name: 'melos', params: { id: m.userId } }" class="leader__name ellipsis">
                       {{ m.lastName }} {{ m.firstName }}
                     </router-link>
-                    <div class="text-caption text-grey-7 ellipsis">{{ m.rankTitle ?? 'Στέλεχος — χωρίς θέση στο e-SEO' }}</div>
+                    <div class="text-caption text-grey-7 ellipsis" :title="m.rankTitle ?? undefined">{{ m.rankTitle ?? 'Στέλεχος — χωρίς θέση στο e-SEO' }}</div>
                   </div>
                   <q-btn v-if="canManage" flat round dense icon="edit" color="klados" @click="openEdit(m)">
                     <q-tooltip>Υπευθυνότητες</q-tooltip>
@@ -216,6 +216,16 @@ async function save(): Promise<void> {
   background: var(--surface, #fff);
   border-radius: 50%;
   padding: 1px;
+}
+// Η κάρτα είναι flex column: χωρίς ρητό πλάτος, ένας μακρύς τίτλος e-SEO
+// («Αρχηγός Ομάδας Μεγάλων Οδηγών/Ναυτοδηγών») φάρδαινε την κεφαλίδα πέρα από
+// την κάρτα και έσπρωχνε το μολύβι έξω. Έτσι κόβεται με «…».
+.leader {
+  min-width: 0;
+  > .q-card__section {
+    width: 100%;
+    min-width: 0;
+  }
 }
 .leader--head {
   border-color: color-mix(in srgb, var(--klados-color, var(--q-primary)) 45%, transparent);

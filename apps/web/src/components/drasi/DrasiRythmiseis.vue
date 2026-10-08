@@ -21,10 +21,10 @@
             <q-toggle v-model="basic.hasSkines" color="klados" label="Η δράση έχει σκηνές" />
               <div class="text-caption text-grey-7">Χωρίς σκηνές η κατάταξη σε σκηνές κρύβεται από τις Ομάδες και την Εκτύπωση. Ό,τι υπάρχει δεν σβήνεται — επιστρέφει αν το ξανανοίξεις.</div>
           </div>
-          <div class="col-8 col-sm-4 col-md-3"><DateField v-model="basic.dateStart" :label="basic.type === 'MONOIMERI' ? 'Ημερομηνία' : 'Έναρξη'" /></div>
-          <div class="col-4 col-sm-2 col-md-2"><TimeField v-model="basic.timeStart" label="Ώρα" hint="Αρχή του προγράμματος" /></div>
-          <div v-if="basic.type !== 'MONOIMERI'" class="col-8 col-sm-4 col-md-3"><DateField v-model="basic.dateEnd" label="Λήξη" /></div>
-          <div class="col-4 col-sm-2 col-md-2"><TimeField v-model="basic.timeEnd" label="Ώρα λήξης" /></div>
+          <div class="col-7 col-sm-4 col-md-3"><DateField v-model="basic.dateStart" :label="basic.type === 'MONOIMERI' ? 'Ημερομηνία' : 'Έναρξη'" /></div>
+          <div class="col-5 col-sm-2 col-md-2"><TimeField v-model="basic.timeStart" label="Ώρα" hint="Αρχή του προγράμματος" /></div>
+          <div v-if="basic.type !== 'MONOIMERI'" class="col-7 col-sm-4 col-md-3"><DateField v-model="basic.dateEnd" label="Λήξη" /></div>
+          <div class="col-5 col-sm-2 col-md-2"><TimeField v-model="basic.timeEnd" label="Ώρα λήξης" /></div>
           <div class="col-12 col-md-4"><q-input v-model="basic.location" label="Τόπος" outlined dense maxlength="200" color="klados" /></div>
           <div class="col-12"><MarkdownField v-model="basic.description" label="Περιγραφή" placeholder="Λίγα λόγια για τη δράση — φαίνονται στο ντοσιέ." :min-height="80" /></div>
           <div v-if="basicError" class="col-12 text-negative text-caption">{{ basicError }}</div>

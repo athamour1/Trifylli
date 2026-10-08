@@ -45,7 +45,7 @@
     <q-inner-loading :showing="loading" />
 
     <div v-if="current && !current.items.length && !loading" class="text-center text-grey-6 q-pa-lg">
-      <q-icon name="schedule" size="40px" class="block q-mb-sm" />
+      <q-icon name="schedule" size="40px" class="block q-mx-auto q-mb-sm" />
       Το ωρολόγιο της ημέρας είναι άδειο. Γράψε τι γίνεται και πόσο κρατά — η ώρα βγαίνει μόνη της από την έναρξη.
     </div>
 

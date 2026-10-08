@@ -1,15 +1,15 @@
 <template>
   <q-page padding>
-    <div class="row items-center q-mb-md">
-      <q-space />
+    <div class="tf-actions">
       <q-btn
         v-if="canSetup"
         flat
         no-caps
         color="klados"
         icon="manage_accounts"
-        label="Συγχρονισμός προσβάσεων"
-        class="q-mr-sm"
+        :round="$q.screen.lt.sm"
+        :label="$q.screen.lt.sm ? undefined : 'Συγχρονισμός προσβάσεων'"
+        aria-label="Συγχρονισμός προσβάσεων"
         :loading="syncing"
         :disable="!data.configured || !kits.length"
         @click="syncAccess"

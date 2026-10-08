@@ -53,8 +53,8 @@
       </q-card-section>
     </q-card>
 
-    <!-- Ενέργειες + φίλτρα -->
-    <div class="row items-center justify-between q-mb-sm">
+    <!-- Ενέργειες + φίλτρα — σε μία γραμμή και στο κινητό. -->
+    <div class="row items-center no-wrap justify-between q-mb-sm" style="gap: 8px">
       <SegmentedToggle
         v-model="filters.kind"
         :options="[
@@ -69,9 +69,20 @@
         unelevated
         class="bordered-toggle"
       />
-      <div v-if="canManage" class="q-gutter-sm">
-        <q-btn color="positive" no-caps icon="add" label="Έσοδο" @click="openEntry('INCOME')" />
-        <q-btn color="negative" no-caps icon="remove" label="Έξοδο" @click="openEntry('EXPENSE')" />
+      <!-- Στο κινητό: δύο μικρά στρογγυλά + / −, δίπλα στο φίλτρο. -->
+      <div v-if="canManage" class="row no-wrap q-gutter-sm">
+        <q-btn
+          color="positive" no-caps icon="add" :round="$q.screen.lt.sm" :dense="$q.screen.lt.sm"
+          :label="$q.screen.lt.sm ? undefined : 'Έσοδο'" aria-label="Νέο έσοδο" @click="openEntry('INCOME')"
+        >
+          <q-tooltip v-if="$q.screen.lt.sm">Νέο έσοδο</q-tooltip>
+        </q-btn>
+        <q-btn
+          color="negative" no-caps icon="remove" :round="$q.screen.lt.sm" :dense="$q.screen.lt.sm"
+          :label="$q.screen.lt.sm ? undefined : 'Έξοδο'" aria-label="Νέο έξοδο" @click="openEntry('EXPENSE')"
+        >
+          <q-tooltip v-if="$q.screen.lt.sm">Νέο έξοδο</q-tooltip>
+        </q-btn>
       </div>
     </div>
 
@@ -182,7 +193,7 @@
             style="width: 100%; height: 68vh; border: none; border-radius: 8px"
           />
           <div v-else class="q-pa-lg text-grey-7">
-            <q-icon name="description" size="48px" class="block q-mb-sm" />
+            <q-icon name="description" size="48px" class="block q-mx-auto q-mb-sm" />
             Δεν υπάρχει προεπισκόπηση — κατέβασέ το για να το δεις.
           </div>
         </q-card-section>

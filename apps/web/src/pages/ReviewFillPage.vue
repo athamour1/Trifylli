@@ -9,7 +9,7 @@
 
       <q-card v-else-if="error" flat bordered>
         <q-card-section class="text-center q-pa-xl">
-          <q-icon name="link_off" size="48px" color="grey-6" class="block q-mb-md" />
+          <q-icon name="link_off" size="48px" color="grey-6" class="block q-mx-auto q-mb-md" />
           <div class="text-subtitle1">{{ error }}</div>
         </q-card-section>
       </q-card>

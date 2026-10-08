@@ -13,12 +13,12 @@
     </q-tab-panel>
 
     <q-tab-panel name="admins" class="q-pa-none">
-    <div class="row items-center justify-between q-mb-md q-gutter-sm">
-      <div class="text-caption text-grey-7 col">
+    <div class="tf-toolbar q-mb-md">
+      <div class="text-caption text-grey-7" style="flex: 1 1 260px">
         Οι λογαριασμοί διαχείρισης: υπερδιαχειριστές και διαχειριστές κλάδου. Τα στελέχη ενεργοποιούνται από την
         καρτέλα «Στελέχη».
       </div>
-      <q-btn color="primary" icon="person_add" label="Νέος λογαριασμός" @click="openCreate" />
+      <q-btn color="primary" icon="person_add" label="Νέος λογαριασμός" class="q-ml-auto" @click="openCreate" />
     </div>
 
     <PageState :loading="loading" :error="error" :stale="stale" @retry="reload">
@@ -49,22 +49,23 @@
             />
           </q-item-section>
 
-          <q-item-section>
-            <q-item-label>{{ account.lastName }} {{ account.firstName }}</q-item-label>
-            <q-item-label caption>{{ account.email }}</q-item-label>
-          </q-item-section>
-
-          <q-item-section side>
-            <div class="row items-center q-gutter-sm">
+          <!-- Ρόλος και κατάσταση κάτω από το όνομα: στο κινητό δεν χωρούν δίπλα. -->
+          <q-item-section style="min-width: 0">
+            <q-item-label class="ellipsis">{{ account.lastName }} {{ account.firstName }}</q-item-label>
+            <q-item-label caption class="ellipsis">{{ account.email }}</q-item-label>
+            <div class="row items-center no-wrap q-gutter-xs q-mt-xs" style="min-width: 0">
               <q-badge
                 :color="account.role === 'SUPER_ADMIN' ? 'primary' : 'secondary'"
                 :label="account.roleLabel"
+                class="ellipsis"
+                style="max-width: 100%"
               />
               <!-- «Ενεργοποιημένος» σημαίνει ότι έχει συνδεθεί τουλάχιστον μία
                    φορά μέσω Authentik· μέχρι τότε ο λογαριασμός περιμένει. -->
               <q-icon
                 :name="account.activated ? 'verified' : 'hourglass_empty'"
                 :color="account.activated ? 'positive' : 'grey-5'"
+                size="18px"
               >
                 <q-tooltip>
                   {{
@@ -74,6 +75,30 @@
                   }}
                 </q-tooltip>
               </q-icon>
+            </div>
+          </q-item-section>
+
+          <q-item-section side>
+            <!-- Κινητό: οι τρεις ενέργειες σε ένα μενού. -->
+            <q-btn v-if="$q.screen.lt.sm" flat round dense icon="more_vert">
+              <q-menu auto-close>
+                <q-list style="min-width: 220px">
+                  <q-item clickable :disable="!account.email" @click="confirmInvite(account)">
+                    <q-item-section avatar><q-icon name="forward_to_inbox" /></q-item-section>
+                    <q-item-section>{{ account.activated ? 'Επαναφορά κωδικού' : 'Αποστολή πρόσκλησης' }}</q-item-section>
+                  </q-item>
+                  <q-item clickable @click="openEdit(account)">
+                    <q-item-section avatar><q-icon name="edit" /></q-item-section>
+                    <q-item-section>Επεξεργασία</q-item-section>
+                  </q-item>
+                  <q-item clickable class="text-negative" :disable="account.id === auth.user?.id" @click="confirmRevoke(account)">
+                    <q-item-section avatar><q-icon name="person_remove" /></q-item-section>
+                    <q-item-section>Ανάκληση πρόσβασης</q-item-section>
+                  </q-item>
+                </q-list>
+              </q-menu>
+            </q-btn>
+            <div v-else class="row items-center no-wrap q-gutter-xs">
               <q-btn
                 dense
                 flat

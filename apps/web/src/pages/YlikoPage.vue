@@ -1,7 +1,7 @@
 <template>
   <q-page padding>
-    <div v-if="canManage" class="row items-center justify-end q-mb-md">
-      <div class="q-gutter-sm">
+    <div v-if="canManage" class="tf-actions">
+      <div class="tf-actions">
         <q-btn outline no-caps color="klados" icon="warehouse" label="Σημεία αποθήκευσης" @click="openStorageSettings" />
         <q-btn color="klados" text-color="klados-on" no-caps icon="add" label="Νέο υλικό" @click="openCreate" />
       </div>
@@ -14,7 +14,7 @@
         <div class="col-12 col-sm-3">
           <q-input v-model="filters.q" label="Αναζήτηση" dense outlined clearable debounce="300" />
         </div>
-        <div class="col-6 col-sm-3">
+        <div class="col-12 col-sm-3">
           <q-select
             v-model="filters.category"
             :options="categoryOptions"
@@ -45,7 +45,8 @@
       @retry="reload"
     >
       <q-list bordered separator class="rounded-borders">
-        <q-item v-for="item in data?.items" :key="item.ylikoId">
+        <!-- Κινητό: η γραμμή ανοίγει την καρτέλα, οι υπόλοιπες ενέργειες σε μενού. -->
+        <q-item v-for="item in data?.items" :key="item.ylikoId" :clickable="$q.screen.lt.sm" @click="$q.screen.lt.sm && openDetail(item)">
           <q-item-section avatar>
             <q-avatar :style="{ backgroundColor: avatarColor(item), color: '#fff' }" size="36px">
               <q-icon :name="CATEGORY_ICON[item.category]" />
@@ -66,7 +67,7 @@
             </q-item-label>
           </q-item-section>
 
-          <q-item-section side style="min-width: 120px">
+          <q-item-section side :style="$q.screen.lt.sm ? undefined : 'min-width: 120px'">
             <div class="text-right">
               <template v-if="item.relation === 'BORROWED'">
                 <div class="text-weight-bold text-klados">{{ item.borrowedQty }} τεμ.</div>
@@ -84,7 +85,23 @@
             </div>
           </q-item-section>
 
-          <q-item-section side>
+          <q-item-section v-if="$q.screen.lt.sm && ((canManage || auth.can('yliko:checkout')) && item.relation === 'OWNED')" side>
+            <q-btn dense flat round icon="more_vert" @click.stop>
+              <q-menu auto-close>
+                <q-list style="min-width: 200px">
+                  <q-item v-if="canManage" clickable @click="openEdit(item)">
+                    <q-item-section avatar><q-icon name="edit" /></q-item-section>
+                    <q-item-section>Επεξεργασία</q-item-section>
+                  </q-item>
+                  <q-item v-if="auth.can('yliko:checkout')" clickable :disable="!hasWindow || item.availableQty === 0" @click="openCheckout(item)">
+                    <q-item-section avatar><q-icon name="bookmark_add" color="klados" /></q-item-section>
+                    <q-item-section>{{ hasWindow ? 'Δέσμευση' : 'Δέσμευση — διάλεξε διάστημα' }}</q-item-section>
+                  </q-item>
+                </q-list>
+              </q-menu>
+            </q-btn>
+          </q-item-section>
+          <q-item-section v-else-if="!$q.screen.lt.sm" side>
             <div class="row items-center">
               <q-btn dense flat round icon="info" @click="openDetail(item)">
                 <q-tooltip>Καρτέλα & ιστορικό</q-tooltip>

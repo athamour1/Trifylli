@@ -1,6 +1,6 @@
 <template>
   <q-page padding>
-    <div class="row items-center justify-end q-mb-md">
+    <div class="tf-actions">
       <SegmentedToggle
         v-model="view"
         dense

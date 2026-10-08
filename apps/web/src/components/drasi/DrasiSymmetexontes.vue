@@ -1,11 +1,11 @@
 <template>
   <div>
     <!-- Σύνολα + ενέργειες -->
-    <div class="row items-center q-col-gutter-sm q-mb-sm">
-      <div class="col-auto text-caption text-grey-7">
+    <div class="tf-toolbar q-mb-sm">
+      <div class="text-caption text-grey-7">
         {{ rows.length }} άτομα · {{ counts.melos }} παιδιά · {{ counts.stelexos }} στελέχη
       </div>
-      <q-space />
+      <div class="tf-actions">
       <SegmentedToggle
         v-model="view"
         dense
@@ -29,6 +29,7 @@
         label="Προσθήκη"
         @click="addDialog = true"
       />
+      </div>
     </div>
 
     <div v-if="rows.length" class="row q-col-gutter-sm q-mb-md">
@@ -42,7 +43,7 @@
     <!-- ── Λίστα ── -->
     <template v-if="view === 'list'">
       <div v-if="!loading && !rows.length" class="text-center text-grey-6 q-pa-lg">
-        <q-icon name="groups" size="40px" class="block q-mb-sm" />
+        <q-icon name="groups" size="40px" class="block q-mx-auto q-mb-sm" />
         Κανένας συμμετέχων ακόμη.
       </div>
       <q-list v-else bordered separator class="rounded-borders">
