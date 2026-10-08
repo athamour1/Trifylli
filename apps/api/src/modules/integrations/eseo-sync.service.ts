@@ -207,10 +207,27 @@ export class EseoSyncService {
   ): Promise<'created' | 'updated' | 'skipped'> {
     if (!member.firstName && !member.lastName) return 'skipped';
 
-    const existing = await this.prisma.user.findUnique({
+    let existing = await this.prisma.user.findUnique({
       where: { eseoId: member.eseoId },
       select: { id: true, topikoId: true, memberships: { select: { id: true } } },
     });
+
+    // Λογαριασμός που φτιάχτηκε πριν από τον συγχρονισμό (π.χ. ο υπερδιαχειριστής
+    // στην πρώτη σύνδεση) με το ίδιο email: είναι το ίδιο πρόσωπο — τον δένουμε
+    // με την εγγραφή του e-SEO αντί να φτιάξουμε δεύτερο άτομο.
+    if (!existing && member.email) {
+      const account = await this.prisma.user.findFirst({
+        where: { topikoId, email: { equals: member.email, mode: 'insensitive' }, eseoId: null },
+        select: { id: true },
+      });
+      if (account) {
+        existing = await this.prisma.user.update({
+          where: { id: account.id },
+          data: { eseoId: member.eseoId },
+          select: { id: true, topikoId: true, memberships: { select: { id: true } } },
+        });
+      }
+    }
 
     // Μέλος που ανήκει σε άλλο Τοπικό δεν μεταφέρεται σιωπηλά.
     if (existing && existing.topikoId !== topikoId) return 'skipped';
@@ -224,7 +241,9 @@ export class EseoSyncService {
     let email = member.email ?? null;
     if (email) {
       const clash = await this.prisma.user.findFirst({
-        where: { topikoId, email, eseoId: { not: member.eseoId } },
+        // Το `not` σκέτο αφήνει έξω τα NULL — χωρίς το OR ένας λογαριασμός χωρίς
+        // eseoId δεν μετράει ως σύγκρουση και το upsert σκάει στο unique.
+        where: { topikoId, email, OR: [{ eseoId: null }, { eseoId: { not: member.eseoId } }] },
         select: { id: true },
       });
       if (clash) email = null;
