@@ -249,6 +249,14 @@
               />
             </q-tab-panel>
 
+            <q-tab-panel name="mythos" class="q-pa-none">
+              <DrasiMythos
+                :drasi-id="id"
+                :organiser="data.klados?.type ?? null"
+                :can-write="canWrite && data.status !== 'KLEISTI'"
+              />
+            </q-tab-panel>
+
             <q-tab-panel name="omades" class="q-pa-none">
               <DrasiOmades
                 mode="groups"
@@ -350,6 +358,7 @@ import DrasiAxiologisi from '../components/drasi/DrasiAxiologisi.vue';
 import DrasiEktyposi from '../components/drasi/DrasiEktyposi.vue';
 import DrasiEntypa from '../components/drasi/DrasiEntypa.vue';
 import DrasiFarmakeio from '../components/drasi/DrasiFarmakeio.vue';
+import DrasiMythos from '../components/drasi/DrasiMythos.vue';
 import DrasiOmades from '../components/drasi/DrasiOmades.vue';
 import DrasiProgramma from '../components/drasi/DrasiProgramma.vue';
 import DrasiRythmiseis from '../components/drasi/DrasiRythmiseis.vue';
@@ -436,6 +445,7 @@ const sections = computed(() => {
   const list = [
     { name: 'episkopisi', label: 'Επισκόπηση', icon: 'dashboard', badge: '' },
     { name: 'programma', label: 'Πρόγραμμα', icon: 'schedule', badge: '' },
+    { name: 'mythos', label: 'Μύθος', icon: 'auto_stories', badge: '' },
     { name: 'participants', label: 'Συμμετέχοντες', icon: 'groups', badge: String(data.value?.participants.length ?? '') },
     // Το όνομα της υποομάδας του κλάδου: Πεντάδες / Φωλιές / Ενωμοτίες — με πολλούς κλάδους, όλες.
     ...(data.value?.kladoi.length ? [{ name: 'omades', label: groupsLabel.value, icon: 'diversity_3', badge: '' }] : []),

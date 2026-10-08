@@ -35,6 +35,22 @@
       </dl>
     </section>
 
+    <!-- ── Μύθος: η κεντρική ιδέα και ποιο στέλεχος παίζει ποιον ── -->
+    <section v-if="mode === 'full' && d.mythos" class="ds-section">
+      <h2 :style="{ color: accent }">Μύθος<span v-if="d.mythos.title">: {{ d.mythos.title }}</span></h2>
+      <div v-if="d.mythos.text" class="markdown-body ds-md" v-html="md(d.mythos.text)" />
+      <table v-if="d.mythos.characters.length" class="ds-table" style="margin-top: 8px">
+        <thead><tr><th style="width: 22%">Ρόλος</th><th style="width: 22%">Στέλεχος</th><th>Lore</th></tr></thead>
+        <tbody>
+          <tr v-for="c in d.mythos.characters" :key="c.id">
+            <td><b>{{ c.name }}</b></td>
+            <td>{{ c.stelexos ? `${c.stelexos.lastName} ${c.stelexos.firstName}` : '—' }}</td>
+            <td><div v-if="c.lore" class="markdown-body ds-md" v-html="md(c.lore)" /></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
     <!-- ── Πρόγραμμα: ωρολόγιο ανά ημέρα, με το προγραμματικό κάθε στοιχείου ── -->
     <section v-if="mode === 'full' && d.days.length" class="ds-section">
       <h2 :style="{ color: accent }">Πρόγραμμα</h2>

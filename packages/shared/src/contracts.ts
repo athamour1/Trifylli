@@ -469,6 +469,32 @@ export interface DrasiGroupsView {
   participants: DrasiGroupMemberView[];
 }
 
+// ───────────────────────── Δράσεις: μύθος ─────────────────────────
+
+/** Στέλεχος της δράσης, όπως εμφανίζεται δίπλα σε έναν ρόλο. */
+export interface DrasiMythosStelexos {
+  participantId: string;
+  firstName: string;
+  lastName: string;
+}
+
+/** Ρόλος του μύθου: ποιος είναι στην ιστορία και ποιο στέλεχος τον παίζει. */
+export interface DrasiCharacterView {
+  id: string;
+  name: string;
+  lore: string | null;
+  order: number;
+  stelexos: DrasiMythosStelexos | null;
+}
+
+export interface DrasiMythosView {
+  title: string | null;
+  text: string | null;
+  characters: DrasiCharacterView[];
+  /** Τα στελέχη της δράσης — οι επιλογές για κάθε ρόλο. */
+  stelexi: DrasiMythosStelexos[];
+}
+
 // ───────────────────────── Δράσεις: έντυπα (F5) & φαρμακείο (F6) ─────────────────────────
 
 export interface DrasiFormView {
@@ -744,6 +770,8 @@ export interface DrasiDossier {
   symvoulia: { id: string; title: string | null; date: string; agenda: string | null; minutes: string | null; finalized: boolean }[];
   review: DrasiReviewSummary | null;
   formsPending: { pending: number; total: number };
+  /** Ο μύθος και οι ρόλοι· `null` όταν δεν έχει γραφτεί τίποτα. */
+  mythos: Omit<DrasiMythosView, 'stelexi'> | null;
 }
 
 /** Το ωρολόγιο όπως το βλέπει η καρτέλα: ημέρες με ώρα έναρξης και στοιχεία. */

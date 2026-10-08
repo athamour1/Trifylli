@@ -9,7 +9,7 @@
           <q-card-section class="col">
             <div class="text-subtitle1 text-weight-medium"><q-icon name="folder" color="klados" class="q-mr-xs" />Ντοσιέ στελεχών</div>
             <div class="text-caption text-grey-7 q-mt-xs">
-              Αρχηγείο, πρόγραμμα ανά ημέρα με υπευθύνους, συμμετέχοντες, ομάδες και σκηνές, υλικό, ταμείο, πρακτικά, αξιολόγηση.
+              Αρχηγείο, μύθος και ρόλοι, πρόγραμμα ανά ημέρα με υπευθύνους, συμμετέχοντες, ομάδες και σκηνές, υλικό, ταμείο, πρακτικά, αξιολόγηση.
             </div>
             <q-toggle v-model="withHealth" dense color="klados" label="Μαζί με τη σύνοψη υγείας (εμπιστευτικό)" class="q-mt-sm" />
           </q-card-section>

@@ -12,6 +12,8 @@ import { DraseisFormsController, PublicFormsController } from './draseis-forms.c
 import { DraseisFormsService } from './draseis-forms.service';
 import { DraseisGroupsController } from './draseis-groups.controller';
 import { DraseisGroupsService } from './draseis-groups.service';
+import { DraseisMythosController } from './draseis-mythos.controller';
+import { DraseisMythosService } from './draseis-mythos.service';
 import { DraseisPharmacyService } from './draseis-pharmacy.service';
 import { DraseisPlanController } from './draseis-plan.controller';
 import { DraseisPlanService } from './draseis-plan.service';
@@ -30,6 +32,7 @@ import { DraseisService } from './draseis.service';
     DraseisFormsController,
     PublicFormsController,
     DraseisPlanController,
+    DraseisMythosController,
     DraseisReviewController,
     PublicReviewController,
   ],
@@ -42,6 +45,7 @@ import { DraseisService } from './draseis.service';
     DraseisFormsService,
     DraseisPharmacyService,
     DraseisPlanService,
+    DraseisMythosService,
     DraseisReviewService,
     DraseisDossierService,
   ],

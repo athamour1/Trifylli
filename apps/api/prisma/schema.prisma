@@ -516,6 +516,11 @@ model Drasi {
   /// Έχει σκηνές η δράση; Μετρά μόνο σε πολυήμερες/κατασκηνώσεις (οι μονοήμερες δεν
   /// έχουν ποτέ). Το `false` ΚΡΥΒΕΙ τις σκηνές — δεν τις σβήνει.
   hasSkines Boolean @default(true)
+  /// Ο μύθος — η κεντρική ιδέα που δένει τη δράση (π.χ. «Το χαμένο ημερολόγιο
+  /// του Αργοναύτη»). Μόνο για τα στελέχη· τα παιδιά τον ζουν, δεν τον διαβάζουν.
+  mythosTitle String?
+  /// Η ιστορία του μύθου — Markdown.
+  mythosText  String?
   /// Προεπιλογή `ENERGI` ώστε seed και απλές κλήσεις API να φτιάχνουν «κανονική»
   /// δράση· το wizard ζητά ρητά `PROSXEDIO` μέχρι να ολοκληρωθεί.
   status    DrasiStatus @default(ENERGI)
@@ -527,6 +532,7 @@ model Drasi {
   /// Ο κλάδος που ΔΙΟΡΓΑΝΩΝΕΙ. Ποιοι συμμετέχουν: `kladoi` + `guestTopika`.
   klados       Klados?            @relation(fields: [kladosId], references: [id], onDelete: SetNull)
   participants DrasiParticipant[]
+  characters   DrasiCharacter[]
   syggentrwseis Syggentrwsh[]
   checkouts    YlikoCheckout[]
   incidents    Incident[]
@@ -961,6 +967,7 @@ model DrasiParticipant {
   leads     DrasiGroup[]     @relation("DrasiGroupLeader")
   forms     DrasiForm[]
   reviewInvite DrasiReviewInvite?
+  characters   DrasiCharacter[]
 
   @@unique([drasiId, userId])
   @@index([drasiId, kind])
@@ -1536,4 +1543,25 @@ model TreasuryEntry {
   @@index([topikoId, kladosId, occurredAt])
   @@index([drasiId, occurredAt])
   @@map("treasury_entry")
+}
+
+/// Ρόλος του μύθου (π.χ. «Η Μάγισσα του δάσους»), με το lore του και το
+/// στέλεχος που τον υποδύεται. Ξεχωριστό από το `DrasiRole` (αρχηγείο/υπηρεσίες).
+model DrasiCharacter {
+  id            String   @id @default(uuid()) @db.Uuid
+  drasiId       String   @db.Uuid
+  name          String
+  /// Ποιος είναι, τι θέλει, πώς μιλά — Markdown.
+  lore          String?
+  order         Int      @default(0)
+  /// Ένα στέλεχος της δράσης ανά ρόλο· κενό ⇒ αδιάθετος ακόμα.
+  participantId String?  @db.Uuid
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  drasi       Drasi             @relation(fields: [drasiId], references: [id], onDelete: Cascade)
+  participant DrasiParticipant? @relation(fields: [participantId], references: [id], onDelete: SetNull)
+
+  @@index([drasiId, order])
+  @@map("drasi_character")
 }

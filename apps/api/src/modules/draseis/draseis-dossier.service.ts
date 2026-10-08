@@ -6,6 +6,7 @@ import { DrasiAccessService } from './drasi-access.service';
 import { DraseisFinanceService } from './draseis-finance.service';
 import { DraseisFormsService } from './draseis-forms.service';
 import { DraseisGroupsService } from './draseis-groups.service';
+import { DraseisMythosService } from './draseis-mythos.service';
 import { DraseisPlanService } from './draseis-plan.service';
 import { DraseisReviewService } from './draseis-review.service';
 import { DraseisService } from './draseis.service';
@@ -24,13 +25,14 @@ export class DraseisDossierService {
     private readonly finance: DraseisFinanceService,
     private readonly forms: DraseisFormsService,
     private readonly groups: DraseisGroupsService,
+    private readonly mythos: DraseisMythosService,
     private readonly plan: DraseisPlanService,
     private readonly review: DraseisReviewService,
   ) {}
 
   async build(user: RequestUser, id: string, options: { health: boolean; treasury: boolean }): Promise<DrasiDossier> {
     const drasi = await this.access.load(user, id, 'read');
-    const [full, schedule, participants, groups, loading, matrix, symvoulia, reviewView, topiko] = await Promise.all([
+    const [full, schedule, participants, groups, loading, matrix, symvoulia, reviewView, topiko, mythos] = await Promise.all([
       this.draseis.findOne(user, id),
       this.plan.scheduleView(user, id),
       this.finance.participants(user, id),
@@ -44,6 +46,7 @@ export class DraseisDossierService {
       }),
       this.review.view(user, id),
       this.prisma.topiko.findUnique({ where: { id: user.topikoId }, select: { name: true } }),
+      this.mythos.forDossier(user, id),
     ]);
 
 
@@ -95,6 +98,7 @@ export class DraseisDossierService {
       symvoulia: symvoulia.map((s) => ({ id: s.id, title: s.title, date: s.date.toISOString(), agenda: s.agenda, minutes: s.minutes, finalized: s.finalizedAt !== null })),
       review: reviewView.summary,
       formsPending: { pending: matrix.pending, total: matrix.total },
+      mythos,
     };
   }
 }
