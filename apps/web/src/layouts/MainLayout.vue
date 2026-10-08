@@ -273,6 +273,10 @@ watch(
  */
 const DETAIL_LINK: Record<string, string> = {
   drasi: 'klados-draseis',
+  // Το wizard (νέα δράση ή συνέχεια προσχεδίου) ανήκει κι αυτό στις Δράσεις —
+  // του κλάδου στο `/k/:klados/draseis/nea`, του Τοπικού στο `/draseis/nea`.
+  'klados-drasi-nea': 'klados-draseis',
+  'drasi-nea': 'klados-draseis',
   'drasi-programmatiko': 'klados-draseis',
   syggentrwsh: 'klados-syggentrwseis',
   parousiologio: 'klados-syggentrwseis',
