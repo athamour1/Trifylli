@@ -1,0 +1,49 @@
+# Η οθόνη σύνδεσης — Trifylli.
+#
+# Email και κωδικός σε ΜΙΑ οθόνη (όχι δύο φορτώσεις σελίδας), ο σύνδεσμος
+# «Ξέχασα τον κωδικό» και ελληνικοί τίτλοι στις προεπιλεγμένες ροές. Ήταν
+# βήματα του `setup.sh` (μόνο dev)· εδώ εφαρμόζονται και σε prod χωρίς κανένα
+# χειροκίνητο βήμα, από τον worker (mount στο /blueprints/custom), ή:
+#   docker compose exec authentik-worker ak apply_blueprint /blueprints/custom/trifylli-login.yaml
+version: 1
+metadata:
+  name: Trifylli — οθόνη σύνδεσης
+  labels:
+    blueprints.goauthentik.io/instantiate: 'true'
+
+entries:
+  # Πρώτα ό,τι πειράζουμε: οι default ροές και η δική μας ροή ανάκτησης.
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: Default - Authentication flow
+      required: true
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: Default - Invalidation flow
+      required: true
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: Trifylli — ορισμός & επαναφορά κωδικού
+      required: true
+
+  - model: authentik_stages_identification.identificationstage
+    identifiers:
+      name: default-authentication-identification
+    attrs:
+      user_fields: [email, username]
+      password_stage: !Find [authentik_stages_password.passwordstage, [name, default-authentication-password]]
+      recovery_flow: !Find [authentik_flows.flow, [slug, trifylli-recovery]]
+
+  - model: authentik_flows.flow
+    identifiers:
+      slug: default-authentication-flow
+    attrs:
+      title: Σύνδεση στο Trifylli
+  - model: authentik_flows.flow
+    identifiers:
+      slug: default-invalidation-flow
+    attrs:
+      title: Αποσύνδεση από το Trifylli

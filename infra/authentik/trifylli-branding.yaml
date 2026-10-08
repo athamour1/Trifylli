@@ -23,6 +23,14 @@ metadata:
     blueprints.goauthentik.io/instantiate: 'true'
 
 entries:
+  # Πρώτα το default brand του Authentik: στο πρώτο boot όλα τα blueprints
+  # τρέχουν μαζί, και αν προλάβαινε αυτό εδώ, το default brand έγραφε μετά τα
+  # δικά του (λογότυπο authentik, σκούρο θέμα) από πάνω.
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: Default - Brand
+      required: true
   - model: authentik_brands.brand
     identifiers:
       domain: authentik-default
