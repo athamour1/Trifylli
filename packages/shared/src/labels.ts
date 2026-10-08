@@ -10,6 +10,7 @@ import {
   DrasiReviewAudience,
   DrasiReviewKind,
   DrasiRoleKind,
+  KladosDuty,
   DrasiScheduleKind,
   DrasiStatus,
   DrasiType,
@@ -344,4 +345,23 @@ export const IDIOTITA_LABEL: Record<string, string> = {
   OMADA_SYNERGASIAS: 'Ομάδα Συνεργασίας',
   SYNDIASKEPSI: 'Μέλος Συνδιάσκεψης',
   FILOS_ODIGISMOU: 'Φίλος του Οδηγισμού',
+};
+
+export const KLADOS_DUTY_LABEL: Record<KladosDuty, string> = {
+  TAMIAS: 'Ταμίας',
+  GRAMMATEAS: 'Γραμματέας',
+  FARMAKEIO: 'Φαρμακείο',
+  FOTOGRAFIA: 'Φωτογραφία',
+  ENIMEROSI: 'Ενημέρωση',
+  SOCIAL_MEDIA: 'Social media',
+};
+
+/** Material icon ανά υπευθυνότητα — για chips και τη σύνοψη του αρχηγείου. */
+export const KLADOS_DUTY_ICON: Record<KladosDuty, string> = {
+  TAMIAS: 'account_balance_wallet',
+  GRAMMATEAS: 'edit_note',
+  FARMAKEIO: 'medical_services',
+  FOTOGRAFIA: 'photo_camera',
+  ENIMEROSI: 'campaign',
+  SOCIAL_MEDIA: 'share',
 };

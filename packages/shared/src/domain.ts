@@ -765,3 +765,18 @@ export const DEFAULT_REVIEW_SETTINGS: DrasiReviewSettings = {
   showSummary: false,
   confirmationMessage: 'Η απάντησή σου καταχωρήθηκε. Ευχαριστούμε!',
 };
+
+/**
+ * Υπευθυνότητες στο αρχηγείο ενός κλάδου. Δεν είναι βαθμός (αυτός έρχεται από
+ * το e-SEO) — είναι ποιος κρατά τι. Νέα υπευθυνότητα = νέα τιμή εδώ + στο enum
+ * της βάσης + ετικέτα/εικονίδιο στο `labels.ts`.
+ */
+export const KladosDuty = {
+  TAMIAS: 'TAMIAS',
+  GRAMMATEAS: 'GRAMMATEAS',
+  FARMAKEIO: 'FARMAKEIO',
+  FOTOGRAFIA: 'FOTOGRAFIA',
+  ENIMEROSI: 'ENIMEROSI',
+  SOCIAL_MEDIA: 'SOCIAL_MEDIA',
+} as const;
+export type KladosDuty = (typeof KladosDuty)[keyof typeof KladosDuty];

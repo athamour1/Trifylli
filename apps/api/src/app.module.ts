@@ -11,6 +11,7 @@ import { StorageModule } from './common/storage/storage.module';
 import { HealthController } from './health.controller';
 import { AccountsModule } from './modules/accounts/accounts.module';
 import { CalendarModule } from './modules/calendar/calendar.module';
+import { ArxigeioModule } from './modules/arxigeio/arxigeio.module';
 import { DraseisModule } from './modules/draseis/draseis.module';
 import { FarmakeioModule } from './modules/farmakeio/farmakeio.module';
 import { PharmaciesModule } from './modules/pharmacies/pharmacies.module';
@@ -47,6 +48,7 @@ import { YlikoModule } from './modules/yliko/yliko.module';
     FilesModule,
     YlikoModule,
     DraseisModule,
+    ArxigeioModule,
     SyggentrwseisModule,
     ParousiologioModule,
     ProodosModule,

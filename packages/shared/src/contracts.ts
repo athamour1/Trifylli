@@ -13,6 +13,7 @@ import type {
   DrasiRoleKind,
   DrasiScheduleKind,
   DrasiType,
+  KladosDuty,
   KladosType,
   MemberKind,
   MemberStatus,
@@ -25,6 +26,7 @@ import type {
   TimelineSection,
   YlikoCategory,
 } from './domain';
+import type { LeaderRank } from './leader-roles';
 
 export interface AuthenticatedUser {
   id: string;
@@ -777,4 +779,23 @@ export interface DrasiDossier {
 /** Το ωρολόγιο όπως το βλέπει η καρτέλα: ημέρες με ώρα έναρξης και στοιχεία. */
 export interface DrasiScheduleView {
   days: { date: string; startTime: string; overridden: boolean; items: DrasiScheduleItemView[] }[];
+}
+
+// ───────────────────────── Αρχηγείο κλάδου ─────────────────────────
+
+/** Στέλεχος του αρχηγείου: βαθμός από το e-SEO, υπευθυνότητες από τον κλάδο. */
+export interface ArxigeioMember {
+  userId: string;
+  firstName: string;
+  lastName: string;
+  /** `null` ⇒ στέλεχος του κλάδου χωρίς ενεργό πτυχίο θέσης (π.χ. τοποθετήθηκε με το χέρι). */
+  rank: LeaderRank | null;
+  /** Ο τίτλος όπως στο e-SEO, π.χ. «Υπαρχηγός Σμήνους». */
+  rankTitle: string | null;
+  duties: KladosDuty[];
+}
+
+export interface ArxigeioView {
+  klados: KladosType;
+  members: ArxigeioMember[];
 }

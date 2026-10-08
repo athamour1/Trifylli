@@ -25,6 +25,7 @@ export const KLADOS_LINKS = [
   { name: 'klados-calendar', path: 'calendar', title: 'Ημερολόγιο', icon: 'event' },
   { name: 'klados-syggentrwseis', path: 'syggentrwseis', title: 'Συγκεντρώσεις', icon: 'schedule' },
   { name: 'klados-meloi', path: 'meloi', title: 'Μέλη', icon: 'badge' },
+  { name: 'klados-arxigeio', path: 'arxigeio', title: 'Αρχηγείο', icon: 'shield' },
   { name: 'klados-proodos', path: 'proodos', title: 'Ατομική πρόοδος', icon: 'trending_up' },
   { name: 'klados-draseis', path: 'draseis', title: 'Δράσεις', icon: 'hiking' },
   { name: 'klados-symvoulia', path: 'symvoulia', title: 'Συμβούλια', icon: 'forum' },
@@ -68,6 +69,12 @@ const kladosChildren: RouteRecordRaw[] = [
     name: 'klados-meloi',
     component: () => import('../pages/MeloiPage.vue'),
     meta: { title: 'Μέλη', capability: 'meloi:read' },
+  },
+  {
+    path: 'arxigeio',
+    name: 'klados-arxigeio',
+    component: () => import('../pages/ArxigeioPage.vue'),
+    meta: { title: 'Αρχηγείο', capability: 'meloi:read' },
   },
   {
     path: 'proodos',

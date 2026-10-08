@@ -262,6 +262,7 @@ model Klados {
   storedFiles  StoredFile[]
   treasuryEntries TreasuryEntry[]
   admins       User[]        @relation("KladosAdmin")
+  responsibilities KladosResponsibility[]
   pharmacyKits PharmacyKit[]
   kitLoansReceived KitLoan[]  @relation("KitLoanToKlados")
   drasiSymmetoxes DrasiKlados[]
@@ -323,6 +324,7 @@ model User {
   topiko          Topiko                 @relation(fields: [topikoId], references: [id], onDelete: Cascade)
   adminKlados     Klados?                @relation("KladosAdmin", fields: [adminKladosId], references: [id], onDelete: SetNull)
   memberships     Membership[]
+  responsibilities KladosResponsibility[]
   guardians       Guardian[]
   licenses        License[]
   proodosEntries  ProodosEntry[]
@@ -1564,4 +1566,31 @@ model DrasiCharacter {
 
   @@index([drasiId, order])
   @@map("drasi_character")
+}
+
+/// Υπευθυνότητα μέσα στο αρχηγείο ενός κλάδου (ταμίας, γραμματέας…). Δεν έρχεται
+/// από το e-SEO — τη δηλώνει ο κλάδος. Ένα στέλεχος μπορεί να έχει πολλές, και
+/// μία υπευθυνότητα μπορεί να τη μοιράζονται περισσότερα στελέχη.
+enum KladosDuty {
+  TAMIAS
+  GRAMMATEAS
+  FARMAKEIO
+  FOTOGRAFIA
+  ENIMEROSI
+  SOCIAL_MEDIA
+}
+
+model KladosResponsibility {
+  id        String     @id @default(uuid()) @db.Uuid
+  kladosId  String     @db.Uuid
+  userId    String     @db.Uuid
+  duty      KladosDuty
+  createdAt DateTime   @default(now())
+
+  klados Klados @relation(fields: [kladosId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([kladosId, userId, duty])
+  @@index([kladosId, duty])
+  @@map("klados_responsibility")
 }
