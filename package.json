@@ -1,6 +1,6 @@
 {
   "name": "trifylli",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": true,
   "description": "Σύστημα διαχείρισης Τοπικού Τμήματος Σ.Ε.Ο.",
   "packageManager": "pnpm@11.11.0",
