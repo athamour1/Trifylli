@@ -323,18 +323,6 @@ export class SetDrasiRolesDto {
   roles!: DrasiRoleDto[];
 }
 
-export class RolesTemplateQueryDto {
-  @ApiPropertyOptional({ enum: KladosType, description: 'Κενό ⇒ η τελευταία δράση Τοπικού.' })
-  @IsOptional()
-  @IsEnum(KladosType)
-  klados?: KladosType;
-
-  @ApiPropertyOptional({ format: 'uuid', description: 'Η δράση που στήνεται τώρα — εξαιρείται.' })
-  @IsOptional()
-  @IsUUID()
-  exclude?: string;
-}
-
 /** Οριστική διαγραφή: ο τίτλος γράφεται ξανά, για να μη γίνει από λάθος πάτημα. */
 export class DeleteDrasiDto {
   @ApiProperty({ description: 'Ο τίτλος της δράσης, ακριβώς.' })

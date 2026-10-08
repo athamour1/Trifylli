@@ -4,7 +4,6 @@ import {
   can,
   KLADOS_LABEL,
   KLADOS_META,
-  type DrasiRolesTemplate,
   type EseoUnitInfo,
   type KataskinosiStats,
   type KladosType,
@@ -20,7 +19,6 @@ import type {
   AddParticipantsDto,
   CreateDrasiDto,
   QueryDraseisDto,
-  RolesTemplateQueryDto,
   SetDrasiKladoiDto,
   SetDrasiRolesDto,
   SetGuestTopikaDto,
@@ -370,46 +368,6 @@ export class DraseisService {
       orderBy: [{ kind: 'asc' }, { user: { lastName: 'asc' } }],
     });
   }
-
-  /**
-   * «Ίδια όπως την προηγούμενη»: οι ευθύνες της πιο πρόσφατης ολοκληρωμένης
-   * δράσης του ίδιου φορέα (κλάδος ή Τοπικό). Τα αρχηγεία αλλάζουν σπάνια· το να
-   * ξαναδιαλέγεις έξι ονόματα κάθε φορά είναι ο λόγος που κάποιος θα παρατήσει
-   * το wizard. Στελέχη που έφυγαν από το μητρώο δεν προτείνονται.
-   */
-  async rolesTemplate(user: RequestUser, query: RolesTemplateQueryDto): Promise<DrasiRolesTemplate> {
-    const kladosId = query.klados ? await this.kladosId(user, query.klados) : null;
-
-    const source = await this.prisma.drasi.findFirst({
-      where: {
-        topikoId: user.topikoId,
-        archivedAt: null,
-        status: { not: DrasiStatus.PROSXEDIO },
-        kladosId,
-        ...(query.exclude ? { id: { not: query.exclude } } : {}),
-        roles: { some: {} },
-      },
-      orderBy: { dateStart: 'desc' },
-      select: {
-        id: true,
-        title: true,
-        dateStart: true,
-        roles: {
-          where: { user: { archivedAt: null } },
-          select: { kind: true, userId: true, note: true },
-          orderBy: { kind: 'asc' },
-        },
-      },
-    });
-
-    if (!source) return { source: null, roles: [] };
-    return {
-      source: { id: source.id, title: source.title, dateStart: source.dateStart.toISOString() },
-      roles: source.roles,
-    };
-  }
-
-  // ───────────────────────── Συμμετέχοντες ─────────────────────────
 
   async addParticipants(user: RequestUser, id: string, dto: AddParticipantsDto) {
     const drasi = await this.assertAccess(user, id);

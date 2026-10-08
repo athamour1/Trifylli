@@ -340,15 +340,6 @@ export interface EseoUnitInfo {
   type: string | null;
 }
 
-/**
- * «Ίδια όπως την προηγούμενη»: οι ευθύνες της τελευταίας δράσης του ίδιου
- * φορέα, για να μην ξαναδιαλέγει κανείς έξι ονόματα κάθε φορά.
- */
-export interface DrasiRolesTemplate {
-  source: { id: string; title: string; dateStart: string } | null;
-  roles: { kind: DrasiRoleKind; userId: string; note: string | null }[];
-}
-
 // ───────────────────────── Δράσεις: ταμείο & κόστη (F1, F2, F4) ─────────────────────────
 
 export interface DrasiBudgetView {

@@ -27,7 +27,6 @@ import {
   DeleteDrasiDto,
   SetDrasiClosedDto,
   QueryDraseisDto,
-  RolesTemplateQueryDto,
   SetDrasiKladoiDto,
   SetDrasiRolesDto,
   SetGuestTopikaDto,
@@ -61,16 +60,6 @@ export class DraseisController {
   }
 
   // Οι στατικές διαδρομές πριν από το `:id`, αλλιώς το ParseUUIDPipe τις κόβει.
-
-  @Get('roles-template')
-  @RequireCapability('drasi:write')
-  @ApiOperation({
-    summary: '«Ίδια όπως την προηγούμενη»',
-    description: 'Οι ευθύνες (αρχηγείο & υπηρεσίες) της πιο πρόσφατης δράσης του ίδιου φορέα.',
-  })
-  rolesTemplate(@CurrentUser() user: RequestUser, @Query() query: RolesTemplateQueryDto) {
-    return this.draseis.rolesTemplate(user, query);
-  }
 
   @Get('guests')
   @RequireCapability('drasi:write')
