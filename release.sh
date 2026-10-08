@@ -4,10 +4,12 @@ set -euo pipefail
 # ─── Configuration ──────────────────────────────────────────────────────────────
 REPO="athamour1/Trifylli"
 REGISTRY="ghcr.io"
-# Τα δύο production images του Trifylli. Το path στο GHCR είναι πεζό.
+# Τα production images του Trifylli. Το path στο GHCR είναι πεζό.
 API_IMAGE="${REGISTRY}/athamour1/trifylli/api"
 WEB_IMAGE="${REGISTRY}/athamour1/trifylli/web"
-# Και τα δύο χτίζονται με context τη ΡΙΖΑ του monorepo (χρειάζονται το packages/shared).
+# Τα αρχεία ρυθμίσεων της στοίβας (infra/) — τα γράφει σε volumes στο `up`.
+CONFIG_IMAGE="${REGISTRY}/athamour1/trifylli/config"
+# Όλα χτίζονται με context τη ΡΙΖΑ του monorepo (χρειάζονται το packages/shared / infra).
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ─── Colors ─────────────────────────────────────────────────────────────────────
@@ -66,13 +68,14 @@ fi
 # ─── Confirmation ───────────────────────────────────────────────────────────────
 echo ""
 info "This will:"
-echo "   1. Build Docker images for api & web"
+echo "   1. Build Docker images for api, web & config"
 echo "   2. Push images to ${REGISTRY}/athamour1/trifylli"
 echo "   3. Create Git tag ${TAG}"
 echo "   4. Create GitHub release ${TAG}"
 echo ""
 echo -e "   📦 ${API_IMAGE}:${TAG}"
 echo -e "   📦 ${WEB_IMAGE}:${TAG}"
+echo -e "   📦 ${CONFIG_IMAGE}:${TAG}"
 echo ""
 
 read -rp "$(echo -e "${YELLOW}Proceed? (y/N): ${NC}")" CONFIRM
@@ -123,6 +126,16 @@ docker push "${WEB_IMAGE}:${TAG}"
 docker push "${WEB_IMAGE}:latest"
 ok "web image pushed"
 
+# ─── Build & push config ───────────────────────────────────────────────────────
+info "Building config image..."
+docker build -f infra/config/Dockerfile -t "${CONFIG_IMAGE}:${TAG}" -t "${CONFIG_IMAGE}:latest" .
+ok "config image built"
+
+info "Pushing config image..."
+docker push "${CONFIG_IMAGE}:${TAG}"
+docker push "${CONFIG_IMAGE}:latest"
+ok "config image pushed"
+
 # ─── Create Git tag & GitHub release ────────────────────────────────────────────
 info "Creating Git tag ${TAG}..."
 git tag -a "$TAG" -m "Release ${TAG}"
@@ -146,6 +159,7 @@ echo ""
 echo "  Images:"
 echo "    docker pull ${API_IMAGE}:${TAG}"
 echo "    docker pull ${WEB_IMAGE}:${TAG}"
+echo "    docker pull ${CONFIG_IMAGE}:${TAG}"
 echo ""
 echo "  Release:"
 echo "    https://github.com/${REPO}/releases/tag/${TAG}"

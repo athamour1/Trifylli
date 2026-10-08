@@ -28,6 +28,11 @@
 
 ## 1. Εγκατάσταση με μία εντολή
 
+> **Κατάσταση (2026-10-08):** έγιναν το config image (`infra/config/`, one-shot
+> `config` που σβήνει και ξαναγράφει τα config volumes), το `gen-env` για τα
+> μυστικά, το `garage-init` χωρίς download και το bootstrap του Τοπικού στο
+> `migrate` (`TOPIKO_*`). Μένουν το `Caddyfile.example` και το restore (#2).
+
 **Τι ζητήθηκε:** «ένα container που να κάνει τα configs χωρίς hard-coded
 πράγματα από το repo, ώστε ένας admin να μπορεί να πάρει το stack και να τρέχει».
 
