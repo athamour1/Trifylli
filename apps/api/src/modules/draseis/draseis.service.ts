@@ -5,7 +5,9 @@ import {
   KLADOS_LABEL,
   KLADOS_META,
   type EseoUnitInfo,
+  type DrasiRoleKind,
   type KataskinosiStats,
+  type MyDrasiView,
   type KladosType,
   type Paginated,
 } from '@trifylli/shared';
@@ -108,6 +110,43 @@ export class DraseisService {
       page: query.page,
       pageSize: query.pageSize,
     };
+  }
+
+  /**
+   * Οι δράσεις όπου ο χρήστης είναι στέλεχος (ρόλος στο αρχηγείο ή στέλεχος στους
+   * συμμετέχοντες). Για τον εξωτερικό: μόνο οι ανοιχτές — αυτές που του δίνουν πρόσβαση.
+   */
+  async mine(user: RequestUser): Promise<MyDrasiView[]> {
+    const rows = await this.prisma.drasi.findMany({
+      where: {
+        topikoId: user.topikoId,
+        archivedAt: null,
+        ...(user.role === AccountRole.EXTERNAL ? { status: { not: DrasiStatus.KLEISTI } } : {}),
+        OR: [{ roles: { some: { userId: user.id } } }, { participants: { some: { userId: user.id, kind: MemberKind.STELEXOS } } }],
+      },
+      orderBy: { dateStart: 'desc' },
+      take: 50,
+      select: {
+        id: true,
+        title: true,
+        type: true,
+        status: true,
+        dateStart: true,
+        dateEnd: true,
+        klados: { select: { type: true } },
+        roles: { where: { userId: user.id }, select: { kind: true } },
+      },
+    });
+    return rows.map((d) => ({
+      id: d.id,
+      title: d.title,
+      type: d.type,
+      status: d.status,
+      dateStart: d.dateStart.toISOString(),
+      dateEnd: d.dateEnd.toISOString(),
+      klados: (d.klados?.type as KladosType | undefined) ?? null,
+      roles: d.roles.map((r) => r.kind as DrasiRoleKind),
+    }));
   }
 
   async findOne(user: RequestUser, id: string) {

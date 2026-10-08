@@ -30,6 +30,8 @@ export const AccountRole = {
   KLADOS_ADMIN: 'KLADOS_ADMIN',
   /** Στέλεχος με πρόσβαση: δικαιώματα ανά κλάδο από βαθμό και υπευθυνότητες (βλ. `access.ts`). */
   STELEXOS: 'STELEXOS',
+  /** Εξωτερικό στέλεχος: μόνο οι ανοιχτές δράσεις όπου συμμετέχει (βλ. `drasi-access.ts`). */
+  EXTERNAL: 'EXTERNAL',
 } as const;
 export type AccountRole = (typeof AccountRole)[keyof typeof AccountRole];
 

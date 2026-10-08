@@ -46,6 +46,8 @@ export const useAuthStore = defineStore('auth', {
     currentPeriod: (state) => state.profile?.currentPeriod ?? null,
 
     isSuperAdmin: (state) => state.profile?.user.isSuperAdmin ?? false,
+    /** Εξωτερικό στέλεχος: βλέπει μόνο τις δράσεις όπου συμμετέχει. */
+    isExternal: (state) => state.profile?.user.role === 'EXTERNAL',
     adminKlados: (state) => state.profile?.user.adminKlados ?? null,
 
     displayName: (state) =>

@@ -1,5 +1,5 @@
 import { ForbiddenException, Inject, Injectable, Logger } from '@nestjs/common';
-import { AccountRole, MemberKind } from '@prisma/client';
+import { AccountRole, DrasiStatus, MemberKind } from '@prisma/client';
 import {
   KLADOI_IN_ORDER,
   LeaderRank,
@@ -132,6 +132,10 @@ export class UserDirectoryService {
     if (!account.accountRole) {
       throw new ForbiddenException('Ο λογαριασμός σας δεν έχει πρόσβαση στην εφαρμογή.');
     }
+    // Εξωτερικό στέλεχος: μόνο όσο έχει ανοιχτή δράση — με το κλείσιμο λήγει μόνο του.
+    if (account.accountRole === AccountRole.EXTERNAL && !(await this.hasOpenDrasi(account.id))) {
+      throw new ForbiddenException('Η πρόσβασή σας έληξε: η δράση για την οποία προσκληθήκατε έκλεισε.');
+    }
 
     await this.prisma.user.update({
       where: { id: account.id },
@@ -225,6 +229,18 @@ export class UserDirectoryService {
         };
       }),
     );
+  }
+
+  /** Συμμετέχει (ως στέλεχος ή με ρόλο) σε δράση που δεν έχει κλείσει ούτε αρχειοθετηθεί; */
+  private async hasOpenDrasi(userId: string): Promise<boolean> {
+    const open = { status: { not: DrasiStatus.KLEISTI }, archivedAt: null };
+    const count = await this.prisma.drasi.count({
+      where: {
+        ...open,
+        OR: [{ roles: { some: { userId } } }, { participants: { some: { userId, kind: MemberKind.STELEXOS } } }],
+      },
+    });
+    return count > 0;
   }
 
   private async topikoKladoi(topikoId: string): Promise<KladosType[]> {

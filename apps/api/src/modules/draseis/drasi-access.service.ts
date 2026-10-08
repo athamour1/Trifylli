@@ -1,5 +1,5 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { DrasiStatus, MemberKind } from '@prisma/client';
+import { AccountRole, DrasiStatus, MemberKind } from '@prisma/client';
 import { can, drasiAccess, isSuperAdmin, type DrasiAccess, type DrasiRoleKind, type KladosType } from '@trifylli/shared';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
@@ -27,6 +27,8 @@ export class DrasiAccessService {
     const drasi = await this.prisma.drasi.findFirst({
       where: { id, topikoId: user.topikoId },
       select: {
+        status: true,
+        archivedAt: true,
         klados: { select: { type: true } },
         kladoi: { select: { klados: { select: { type: true } } } },
         roles: { where: { userId: user.id }, select: { kind: true } },
@@ -34,6 +36,10 @@ export class DrasiAccessService {
       },
     });
     if (!drasi) throw new NotFoundException('Η δράση δεν βρέθηκε.');
+    // Εξωτερικός: η πρόσβαση λήγει με το κλείσιμο (ή την αρχειοθέτηση) της δράσης.
+    if (user.role === AccountRole.EXTERNAL && (drasi.status === DrasiStatus.KLEISTI || drasi.archivedAt)) {
+      return drasiAccess({ full: false, staff: false, roles: [] });
+    }
     const profile = accessProfileOf(user);
     const organiser = drasi.klados?.type as KladosType | undefined;
     const full = isSuperAdmin(profile) || can(profile, 'drasi:write', organiser);

@@ -134,6 +134,7 @@ export function isSuperAdmin(profile: AccessProfile): boolean {
 /** Οι κλάδοι που βλέπει ο χρήστης — όλοι για τον υπερδιαχειριστή, ένας για τον admin κλάδου. */
 export function visibleKladoi(profile: AccessProfile, all: readonly KladosType[]): KladosType[] {
   if (isSuperAdmin(profile)) return [...all];
+  if (profile.role === AccountRole.EXTERNAL) return [];
   if (profile.role === AccountRole.STELEXOS) return all.filter((k) => profile.grants?.[k]);
   return profile.adminKlados ? [profile.adminKlados] : [];
 }
@@ -141,6 +142,7 @@ export function visibleKladoi(profile: AccessProfile, all: readonly KladosType[]
 /** Έχει ο χρήστης πρόσβαση στα δεδομένα αυτού του κλάδου; */
 export function canAccessKlados(profile: AccessProfile, klados: KladosType): boolean {
   if (isSuperAdmin(profile)) return true;
+  if (profile.role === AccountRole.EXTERNAL) return false;
   if (profile.role === AccountRole.STELEXOS) return !!profile.grants?.[klados];
   return profile.adminKlados === klados;
 }
@@ -155,6 +157,9 @@ export function canAccessKlados(profile: AccessProfile, klados: KladosType): boo
  */
 export function can(profile: AccessProfile, capability: Capability, klados?: KladosType): boolean {
   if (isSuperAdmin(profile)) return true;
+  // Εξωτερικό στέλεχος: καμία ικανότητα κλάδου/Τοπικού — μόνο ό,τι επιτρέπει ο
+  // ρόλος του μέσα σε συγκεκριμένη δράση (`drasiAccess`).
+  if (profile.role === AccountRole.EXTERNAL) return false;
   if (profile.role === AccountRole.STELEXOS) {
     // Με κλάδο: το δικαίωμα σε **αυτόν** τον κλάδο. Χωρίς: σε κάποιον από τους
     // κλάδους του — η εμβέλεια ελέγχεται μετά, στο service (βλ. klados-scope).

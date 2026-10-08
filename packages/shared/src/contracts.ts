@@ -828,3 +828,37 @@ export interface ArxigeioView {
   klados: KladosType;
   members: ArxigeioMember[];
 }
+
+// ───────────────────────── Δράσεις: εξωτερικά στελέχη ─────────────────────────
+
+/** Εξωτερικό στέλεχος μιας δράσης (π.χ. από άλλο Τοπικό), με πρόσβαση όσο η δράση είναι ανοιχτή. */
+export interface DrasiExternalView {
+  userId: string;
+  firstName: string;
+  lastName: string;
+  email: string | null;
+  phone: string | null;
+  /** Από πού έρχεται (ελεύθερο κείμενο, π.χ. «Τοπικό Καλαμάτας»). */
+  origin: string | null;
+  /** `true` όταν έχει συνδεθεί τουλάχιστον μία φορά. */
+  active: boolean;
+  roles: DrasiRoleKind[];
+}
+
+export interface DrasiExternalCreated {
+  external: DrasiExternalView;
+  invited: boolean;
+  inviteError: string | null;
+}
+
+/** Δράση όπου ο χρήστης είναι στέλεχος — για την Αρχική («Οι δράσεις μου»). */
+export interface MyDrasiView {
+  id: string;
+  title: string;
+  type: DrasiType;
+  status: string;
+  dateStart: string;
+  dateEnd: string;
+  klados: KladosType | null;
+  roles: DrasiRoleKind[];
+}

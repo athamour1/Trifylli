@@ -52,6 +52,13 @@ export class DraseisController {
     return this.draseis.list(user, query);
   }
 
+  // Χωρίς ικανότητα κλάδου: το βλέπει και ο εξωτερικός — φέρνει μόνο τις δικές του.
+  @Get('mine')
+  @ApiOperation({ summary: 'Οι δράσεις όπου είμαι στέλεχος (για την Αρχική)' })
+  mine(@CurrentUser() user: RequestUser) {
+    return this.draseis.mine(user);
+  }
+
   @Get('kataskinoseis')
   @RequireCapability('calendar:read')
   @ApiOperation({ summary: 'Συγκεντρωτικά όλων των κατασκηνώσεων' })

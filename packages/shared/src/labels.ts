@@ -54,6 +54,7 @@ export const ACCOUNT_ROLE_LABEL: Record<AccountRole, string> = {
   SUPER_ADMIN: 'Υπερδιαχειριστής',
   KLADOS_ADMIN: 'Διαχειριστής Κλάδου',
   STELEXOS: 'Στέλεχος',
+  EXTERNAL: 'Εξωτερικό στέλεχος',
 };
 
 /**
@@ -63,6 +64,7 @@ export const ACCOUNT_ROLE_LABEL: Record<AccountRole, string> = {
 export function accountRoleLabel(role: AccountRole, klados: KladosType | null): string {
   if (role === AccountRole.SUPER_ADMIN) return ACCOUNT_ROLE_LABEL.SUPER_ADMIN;
   if (role === AccountRole.STELEXOS) return ACCOUNT_ROLE_LABEL.STELEXOS;
+  if (role === AccountRole.EXTERNAL) return ACCOUNT_ROLE_LABEL.EXTERNAL;
   return klados ? `Διαχειριστής ${KLADOS_LABEL_GENITIVE[klados]}` : ACCOUNT_ROLE_LABEL.KLADOS_ADMIN;
 }
 

@@ -7,6 +7,8 @@ import { DrasiPermGuard } from './drasi-perm.guard';
 import { DraseisController } from './draseis.controller';
 import { DraseisDossierService } from './draseis-dossier.service';
 import { DraseisExportService } from './draseis-export.service';
+import { DraseisExternalsController } from './draseis-externals.controller';
+import { DraseisExternalsService } from './draseis-externals.service';
 import { DraseisFinanceController } from './draseis-finance.controller';
 import { DraseisFinanceService } from './draseis-finance.service';
 import { DraseisFormsController, PublicFormsController } from './draseis-forms.controller';
@@ -34,6 +36,7 @@ import { DraseisService } from './draseis.service';
     PublicFormsController,
     DraseisPlanController,
     DraseisMythosController,
+    DraseisExternalsController,
     DraseisReviewController,
     PublicReviewController,
   ],
@@ -48,6 +51,7 @@ import { DraseisService } from './draseis.service';
     DraseisPharmacyService,
     DraseisPlanService,
     DraseisMythosService,
+    DraseisExternalsService,
     DraseisReviewService,
     DraseisDossierService,
   ],

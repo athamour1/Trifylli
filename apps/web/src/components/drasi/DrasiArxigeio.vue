@@ -1,7 +1,66 @@
 <template>
   <div>
-    <!-- ── Επεξεργασία (αρχηγός δράσης / διαχείριση) ── -->
-    <template v-if="canEdit">
+    <!-- Δύο καρτέλες για όποιον επεξεργάζεται: ρόλοι και εξωτερικά στελέχη. -->
+    <q-tabs v-if="canEdit" v-model="tab" dense no-caps align="left" class="q-mb-md" active-color="klados" indicator-color="klados" narrow-indicator>
+      <q-tab name="roles" icon="shield" label="Ρόλοι" />
+      <q-tab name="externals" icon="person_add_alt" :label="externals.length ? `Εξωτερικά στελέχη (${externals.length})` : 'Εξωτερικά στελέχη'" />
+    </q-tabs>
+
+    <!-- ── Εξωτερικά στελέχη ── -->
+    <template v-if="canEdit && tab === 'externals'">
+      <div class="tf-toolbar q-mb-md">
+        <div class="text-caption text-grey-7" style="flex: 1 1 280px">
+          Στελέχη που δεν είναι στο e-SEO του Τοπικού (π.χ. από άλλο Τοπικό). Παίρνουν email για κωδικό, βλέπουν τη δράση
+          σύμφωνα με τον ρόλο που τους δίνεις στο αρχηγείο, και η πρόσβαση λήγει μόνη της όταν κλείσει η δράση.
+        </div>
+        <q-btn unelevated no-caps color="klados" text-color="klados-on" icon="person_add" label="Νέο εξωτερικό στέλεχος" class="q-ml-auto" @click="openExternal" />
+      </div>
+      <div v-if="!externals.length" class="text-center text-grey-6 q-pa-lg">
+        <q-icon name="badge" size="40px" class="block q-mx-auto q-mb-sm" />
+        Κανένα εξωτερικό στέλεχος.
+      </div>
+      <q-list v-else bordered separator class="rounded-borders">
+        <q-item v-for="e in externals" :key="e.userId">
+          <q-item-section style="min-width: 0">
+            <q-item-label class="ellipsis">{{ e.lastName }} {{ e.firstName }}</q-item-label>
+            <q-item-label caption class="ellipsis">{{ [e.email, e.phone, e.origin].filter(Boolean).join(' · ') }}</q-item-label>
+            <div class="row items-center q-gutter-xs q-mt-xs">
+              <q-badge :color="e.active ? 'positive' : 'orange-8'" :label="e.active ? 'Ενεργό' : 'Προσκλήθηκε'" />
+              <q-chip v-for="r in e.roles" :key="r" dense square class="q-ma-none role-chip" :label="DRASI_ROLE_LABEL[r]" />
+              <span v-if="!e.roles.length" class="text-caption text-warning">Χωρίς ρόλο — δώσε του από την καρτέλα «Ρόλοι»</span>
+            </div>
+          </q-item-section>
+          <q-item-section side>
+            <div class="row no-wrap items-center">
+              <q-btn flat round dense icon="forward_to_inbox" color="klados" @click="resend(e)"><q-tooltip>Ξανά αποστολή πρόσκλησης</q-tooltip></q-btn>
+              <q-btn flat round dense icon="person_remove" color="negative" @click="removeExternal(e)"><q-tooltip>Αφαίρεση από τη δράση</q-tooltip></q-btn>
+            </div>
+          </q-item-section>
+        </q-item>
+      </q-list>
+
+      <q-dialog v-model="extDialog.open">
+        <q-card style="width: 440px; max-width: 100%">
+          <q-card-section class="text-h6">Νέο εξωτερικό στέλεχος</q-card-section>
+          <q-card-section class="q-pt-none q-gutter-sm">
+            <div class="row q-col-gutter-sm">
+              <div class="col-6"><q-input v-model="extDialog.firstName" label="Όνομα *" outlined dense color="klados" autofocus /></div>
+              <div class="col-6"><q-input v-model="extDialog.lastName" label="Επώνυμο *" outlined dense color="klados" /></div>
+            </div>
+            <q-input v-model="extDialog.email" type="email" label="Email *" outlined dense color="klados" hint="Εδώ φτάνει ο σύνδεσμος για τον κωδικό." />
+            <q-input v-model="extDialog.phone" label="Τηλέφωνο" outlined dense color="klados" />
+            <q-input v-model="extDialog.origin" label="Από πού έρχεται" placeholder="π.χ. Τοπικό Καλαμάτας" outlined dense color="klados" />
+          </q-card-section>
+          <q-card-actions align="right">
+            <q-btn v-close-popup flat no-caps label="Άκυρο" :disable="extDialog.saving" />
+            <q-btn unelevated no-caps color="klados" text-color="klados-on" label="Προσθήκη & πρόσκληση" :loading="extDialog.saving" @click="addExternal" />
+          </q-card-actions>
+        </q-card>
+      </q-dialog>
+    </template>
+
+    <!-- ── Επεξεργασία ρόλων (αρχηγός δράσης / διαχείριση) ── -->
+    <template v-else-if="canEdit">
       <q-card flat bordered class="q-mb-md">
         <q-card-section class="text-subtitle2 q-pb-xs">Αρχηγείο</q-card-section>
         <q-card-section class="q-pt-none">
@@ -78,13 +137,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useQuasar } from 'quasar';
 import {
   DRASI_ARXIGEIO_KINDS,
   DRASI_ROLE_LABEL,
   DRASI_YPIRESIA_KINDS,
   DrasiRoleKind,
+  type DrasiExternalCreated,
+  type DrasiExternalView,
   type DrasiRoleView,
   type KladosType,
   type MemberSummary,
@@ -92,7 +153,7 @@ import {
 } from '@trifylli/shared';
 import DrasiRolesEditor from './DrasiRolesEditor.vue';
 import { emptyRoles, type RolesMap } from './types';
-import { ApiError, get, put } from '../../lib/api';
+import { ApiError, del, get, post, put } from '../../lib/api';
 
 const props = defineProps<{
   drasiId: string;
@@ -143,17 +204,89 @@ watch(
 );
 
 const stelexi = ref<MemberSummary[]>([]);
-const stelexiOptions = computed(() =>
-  stelexi.value.map((s) => ({ label: `${s.lastName} ${s.firstName}`.trim(), value: s.id, caption: s.leaderTitle ?? '' })),
-);
+/** Στελέχη του μητρώου + τα εξωτερικά της δράσης — όλοι μπορούν να πάρουν ρόλο. */
+const stelexiOptions = computed(() => [
+  ...stelexi.value.map((s) => ({ label: `${s.lastName} ${s.firstName}`.trim(), value: s.id, caption: s.leaderTitle ?? '' })),
+  ...externals.value.map((e) => ({ label: `${e.lastName} ${e.firstName}`.trim(), value: e.userId, caption: `Εξωτερικό${e.origin ? ` · ${e.origin}` : ''}` })),
+]);
 onMounted(async () => {
   if (!props.canEdit) return;
+  await loadExternals();
   try {
     stelexi.value = (await get<Paginated<MemberSummary>>('/meloi', { params: { kind: 'STELEXOS', pageSize: 500 } })).items;
   } catch {
     // Χωρίς λίστα στελεχών οι επιλογείς μένουν άδειοι — η προβολή δουλεύει.
   }
 });
+
+// ── Εξωτερικά στελέχη ──
+const tab = ref<'roles' | 'externals'>('roles');
+const externals = ref<DrasiExternalView[]>([]);
+async function loadExternals(): Promise<void> {
+  try {
+    externals.value = await get<DrasiExternalView[]>(`/draseis/${props.drasiId}/externals`);
+  } catch {
+    externals.value = [];
+  }
+}
+const extDialog = reactive({ open: false, saving: false, firstName: '', lastName: '', email: '', phone: '', origin: '' });
+function openExternal(): void {
+  Object.assign(extDialog, { open: true, saving: false, firstName: '', lastName: '', email: '', phone: '', origin: '' });
+}
+async function addExternal(): Promise<void> {
+  if (!extDialog.firstName.trim() || !extDialog.lastName.trim() || !extDialog.email.trim()) {
+    $q.notify({ type: 'warning', message: 'Όνομα, επώνυμο και email είναι υποχρεωτικά.' });
+    return;
+  }
+  extDialog.saving = true;
+  try {
+    const r = await post<DrasiExternalCreated>(`/draseis/${props.drasiId}/externals`, {
+      firstName: extDialog.firstName,
+      lastName: extDialog.lastName,
+      email: extDialog.email,
+      ...(extDialog.phone.trim() ? { phone: extDialog.phone } : {}),
+      ...(extDialog.origin.trim() ? { origin: extDialog.origin } : {}),
+    });
+    extDialog.open = false;
+    $q.notify(
+      r.invited
+        ? { type: 'positive', icon: 'forward_to_inbox', message: `Στάλθηκε πρόσκληση στο ${r.external.email}. Δώσε του ρόλο από την καρτέλα «Ρόλοι».` }
+        : { type: 'warning', message: `Προστέθηκε, αλλά η πρόσκληση δεν έφυγε: ${r.inviteError}` },
+    );
+    await loadExternals();
+    emit('changed');
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err instanceof ApiError ? err.message : 'Δεν προστέθηκε.' });
+  } finally {
+    extDialog.saving = false;
+  }
+}
+async function resend(e: DrasiExternalView): Promise<void> {
+  try {
+    await post(`/draseis/${props.drasiId}/externals/${e.userId}/invite`);
+    $q.notify({ type: 'positive', icon: 'forward_to_inbox', message: `Στάλθηκε ξανά στο ${e.email}.` });
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err instanceof ApiError ? err.message : 'Η πρόσκληση δεν έφυγε.' });
+  }
+}
+function removeExternal(e: DrasiExternalView): void {
+  $q.dialog({
+    title: 'Αφαίρεση από τη δράση',
+    message: `Ο/Η ${e.lastName} ${e.firstName} βγαίνει από τη δράση και χάνει την πρόσβαση σε αυτήν.`,
+    cancel: { flat: true, noCaps: true, label: 'Άκυρο' },
+    ok: { unelevated: true, noCaps: true, color: 'negative', label: 'Αφαίρεση' },
+  }).onOk(() => {
+    void (async () => {
+      try {
+        await del(`/draseis/${props.drasiId}/externals/${e.userId}`);
+        await loadExternals();
+        emit('changed');
+      } catch (err) {
+        $q.notify({ type: 'negative', message: err instanceof ApiError ? err.message : 'Αποτυχία.' });
+      }
+    })();
+  });
+}
 
 const saving = ref(false);
 async function save(): Promise<void> {
@@ -178,6 +311,11 @@ async function save(): Promise<void> {
 <style scoped lang="scss">
 .role-card__icon {
   color: var(--klados-ink, var(--q-primary));
+}
+.role-chip {
+  border-radius: 8px;
+  color: var(--klados-ink, var(--q-primary));
+  background: color-mix(in srgb, var(--klados-color, var(--q-primary)) 12%, transparent);
 }
 .role-card--empty {
   border-style: dashed;

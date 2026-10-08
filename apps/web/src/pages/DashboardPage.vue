@@ -7,7 +7,34 @@
       </div>
     </div>
 
-    <PageState :loading="loading" :error="error" :stale="stale" @retry="reload">
+    <!-- Οι δράσεις όπου είμαι στέλεχος — για τον εξωτερικό, το μόνο που υπάρχει. -->
+    <template v-if="myDraseis.length || auth.isExternal">
+      <div class="section-title q-mb-sm">Οι δράσεις μου</div>
+      <div v-if="!myDraseis.length" class="text-caption text-grey-7 q-mb-lg">Καμία ανοιχτή δράση αυτή τη στιγμή.</div>
+      <div v-else class="tf-card-grid q-mb-lg" style="--tf-min: 260px">
+        <div v-for="d in myDraseis" :key="d.id">
+          <q-card
+            flat bordered class="full-height cursor-pointer my-drasi" :style="kladosVars(d.klados)"
+            role="link" tabindex="0" @click="router.push({ name: 'drasi', params: { id: d.id } })"
+            @keydown.enter.prevent="router.push({ name: 'drasi', params: { id: d.id } })"
+          >
+            <q-card-section>
+              <div class="row items-center no-wrap">
+                <q-icon name="hiking" size="20px" class="q-mr-sm my-drasi__icon" />
+                <div class="text-subtitle1 text-weight-medium ellipsis col">{{ d.title }}</div>
+                <q-badge v-if="d.status === 'KLEISTI'" color="grey-7" label="Κλειστή" />
+              </div>
+              <div class="text-caption text-grey-7 q-mt-xs">{{ formatDateRange(d.dateStart, d.dateEnd) }}</div>
+              <div v-if="d.roles.length" class="row q-gutter-xs q-mt-sm">
+                <q-chip v-for="r in d.roles" :key="r" dense square class="q-ma-none my-drasi__role" :label="DRASI_ROLE_LABEL[r]" />
+              </div>
+            </q-card-section>
+          </q-card>
+        </div>
+      </div>
+    </template>
+
+    <PageState v-if="!auth.isExternal" :loading="loading" :error="error" :stale="stale" @retry="reload">
       <div class="row q-col-gutter-md">
         <div class="col-12 col-sm-6 col-md-3">
           <q-card flat bordered class="stat-card">
@@ -106,13 +133,16 @@
 </template>
 
 <script setup lang="ts">
-import { KLADOS_LABEL, type CalendarEvent } from '@trifylli/shared';
+import { onMounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
+import { DRASI_ROLE_LABEL, KLADOS_LABEL, type CalendarEvent, type MyDrasiView } from '@trifylli/shared';
 import PageState from '../components/PageState.vue';
 import { useAsyncData } from '../composables/useAsyncData';
 import { get } from '../lib/api';
 import { useAuthStore } from '../stores/auth';
 import { useOfflineStore } from '../stores/offline';
-import { formatDateTime } from '../lib/format';
+import { formatDateRange, formatDateTime } from '../lib/format';
+import { kladosVars } from '../lib/klados-theme';
 
 interface Dashboard {
   upcoming: CalendarEvent[];
@@ -123,10 +153,20 @@ interface Dashboard {
 const auth = useAuthStore();
 const offline = useOfflineStore();
 
+const router = useRouter();
+// Ο εξωτερικός δεν έχει ημερολόγιο κλάδου — μόνο τις δράσεις του.
 const { data, loading, error, stale, reload } = useAsyncData(
   () => get<Dashboard>('/calendar/dashboard'),
-  { cacheKey: 'dashboard' },
+  { cacheKey: 'dashboard', immediate: !auth.isExternal },
 );
+const myDraseis = ref<MyDrasiView[]>([]);
+onMounted(async () => {
+  try {
+    myDraseis.value = await get<MyDrasiView[]>('/draseis/mine');
+  } catch {
+    // Χωρίς τη λίστα, η Αρχική δουλεύει όπως πριν.
+  }
+});
 
 const KIND_ICON: Record<CalendarEvent['kind'], string> = {
   DRASI: 'hiking',
@@ -140,3 +180,14 @@ const KIND_LABEL: Record<CalendarEvent['kind'], string> = {
   SYMVOULIO: 'Συμβούλιο',
 };
 </script>
+
+<style scoped>
+.my-drasi__icon {
+  color: var(--klados-ink, var(--q-primary));
+}
+.my-drasi__role {
+  border-radius: 8px;
+  color: var(--klados-ink, var(--q-primary));
+  background: color-mix(in srgb, var(--klados-color, var(--q-primary)) 12%, transparent);
+}
+</style>
