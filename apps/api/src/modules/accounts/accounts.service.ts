@@ -112,6 +112,15 @@ export class AccountsService {
    * Εδώ, σε αντίθεση με τη δημιουργία, η αποτυχία **πρέπει** να φτάσει στον
    * χρήστη: το μόνο που ζήτησε είναι να φύγει ένα email.
    */
+  /**
+   * Ο ίδιος ο χρήστης ζητά σύνδεσμο αλλαγής κωδικού — από τις Ρυθμίσεις, όχι
+   * από τον υπερδιαχειριστή. Ίδια ροή με την πρόσκληση· ο στόχος είναι πάντα
+   * ο λογαριασμός του token, όχι παράμετρος, οπότε δεν υπάρχει τι να ελεγχθεί.
+   */
+  async inviteSelf(user: RequestUser): Promise<{ sent: true; email: string }> {
+    return this.invite(user, user.id);
+  }
+
   async invite(user: RequestUser, id: string): Promise<{ sent: true; email: string }> {
     const account = await this.load(user, id);
     if (!account.email) {

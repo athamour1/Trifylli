@@ -1,6 +1,9 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Put, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Put, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { KladosType } from '@trifylli/shared';
+import { AuditService } from '../../common/audit/audit.service';
+import { AccountsService } from '../accounts/accounts.service';
 import { CapabilityGuard } from '../../common/auth/capability.guard';
 import { CurrentUser, RequireCapability, SuperAdminOnly } from '../../common/auth/decorators';
 import type { RequestUser } from '../../common/auth/types';
@@ -12,7 +15,11 @@ import { TopikoService } from './topiko.service';
 @UseGuards(CapabilityGuard)
 @Controller()
 export class TopikoController {
-  constructor(private readonly topiko: TopikoService) {}
+  constructor(
+    private readonly topiko: TopikoService,
+    private readonly accounts: AccountsService,
+    private readonly audit: AuditService,
+  ) {}
 
   @Get('me')
   @ApiOperation({
@@ -21,6 +28,21 @@ export class TopikoController {
   })
   me(@CurrentUser() user: RequestUser) {
     return this.topiko.me(user);
+  }
+
+  @Post('me/password-link')
+  // Στέλνει email: αυστηρό όριο, όπως και η πρόσκληση από τον υπερδιαχειριστή.
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @ApiOperation({
+    summary: 'Σύνδεσμος αλλαγής κωδικού στο email μου',
+    description:
+      'Το Trifylli δεν βλέπει ποτέ κωδικό: το Authentik στέλνει σύνδεσμο ορισμού νέου κωδικού ' +
+      'στο email του συνδεδεμένου λογαριασμού. Για όποιον δεν θυμάται τον τρέχοντα.',
+  })
+  async passwordLink(@CurrentUser() user: RequestUser) {
+    const result = await this.accounts.inviteSelf(user);
+    await this.audit.record(user, 'account.password_link', 'user', user.id);
+    return result;
   }
 
   @Get('kladoi')

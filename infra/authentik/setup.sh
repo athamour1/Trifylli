@@ -37,6 +37,7 @@ docker compose exec -T authentik-worker \
 echo "→ Εφαρμογή blueprint (ορισμός & επαναφορά κωδικού)"
 docker compose exec -T authentik-worker \
   ak apply_blueprint /blueprints/custom/trifylli-recovery.yaml >/dev/null 2>&1
+  ak apply_blueprint /blueprints/custom/trifylli-password-change.yaml >/dev/null 2>&1
 
 echo "→ Εφαρμογή blueprint (εμφάνιση: λογότυπο, φόντο, CSS)"
 docker compose exec -T authentik-worker \

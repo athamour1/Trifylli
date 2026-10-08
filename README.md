@@ -137,9 +137,10 @@ infra/
   authentik/
     trifylli-oidc.yaml       Blueprint: provider, εφαρμογή, ροές σύνδεσης/αποσύνδεσης
     trifylli-recovery.yaml   Blueprint: ροή «ορισμός & επαναφορά κωδικού»
+    trifylli-password-change.yaml  Blueprint: ροή «αλλαγή κωδικού» από τις Ρυθμίσεις (επιστρέφει στην εφαρμογή)
     trifylli-branding.yaml   Blueprint: λογότυπο, φόντο και ΟΛΟ το custom CSS
     ouchtracker-oidc.yaml    Blueprint: η δεύτερη OIDC εφαρμογή (SSO)
-    branding/                logo.svg, favicon.svg, clover-pattern.webp
+    branding/                logo.svg, favicon.svg, login-scene.svg (το τοπίο της οθόνης σύνδεσης)
     email-templates/         Ελληνικά πρότυπα email (mount στο /templates)
     setup.sh                 Εφαρμογή blueprints + χρήστες ανάπτυξης
   garage/         Ρυθμίσεις και αρχικοποίηση του S3 (layout, bucket, key)
@@ -293,6 +294,17 @@ sequenceDiagram
 > πρόσκληση από το ✉, που δημιουργεί τον χρήστη και μετά στέλνει τον σύνδεσμο.
 > Το εικονίδιο ⏳ στους Λογαριασμούς δείχνει ακριβώς αυτούς που δεν έχουν μπει
 > ποτέ.
+
+### Αλλαγή κωδικού από τις Ρυθμίσεις
+
+Ο συνδεδεμένος χρήστης αλλάζει κωδικό από **Ρυθμίσεις → Κωδικός**. Το κουμπί
+ανοίγει τη ροή `trifylli-password-change` του Authentik (ίδια πεδία και ίδια
+πολιτική κωδικού με την επαναφορά) και, μόλις γραφτεί ο νέος κωδικός, το
+Authentik γυρίζει στο `/settings?password=ok`. Η επιστροφή ορίζεται από
+expression policy μέσα στο blueprint — το `?next=` του Authentik δέχεται μόνο
+διευθύνσεις του δικού του host. Το δεύτερο κουμπί (`POST /api/me/password-link`)
+στέλνει τον σύνδεσμο ορισμού κωδικού στο email του ίδιου του χρήστη, για όποιον
+δεν θυμάται τον τρέχοντα.
 
 ### Email
 
