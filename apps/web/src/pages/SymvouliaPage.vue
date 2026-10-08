@@ -1,7 +1,7 @@
 <template>
   <q-page padding>
     <div class="row items-center justify-between q-mb-md">
-      <div class="page-title">Συμβούλια{{ inKlados ? ` — ${kladosLabel}` : '' }}</div>
+      <div class="page-title">Συμβούλια</div>
 
       <q-btn
         v-if="inKlados && canWriteKlados"
@@ -145,7 +145,7 @@ interface SymvoulioRow {
 const $q = useQuasar();
 const router = useRouter();
 const auth = useAuthStore();
-const { klados, inKlados, label: kladosLabel } = useKladosScope();
+const { klados, inKlados } = useKladosScope();
 
 // Δημιουργία: συμβούλιο κλάδου μέσα στον κλάδο· συμβούλιο Τοπικού/Στελεχών μόνο ο υπερδιαχειριστής.
 const canWriteKlados = computed(() => (klados.value ? auth.can('symvoulio:klados:write', klados.value) : false));

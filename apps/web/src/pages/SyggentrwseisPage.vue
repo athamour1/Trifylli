@@ -1,7 +1,7 @@
 <template>
   <q-page padding>
     <div class="row items-center justify-between q-mb-md">
-      <div class="page-title">Συγκεντρώσεις{{ inKlados ? ` — ${kladosLabel}` : '' }}</div>
+      <div class="page-title">Συγκεντρώσεις</div>
       <q-btn
         v-if="canWrite"
         color="klados"
@@ -144,7 +144,6 @@ const auth = useAuthStore();
 const {
   klados: routeKlados,
   inKlados,
-  label: kladosLabel,
   options: kladosOptions,
 } = useKladosScope();
 

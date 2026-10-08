@@ -1,7 +1,7 @@
 <template>
   <q-page padding>
     <div class="page-title">
-      {{ drasiId ? 'Στήσιμο δράσης' : 'Νέα δράση' }}{{ inKlados ? ` — ${kladosLabel}` : '' }}
+      {{ drasiId ? 'Στήσιμο δράσης' : 'Νέα δράση' }}
     </div>
     <div class="text-caption text-grey-7 q-mb-md">
       Τέσσερα βήματα — τα δύο τελευταία παραλείπονται. Τίποτα δεν κλειδώνει: ό,τι
@@ -241,7 +241,7 @@ const $q = useQuasar();
 const route = useRoute();
 const router = useRouter();
 const auth = useAuthStore();
-const { klados: routeKlados, inKlados, label: kladosLabel } = useKladosScope();
+const { klados: routeKlados, inKlados } = useKladosScope();
 
 const drasiId = ref<string | null>(typeof route.query.id === 'string' ? route.query.id : null);
 const step = ref(1);

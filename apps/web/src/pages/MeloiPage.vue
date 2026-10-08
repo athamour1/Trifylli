@@ -1,6 +1,6 @@
 <template>
   <q-page padding>
-    <div class="page-title q-mb-md">{{ inKlados ? `Μέλη — ${kladosLabel}` : 'Μητρώο μελών' }}</div>
+    <div class="page-title q-mb-md">{{ inKlados ? 'Μέλη' : 'Μητρώο μελών' }}</div>
 
     <!-- Κλικ σε μέλος (μέσα σε κλάδο): κρύβεται ο πίνακας, εμφανίζονται inline τα
          στοιχεία με back button πάνω-αριστερά (βλ. openMember). -->
@@ -178,7 +178,6 @@ const router = useRouter();
 const {
   klados: routeKlados,
   inKlados,
-  label: kladosLabel,
   options: kladosOptions,
 } = useKladosScope();
 

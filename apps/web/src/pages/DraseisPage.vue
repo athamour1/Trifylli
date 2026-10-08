@@ -1,7 +1,7 @@
 <template>
   <q-page padding>
     <div class="row items-center justify-between q-mb-md q-gutter-sm">
-      <div class="page-title">Δράσεις{{ inKlados ? ` — ${kladosLabel}` : '' }}</div>
+      <div class="page-title">Δράσεις</div>
       <div class="row items-center q-gutter-sm">
         <SegmentedToggle
           v-model="typeFilter"
@@ -133,7 +133,7 @@ interface DrasiRow {
 
 const router = useRouter();
 const auth = useAuthStore();
-const { klados, inKlados, label: kladosLabel } = useKladosScope();
+const { klados, inKlados } = useKladosScope();
 const typeFilter = ref<DrasiType | null>(null);
 const canWrite = computed(() => auth.can('drasi:write', klados.value ?? undefined));
 

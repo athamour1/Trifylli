@@ -1,7 +1,7 @@
 <template>
   <q-page padding>
     <div class="row items-center justify-between q-mb-md">
-      <div class="page-title">{{ inKlados ? `Ημερολόγιο — ${kladosLabel}` : 'Κεντρικό ημερολόγιο' }}</div>
+      <div class="page-title">{{ inKlados ? 'Ημερολόγιο' : 'Κεντρικό ημερολόγιο' }}</div>
       <SegmentedToggle
         v-model="view"
         dense
@@ -108,7 +108,6 @@ import { useKladosScope } from '../composables/useKladosScope';
 const {
   klados: routeKlados,
   inKlados,
-  label: kladosLabel,
   options: kladosOptions,
 } = useKladosScope();
 

@@ -1,7 +1,7 @@
 <template>
   <q-page padding>
     <div class="row items-center justify-between q-mb-md">
-      <div class="page-title">Ατομική πρόοδος{{ inKlados ? ` — ${kladosLabel}` : '' }}</div>
+      <div class="page-title">Ατομική πρόοδος</div>
       <q-select
         v-if="!inKlados"
         v-model="picked"
@@ -139,7 +139,6 @@ const auth = useAuthStore();
 const {
   klados: routeKlados,
   inKlados,
-  label: kladosLabel,
   options: kladosOptions,
 } = useKladosScope();
 

@@ -1,6 +1,6 @@
 <template>
   <q-page padding>
-    <div class="page-title q-mb-md">{{ inKlados ? `Συνδρομές — ${label}` : 'Συνδρομές' }}</div>
+    <div class="page-title q-mb-md">Συνδρομές</div>
 
     <q-tabs v-model="tab" dense align="left" class="text-klados q-mb-md" narrow-indicator active-color="klados">
       <q-tab name="report" label="Εικόνα" />
@@ -251,7 +251,7 @@ import DateField from '../components/DateField.vue';
 
 const $q = useQuasar();
 const auth = useAuthStore();
-const { klados, inKlados, label } = useKladosScope();
+const { klados } = useKladosScope();
 const canManage = computed(() => (klados.value ? auth.can('syndromes:manage', klados.value) : auth.isSuperAdmin));
 const scopeParams = computed(() => (klados.value ? { klados: klados.value } : {}));
 

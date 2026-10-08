@@ -1,7 +1,7 @@
 <template>
   <q-page padding>
     <div class="row items-center q-mb-md">
-      <div class="page-title">{{ inKlados ? `Φαρμακεία — ${label}` : 'Φαρμακεία Τοπικού' }}</div>
+      <div class="page-title">{{ inKlados ? 'Φαρμακεία' : 'Φαρμακεία Τοπικού' }}</div>
       <q-space />
       <q-btn
         v-if="canSetup"
@@ -252,7 +252,7 @@ interface KitView {
 interface ListResponse { configured: boolean; kits: KitView[] }
 
 const $q = useQuasar();
-const { klados, inKlados, label } = useKladosScope();
+const { klados, inKlados } = useKladosScope();
 const auth = useAuthStore();
 
 const ouchBase = OUCHTRACKER_URL.replace(/\/$/, '');

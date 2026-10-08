@@ -1,6 +1,6 @@
 <template>
   <q-page padding>
-    <div class="page-title q-mb-md">{{ inKlados ? `Ταμείο — ${label}` : 'Ταμείο Τοπικού' }}</div>
+    <div class="page-title q-mb-md">{{ inKlados ? 'Ταμείο' : 'Ταμείο Τοπικού' }}</div>
 
     <!-- Επισκόπηση όλων των ταμείων (μόνο υπερδιαχειριστής, στην προβολή Τοπικού) -->
     <div v-if="!inKlados && overview.length" class="row q-col-gutter-md q-mb-lg">
@@ -35,7 +35,7 @@ import { get } from '../lib/api';
 import { formatEuro } from '../lib/format';
 import { inkOnWhite } from '../lib/color';
 
-const { klados, inKlados, label } = useKladosScope();
+const { klados, inKlados } = useKladosScope();
 const auth = useAuthStore();
 
 interface Overview {

@@ -1,7 +1,7 @@
 <template>
   <q-page padding>
     <div class="row items-center justify-between q-mb-md">
-      <div class="page-title">{{ inKlados ? `Υλικό — ${kladosLabel}` : 'Κεντρική αποθήκη' }}</div>
+      <div class="page-title">{{ inKlados ? 'Υλικό' : 'Κεντρική αποθήκη' }}</div>
       <div class="q-gutter-sm" v-if="canManage">
         <q-btn outline no-caps color="klados" icon="warehouse" label="Σημεία αποθήκευσης" @click="openStorageSettings" />
         <q-btn color="klados" text-color="klados-on" no-caps icon="add" label="Νέο υλικό" @click="openCreate" />
@@ -262,7 +262,7 @@ import DateField from '../components/DateField.vue';
 
 const $q = useQuasar();
 const auth = useAuthStore();
-const { klados: routeKlados, inKlados, label: kladosLabel } = useKladosScope();
+const { klados: routeKlados, inKlados } = useKladosScope();
 
 /** Διαχείριση: ο κλάδος του διαχειριστή του, ή η κεντρική αποθήκη για τον υπερδιαχειριστή. */
 const canManage = computed(() =>
