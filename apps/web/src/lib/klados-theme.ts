@@ -56,4 +56,26 @@ export function paintKladosVars(klados: KladosType | null | undefined): void {
     if (value) document.body.style.setProperty(name, value);
     else document.body.style.removeProperty(name);
   }
+  paintThemeColor(vars['--klados-color']);
+}
+
+/** Το χρώμα της εφαρμογής όταν δεν είμαστε σε κλάδο — ίδιο με το `theme_color` του manifest. */
+const APP_THEME_COLOR = '#2e7d32';
+
+/**
+ * Η γραμμή κατάστασης του κινητού και η μπάρα τίτλου του εγκατεστημένου PWA.
+ *
+ * Το `theme_color` του manifest είναι σταθερό· αυτό που ισχύει όσο τρέχει η
+ * εφαρμογή είναι το `<meta name="theme-color">`, οπότε το ακολουθούμε ώστε η
+ * μπάρα του συστήματος να συνεχίζει την μπάρα της εφαρμογής (`bg-klados`).
+ */
+function paintThemeColor(color: string | undefined): void {
+  let metas = document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]');
+  if (metas.length === 0) {
+    const meta = document.createElement('meta');
+    meta.name = 'theme-color';
+    document.head.appendChild(meta);
+    metas = document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]');
+  }
+  metas.forEach((meta) => meta.setAttribute('content', color ?? APP_THEME_COLOR));
 }
