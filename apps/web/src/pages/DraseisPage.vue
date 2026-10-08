@@ -17,13 +17,13 @@
           ]"
         />
         <q-btn
-          v-if="canWrite && inKlados"
+          v-if="canWrite"
           color="klados"
           text-color="klados-on"
           unelevated
           icon="add"
           label="Νέα δράση"
-          :to="{ name: 'klados-drasi-nea' }"
+          :to="{ name: inKlados ? 'klados-drasi-nea' : 'drasi-nea' }"
         />
       </div>
     </div>
@@ -140,7 +140,7 @@ const canWrite = computed(() => auth.can('drasi:write', klados.value ?? undefine
 /** Προσχέδιο → πίσω στο wizard· αλλιώς η σελίδα της δράσης. */
 function open(d: DrasiRow): void {
   if (d.status === 'PROSXEDIO' && canWrite.value && inKlados.value) {
-    void router.push({ name: 'klados-drasi-nea', query: { id: d.id } });
+    void router.push({ name: inKlados.value ? 'klados-drasi-nea' : 'drasi-nea', query: { id: d.id } });
   } else {
     void router.push({ name: 'drasi', params: { id: d.id } });
   }

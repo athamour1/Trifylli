@@ -39,6 +39,7 @@ export const TOPIKO_LINKS = [
   { name: 'calendar', title: 'Κεντρικό ημερολόγιο', icon: 'calendar_month' },
   { name: 'kladoi', title: 'Κλάδοι', icon: 'groups' },
   { name: 'symvoulia', title: 'Συμβούλια', icon: 'forum' },
+  { name: 'draseis', title: 'Δράσεις', icon: 'hiking' },
   { name: 'yliko', title: 'Κεντρική αποθήκη', icon: 'warehouse' },
   { name: 'meloi', title: 'Μητρώο μελών', icon: 'contacts' },
   { name: 'syndromes', title: 'Συνδρομές', icon: 'euro' },
@@ -275,6 +276,20 @@ const routes: RouteRecordRaw[] = [
         name: 'symvoulia',
         component: () => import('../pages/SymvouliaPage.vue'),
         meta: { title: 'Συμβούλια', icon: 'forum', superAdmin: true },
+      },
+      // Δράσεις που διοργανώνει το Τοπικό — χωρίς ενωμοτίες/φωλιές/ΟΕ/επιτροπές.
+      // Η λίστα δείχνει όλες τις δράσεις, με τον διοργανωτή στην κάρτα.
+      {
+        path: 'draseis',
+        name: 'draseis',
+        component: () => import('../pages/DraseisPage.vue'),
+        meta: { title: 'Δράσεις', icon: 'hiking', superAdmin: true },
+      },
+      {
+        path: 'draseis/nea',
+        name: 'drasi-nea',
+        component: () => import('../pages/DrasiWizardPage.vue'),
+        meta: { title: 'Νέα δράση', capability: 'drasi:write', superAdmin: true },
       },
       {
         path: 'yliko',

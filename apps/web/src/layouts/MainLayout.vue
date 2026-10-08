@@ -126,6 +126,7 @@
             :inset-level="0.4"
             :to="{ name: link.name }"
             active-class="klados-active"
+            :class="{ 'klados-active': topikoDetailLink === link.name }"
           >
             <q-item-section avatar>
               <q-icon :name="link.icon" size="20px" />
@@ -284,6 +285,16 @@ const detailLink = computed(() => DETAIL_LINK[String(route.name)] ?? null);
 const contextKlados = computed<KladosType | null>(() => activeKlados.value?.type ?? (detailLink.value ? kladosTheme.klados : null));
 
 /**
+ * Σελίδα λεπτομέρειας χωρίς κλάδο (δράση/συμβούλιο του Τοπικού) → ο σύνδεσμος
+ * του Τοπικού που της «ανήκει»: `klados-draseis` → `draseis`.
+ */
+const topikoDetailLink = computed<string | null>(() => {
+  if (!detailLink.value || contextKlados.value) return null;
+  const name = detailLink.value.replace(/^klados-/, '');
+  return TOPIKO_LINKS.some((l) => l.name === name) ? name : null;
+});
+
+/**
  * Το τμήμα «Τοπικό» υπάρχει μόνο για τον υπερδιαχειριστή — ο διαχειριστής
  * κλάδου δεν έχει καμία από αυτές τις σελίδες, οπότε δεν του δείχνουμε κενή
  * ενότητα.
@@ -318,7 +329,7 @@ function toggleSection(key: string, open: boolean): void {
  * παραμένουν σεβαστές.
  */
 watch(
-  () => (contextKlados.value ?? (isTopikoRoute.value ? 'topiko' : null)),
+  () => (contextKlados.value ?? (isTopikoRoute.value || topikoDetailLink.value ? 'topiko' : null)),
   (section) => {
     if (section) openSection.value = section;
   },

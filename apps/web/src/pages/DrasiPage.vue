@@ -448,7 +448,8 @@ const sections = computed(() => {
     { name: 'mythos', label: 'Μύθος', icon: 'auto_stories', badge: '' },
     { name: 'participants', label: 'Συμμετέχοντες', icon: 'groups', badge: String(data.value?.participants.length ?? '') },
     // Το όνομα της υποομάδας του κλάδου: Πεντάδες / Φωλιές / Ενωμοτίες — με πολλούς κλάδους, όλες.
-    ...(data.value?.kladoi.length ? [{ name: 'omades', label: groupsLabel.value, icon: 'diversity_3', badge: '' }] : []),
+    // Οι δράσεις του Τοπικού δεν έχουν τέτοιες ομάδες (μόνο σκηνές, αν έχουν).
+    ...(data.value?.klados && data.value.kladoi.length ? [{ name: 'omades', label: groupsLabel.value, icon: 'diversity_3', badge: '' }] : []),
     // Οι σκηνές έχουν δική τους ενότητα — μόνο όπου η δράση έχει (όχι μονοήμερες, ρύθμιση ανοιχτή).
     ...(data.value && drasiHasSkines(data.value) ? [{ name: 'skines', label: 'Σκηνές', icon: 'night_shelter', badge: '' }] : []),
     { name: 'entypa', label: 'Έντυπα', icon: 'assignment', badge: '' },
@@ -491,14 +492,10 @@ watch(
 
 const canWrite = computed(() => auth.can('drasi:write', data.value?.klados?.type ?? undefined));
 
-/**
- * Το wizard ζει κάτω από `/k/:klados/`. Για δράση Τοπικού (χωρίς διοργανωτή
- * κλάδο) χρησιμοποιείται ο πρώτος κλάδος που βλέπει ο χρήστης — το στήσιμο
- * δεν εξαρτάται από τη διαδρομή, μόνο το θέμα χρωμάτων.
- */
+/** Το wizard του διοργανωτή: κάτω από `/k/:klados/`, ή του Τοπικού για δράση Τοπικού. */
 const wizardRoute = computed(() => {
-  const klados = data.value?.klados?.type ?? auth.kladoi[0]?.type;
-  return klados ? { name: 'klados-drasi-nea', params: { klados }, query: { id } } : null;
+  const klados = data.value?.klados?.type;
+  return klados ? { name: 'klados-drasi-nea', params: { klados }, query: { id } } : { name: 'drasi-nea', query: { id } };
 });
 
 interface RoleGroup {

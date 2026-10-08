@@ -429,7 +429,7 @@ function saveAndExit(): void {
   void run(async () => {
     if (!(await saveCurrent())) return;
     $q.notify({ type: 'positive', message: 'Η δράση αποθηκεύτηκε ως προσχέδιο.' });
-    await router.push(inKlados.value ? { name: 'klados-draseis' } : { name: 'dashboard' });
+    await router.push(inKlados.value ? { name: 'klados-draseis' } : { name: 'draseis' });
   }, 'Αποτυχία αποθήκευσης.');
 }
 

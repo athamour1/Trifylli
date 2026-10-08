@@ -109,9 +109,9 @@ export class DraseisGroupsService {
     const drasi = await this.access.load(user, id, 'read');
     const [groups, participants] = await Promise.all([
       this.prisma.drasiGroup.findMany({
-        // Χωρίς σκηνές στη δράση: οι σκηνές κρύβονται (δεν σβήνονται) — από εδώ
+        // Ό,τι δεν ισχύει για τη δράση κρύβεται (δεν σβήνεται) — από εδώ
         // τροφοδοτούνται και η ενότητα Ομάδες και το ντοσιέ.
-        where: { drasiId: id, ...(drasiHasSkines(drasi) ? {} : { kind: { not: DrasiGroupKind.SKINI } }) },
+        where: { drasiId: id, kind: { in: visibleKinds(drasi) } },
         orderBy: [{ kind: 'asc' }, { order: 'asc' }, { name: 'asc' }],
         include: {
           klados: { select: { type: true } },
@@ -319,9 +319,14 @@ export class DraseisGroupsService {
   // ───────────────────────── Εσωτερικά ─────────────────────────
 
   /** Σκηνές μόνο όπου η δράση έχει (όχι μονοήμερες, όχι με τη ρύθμιση κλειστή). */
-  private assertKindAvailable(drasi: { type: DrasiType; hasSkines: boolean }, kind: DrasiGroupKind): void {
+  private assertKindAvailable(drasi: { type: DrasiType; hasSkines: boolean; kladosId: string | null }, kind: DrasiGroupKind): void {
     if (kind === DrasiGroupKind.SKINI && !drasiHasSkines(drasi)) {
       throw new BadRequestException('Η δράση δεν έχει σκηνές — ενεργοποιήστε τις από τις Ρυθμίσεις.');
+    }
+    // Πεντάδες, φωλιές, ενωμοτίες, ΟΕ και επιτροπές ανήκουν στη ζωή ενός κλάδου·
+    // μια δράση του Τοπικού έχει μόνο σκηνές.
+    if (kind !== DrasiGroupKind.SKINI && !drasi.kladosId) {
+      throw new BadRequestException('Οι δράσεις του Τοπικού δεν έχουν ομάδες κλάδου — μόνο σκηνές.');
     }
   }
 
@@ -430,4 +435,14 @@ function toGuestView(u: {
     guardianPhone: guest.guardianPhone ?? null,
     participations: u._count.participations,
   };
+}
+
+/**
+ * Ποια είδη ομάδων φαίνονται: χωρίς σκηνές στη δράση κρύβονται οι σκηνές, και
+ * μια δράση του Τοπικού δεν έχει ομάδες κλάδου.
+ */
+function visibleKinds(drasi: { type: DrasiType; hasSkines: boolean; kladosId: string | null }): DrasiGroupKind[] {
+  return Object.values(DrasiGroupKind).filter((kind) =>
+    kind === DrasiGroupKind.SKINI ? drasiHasSkines(drasi) : drasi.kladosId !== null,
+  );
 }
