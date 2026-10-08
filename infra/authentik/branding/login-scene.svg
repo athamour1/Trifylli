@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080" preserveAspectRatio="xMidYMax slice">
+  <!-- Trifylli — φόντο οθόνης σύνδεσης. Ίδια σκηνή με τις σελίδες 404 / «Έσβησε η φωτιά» της εφαρμογής:
+       ουρανός, λόφοι, μονοπάτι με σημάδια στα χρώματα των κλάδων. Στατικό· τα σύννεφα τα κινεί το CSS. -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#dcebe0"/>
+      <stop offset="0.55" stop-color="#eef5f0"/>
+      <stop offset="1" stop-color="#f4f6f3"/>
+    </linearGradient>
+    <radialGradient id="sun" cx="0.78" cy="0.22" r="0.35">
+      <stop offset="0" stop-color="#fff8dc" stop-opacity="0.95"/>
+      <stop offset="0.35" stop-color="#fff8dc" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#fff8dc" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="near" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8fc296"/>
+      <stop offset="1" stop-color="#6fae78"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="1920" height="1080" fill="url(#sky)"/>
+  <rect width="1920" height="1080" fill="url(#sun)"/>
+  <circle cx="1500" cy="235" r="56" fill="#fff3bf" opacity="0.9"/>
+
+  <!-- Λόφοι: μακριά → κοντά -->
+  <path fill="#cfe3d2" d="M0 700 C 220 620, 420 650, 640 600 S 1040 520, 1280 570 S 1700 560, 1920 500 V1080 H0 Z"/>
+  <path fill="#b3d4b8" d="M0 790 C 260 720, 480 760, 720 700 S 1180 650, 1400 690 S 1760 700, 1920 640 V1080 H0 Z"/>
+  <path fill="url(#near)" d="M0 900 C 240 840, 520 880, 780 830 S 1240 790, 1480 830 S 1780 850, 1920 800 V1080 H0 Z"/>
+
+  <!-- Δέντρα στον μεσαίο λόφο -->
+  <g fill="#7fb588">
+    <path d="M300 735 l26 -70 l26 70 z"/><path d="M300 712 l26 -62 l26 62 z"/>
+    <path d="M1560 700 l22 -58 l22 58 z"/><path d="M1560 682 l22 -52 l22 52 z"/>
+    <path d="M1620 715 l18 -46 l18 46 z"/>
+  </g>
+  <g fill="#6d4c41">
+    <rect x="323" y="735" width="6" height="18" rx="2"/>
+    <rect x="1579" y="700" width="6" height="16" rx="2"/>
+    <rect x="1635" y="715" width="6" height="13" rx="2"/>
+  </g>
+
+  <!-- Μονοπάτι -->
+  <path fill="none" stroke="#a1887f" stroke-width="14" stroke-linecap="round" stroke-dasharray="26 22" opacity="0.9"
+        d="M-20 1060 C 260 1010, 420 960, 640 940 S 980 950, 1140 900 S 1380 830, 1560 850 S 1800 870, 1960 810"/>
+
+  <!-- Σημάδια μονοπατιού: Αστέρια, Πουλιά, Οδηγοί, Μεγάλοι Οδηγοί -->
+  <g stroke="#ffffff" stroke-width="4">
+    <rect x="556" y="890" width="10" height="64" rx="4" fill="#a1887f" stroke="none"/><circle cx="561" cy="880" r="15" fill="#00a2b1"/>
+    <rect x="1040" y="860" width="10" height="64" rx="4" fill="#a1887f" stroke="none"/><circle cx="1045" cy="850" r="15" fill="#ffcb06"/>
+    <rect x="1436" y="800" width="10" height="64" rx="4" fill="#a1887f" stroke="none"/><circle cx="1441" cy="790" r="15" fill="#0094da"/>
+    <rect x="1760" y="800" width="10" height="64" rx="4" fill="#a1887f" stroke="none"/><circle cx="1765" cy="790" r="15" fill="#ee1c25"/>
+  </g>
+
+  <!-- Λίγα τριφύλλια στο γρασίδι, διακριτικά -->
+  <g fill="#2e7d32" opacity="0.28">
+    <g transform="translate(180 980) scale(1.1)"><circle cx="0" cy="-7" r="7"/><circle cx="-6.5" cy="4" r="7"/><circle cx="6.5" cy="4" r="7"/><rect x="-1.2" y="4" width="2.4" height="13" rx="1"/></g>
+    <g transform="translate(860 1020)"><circle cx="0" cy="-7" r="7"/><circle cx="-6.5" cy="4" r="7"/><circle cx="6.5" cy="4" r="7"/><rect x="-1.2" y="4" width="2.4" height="13" rx="1"/></g>
+    <g transform="translate(1290 985) scale(0.9)"><circle cx="0" cy="-7" r="7"/><circle cx="-6.5" cy="4" r="7"/><circle cx="6.5" cy="4" r="7"/><rect x="-1.2" y="4" width="2.4" height="13" rx="1"/></g>
+    <g transform="translate(1680 1000) scale(1.2)"><circle cx="0" cy="-7" r="7"/><circle cx="-6.5" cy="4" r="7"/><circle cx="6.5" cy="4" r="7"/><rect x="-1.2" y="4" width="2.4" height="13" rx="1"/></g>
+  </g>
+</svg>

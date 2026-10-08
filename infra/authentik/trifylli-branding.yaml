@@ -6,7 +6,7 @@
 #
 # ΠΟΥ ΖΟΥΝ ΤΑ ΑΡΧΕΙΑ: `infra/authentik/branding/` → mount στο `/media/public`
 # (βλ. compose). Το Authentik τα βλέπει ως `logo.svg`, `favicon.svg`,
-# `clover-pattern.jpg` — **σκέτα ονόματα**: απόλυτη διαδρομή (`/media/...`) κόβεται
+# `login-scene.svg` — **σκέτα ονόματα**: απόλυτη διαδρομή (`/media/...`) κόβεται
 # από τον validator («Absolute paths are not allowed»).
 #
 # ΓΙΑΤΙ ΕΔΩ ΤΟ CSS: στο Authentik 2026.x το αρχείο `/web/dist/custom.css` ΔΕΝ
@@ -30,7 +30,7 @@ entries:
       branding_title: Trifylli
       branding_logo: logo.svg
       branding_favicon: favicon.svg
-      branding_default_flow_background: clover-pattern.webp
+      branding_default_flow_background: login-scene.svg
       # Ανοιχτό θέμα, όπως η εφαρμογή — όχι «ό,τι έχει ο browser».
       attributes:
         settings:
@@ -120,27 +120,63 @@ entries:
           background-color: transparent;
         }
 
-        /* Το μοτίβο τριφυλλιού επαναλαμβάνεται αντί να «γεμίζει» την οθόνη: είναι
-           seamless tile, οπότε με `cover` (η προεπιλογή του Authentik) θα
-           μεγέθυνε τα φύλλα σε τεράστια μπαλώματα.
-           Το αρχείο είναι 900px αλλά ζωγραφίζεται σε **450px**: διπλή πυκνότητα
-           εικονοστοιχείων, ώστε σε οθόνη Retina/HiDPI να μένει καθαρό αντί να
-           μεγεθύνεται θολό — και τα φύλλα βγαίνουν στο μισό μέγεθος, πιο κοντά
-           σε υφή παρά σε εικονογράφηση. */
+        /* Σε στενές οθόνες η PatternFly στρώνει ένα λευκό `::before` πίσω από όλη
+           τη ροή (το «κινητό» layout της). Σκεπάζει το τοπίο — το σβήνουμε. */
+        .pf-c-login::before {
+          background: transparent !important;
+          content: none !important;
+        }
+
+        /* Η σκηνή (`branding/login-scene.svg`): ίδιο τοπίο με τις σελίδες 404 και
+           «Έσβησε η φωτιά» της εφαρμογής — ουρανός, λόφοι, μονοπάτι με τα σημάδια
+           των κλάδων. Διάνυσμα, άρα καθαρό σε κάθε οθόνη· `cover` με τους λόφους
+           κολλημένους κάτω, ώστε η κάρτα να κάθεται στον ουρανό. */
         body::before {
-          background-repeat: repeat;
-          background-size: 450px auto;
-          background-position: top center;
+          /* Σε στενές οθόνες το Authentik κρύβει την εικόνα φόντου (κρατά μόνο το
+             χρώμα). Το τοπίο είναι διάνυσμα και κόβεται σωστά, οπότε το θέλουμε
+             παντού — η μεταβλητή είναι ήδη ορισμένη στο :root από το brand. */
+          background-image: var(--ak-global--background-image) !important;
+          background-repeat: no-repeat;
+          background-size: cover;
+          background-position: center bottom;
+        }
+
+        /* Σύννεφα που περνούν αργά. Δεύτερο σταθερό στρώμα πάνω από τη σκηνή και
+           κάτω από το περιεχόμενο· δύο σειρές σε διαφορετική ταχύτητα για βάθος.
+           Το SVG είναι inline (data URI) για να μην εξαρτάται από δεύτερο αρχείο. */
+        body::after {
+          content: '';
+          position: fixed;
+          inset: 0;
+          z-index: -1;
+          pointer-events: none;
+          background-repeat: repeat-x;
+          background-image:
+            url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='900' height='220' viewBox='0 0 900 220'%3E%3Cg fill='%23ffffff' opacity='0.9'%3E%3Cellipse cx='120' cy='80' rx='70' ry='24'/%3E%3Cellipse cx='160' cy='64' rx='44' ry='28'/%3E%3Cellipse cx='560' cy='150' rx='90' ry='28'/%3E%3Cellipse cx='520' cy='134' rx='50' ry='32'/%3E%3Cellipse cx='600' cy='138' rx='40' ry='26'/%3E%3C/g%3E%3C/svg%3E"),
+            url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1300' height='260' viewBox='0 0 1300 260'%3E%3Cg fill='%23ffffff' opacity='0.6'%3E%3Cellipse cx='300' cy='120' rx='110' ry='30'/%3E%3Cellipse cx='350' cy='98' rx='60' ry='36'/%3E%3Cellipse cx='950' cy='60' rx='80' ry='22'/%3E%3Cellipse cx='920' cy='46' rx='42' ry='26'/%3E%3C/g%3E%3C/svg%3E");
+          background-size: 900px 220px, 1300px 260px;
+          background-position: 0 6vh, 0 16vh;
+          animation: tf-clouds 140s linear infinite;
+        }
+        @keyframes tf-clouds {
+          to { background-position: 900px 6vh, 1300px 16vh; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          body::after { animation: none; }
         }
 
         /* ══════════════ Η κάρτα: ίδια με `q-card flat bordered` ══════════════ */
         .pf-c-login__main {
-          background: var(--tf-surface);
-          border: 1px solid var(--tf-border);
+          /* Ελαφρώς διάφανη με θόλωση: τα σύννεφα περνούν αχνά από πίσω της και η
+             κάρτα μοιάζει να κάθεται μέσα στο τοπίο, όχι κολλημένη πάνω του. */
+          background: rgba(255, 255, 255, 0.9);
+          -webkit-backdrop-filter: blur(14px) saturate(1.1);
+          backdrop-filter: blur(14px) saturate(1.1);
+          border: 1px solid rgba(255, 255, 255, 0.7);
           border-radius: var(--tf-radius);
-          /* Πιο βαθιά σκιά από της εφαρμογής: εδώ η κάρτα πατά πάνω σε μοτίβο,
+          /* Πιο βαθιά σκιά από της εφαρμογής: εδώ η κάρτα πατά πάνω σε τοπίο,
              όχι σε ήρεμο off-white, και χρειάζεται να ξεχωρίζει καθαρά. */
-          box-shadow: 0 18px 40px rgba(10, 30, 15, 0.28), 0 4px 12px rgba(10, 30, 15, 0.16);
+          box-shadow: 0 24px 48px rgba(16, 40, 24, 0.22), 0 4px 12px rgba(16, 40, 24, 0.12);
           overflow: hidden;
         }
 

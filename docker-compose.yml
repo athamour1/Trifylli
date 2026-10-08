@@ -110,7 +110,7 @@ services:
       - ./infra/authentik:/blueprints/custom:ro
       # Εμφάνιση στα χρώματα του Trifylli: η οθόνη σύνδεσης είναι μέρος της
       # ίδιας διαδρομής, δεν πρέπει να μοιάζει με ξένο προϊόν. Τα αρχεία τα
-      # βλέπει το Authentik ως `logo.svg`/`favicon.svg`/`clover-pattern.jpg`
+      # βλέπει το Authentik ως `logo.svg`/`favicon.svg`/`login-scene.svg`
       # (τα ονόματα που δηλώνει το blueprint του brand).
       - ./infra/authentik/branding:/media/public:ro
       # Ελληνικά πρότυπα email (ορισμός κωδικού) — `email.template_dir`.
