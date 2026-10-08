@@ -13,6 +13,7 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { KladosType, SymvoulioType, TOPIKO_SYMVOULIA, can } from '@trifylli/shared';
+import { accessProfileOf } from '../../common/util/klados-scope';
 import { CapabilityGuard } from '../../common/auth/capability.guard';
 import { CurrentUser, RequireCapability } from '../../common/auth/decorators';
 import type { RequestUser } from '../../common/auth/types';
@@ -104,8 +105,7 @@ export class SymvouliaController {
 
 function assertWriteCapability(user: RequestUser, type: SymvoulioType): void {
   if (!(TOPIKO_SYMVOULIA as readonly string[]).includes(type)) return;
-  const profile = { role: user.role, adminKlados: user.adminKlados };
-  if (!can(profile, 'symvoulio:topiko:write')) {
+  if (!can(accessProfileOf(user), 'symvoulio:topiko:write')) {
     throw new ForbiddenException('Τα συμβούλια Τοπικού τα διαχειρίζεται ο υπερδιαχειριστής.');
   }
 }

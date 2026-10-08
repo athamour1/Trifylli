@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import type { AccountRole, Capability, KladosType } from '@trifylli/shared';
+import type { AccountRole, Capability, KladosGrants, KladosType } from '@trifylli/shared';
 import { can as canDo, KLADOS_LABEL } from '@trifylli/shared';
 import { get } from '../lib/api';
 import { useOfflineStore } from './offline';
@@ -16,6 +16,8 @@ interface MeResponse {
     isSuperAdmin: boolean;
     /** Οι κλάδοι που βλέπει — ένας για τον διαχειριστή κλάδου, όλοι για τον υπερδιαχειριστή. */
     kladoi: { type: KladosType; label: string; color: string; icon: string }[];
+    /** Στελέχη: δικαιώματα ανά κλάδο (βαθμός e-SEO + υπευθυνότητες αρχηγείου). */
+    grants?: KladosGrants | null;
   };
   topiko: { id: string; name: string; location: string | null; timezone: string } | null;
   currentPeriod: { id: string; label: string; syndromiAmount: number } | null;
@@ -53,7 +55,7 @@ export const useAuthStore = defineStore('auth', {
 
     accessProfile: (state) =>
       state.profile
-        ? { role: state.profile.user.role, adminKlados: state.profile.user.adminKlados }
+        ? { role: state.profile.user.role, adminKlados: state.profile.user.adminKlados, grants: state.profile.user.grants ?? null }
         : null,
   },
 

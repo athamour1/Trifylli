@@ -27,6 +27,7 @@ import type {
   YlikoCategory,
 } from './domain';
 import type { LeaderRank } from './leader-roles';
+import type { KladosGrants } from './access';
 
 export interface AuthenticatedUser {
   id: string;
@@ -39,6 +40,8 @@ export interface AuthenticatedUser {
   adminKlados: KladosType | null;
   /** Οι κλάδοι που βλέπει — παράγωγο του ρόλου, για ευκολία του UI. */
   kladoi: KladosType[];
+  /** Μόνο για `STELEXOS`: δικαιώματα ανά κλάδο (βαθμός e-SEO + υπευθυνότητες). */
+  grants: KladosGrants | null;
   topikoId: string;
 }
 
@@ -70,6 +73,34 @@ export interface AccountCreated {
   invited: boolean;
   /** Γιατί δεν έφυγε — `null` όταν έφυγε κανονικά. */
   inviteError: string | null;
+}
+
+/** Πού βρίσκεται η πρόσβαση ενός στελέχους στην πλατφόρμα. */
+export type StelexosAccessStatus =
+  /** Έχει λογαριασμό διαχείρισης (υπερδιαχειριστής / διαχειριστής κλάδου). */
+  | 'ADMIN'
+  /** Έχει συνδεθεί τουλάχιστον μία φορά. */
+  | 'ACTIVE'
+  /** Στάλθηκε πρόσκληση, δεν έχει μπει ακόμα. */
+  | 'INVITED'
+  /** Χωρίς λογαριασμό — μπορεί να ενεργοποιηθεί. */
+  | 'NONE'
+  /** Χωρίς email στο e-SEO — δεν μπορεί να προσκληθεί. */
+  | 'NO_EMAIL';
+
+/** Ένα στέλεχος στη λίστα ενεργοποίησης του υπερδιαχειριστή. */
+export interface StelexosAccessRow {
+  userId: string;
+  firstName: string;
+  lastName: string;
+  email: string | null;
+  kladoi: { klados: KladosType; rank: LeaderRank | null }[];
+  status: StelexosAccessStatus;
+  lastLoginAt: string | null;
+}
+
+export interface StelexiActivationResult {
+  results: { userId: string; ok: boolean; error: string | null }[];
 }
 
 export interface MemberSummary {

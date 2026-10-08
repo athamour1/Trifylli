@@ -1,10 +1,22 @@
 <template>
   <q-page padding>
-    <div class="row items-center justify-between q-mb-md">
-      <div>
-        <div class="text-caption text-grey-7">
-          Ποιος μπαίνει στην εφαρμογή. Τα μέλη και τα στελέχη του μητρώου δεν χρειάζονται λογαριασμό.
-        </div>
+    <!-- Δύο λίστες: όσοι διαχειρίζονται (λίγοι, φτιάχνονται με το χέρι) και τα
+         στελέχη των κλάδων (πολλά, ενεργοποιούνται μαζικά από το e-SEO). -->
+    <q-tabs v-model="tab" dense align="left" no-caps class="q-mb-md" active-color="primary" indicator-color="primary" narrow-indicator>
+      <q-tab name="admins" icon="admin_panel_settings" label="Διαχείριση" />
+      <q-tab name="stelexi" icon="groups" label="Στελέχη" />
+    </q-tabs>
+
+    <q-tab-panels v-model="tab" animated keep-alive class="bg-transparent">
+    <q-tab-panel name="stelexi" class="q-pa-none">
+      <StelexiAccess />
+    </q-tab-panel>
+
+    <q-tab-panel name="admins" class="q-pa-none">
+    <div class="row items-center justify-between q-mb-md q-gutter-sm">
+      <div class="text-caption text-grey-7 col">
+        Οι λογαριασμοί διαχείρισης: υπερδιαχειριστές και διαχειριστές κλάδου. Τα στελέχη ενεργοποιούνται από την
+        καρτέλα «Στελέχη».
       </div>
       <q-btn color="primary" icon="person_add" label="Νέος λογαριασμός" @click="openCreate" />
     </div>
@@ -100,6 +112,8 @@
         </q-item>
       </q-list>
     </PageState>
+    </q-tab-panel>
+    </q-tab-panels>
 
     <q-dialog v-model="dialog">
       <q-card style="min-width: 360px">
@@ -167,7 +181,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { useQuasar } from 'quasar';
 import {
   ACCOUNT_ROLE_LABEL,
@@ -180,6 +195,7 @@ import {
   type KladosType,
 } from '@trifylli/shared';
 import PageState from '../components/PageState.vue';
+import StelexiAccess from '../components/StelexiAccess.vue';
 import { useAsyncData } from '../composables/useAsyncData';
 import { readableOn } from '../lib/color';
 import { ApiError, del, get, patch, post } from '../lib/api';
@@ -199,6 +215,12 @@ interface AssignableKlados {
 
 const $q = useQuasar();
 const auth = useAuthStore();
+
+const route = useRoute();
+const router = useRouter();
+/** Η καρτέλα ζει στο URL (`?tab=stelexi`), ώστε να ανοίγει απευθείας από σύνδεσμο. */
+const tab = ref<'admins' | 'stelexi'>(route.query.tab === 'stelexi' ? 'stelexi' : 'admins');
+watch(tab, (value) => void router.replace({ query: { ...route.query, tab: value === 'admins' ? undefined : value } }));
 
 const { data, loading, error, stale, reload } = useAsyncData(
   () => get<AccountsResponse>('/accounts'),

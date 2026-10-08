@@ -8,7 +8,7 @@ import {
   DRASI_REVIEW_KIND_LABEL,
   DRASI_REVIEW_SCALE_MAX,
   FORM_LINK_TTL_DAYS,
-  canAccessKlados,
+  can,
   isSuperAdmin,
   type DrasiReviewAnswerValue,
   type DrasiReviewInviteView,
@@ -26,6 +26,7 @@ import { AppConfigToken } from '../../common/config/config.module';
 import type { AppConfig } from '../../common/config/configuration';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
+import { accessProfileOf } from '../../common/util/klados-scope';
 import { DrasiAccessService } from './drasi-access.service';
 import type { IssueReviewInvitesDto, PublicReviewAnswersDto, SetReviewAnswersDto, SetReviewQuestionsDto, UpdateReviewSettingsDto } from './dto/drasi-review.dto';
 
@@ -119,8 +120,9 @@ export class DraseisReviewService {
   }
 
   private manages(user: RequestUser, organiser: KladosType | undefined): boolean {
-    const profile = { role: user.role, adminKlados: user.adminKlados };
-    return isSuperAdmin(profile) || (organiser ? canAccessKlados(profile, organiser) : false);
+    // Τη διαχειρίζεται όποιος γράφει στις δράσεις του διοργανωτή.
+    const profile = accessProfileOf(user);
+    return isSuperAdmin(profile) || (organiser ? can(profile, 'drasi:write', organiser) : false);
   }
 
   private async isStelexos(userId: string): Promise<boolean> {

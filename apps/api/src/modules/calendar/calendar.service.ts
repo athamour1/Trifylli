@@ -201,7 +201,7 @@ export class CalendarService {
         where: {
           archivedAt: null,
           date: { gte: now, lte: weekAhead },
-          klados: { topikoId: user.topikoId, ...(scopedKladoi(user) ? { type: { in: user.kladoi } } : {}) },
+          klados: { topikoId: user.topikoId, ...(scopedKladoi(user) ? { type: { in: scopedKladoi(user)! } } : {}) },
           timeline: { none: {} },
         },
       }),

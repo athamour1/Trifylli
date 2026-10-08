@@ -6,7 +6,7 @@ import { CapabilityGuard } from '../../common/auth/capability.guard';
 import { CurrentUser, SuperAdminOnly } from '../../common/auth/decorators';
 import type { RequestUser } from '../../common/auth/types';
 import { AccountsService } from './accounts.service';
-import { CreateAccountDto, UpdateAccountDto } from './dto/account.dto';
+import { ActivateStelexiDto, CreateAccountDto, UpdateAccountDto } from './dto/account.dto';
 
 /**
  * Όλο το module είναι κλειδωμένο στον υπερδιαχειριστή: είναι το σημείο όπου
@@ -31,6 +31,24 @@ export class AccountsController {
   })
   list(@CurrentUser() user: RequestUser) {
     return this.accounts.list(user);
+  }
+
+  @Get('stelexi')
+  @ApiOperation({ summary: 'Τα στελέχη των κλάδων, με την κατάσταση πρόσβασής τους' })
+  stelexi(@CurrentUser() user: RequestUser) {
+    return this.accounts.stelexi(user);
+  }
+
+  @Post('stelexi/activate')
+  // Ένα αίτημα, πολλά email: το όριο μετρά αιτήματα, το μέγεθος το κόβει το DTO.
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Μαζική ενεργοποίηση στελεχών (λογαριασμός + email ορισμού κωδικού)' })
+  async activateStelexi(@CurrentUser() user: RequestUser, @Body() dto: ActivateStelexiDto) {
+    const result = await this.accounts.activateStelexi(user, dto.userIds);
+    for (const r of result.results) {
+      if (r.ok) await this.audit.record(user, 'account.activate', 'user', r.userId, { role: 'STELEXOS' });
+    }
+    return result;
   }
 
   @Get('kladoi')

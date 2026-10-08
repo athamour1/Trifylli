@@ -4,10 +4,14 @@ import {
   KLADOI_IN_ORDER,
   KLADOS_LABEL,
   KLADOS_META,
+  LeaderRank,
   accountRoleLabel,
+  deriveLeaderProfile,
   type AccountCreated,
   type AccountSummary,
   type KladosType,
+  type StelexiActivationResult,
+  type StelexosAccessRow,
 } from '@trifylli/shared';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
@@ -36,15 +40,22 @@ export class AccountsService {
   ) {}
 
   async list(user: RequestUser): Promise<{ accounts: AccountSummary[]; kladoiWithoutAdmin: KladosType[] }> {
+    // Μόνο οι λογαριασμοί διαχείρισης· τα στελέχη ζουν στη δική τους λίστα (`stelexi`).
     const rows = await this.prisma.user.findMany({
-      where: { topikoId: user.topikoId, accountRole: { not: null } },
+      where: { topikoId: user.topikoId, accountRole: { in: [AccountRole.SUPER_ADMIN, AccountRole.KLADOS_ADMIN] } },
       include: { adminKlados: { select: { type: true } } },
       orderBy: [{ accountRole: 'asc' }, { lastName: 'asc' }],
     });
 
     const accounts = rows.map((row) => this.toSummary(row));
 
+    // Κλάδος «καλυμμένος»: έχει διαχειριστή κλάδου ή Αρχηγό (e-SEO) με πρόσβαση —
+    // ο Αρχηγός με λογαριασμό στελέχους έχει τα ίδια δικαιώματα στον κλάδο του.
     const covered = new Set(accounts.map((a) => a.adminKlados).filter((k): k is KladosType => !!k));
+    for (const row of await this.stelexi(user)) {
+      if (row.status !== 'ACTIVE' && row.status !== 'INVITED') continue;
+      for (const k of row.kladoi) if (k.rank === LeaderRank.ARCHIGOS) covered.add(k.klados);
+    }
     const existing = await this.prisma.klados.findMany({
       where: { topikoId: user.topikoId },
       select: { type: true },
@@ -221,6 +232,98 @@ export class AccountsService {
     return { revoked: true };
   }
 
+  /**
+   * Όλα τα στελέχη των κλάδων, με την κατάσταση πρόσβασής τους — η λίστα από
+   * την οποία ο υπερδιαχειριστής τα ενεργοποιεί. Όσοι είναι μόνο στελέχη SOS
+   * μένουν εκτός (δεν έχουν ρόλο στην πλατφόρμα), όπως και στο αρχηγείο.
+   */
+  async stelexi(user: RequestUser): Promise<StelexosAccessRow[]> {
+    const rows = await this.prisma.user.findMany({
+      where: {
+        topikoId: user.topikoId,
+        archivedAt: null,
+        guestTopikoCode: null,
+        memberships: { some: { leftAt: null, kind: MemberKind.STELEXOS } },
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        accountRole: true,
+        ssoId: true,
+        lastLoginAt: true,
+        memberships: { where: { leftAt: null, kind: MemberKind.STELEXOS }, select: { klados: { select: { type: true } } } },
+        licenses: { where: { status: 'ACTIVE' }, select: { title: true, status: true } },
+      },
+      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+    });
+
+    const result: StelexosAccessRow[] = [];
+    for (const row of rows) {
+      const leader = deriveLeaderProfile(row.licenses);
+      if (leader.isSOS && !leader.kladosRoles.length) continue;
+      const kladoi = row.memberships
+        .map((m) => m.klados.type as KladosType)
+        .sort((a, b) => KLADOS_META[a].order - KLADOS_META[b].order)
+        .map((klados) => ({ klados, rank: leader.kladosRoles.find((r) => r.kladosType === klados)?.rank ?? null }));
+      result.push({
+        userId: row.id,
+        firstName: row.firstName,
+        lastName: row.lastName,
+        email: row.email,
+        kladoi,
+        status: accessStatus(row),
+        lastLoginAt: row.lastLoginAt?.toISOString() ?? null,
+      });
+    }
+    return result;
+  }
+
+  /**
+   * Μαζική ενεργοποίηση: κάθε στέλεχος παίρνει λογαριασμό `STELEXOS` (αν δεν
+   * έχει) και email ορισμού κωδικού. Ένα-ένα και με αποτέλεσμα ανά άτομο: μια
+   * αποτυχία (χωρίς email, Authentik άφταστο) δεν ακυρώνει τις υπόλοιπες.
+   * Λογαριασμοί διαχείρισης δεν υποβιβάζονται ποτέ από εδώ.
+   */
+  async activateStelexi(user: RequestUser, userIds: string[]): Promise<StelexiActivationResult> {
+    const eligible = new Map((await this.stelexi(user)).map((r) => [r.userId, r]));
+    const results: StelexiActivationResult['results'] = [];
+
+    for (const userId of [...new Set(userIds)]) {
+      const row = eligible.get(userId);
+      if (!row) {
+        results.push({ userId, ok: false, error: 'Δεν είναι στέλεχος κλάδου.' });
+        continue;
+      }
+      if (row.status === 'ADMIN') {
+        results.push({ userId, ok: false, error: 'Έχει ήδη λογαριασμό διαχείρισης.' });
+        continue;
+      }
+      if (!row.email) {
+        results.push({ userId, ok: false, error: 'Δεν έχει email στο e-SEO.' });
+        continue;
+      }
+
+      if (row.status === 'NONE') {
+        await this.prisma.user.update({ where: { id: userId }, data: { accountRole: AccountRole.STELEXOS, adminKladosId: null } });
+      }
+      if (!this.authentik.configured) {
+        results.push({ userId, ok: false, error: 'Δεν έχει ρυθμιστεί το Authentik — ο λογαριασμός ενεργοποιήθηκε χωρίς email.' });
+        continue;
+      }
+      try {
+        await this.authentik.sendPasswordSetupEmail({ accountId: userId, email: row.email, firstName: row.firstName, lastName: row.lastName });
+        results.push({ userId, ok: true, error: null });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        this.logger.error(`Η πρόσκληση στελέχους ${userId} απέτυχε: ${message}`);
+        results.push({ userId, ok: false, error: message });
+      }
+    }
+    return { results };
+  }
+
   /** Οι κλάδοι που μπορούν να ανατεθούν, με τον τρέχοντα διαχειριστή τους. */
   async assignableKladoi(user: RequestUser) {
     const rows = await this.prisma.klados.findMany({
@@ -271,6 +374,8 @@ export class AccountsService {
       if (klados) throw new BadRequestException('Ο υπερδιαχειριστής δεν ανήκει σε κλάδο.');
       return null;
     }
+    // Τα στελέχη παίρνουν κλάδους από τα memberships τους, όχι από τον λογαριασμό.
+    if (role === AccountRole.STELEXOS) return null;
     if (!klados) throw new BadRequestException('Ο διαχειριστής κλάδου πρέπει να έχει κλάδο.');
 
     const row = await this.prisma.klados.findUnique({
@@ -308,4 +413,10 @@ export class AccountsService {
       createdAt: row.createdAt.toISOString(),
     };
   }
+}
+
+function accessStatus(row: { email: string | null; accountRole: AccountRole | null; ssoId: string | null }): StelexosAccessRow['status'] {
+  if (row.accountRole === AccountRole.SUPER_ADMIN || row.accountRole === AccountRole.KLADOS_ADMIN) return 'ADMIN';
+  if (row.accountRole === AccountRole.STELEXOS) return row.ssoId ? 'ACTIVE' : 'INVITED';
+  return row.email ? 'NONE' : 'NO_EMAIL';
 }

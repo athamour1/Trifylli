@@ -164,7 +164,8 @@ export class ProodosService {
     if (!member) throw new NotFoundException('Το μέλος δεν βρέθηκε.');
 
     const kladoi = member.memberships.map((m) => m.klados.type as KladosType);
-    if (scopedKladoi(user) && !kladoi.some((k) => user.kladoi.includes(k))) {
+    const scope = scopedKladoi(user);
+    if (scope && !kladoi.some((k) => scope.includes(k))) {
       throw new NotFoundException('Το μέλος δεν βρέθηκε.');
     }
 
@@ -209,7 +210,8 @@ export class ProodosService {
     if (!member) throw new NotFoundException('Το μέλος δεν βρέθηκε.');
 
     const kladoi = member.memberships.map((m) => m.klados.type as KladosType);
-    if (scopedKladoi(user) && !kladoi.some((k) => user.kladoi.includes(k))) {
+    const scope = scopedKladoi(user);
+    if (scope && !kladoi.some((k) => scope.includes(k))) {
       throw new NotFoundException('Το μέλος δεν βρέθηκε.');
     }
     return member;

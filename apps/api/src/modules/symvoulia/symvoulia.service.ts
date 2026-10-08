@@ -16,7 +16,7 @@ import {
 } from '@trifylli/shared';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
-import { assertKladosAccess, scopedKladoi } from '../../common/util/klados-scope';
+import { accessProfileOf, assertKladosAccess, scopedKladoi } from '../../common/util/klados-scope';
 import { MemberKind, MemberStatus } from '@prisma/client';
 import { FilesService } from '../files/files.service';
 import type { CreateSymvoulioDto, UpdateSymvoulioDto } from './dto/symvoulio.dto';
@@ -39,7 +39,7 @@ export class SymvouliaService {
       ...(klados
         ? { klados: { type: klados } }
         : scopedKladoi(user)
-          ? { OR: [{ kladosId: null }, { klados: { type: { in: user.kladoi } } }] }
+          ? { OR: [{ kladosId: null }, { klados: { type: { in: scopedKladoi(user) ?? [] } } }] }
           : {}),
     };
 
@@ -230,7 +230,7 @@ export class SymvouliaService {
     assertKladosAccess(user, symvoulio.klados?.type as KladosType | undefined);
 
     const isTopiko = (TOPIKO_SYMVOULIA as readonly string[]).includes(symvoulio.type);
-    if (isTopiko && !can({ role: user.role, adminKlados: user.adminKlados }, 'symvoulio:topiko:write')) {
+    if (isTopiko && !can(accessProfileOf(user), 'symvoulio:topiko:write')) {
       throw new ForbiddenException('Τα συμβούλια Τοπικού τα διαχειρίζεται ο υπερδιαχειριστής.');
     }
 

@@ -8,7 +8,7 @@
  * Τοπικού, και ένας διαχειριστής ανά κλάδο που έχει πλήρη δικαιώματα **μέσα
  * στον δικό του κλάδο** και καμία ορατότητα έξω από αυτόν.
  */
-import { AccountRole, KladosType } from './domain';
+import { AccountRole, KladosDuty, KladosType } from './domain';
 
 /** Ενέργειες που ελέγχονται ρητά. */
 export type Capability =
@@ -67,10 +67,64 @@ const KLADOS_ADMIN_CAPABILITIES: readonly Capability[] = [
   'farmakeio:write',
 ];
 
+// ───────────────────────── Στελέχη (ρόλος `STELEXOS`) ─────────────────────────
+
+/**
+ * Ό,τι έχει κάθε στέλεχος στον κλάδο του, χωρίς υπευθυνότητα: βλέπει τη ζωή του
+ * κλάδου (ημερολόγιο, συγκεντρώσεις, δράσεις, μέλη, αρχηγείο, υλικό,
+ * φαρμακεία) και κάνει τη δουλειά της συγκέντρωσης (πρόγραμμα, παρουσίες).
+ */
+export const STELEXOS_BASE_CAPABILITIES: readonly Capability[] = [
+  'calendar:read',
+  'meloi:read',
+  'yliko:read',
+  'farmakeio:read',
+  'parousiologio:write',
+  'syggentrwsh:write',
+];
+
+/**
+ * Τι ξεκλειδώνει κάθε υπευθυνότητα του αρχηγείου. Όσες δεν αντιστοιχούν ακόμα
+ * σε λειτουργία της πλατφόρμας (φωτογραφία, ενημέρωση, social) δεν δίνουν τίποτα.
+ */
+export const DUTY_CAPABILITIES: Record<KladosDuty, readonly Capability[]> = {
+  TAMIAS: ['syndromes:read', 'syndromes:manage', 'treasury:read', 'treasury:manage'],
+  GRAMMATEAS: ['symvoulio:klados:write'],
+  FARMAKEIO: ['farmakeio:write'],
+  PROODOS: ['proodos:write'],
+  YLIKO: ['yliko:checkout', 'yliko:manage'],
+  FOTOGRAFIA: [],
+  ENIMEROSI: [],
+  SOCIAL_MEDIA: [],
+};
+
+/** Η θέση ενός στελέχους σε έναν κλάδο — από memberships, e-SEO και αρχηγείο. */
+export interface StelexosPlacement {
+  klados: KladosType;
+  /** Αρχηγός στο e-SEO ⇒ διαχειριστής του κλάδου. */
+  isArchigos: boolean;
+  duties: readonly KladosDuty[];
+}
+
+/** Τα δικαιώματα ανά κλάδο ενός στελέχους. */
+export function stelexosGrants(placements: readonly StelexosPlacement[]): KladosGrants {
+  const grants: KladosGrants = {};
+  for (const p of placements) {
+    const caps = new Set<Capability>(p.isArchigos ? KLADOS_ADMIN_CAPABILITIES : STELEXOS_BASE_CAPABILITIES);
+    for (const duty of p.duties) for (const c of DUTY_CAPABILITIES[duty]) caps.add(c);
+    grants[p.klados] = [...caps];
+  }
+  return grants;
+}
+
+export type KladosGrants = Partial<Record<KladosType, readonly Capability[]>>;
+
 export interface AccessProfile {
   role: AccountRole;
   /** Ο κλάδος που διαχειρίζεται· `null` για τον υπερδιαχειριστή. */
   adminKlados: KladosType | null;
+  /** Μόνο για `STELEXOS`: τα δικαιώματα ανά κλάδο (βλ. `stelexosGrants`). */
+  grants?: KladosGrants | null;
 }
 
 export function isSuperAdmin(profile: AccessProfile): boolean {
@@ -80,12 +134,15 @@ export function isSuperAdmin(profile: AccessProfile): boolean {
 /** Οι κλάδοι που βλέπει ο χρήστης — όλοι για τον υπερδιαχειριστή, ένας για τον admin κλάδου. */
 export function visibleKladoi(profile: AccessProfile, all: readonly KladosType[]): KladosType[] {
   if (isSuperAdmin(profile)) return [...all];
+  if (profile.role === AccountRole.STELEXOS) return all.filter((k) => profile.grants?.[k]);
   return profile.adminKlados ? [profile.adminKlados] : [];
 }
 
 /** Έχει ο χρήστης πρόσβαση στα δεδομένα αυτού του κλάδου; */
 export function canAccessKlados(profile: AccessProfile, klados: KladosType): boolean {
-  return isSuperAdmin(profile) || profile.adminKlados === klados;
+  if (isSuperAdmin(profile)) return true;
+  if (profile.role === AccountRole.STELEXOS) return !!profile.grants?.[klados];
+  return profile.adminKlados === klados;
 }
 
 /**
@@ -98,6 +155,13 @@ export function canAccessKlados(profile: AccessProfile, klados: KladosType): boo
  */
 export function can(profile: AccessProfile, capability: Capability, klados?: KladosType): boolean {
   if (isSuperAdmin(profile)) return true;
+  if (profile.role === AccountRole.STELEXOS) {
+    // Με κλάδο: το δικαίωμα σε **αυτόν** τον κλάδο. Χωρίς: σε κάποιον από τους
+    // κλάδους του — η εμβέλεια ελέγχεται μετά, στο service (βλ. klados-scope).
+    const grants = profile.grants ?? {};
+    if (klados) return grants[klados]?.includes(capability) ?? false;
+    return Object.values(grants).some((caps) => caps?.includes(capability));
+  }
   if (!KLADOS_ADMIN_CAPABILITIES.includes(capability)) return false;
   if (klados && !canAccessKlados(profile, klados)) return false;
   return true;

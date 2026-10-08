@@ -29,7 +29,7 @@ export class SyggentrwseisService {
       archivedAt: null,
       klados: {
         topikoId: user.topikoId,
-        ...(klados ? { type: klados } : (scopedKladoi(user) ? { type: { in: user.kladoi } } : {})),
+        ...(klados ? { type: klados } : (scopedKladoi(user) ? { type: { in: scopedKladoi(user)! } } : {})),
       },
       ...(from || to ? { date: { ...(from ? { gte: from } : {}), ...(to ? { lte: to } : {}) } } : {}),
     };

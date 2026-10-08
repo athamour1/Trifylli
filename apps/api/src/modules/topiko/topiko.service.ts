@@ -12,7 +12,7 @@ import {
 } from '@trifylli/shared';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
-import { assertKladosAccess, scopedKladoi } from '../../common/util/klados-scope';
+import { accessProfileOf, assertKladosAccess, scopedKladoi } from '../../common/util/klados-scope';
 import type { UpdateKladosDto, UpdateMembershipDto } from './dto/topiko.dto';
 
 @Injectable()
@@ -40,7 +40,9 @@ export class TopikoService {
         role: user.role,
         roleLabel: accountRoleLabel(user.role, user.adminKlados),
         adminKlados: user.adminKlados,
-        isSuperAdmin: isSuperAdmin({ role: user.role, adminKlados: user.adminKlados }),
+        isSuperAdmin: isSuperAdmin(accessProfileOf(user)),
+        /** Στελέχη: δικαιώματα ανά κλάδο — το UI τα δίνει στο ίδιο `can()` με το API. */
+        grants: user.grants,
         /** Οι κλάδοι που βλέπει — τροφοδοτεί απευθείας το μενού. */
         kladoi: user.kladoi.map((type) => ({
           type,

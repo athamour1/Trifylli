@@ -2,9 +2,14 @@ import { ForbiddenException, Inject, Injectable, Logger } from '@nestjs/common';
 import { AccountRole, MemberKind } from '@prisma/client';
 import {
   KLADOI_IN_ORDER,
+  LeaderRank,
+  deriveLeaderProfile,
   sortKladoi,
+  stelexosGrants,
   visibleKladoi,
   type AuthenticatedUser,
+  type KladosDuty,
+  type KladosGrants,
   type KladosType,
 } from '@trifylli/shared';
 import { AppConfigToken } from '../config/config.module';
@@ -134,7 +139,8 @@ export class UserDirectoryService {
     });
 
     const adminKlados = (account.adminKlados?.type as KladosType | undefined) ?? null;
-    const profile = { role: account.accountRole, adminKlados };
+    const grants = account.accountRole === AccountRole.STELEXOS ? await this.stelexosGrants(account.id) : null;
+    const profile = { role: account.accountRole, adminKlados, grants };
 
     return {
       id: account.id,
@@ -145,6 +151,7 @@ export class UserDirectoryService {
       role: account.accountRole,
       adminKlados,
       kladoi: sortKladoi(visibleKladoi(profile, await this.topikoKladoi(topiko.id))),
+      grants,
       topikoId: topiko.id,
     };
   }
@@ -184,6 +191,40 @@ export class UserDirectoryService {
           },
           include: { adminKlados: { select: { type: true } } },
         });
+  }
+
+  /**
+   * Τα δικαιώματα ενός στελέχους, ανά κλάδο. Υπολογίζονται σε **κάθε** αίτημα
+   * από τρεις πηγές, ώστε μια αλλαγή να ισχύει αμέσως και όχι στην επόμενη
+   * σύνδεση: σε ποιους κλάδους είναι στέλεχος (memberships), αν είναι Αρχηγός
+   * εκεί (ενεργό πτυχίο e-SEO ⇒ διαχειριστής του κλάδου) και ποιες
+   * υπευθυνότητες κρατά στο αρχηγείο.
+   */
+  private async stelexosGrants(userId: string): Promise<KladosGrants> {
+    const row = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        memberships: {
+          where: { leftAt: null, kind: MemberKind.STELEXOS },
+          select: { kladosId: true, klados: { select: { type: true } } },
+        },
+        licenses: { where: { status: 'ACTIVE' }, select: { title: true, status: true } },
+        responsibilities: { select: { kladosId: true, duty: true } },
+      },
+    });
+    if (!row) return {};
+
+    const leader = deriveLeaderProfile(row.licenses);
+    return stelexosGrants(
+      row.memberships.map((m) => {
+        const klados = m.klados.type as KladosType;
+        return {
+          klados,
+          isArchigos: leader.kladosRoles.some((r) => r.kladosType === klados && r.rank === LeaderRank.ARCHIGOS),
+          duties: row.responsibilities.filter((r) => r.kladosId === m.kladosId).map((r) => r.duty as KladosDuty),
+        };
+      }),
+    );
   }
 
   private async topikoKladoi(topikoId: string): Promise<KladosType[]> {

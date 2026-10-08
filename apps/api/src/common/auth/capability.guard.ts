@@ -2,6 +2,7 @@ import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from '@
 import { Reflector } from '@nestjs/core';
 import { AccountRole, KladosType, can, isSuperAdmin, type Capability } from '@trifylli/shared';
 import type { Request } from 'express';
+import { accessProfileOf } from '../util/klados-scope';
 import { CAPABILITY_KEY, SUPER_ADMIN_KEY } from './decorators';
 import type { RequestUser } from './types';
 
@@ -27,13 +28,15 @@ export class CapabilityGuard implements CanActivate {
     const user = request.user as RequestUser | undefined;
     if (!user) throw new ForbiddenException('Λείπει το προφίλ χρήστη.');
 
-    const profile = { role: user.role, adminKlados: user.adminKlados };
+    const profile = accessProfileOf(user);
 
     if (superAdminOnly && !isSuperAdmin(profile)) {
       throw new ForbiddenException('Η ενέργεια επιτρέπεται μόνο στον υπερδιαχειριστή.');
     }
 
     if (capability) {
+      // Για τον έλεγχο κλάδου στο service (βλ. `assertKladosAccess`).
+      user.activeCapability = capability;
       const klados = readKlados(request);
       if (!can(profile, capability, klados)) {
         throw new ForbiddenException(

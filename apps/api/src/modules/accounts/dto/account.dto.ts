@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsEnum, IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsEmail, IsEnum, IsIn, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
 import { AccountRole, KladosType } from '@trifylli/shared';
 
 export class CreateAccountDto {
@@ -23,8 +23,8 @@ export class CreateAccountDto {
   @IsEmail()
   email!: string;
 
-  @ApiProperty({ enum: AccountRole })
-  @IsEnum(AccountRole)
+  @ApiProperty({ enum: [AccountRole.SUPER_ADMIN, AccountRole.KLADOS_ADMIN] })
+  @IsIn([AccountRole.SUPER_ADMIN, AccountRole.KLADOS_ADMIN], { message: 'Τα στελέχη ενεργοποιούνται από τη λίστα στελεχών.' })
   role!: AccountRole;
 
   @ApiPropertyOptional({
@@ -54,13 +54,23 @@ export class UpdateAccountDto {
   @IsEmail()
   email?: string;
 
-  @ApiPropertyOptional({ enum: AccountRole })
+  @ApiPropertyOptional({ enum: [AccountRole.SUPER_ADMIN, AccountRole.KLADOS_ADMIN] })
   @IsOptional()
-  @IsEnum(AccountRole)
+  @IsIn([AccountRole.SUPER_ADMIN, AccountRole.KLADOS_ADMIN], { message: 'Τα στελέχη ενεργοποιούνται από τη λίστα στελεχών.' })
   role?: AccountRole;
 
   @ApiPropertyOptional({ enum: KladosType })
   @IsOptional()
   @IsEnum(KladosType)
   adminKlados?: KladosType;
+}
+
+/** Μαζική ενεργοποίηση στελεχών: λογαριασμός + email ορισμού κωδικού. */
+export class ActivateStelexiDto {
+  @ApiProperty({ type: [String], format: 'uuid' })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(200)
+  @IsUUID(undefined, { each: true })
+  userIds!: string[];
 }

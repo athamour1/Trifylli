@@ -28,6 +28,8 @@ export type KladosType = (typeof KladosType)[keyof typeof KladosType];
 export const AccountRole = {
   SUPER_ADMIN: 'SUPER_ADMIN',
   KLADOS_ADMIN: 'KLADOS_ADMIN',
+  /** Στέλεχος με πρόσβαση: δικαιώματα ανά κλάδο από βαθμό και υπευθυνότητες (βλ. `access.ts`). */
+  STELEXOS: 'STELEXOS',
 } as const;
 export type AccountRole = (typeof AccountRole)[keyof typeof AccountRole];
 

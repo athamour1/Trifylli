@@ -1,9 +1,28 @@
 import { ForbiddenException } from '@nestjs/common';
-import { can, canAccessKlados, isSuperAdmin, type Capability, type KladosType } from '@trifylli/shared';
+import {
+  AccountRole,
+  can,
+  canAccessKlados,
+  isSuperAdmin,
+  type AccessProfile,
+  type Capability,
+  type KladosType,
+} from '@trifylli/shared';
 import type { RequestUser } from '../auth/types';
 
-function profileOf(user: RequestUser) {
-  return { role: user.role, adminKlados: user.adminKlados };
+/** Το προφίλ πρόσβασης του χρήστη — **ο μόνος** τρόπος να το φτιάξει κανείς στο API. */
+export function accessProfileOf(user: RequestUser): AccessProfile {
+  return { role: user.role, adminKlados: user.adminKlados, grants: user.grants };
+}
+const profileOf = accessProfileOf;
+
+/**
+ * Στέλεχος: η εμβέλεια εξαρτάται από το δικαίωμα — μπορεί να είναι ταμίας στον
+ * έναν κλάδο και απλό στέλεχος στον άλλον. Για τους υπόλοιπους ρόλους η
+ * εμβέλεια είναι ίδια για όλα τα δικαιώματα.
+ */
+function needsPerKladosCheck(user: RequestUser): user is RequestUser & { activeCapability: Capability } {
+  return user.role === AccountRole.STELEXOS && !!user.activeCapability;
 }
 
 /**
@@ -40,14 +59,19 @@ export function assertKladosAccess(user: RequestUser, klados: KladosType | null 
     // στο guard μέσω της ικανότητας.
     return;
   }
-  if (!canAccessKlados(profileOf(user), klados)) {
+  const allowed = needsPerKladosCheck(user)
+    ? can(profileOf(user), user.activeCapability, klados)
+    : canAccessKlados(profileOf(user), klados);
+  if (!allowed) {
     throw new ForbiddenException(`Δεν έχετε πρόσβαση στα δεδομένα του κλάδου ${klados}.`);
   }
 }
 
 /** Οι κλάδοι που επιτρέπεται να δει ο χρήστης — `null` σημαίνει «όλοι». */
 export function scopedKladoi(user: RequestUser): KladosType[] | null {
-  return isSuperAdmin(profileOf(user)) ? null : user.kladoi;
+  if (isSuperAdmin(profileOf(user))) return null;
+  if (needsPerKladosCheck(user)) return user.kladoi.filter((k) => can(profileOf(user), user.activeCapability, k));
+  return user.kladoi;
 }
 
 /**
