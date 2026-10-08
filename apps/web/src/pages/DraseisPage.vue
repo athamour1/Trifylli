@@ -3,7 +3,7 @@
     <div class="row items-center justify-between q-mb-md q-gutter-sm">
       <div class="page-title">Δράσεις{{ inKlados ? ` — ${kladosLabel}` : '' }}</div>
       <div class="row items-center q-gutter-sm">
-        <q-btn-toggle
+        <SegmentedToggle
           v-model="typeFilter"
           dense
           unelevated
@@ -39,7 +39,19 @@
     >
       <div class="row q-col-gutter-md">
         <div v-for="d in data?.items" :key="d.id" class="col-12 col-md-6">
-          <q-card flat bordered clickable :class="{ 'drasi-draft': d.status === 'PROSXEDIO' }" @click="open(d)">
+          <!-- `cursor-pointer` και όχι `clickable`: η q-card δεν έχει τέτοιο prop, οπότε
+               δεν έβγαζε δείκτη συνδέσμου. Μαζί role/tabindex/Enter ώστε να ανοίγει
+               και από το πληκτρολόγιο, όπως ένας σύνδεσμος. -->
+          <q-card
+            flat
+            bordered
+            class="cursor-pointer"
+            :class="{ 'drasi-draft': d.status === 'PROSXEDIO' }"
+            role="link"
+            tabindex="0"
+            @click="open(d)"
+            @keydown.enter.prevent="open(d)"
+          >
             <q-card-section class="row items-start justify-between">
               <div>
                 <div class="text-subtitle1 text-weight-medium">{{ d.title }}</div>

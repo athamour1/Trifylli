@@ -125,6 +125,14 @@ const routes: RouteRecordRaw[] = [
   // Ξεχωριστές ρίζες (`/login`, `/auth`) και όχι κοινή `/` με το MainLayout:
   // δύο records με το ίδιο `path: '/'` σημαίνει ότι η bare διαδρομή ταιριάζει
   // με το πρώτο, οπότε η Αρχική θα έβγαινε κενή μέσα στο λιτό layout.
+  // Η συνεδρία έληξε ή το token απορρίφθηκε: μια σελίδα που το λέει, με
+  // «Σύνδεση ξανά» που γυρίζει εκεί που ήταν — όχι σκέτο κόκκινο «Unauthorized».
+  {
+    path: '/session-expired',
+    name: 'session-expired',
+    component: () => import('../pages/SessionExpiredPage.vue'),
+    meta: { title: 'Η συνεδρία έληξε', public: true },
+  },
   {
     path: '/login',
     component: () => import('../layouts/BlankLayout.vue'),
@@ -322,6 +330,12 @@ const routes: RouteRecordRaw[] = [
         name: 'sync',
         component: () => import('../pages/SyncPage.vue'),
         meta: { title: 'Συγχρονισμός', icon: 'sync' },
+      },
+      {
+        path: 'settings',
+        name: 'settings',
+        component: () => import('../pages/SettingsPage.vue'),
+        meta: { title: 'Ρυθμίσεις', icon: 'settings' },
       },
     ],
   },

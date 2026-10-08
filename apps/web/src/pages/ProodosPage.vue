@@ -201,13 +201,13 @@ const STATUS_COLOR: Record<ProodosStatus, string> = {
 
   th,
   td {
-    border: 1px solid rgba(0, 0, 0, 0.08);
+    border: 1px solid var(--line-soft);
     padding: 4px 8px;
     white-space: nowrap;
   }
 
   th {
-    background: rgba(0, 0, 0, 0.04);
+    background: var(--tint-soft);
     font-size: 0.75rem;
   }
 }
@@ -215,7 +215,7 @@ const STATUS_COLOR: Record<ProodosStatus, string> = {
 .sticky-col {
   position: sticky;
   left: 0;
-  background: #fff;
+  background: var(--surface);
   z-index: 1;
   text-align: left;
 }

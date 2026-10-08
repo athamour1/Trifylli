@@ -143,7 +143,7 @@
             @drop.prevent="onDrop(q.key)"
             @dragend="onDragEnd"
           >
-            <q-card flat bordered :class="{ 'question-card--active': activeKey === q.key }" @click="activeKey = q.key">
+            <q-card flat bordered class="cursor-pointer" :class="{ 'question-card--active': activeKey === q.key }" @click="activeKey = q.key">
               <div class="text-center drag-grip" @mousedown="armedKey = q.key"><q-icon name="drag_handle" color="grey-5" /></div>
               <q-card-section class="q-pt-none">
                 <div class="row q-col-gutter-sm">
@@ -218,7 +218,7 @@
           </div>
 
           <template v-if="view.summary?.respondents">
-            <q-btn-toggle v-model="respView" dense unelevated toggle-color="klados" toggle-text-color="klados-on" :options="[{ label: 'Σύνοψη', value: 'summary' }, { label: 'Ατομικά', value: 'individual' }]" class="q-mb-md" />
+            <SegmentedToggle v-model="respView" dense unelevated toggle-color="klados" toggle-text-color="klados-on" :options="[{ label: 'Σύνοψη', value: 'summary' }, { label: 'Ατομικά', value: 'individual' }]" class="q-mb-md" />
 
             <!-- Σύνοψη -->
             <template v-if="respView === 'summary'">
@@ -782,7 +782,7 @@ function notifyError(err: unknown, fallback: string): void {
   box-shadow: 0 -3px 0 var(--klados-ink);
 }
 .answer-ghost {
-  border-bottom: 1px dotted rgba(0, 0, 0, 0.3);
+  border-bottom: 1px dotted var(--line-strong);
   max-width: 60%;
   padding: 4px 0;
 }
@@ -790,7 +790,7 @@ function notifyError(err: unknown, fallback: string): void {
   max-width: 85%;
 }
 .scale-toggle {
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--line);
 }
 .scale-dot {
   display: inline-block;
@@ -803,7 +803,7 @@ function notifyError(err: unknown, fallback: string): void {
   font-size: 0.85rem;
 }
 .dist-track {
-  background: rgba(0, 0, 0, 0.06);
+  background: var(--tint);
   border-radius: 4px;
   height: 18px;
   overflow: hidden;

@@ -27,3 +27,4 @@ apps/api/scripts/.eseo-creds
 
 # Παραγωγικά μυστικά (το .example μένει στο git)
 .env.prod
+.ui-proto/

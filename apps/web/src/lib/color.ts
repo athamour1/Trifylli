@@ -95,3 +95,44 @@ export function inkOnWhite(color: string): string {
 export function inkOnWhiteLarge(color: string): string {
   return darkenToLuminance(color, MAX_INK_LUMINANCE_LARGE);
 }
+
+// ── Σκοτεινό θέμα: η αντίστροφη ερώτηση ──
+// Το φόντο είναι η κάρτα του σκοτεινού θέματος (`--q-dark` στο app.scss), όχι
+// η σελίδα: είναι το πιο φωτεινό από τα δύο, άρα η δυσκολότερη περίπτωση.
+const DARK_SURFACE_LUMINANCE = luminance('#1b201c');
+/** Ελάχιστη φωτεινότητα για 4.5:1 πάνω στη σκοτεινή επιφάνεια. */
+const MIN_INK_LUMINANCE_DARK = 4.5 * (DARK_SURFACE_LUMINANCE + 0.05) - 0.05;
+/** Ελάχιστη φωτεινότητα για 3:1 (έντονο/μεγάλο κείμενο). */
+const MIN_INK_LUMINANCE_DARK_LARGE = 3 * (DARK_SURFACE_LUMINANCE + 0.05) - 0.05;
+
+/** Ανοίγει σταδιακά το χρώμα προς το λευκό ώσπου να περάσει το `minLum`, κρατώντας την απόχρωση. */
+function lightenToLuminance(color: string, minLum: number): string {
+  if (!color.startsWith('#')) return color;
+
+  const value = color.slice(1);
+  const full =
+    value.length === 3
+      ? value
+          .split('')
+          .map((c) => c + c)
+          .join('')
+      : value;
+  const rgb = [0, 2, 4].map((offset) => parseInt(full.slice(offset, offset + 2), 16));
+
+  for (let mix = 0; mix <= 100; mix += 2) {
+    const tint = rgb.map((channel) => Math.round(channel + ((255 - channel) * mix) / 100));
+    const hex = `#${tint.map((c) => c.toString(16).padStart(2, '0')).join('')}`;
+    if (luminance(hex) >= minLum) return hex;
+  }
+  return '#fff';
+}
+
+/** Το ίδιο χρώμα, αρκετά ανοιχτό ώστε να διαβάζεται ως κανονικό κείμενο σε σκοτεινό φόντο. */
+export function inkOnDark(color: string): string {
+  return lightenToLuminance(color, MIN_INK_LUMINANCE_DARK);
+}
+
+/** Σαν το `inkOnDark`, για έντονο/μεγάλο κείμενο — τα χρώματα μένουν πιο κοντά στο αυθεντικό. */
+export function inkOnDarkLarge(color: string): string {
+  return lightenToLuminance(color, MIN_INK_LUMINANCE_DARK_LARGE);
+}

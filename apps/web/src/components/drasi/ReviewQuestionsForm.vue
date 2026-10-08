@@ -50,7 +50,7 @@
             <div v-if="q.scaleLow" class="col-auto text-caption text-grey-7">{{ q.scaleLow }}</div>
             <div class="col">
               <!-- Όχι `outline`: στο επιλεγμένο κουμπί το λευκό κείμενο γινόταν και περίγραμμα — αόρατο σε λευκό. -->
-              <q-btn-toggle
+              <SegmentedToggle
                 v-model="mine[q.id]!.value"
                 :options="Array.from({ length: scaleMax(q.kind) }, (_, i) => ({ label: String(i + 1), value: i + 1 }))"
                 unelevated
@@ -192,7 +192,7 @@ function submit(): void {
   border-color: var(--q-negative);
 }
 .scale-toggle {
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--line);
 }
 .dist-label {
   width: 140px;
@@ -200,7 +200,7 @@ function submit(): void {
   font-size: 0.85rem;
 }
 .dist-track {
-  background: rgba(0, 0, 0, 0.06);
+  background: var(--tint);
   border-radius: 4px;
   height: 18px;
   overflow: hidden;

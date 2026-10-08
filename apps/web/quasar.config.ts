@@ -14,7 +14,7 @@ try {
 }
 
 export default defineConfig((ctx) => ({
-  boot: ['fonts', 'api', 'auth'],
+  boot: ['theme', 'fonts', 'api', 'auth', 'components'],
 
   css: ['app.scss'],
 
@@ -58,7 +58,8 @@ export default defineConfig((ctx) => ({
         primary: '#2e7d32',
         secondary: '#6d4c41',
         accent: '#f9a825',
-        dark: '#1d1d1d',
+        // ΟΧΙ `dark` εδώ: η Quasar το γράφει inline στο body και νικά το
+        // `--q-dark` του app.scss, που στο σκοτεινό θέμα βάφεται ανά κλάδο.
         positive: '#2e7d32',
         negative: '#c62828',
         info: '#0277bd',

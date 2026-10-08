@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="row items-center q-mb-md q-gutter-sm">
-      <q-btn-toggle
+      <SegmentedToggle
         v-model="view"
         dense
         unelevated
@@ -122,7 +122,7 @@
       <q-card v-if="canWrite && !locked" flat bordered class="q-pa-sm q-mb-md">
         <div class="row q-col-gutter-sm items-start">
           <div class="col-6 col-sm-2">
-            <q-btn-toggle
+            <SegmentedToggle
               v-model="entry.kind"
               dense
               unelevated
@@ -170,7 +170,7 @@
         </div>
       </q-card>
 
-      <q-btn-toggle
+      <SegmentedToggle
         v-model="entryFilter"
         class="q-mb-sm"
         dense

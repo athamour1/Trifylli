@@ -2,7 +2,7 @@
   <q-page padding>
     <div class="row items-center justify-between q-mb-md">
       <div class="page-title">{{ inKlados ? `Ημερολόγιο — ${kladosLabel}` : 'Κεντρικό ημερολόγιο' }}</div>
-      <q-btn-toggle
+      <SegmentedToggle
         v-model="view"
         dense
         unelevated
@@ -244,7 +244,7 @@ void KLADOS_META;
 
 .calendar-cell {
   min-height: 84px;
-  border: 1px solid rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--line-soft);
   border-radius: 4px;
   padding: 2px 3px;
   overflow: hidden;
@@ -262,7 +262,7 @@ void KLADOS_META;
 .calendar-daynum {
   font-size: 0.7rem;
   text-align: right;
-  color: rgba(0, 0, 0, 0.6);
+  color: var(--text-soft);
 }
 
 .calendar-event {

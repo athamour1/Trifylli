@@ -1,6 +1,7 @@
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 import { KLADOS_META, type KladosType } from '@trifylli/shared';
-import { inkOnWhite, inkOnWhiteLarge, readableOnLarge } from './color';
+import { inkOnDark, inkOnDarkLarge, inkOnWhite, inkOnWhiteLarge, readableOnLarge } from './color';
+import { isDark } from './theme';
 
 /**
  * Το χρώμα του κλάδου ως CSS μεταβλητές.
@@ -28,9 +29,12 @@ export function kladosVars(klados: KladosType | null | undefined): Record<string
     '--klados-on-bar': readableOnLarge(color),
     // Ξεχωριστή απόχρωση για κείμενο: το φόντο και η γραφή έχουν αντίστροφες
     // απαιτήσεις, και ένα χρώμα δεν τις ικανοποιεί και τις δύο.
-    '--klados-ink': inkOnWhite(color),
+    // Στο σκοτεινό θέμα η επιφάνεια είναι σκούρα, άρα το μελάνι ανοίγει αντί να
+    // σκουραίνει. Το `isDark` είναι reactive: templates που καλούν `kladosVars`
+    // ξαναϋπολογίζονται μόνα τους όταν αλλάζει το θέμα.
+    '--klados-ink': isDark.value ? inkOnDark(color) : inkOnWhite(color),
     // Πιο ζωηρή απόχρωση για έντονο/μεγάλο κείμενο (μενού), όπως στη μπάρα.
-    '--klados-ink-lg': inkOnWhiteLarge(color),
+    '--klados-ink-lg': isDark.value ? inkOnDarkLarge(color) : inkOnWhiteLarge(color),
   };
 }
 
@@ -62,3 +66,7 @@ export function applyKladosTheme(klados: KladosType | null | undefined): void {
     else document.body.style.removeProperty(name);
   }
 }
+
+// Οι μεταβλητές στο `body` είναι inline και δεν ξέρουν από θέμα· με κάθε
+// εναλλαγή τις ξαναγράφουμε για τον ίδιο κλάδο.
+watch(isDark, () => applyKladosTheme(themedKlados.value));

@@ -30,7 +30,8 @@
 
     <q-inner-loading :showing="loading" />
 
-    <q-markup-table v-if="matrix" flat bordered dense>
+    <!-- `wrap-cells`: τρεις στήλες με chip, ημερομηνία και κουμπιά δεν χωρούν σε μία γραμμή στη στήλη περιεχομένου· καλύτερα να τυλίγουν παρά οριζόντια κύλιση. -->
+    <q-markup-table v-if="matrix" flat bordered dense wrap-cells>
       <thead>
         <tr>
           <th class="text-left">Συμμετέχων</th>

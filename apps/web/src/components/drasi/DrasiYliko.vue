@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="row items-center q-mb-md q-gutter-sm">
-      <q-btn-toggle
+      <SegmentedToggle
         v-model="view"
         dense
         unelevated

@@ -46,7 +46,7 @@
 
             <div v-if="field.kind === 'yesno'" class="field-row">
               <div class="text-body2">{{ labelOf(field) }}<span v-if="field.required" class="text-negative"> *</span></div>
-              <q-btn-toggle
+              <SegmentedToggle
                 v-model="answers[field.key]"
                 dense
                 unelevated
@@ -254,7 +254,7 @@ async function submit(): Promise<void> {
   padding: 4px 0;
 }
 .section-title {
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  border-bottom: 1px solid var(--line-soft);
   padding-bottom: 4px;
 }
 </style>

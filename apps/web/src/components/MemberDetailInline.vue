@@ -13,7 +13,7 @@
           </q-btn>
 
           <div class="row items-center no-wrap q-gutter-md hero-main">
-            <q-avatar size="72px" color="white" text-color="dark" class="text-weight-bold">
+            <q-avatar size="72px" color="white" text-color="black" class="text-weight-bold">
               {{ initials }}
             </q-avatar>
             <div class="col">
@@ -27,8 +27,8 @@
                 <span v-if="data.age !== null"> · {{ data.age }} ετών</span>
               </div>
               <div class="row items-center q-gutter-xs q-mt-sm">
-                <q-chip dense square size="sm" color="white" text-color="dark" :label="MEMBER_KIND_LABEL[data.kind]" />
-                <q-chip dense square size="sm" color="white" text-color="dark" :label="MEMBER_STATUS_LABEL[data.status]" />
+                <q-chip dense square size="sm" color="white" text-color="black" :label="MEMBER_KIND_LABEL[data.kind]" />
+                <q-chip dense square size="sm" color="white" text-color="black" :label="MEMBER_STATUS_LABEL[data.status]" />
                 <q-chip v-if="isSOS" dense square size="sm" color="deep-orange-7" text-color="white" icon="emergency" label="ΣΟΣ" />
               </div>
             </div>

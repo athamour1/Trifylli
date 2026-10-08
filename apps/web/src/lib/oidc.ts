@@ -17,8 +17,23 @@ import { OIDC_AUTHORITY, OIDC_CLIENT_ID, OIDC_LOGOUT_FLOW } from './runtime-conf
 
 export { OIDC_AUTHORITY, OIDC_CLIENT_ID };
 
+
 /** `false` ⇒ τρέχουμε σε development με `x-dev-email` αντί για πραγματικό login. */
 export const oidcEnabled = Boolean(OIDC_AUTHORITY && OIDC_CLIENT_ID);
+
+/**
+ * Η ροή αλλαγής κωδικού (`infra/authentik/trifylli-password-change.yaml`).
+ * Απαιτεί ενεργή συνεδρία Authentik — την έχει όποιος μόλις συνδέθηκε — και
+ * ζητά μόνο νέο κωδικό και επανάληψη. Την επιστροφή στις Ρυθμίσεις την ορίζει
+ * η ίδια η ροή: το `?next=` του Authentik δεν δέχεται άλλον host.
+ */
+const PASSWORD_CHANGE_FLOW = 'trifylli-password-change';
+
+/** `null` όταν δεν υπάρχει OIDC (dev παράκαμψη): τότε δεν υπάρχει και κωδικός. */
+export function passwordChangeUrl(): string | null {
+  if (!oidcEnabled) return null;
+  return new URL(`/if/flow/${PASSWORD_CHANGE_FLOW}/`, OIDC_AUTHORITY).toString();
+}
 
 const REDIRECT_PATH = '/auth/callback';
 const SILENT_PATH = '/auth/silent';

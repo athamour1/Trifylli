@@ -13,7 +13,7 @@
       </q-card-section>
 
       <q-card-section class="q-pt-none q-pb-sm">
-        <q-btn-toggle
+        <SegmentedToggle
           v-model="source"
           dense
           unelevated
@@ -40,7 +40,7 @@
               </q-input>
             </div>
           </div>
-          <q-btn-toggle
+          <SegmentedToggle
             v-model="filters.kind"
             class="q-mt-sm"
             dense
@@ -122,7 +122,7 @@
             <div class="col-6"><q-input v-model="guestForm.lastName" label="Επώνυμο *" outlined dense color="klados" /></div>
             <div class="col-6"><q-input v-model="guestForm.firstName" label="Όνομα *" outlined dense color="klados" /></div>
             <div class="col-6">
-              <q-btn-toggle
+              <SegmentedToggle
                 v-model="guestForm.kind"
                 dense
                 unelevated

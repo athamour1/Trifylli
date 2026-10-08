@@ -1,6 +1,6 @@
 <template>
   <q-layout view="hHh Lpr lFf">
-    <q-header elevated class="bg-klados text-klados-bar">
+    <q-header elevated class="bg-klados text-klados-bar" :class="{ 'is-scrolled': scrolled }">
       <q-toolbar>
         <q-btn flat dense round icon="menu" aria-label="Μενού" @click="drawer = !drawer" />
 
@@ -41,6 +41,11 @@
                   <q-item-label>{{ auth.currentPeriod.label }}</q-item-label>
                 </q-item-section>
               </q-item>
+              <q-separator />
+              <q-item clickable v-close-popup :to="{ name: 'settings' }">
+                <q-item-section avatar><q-icon name="settings" /></q-item-section>
+                <q-item-section>Ρυθμίσεις</q-item-section>
+              </q-item>
               <template v-if="session.enabled">
                 <q-separator />
                 <q-item clickable v-close-popup @click="confirmSignOut">
@@ -54,9 +59,17 @@
       </q-toolbar>
     </q-header>
 
-    <q-drawer v-model="drawer" show-if-above bordered :width="272">
+    <!-- Σε μεγάλες οθόνες το συρτάρι «αιωρείται» (βλ. app.scss, «Πλωτά πάνελ»):
+         τα 12px επιπλέον πλάτος είναι το κενό αριστερά του, ώστε η Quasar να
+         υπολογίζει σωστά το περιθώριο της σελίδας και την απόκρυψη. -->
+    <q-drawer ref="drawerRef" v-model="drawer" show-if-above bordered :width="$q.screen.lt.md ? 272 : 284">
+      <!-- Ο περιέκτης του μενού είναι το σημείο αναφοράς του «χαπιού» που γλιστρά
+           στο ενεργό στοιχείο (useSlidingThumb). Μετριέται αυτός και όχι το
+           συρτάρι, ώστε να πιάνει και το άνοιγμα/κλείσιμο ενοτήτων κλάδου. -->
+      <div ref="menuEl" class="drawer-menu" :class="{ 'drawer-menu--ready': menuReady }">
+        <span class="drawer-menu__thumb" :style="menuThumb" aria-hidden="true" />
       <q-list padding>
-        <q-item clickable v-ripple :to="{ name: 'dashboard' }" exact>
+        <q-item clickable v-ripple :to="{ name: 'dashboard' }" exact active-class="klados-active">
           <q-item-section avatar><q-icon name="dashboard" /></q-item-section>
           <q-item-section>Αρχική</q-item-section>
         </q-item>
@@ -71,7 +84,7 @@
           :key="klados.type"
           :icon="klados.icon"
           :label="klados.label"
-          :header-style="{ color: inkOnWhiteLarge(klados.color) }"
+          :header-style="{ color: 'var(--klados-ink-lg)' }"
           :style="kladosVars(klados.type)"
           :model-value="openSection === klados.type"
           expand-separator
@@ -122,7 +135,7 @@
         </q-expansion-item>
 
         <q-separator spaced />
-        <q-item clickable v-ripple :to="{ name: 'sync' }">
+        <q-item clickable v-ripple :to="{ name: 'sync' }" active-class="klados-active">
           <q-item-section avatar>
             <q-icon name="sync" :color="offline.hasPending ? 'warning' : undefined" />
           </q-item-section>
@@ -132,9 +145,10 @@
           </q-item-section>
         </q-item>
       </q-list>
+      </div>
     </q-drawer>
 
-    <q-page-container>
+    <q-page-container ref="pageContainer">
       <q-banner v-if="!offline.online" dense class="bg-grey-9 text-white offline-banner">
         <template #avatar><q-icon name="cloud_off" /></template>
         Λειτουργία χωρίς σύνδεση — βλέπετε αποθηκευμένα δεδομένα. Οι καταχωρήσεις θα σταλούν αυτόματα.
@@ -148,25 +162,77 @@
         </template>
       </q-banner>
 
-      <router-view />
+      <!-- Μικρή μετάβαση ανάμεσα σε σελίδες (βλ. app.scss «Κίνηση»): fade με
+           ελαφρύ ανέβασμα, 160ms — αρκετή για να «κουμπώνει» η αλλαγή, όχι τόση
+           ώστε να την περιμένεις. -->
+      <!-- `key` στο id της διαδρομής: οι σελίδες λεπτομέρειας (δράση, συγκέντρωση,
+           συμβούλιο, μέλος) διαβάζουν το id μία φορά, και από δράση σε δράση το Vue
+           Router ξαναχρησιμοποιεί το ίδιο component — έμεναν τα δεδομένα της
+           προηγούμενης. Η αλλαγή ενότητας μέσα στην ίδια δράση κρατά το ίδιο key. -->
+      <router-view v-slot="{ Component, route: viewRoute }">
+        <transition name="tf-page" mode="out-in">
+          <component :is="Component" :key="String(viewRoute.params.id ?? viewRoute.name)" />
+        </transition>
+      </router-view>
     </q-page-container>
   </q-layout>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { KladosType } from '@trifylli/shared';
-import { useQuasar } from 'quasar';
-import { inkOnWhiteLarge } from '../lib/color';
+import { useQuasar, type QDrawer } from 'quasar';
 import { applyKladosTheme, kladosVars, themedKlados } from '../lib/klados-theme';
 import { useAuthStore } from '../stores/auth';
 import { useOfflineStore } from '../stores/offline';
 import { useSessionStore } from '../stores/session';
 import { KLADOS_LINKS, TOPIKO_LINKS } from '../router/routes';
+import { useSlidingThumb } from '../composables/useSlidingThumb';
 
 const drawer = ref(false);
 const route = useRoute();
+
+/** Το χάπι του ενεργού στοιχείου στο μενού — βλ. useSlidingThumb. */
+const menuEl = ref<HTMLElement | null>(null);
+const { thumbStyle: menuThumb, ready: menuReady } = useSlidingThumb(menuEl, '.klados-active');
+
+/**
+ * «Ζελέ» στο άνοιγμα του συρταριού: η κλάση μπαίνει μόνο όσο κρατά η κίνηση,
+ * ώστε το overshoot (βλ. app.scss) να μην αγγίζει το κλείσιμο ούτε τις αλλαγές
+ * μεγέθους παραθύρου, όπου ένα «μπινγκ» θα ήταν εκνευριστικό.
+ * Απευθείας στο DOM: η QDrawer δεν περνά `class` στο root της, οπότε ένα
+ * `:class` στο template δεν φτάνει πουθενά.
+ */
+const drawerRef = ref<QDrawer | null>(null);
+let drawerBounceTimer: ReturnType<typeof setTimeout> | null = null;
+watch(drawer, (open) => {
+  const el = drawerRef.value?.$el as HTMLElement | undefined;
+  if (!el) return;
+  if (drawerBounceTimer) clearTimeout(drawerBounceTimer);
+  // Άνοιγμα: overshoot. Κλείσιμο: «φόρα» προς τα μέσα και μετά έξω (το
+  // overshoot προς τα έξω θα γινόταν εκτός οθόνης, αόρατο).
+  el.classList.toggle('drawer-bounce', open);
+  el.classList.toggle('drawer-bounce-out', !open);
+  drawerBounceTimer = setTimeout(() => el.classList.remove('drawer-bounce', 'drawer-bounce-out'), 900);
+});
+
+/**
+ * Η μπάρα παίρνει βαθύτερη σκιά μόλις το περιεχόμενο κυλήσει από κάτω της — το
+ * σήμα «υπάρχει κι άλλο πάνω». Το scroll ζει στον q-page-container (app.scss),
+ * όχι στο window, γι' αυτό ακούμε εκεί.
+ */
+const scrolled = ref(false);
+const pageContainer = ref<{ $el: HTMLElement } | null>(null);
+function onPageScroll(event: Event): void {
+  scrolled.value = (event.target as HTMLElement).scrollTop > 4;
+}
+onMounted(() => {
+  const el = pageContainer.value?.$el;
+  // capture: το scroll δεν κάνει bubble, και σε μεγάλες οθόνες κυλάει η κάρτα
+  // της σελίδας (παιδί του περιέκτη), όχι ο ίδιος ο περιέκτης.
+  if (el) el.addEventListener('scroll', onPageScroll, { passive: true, capture: true });
+});
 const router = useRouter();
 const $q = useQuasar();
 const auth = useAuthStore();
@@ -261,8 +327,8 @@ watch(
 /** Χρώμα Τοπικού = πράσινο εφαρμογής, στη λογική των μεταβλητών κλάδου. */
 const topikoVars: Record<string, string> = {
   '--klados-color': 'var(--q-primary)',
-  '--klados-ink': 'var(--q-primary)',
-  '--klados-ink-lg': 'var(--q-primary)',
+  '--klados-ink': 'var(--topiko-ink)',
+  '--klados-ink-lg': 'var(--topiko-ink)',
   '--klados-on': '#fff',
   '--klados-on-bar': '#fff',
 };

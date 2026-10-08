@@ -12,8 +12,8 @@ body {
   --klados-color: var(--q-primary);
   --klados-on: #fff;
   --klados-on-bar: #fff;
-  --klados-ink: var(--q-primary);
-  --klados-ink-lg: var(--q-primary);
+  --klados-ink: var(--topiko-ink);
+  --klados-ink-lg: var(--topiko-ink);
 }
 
 // Τα ονόματα ακολουθούν τη σύμβαση της Quasar: ένα `color="klados"` παράγει
@@ -75,12 +75,47 @@ body {
   transition: background-color 200ms ease;
 }
 
-// Το ενεργό στοιχείο του μενού παίρνει το χρώμα του κλάδου στον οποίο ανήκει.
-// `box-shadow` και όχι `border-left`: δεν μετακινεί το περιεχόμενο.
+// Το ενεργό στοιχείο του μενού: «χάπι» στο χρώμα του κλάδου στον οποίο ανήκει
+// (ίδιος κανόνας για Αρχική, κλάδους, Τοπικό και Συγχρονισμό). Το περιθώριο
+// το ξεκολλά από τις άκρες του συρταριού, ώστε να διαβάζεται ως σχήμα.
 .klados-active {
   color: var(--klados-ink-lg, var(--klados-ink)) !important;
   font-weight: 600;
-  box-shadow: inset 3px 0 0 currentColor;
+  background: color-mix(in srgb, var(--klados-ink) 14%, transparent);
+  border-radius: 999px;
+  margin: 2px 10px;
+}
+
+/* Στο κύριο συρτάρι το χρώμα του ενεργού το φέρνει το χάπι που γλιστρά
+   (MainLayout `.drawer-menu__thumb`), όχι το ίδιο το στοιχείο. */
+.drawer-menu {
+  position: relative;
+}
+.drawer-menu .klados-active {
+  background: transparent;
+}
+.drawer-menu .q-item,
+.drawer-menu .q-expansion-item {
+  position: relative;
+  z-index: 1;
+}
+.drawer-menu__thumb {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--klados-ink) 14%, transparent);
+  pointer-events: none;
+  will-change: transform, height;
+}
+.drawer-menu--ready .drawer-menu__thumb {
+  transition:
+    transform 280ms var(--ease-emphasized),
+    height 280ms var(--ease-emphasized),
+    width 280ms var(--ease-emphasized),
+    background-color var(--dur-medium) var(--ease-standard),
+    opacity var(--dur-medium) var(--ease-standard);
 }
 
 .page-title {
@@ -125,6 +160,18 @@ body {
   --radius-card: 14px;
   --shadow-1: 0 1px 2px rgba(16, 24, 20, 0.04), 0 1px 3px rgba(16, 24, 20, 0.06);
   --shadow-2: 0 6px 16px rgba(16, 24, 20, 0.09), 0 2px 6px rgba(16, 24, 20, 0.05);
+  /* Γραμμές, αποχρώσεις και απαλό κείμενο — αντί για rgba(0,0,0,…) μέσα στα
+     components, ώστε το σκοτεινό θέμα να τα γυρίζει όλα από ένα σημείο. */
+  --surface-2: #fafafa;
+  --line: rgba(0, 0, 0, 0.12);
+  --line-soft: rgba(0, 0, 0, 0.08);
+  --line-strong: rgba(0, 0, 0, 0.3);
+  --tint: rgba(0, 0, 0, 0.06);
+  --tint-soft: rgba(0, 0, 0, 0.04);
+  --text-soft: rgba(0, 0, 0, 0.6);
+  /* Το «μελάνι» του Τοπικού: πράσινο εφαρμογής στο φως, πιο ανοιχτό στο σκοτάδι. */
+  --topiko-ink: var(--q-primary);
+  --q-card-bg: #ffffff;
 }
 
 body {
@@ -184,6 +231,127 @@ a.q-card:hover {
   letter-spacing: 0;
 }
 
+/* ════════════════════════════════════════════════════════════════════════
+   Κίνηση & elevation (Material 3)
+   Κανόνας: επίπεδο σε ηρεμία, ανασηκώνεται στο hover, «πατιέται» στο κλικ.
+   Μικρές διάρκειες (120–200ms) και standard easing· τίποτα δεν περιμένεις.
+   Όλα σβήνουν με prefers-reduced-motion (καθολικός κανόνας παρακάτω).
+   ════════════════════════════════════════════════════════════════════════ */
+:root {
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasized: cubic-bezier(0.3, 0, 0, 1);
+  --dur-short: 120ms;
+  --dur-medium: 200ms;
+  /* M3 state layers: ποσοστά «μελανιού» πάνω στην επιφάνεια. */
+  --state-hover: 8%;
+  --state-press: 12%;
+}
+
+/* Γεμάτα κουμπιά (standard): χωρίς σκιά σε ηρεμία — η Quasar τα δίνει
+   ανασηκωμένα από προεπιλογή και μαζί με τις κάρτες έβγαζαν θόρυβο. */
+.q-btn.q-btn--standard {
+  box-shadow: none;
+}
+.q-btn {
+  transition:
+    transform var(--dur-short) var(--ease-standard),
+    box-shadow var(--dur-medium) var(--ease-standard),
+    background-color var(--dur-medium) var(--ease-standard),
+    color var(--dur-medium) var(--ease-standard);
+}
+/* Hover: ανασήκωμα 1px + σκιά, μόνο σε κουμπιά με «σώμα» (όχι flat/round-icon). */
+.q-btn.q-btn--standard.q-btn--rectangle:not(.disabled):hover,
+.q-btn.q-btn--unelevated.q-btn--rectangle:not(.disabled):hover,
+.q-btn.q-btn--outline.q-btn--rectangle:not(.disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-2);
+}
+/* Πάτημα: μικραίνει ελάχιστα — η αίσθηση του «πίεσα κάτι». */
+.q-btn:not(.disabled):active {
+  transform: scale(0.97);
+  box-shadow: none;
+  transition-duration: 60ms;
+}
+.q-btn.q-btn--round:not(.disabled):active {
+  transform: scale(0.9);
+}
+/* Το hover state layer της Quasar (q-focus-helper) να έχει το ρυθμό μας. */
+.q-focus-helper {
+  transition: background-color var(--dur-medium) var(--ease-standard), opacity var(--dur-medium) var(--ease-standard);
+}
+
+/* Εικονίδιο μέσα σε κουμπί: μικρό «νεύμα» στο hover (π.χ. το ➕ της Νέας δράσης). */
+.q-btn.q-btn--rectangle:not(.disabled):hover .q-btn__content > .q-icon:first-child {
+  transform: translateX(-1px) scale(1.08);
+}
+.q-btn__content > .q-icon {
+  transition: transform var(--dur-medium) var(--ease-emphasized);
+}
+
+/* Στοιχεία λίστας/μενού (συρτάρι, dropdowns): state layer στο χρώμα του κλάδου. */
+.q-item.q-item--clickable {
+  transition: background-color var(--dur-medium) var(--ease-standard), color var(--dur-medium) var(--ease-standard);
+}
+.q-drawer .q-item.q-item--clickable:not(.klados-active):hover {
+  background: color-mix(in srgb, var(--klados-ink) var(--state-hover), transparent);
+  border-radius: 999px;
+  margin: 2px 10px;
+}
+.q-drawer .q-item.q-item--clickable {
+  margin: 2px 10px;
+  border-radius: 999px;
+}
+.klados-active {
+  transition: background-color var(--dur-medium) var(--ease-standard);
+}
+
+/* Chips που πατιούνται: ίδιο ανασήκωμα με τα κουμπιά. */
+.q-chip--clickable {
+  transition: transform var(--dur-short) var(--ease-standard), box-shadow var(--dur-medium) var(--ease-standard);
+}
+.q-chip--clickable:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-1);
+}
+.q-chip--clickable:active {
+  transform: scale(0.96);
+}
+
+/* Γραμμές πίνακα: απαλό hover, να ξέρεις σε ποια είσαι. */
+.q-table tbody tr {
+  transition: background-color var(--dur-short) var(--ease-standard);
+}
+.q-table tbody tr:hover {
+  background: color-mix(in srgb, var(--klados-ink) 5%, transparent);
+}
+
+/* Κάρτες: η σκιά τους «αναπνέει» (το hover για clickable υπάρχει ήδη πιο πάνω). */
+.q-card {
+  transition: box-shadow var(--dur-medium) var(--ease-standard), transform var(--dur-medium) var(--ease-standard);
+}
+
+/* Expansion / q-slide: emphasized easing αντί για linear. */
+.q-expansion-item__container,
+.q-expansion-item__content,
+.q-slide-transition {
+  transition-timing-function: var(--ease-emphasized) !important;
+}
+
+/* Μετάβαση σελίδας (router-view στο MainLayout). */
+.tf-page-enter-active {
+  transition: opacity 160ms var(--ease-standard), transform 160ms var(--ease-emphasized);
+}
+.tf-page-leave-active {
+  transition: opacity 90ms var(--ease-standard);
+}
+.tf-page-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+.tf-page-leave-to {
+  opacity: 0;
+}
+
 /* ── Header & drawer ── */
 .q-header {
   box-shadow: 0 1px 0 rgba(0, 0, 0, 0.04), 0 3px 10px rgba(16, 24, 20, 0.07);
@@ -193,6 +361,73 @@ a.q-card:hover {
 }
 .q-drawer--bordered {
   border-right-color: var(--border-soft) !important;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Πλωτά πάνελ
+   Μπάρα, συρτάρι και περιεχόμενο ήταν κολλημένα στις άκρες και μεταξύ τους,
+   ενώ όλα τα υπόλοιπα (κάρτες, κουμπιά, chips) έχουν γωνίες. Σε μεγάλες οθόνες
+   γίνονται τρεις στρογγυλεμένες κάρτες πάνω στο φόντο, με 12px ανάμεσα.
+   Η Quasar κρατά τη γεωμετρία της: το συρτάρι δηλώνεται 284px (MainLayout) και
+   ζωγραφίζεται 272 — τα 12 που περισσεύουν είναι το κενό στα αριστερά του, άρα
+   το περιθώριο της σελίδας και το translateX της απόκρυψης βγαίνουν σωστά.
+   ════════════════════════════════════════════════════════════════════════ */
+@media (min-width: 1024px) {
+  .q-layout {
+    padding: 12px;
+    gap: 12px;
+  }
+  /* Ο περιέκτης του συρταριού είναι flex item μηδενικού ύψους ανάμεσα σε μπάρα
+     και σελίδα: χωρίς αυτό το `gap` μετρούσε δύο φορές (24px αντί 12). Το
+     συρτάρι είναι `fixed`, οπότε δεν τον χρειάζεται ως κουτί. */
+  .q-layout > .q-drawer-container {
+    display: contents;
+  }
+  .q-header {
+    border-radius: 16px;
+    box-shadow: var(--shadow-2);
+  }
+  .q-drawer {
+    width: calc(var(--q-drawer-width) - 12px) !important;
+    left: 12px;
+    /* Κάτω από την μπάρα (12 + 50) και πάνω από το κάτω περιθώριο. */
+    margin-top: 24px;
+    margin-bottom: 12px;
+    border: 1px solid var(--border-soft) !important;
+    border-radius: 16px;
+    box-shadow: var(--shadow-1);
+    overflow: hidden;
+  }
+  /* Η κάρτα της σελίδας παίρνει ΑΚΡΙΒΩΣ το ύψος που περισσεύει και κυλάει
+     μέσα της: έτσι οι τέσσερις γωνίες της είναι πάντα ορατές, αντί να ξεφεύγει
+     κάτω από το viewport και να φαίνεται «κομμένη». Τα banners (offline,
+     σφάλμα) μένουν από πάνω της, εκτός κύλισης. */
+  .q-page-container {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .q-page-container > .q-page {
+    flex: 1 1 auto;
+    /* Η Quasar γράφει inline min-height = ύψος περιέκτη· εδώ θέλουμε να χωρά. */
+    min-height: 0 !important;
+    box-sizing: border-box;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scroll-behavior: smooth;
+    background: var(--surface);
+    border: 1px solid var(--border-soft);
+    border-radius: 16px;
+    box-shadow: var(--shadow-1);
+  }
+}
+/* Σε μικρές οθόνες το συρτάρι είναι overlay: μένει κολλημένο αριστερά, με
+   στρογγυλεμένη μόνο την πλευρά που «μπαίνει» πάνω στη σελίδα. */
+@media (max-width: 1023.98px) {
+  .q-drawer {
+    border-radius: 0 18px 18px 0;
+    overflow: hidden;
+  }
 }
 
 /* ── Chips & badges: λίγο πιο «στρογγυλά» και ευανάγνωστα ── */
@@ -278,26 +513,519 @@ body,
    αλλάζει ανά διαδρομή, ώστε να ακολουθεί τη μπάρα — ακόμη και για το ανοιχτό
    κίτρινο των Πουλιών μένει ορατή. */
 .q-page-container,
+.q-page,
 .q-drawer__content {
   scrollbar-width: thin;
   scrollbar-color: var(--klados-ink) transparent;
 }
 .q-page-container::-webkit-scrollbar,
+.q-page::-webkit-scrollbar,
 .q-drawer__content::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
 .q-page-container::-webkit-scrollbar-track,
+.q-page::-webkit-scrollbar-track,
 .q-drawer__content::-webkit-scrollbar-track {
   background: transparent;
 }
 .q-page-container::-webkit-scrollbar-thumb,
+.q-page::-webkit-scrollbar-thumb,
 .q-drawer__content::-webkit-scrollbar-thumb {
   background: var(--klados-ink);
   border-radius: 999px;
-  border: 2px solid var(--app-bg);
+  border: 2px solid var(--surface);
 }
 .q-page-container::-webkit-scrollbar-thumb:hover,
+.q-page::-webkit-scrollbar-thumb:hover,
 .q-drawer__content::-webkit-scrollbar-thumb:hover {
   background: color-mix(in srgb, var(--klados-ink), #000 18%);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Σκοτεινό θέμα (Quasar Dark → `body.body--dark`)
+   Η Quasar βάφει μόνη της κάρτες, πίνακες, πεδία, λίστες. Εδώ γυρίζουν τα
+   δικά μας tokens και οι κλάσεις χρώματος που οι σελίδες χρησιμοποιούν με
+   «φωτεινή» προϋπόθεση (γκρι κείμενο, ανοιχτές αποχρώσεις φόντου).
+   Πρασινωπό σκούρο αντί για ουδέτερο μαύρο: ίδια θερμοκρασία με το φωτεινό.
+   ════════════════════════════════════════════════════════════════════════ */
+body.body--dark {
+  /* Οι επιφάνειες βάφονται ελαφρά με το χρώμα του κλάδου που βλέπεις: μπλε
+     σκοτάδι στους Οδηγούς, θερμό στα Πουλιά, πράσινο στο Τοπικό (εκεί το
+     `--klados-color` πέφτει στο πράσινο της εφαρμογής). Το `--klados-color`
+     το γράφει inline στο body το klados-theme.ts, οπότε το color-mix εδώ, πάνω
+     στο ίδιο στοιχείο, το βλέπει· τα ποσοστά είναι μικρά για να μένει «σκούρο»
+     και όχι «χρωματιστό». */
+  --app-bg: color-mix(in srgb, #111214, var(--klados-color) 7%);
+  --surface: color-mix(in srgb, #1a1c1f, var(--klados-color) 9%);
+  --surface-2: color-mix(in srgb, #212428, var(--klados-color) 10%);
+  --border-soft: color-mix(in srgb, #2b2f34, var(--klados-color) 18%);
+  --muted: #a3acb3;
+  --ink: #e8ebee;
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 3px rgba(0, 0, 0, 0.5);
+  --shadow-2: 0 6px 16px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.4);
+  --line: rgba(255, 255, 255, 0.14);
+  --line-soft: rgba(255, 255, 255, 0.1);
+  --line-strong: rgba(255, 255, 255, 0.32);
+  --tint: rgba(255, 255, 255, 0.07);
+  --tint-soft: rgba(255, 255, 255, 0.05);
+  --text-soft: rgba(255, 255, 255, 0.66);
+  --topiko-ink: #7cc47f;
+  /* Οι επιφάνειες της Quasar ακολουθούν την ίδια παλέτα. */
+  --q-dark-page: var(--app-bg);
+  --q-dark: var(--surface);
+  --q-card-bg: var(--surface);
+
+  background: var(--app-bg);
+  color: var(--ink);
+  transition: background-color var(--dur-medium) var(--ease-standard);
+
+  .q-drawer {
+    background: color-mix(in srgb, #16181b, var(--klados-color) 8%);
+    transition: background-color var(--dur-medium) var(--ease-standard);
+  }
+  /* Κάρτες και σελίδα: η αλλαγή απόχρωσης ανάμεσα σε κλάδους γίνεται ομαλά. */
+  .q-card,
+  .q-page {
+    transition: background-color var(--dur-medium) var(--ease-standard), box-shadow var(--dur-medium) var(--ease-standard), transform var(--dur-medium) var(--ease-standard);
+  }
+  .q-header {
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.3), 0 3px 10px rgba(0, 0, 0, 0.45);
+  }
+  .q-card--bordered,
+  .q-list--bordered {
+    border-color: var(--border-soft);
+  }
+  .q-drawer--bordered {
+    border-right-color: var(--border-soft) !important;
+  }
+
+  /* Γκρι κείμενο «πάνω σε λευκό» → ανοιχτό γκρι πάνω σε σκούρο. */
+  .text-grey-6,
+  .text-grey-7,
+  .text-grey-8 {
+    color: #a7b3a8 !important;
+  }
+  .text-grey-9,
+  .text-grey-10,
+  .text-dark {
+    color: #e0e6e0 !important;
+  }
+  /* Τα σημασιολογικά χρώματα της μάρκας είναι βαθιά για λευκό φόντο· ως
+     κείμενο σε σκούρο θέλουν μια ανοιχτότερη απόχρωση (τα κουμπιά `bg-*`
+     μένουν ως έχουν). */
+  .text-primary,
+  .text-positive {
+    color: #6fbf73 !important;
+  }
+  .text-negative {
+    color: #ef5350 !important;
+  }
+  .text-warning {
+    color: #ffa726 !important;
+  }
+  .text-info {
+    color: #4fc3f7 !important;
+  }
+  .text-orange-9,
+  .text-orange-10 {
+    color: #ffb74d !important;
+  }
+  .text-green-10 {
+    color: #81c784 !important;
+  }
+
+  /* Ανοιχτές αποχρώσεις φόντου → διαφανείς «βαφές» πάνω στο σκούρο. */
+  .bg-grey-1 {
+    background: rgba(255, 255, 255, 0.04) !important;
+  }
+  .bg-grey-2 {
+    background: rgba(255, 255, 255, 0.07) !important;
+  }
+  .bg-grey-3 {
+    background: rgba(255, 255, 255, 0.1) !important;
+  }
+  .bg-grey-4 {
+    background: rgba(255, 255, 255, 0.14) !important;
+  }
+  .bg-red-1 {
+    background: rgba(239, 83, 80, 0.16) !important;
+  }
+  .bg-orange-1 {
+    background: rgba(255, 167, 38, 0.16) !important;
+  }
+  .bg-blue-1 {
+    background: rgba(66, 165, 245, 0.16) !important;
+  }
+  .bg-green-1 {
+    background: rgba(102, 187, 106, 0.16) !important;
+  }
+
+  .q-page-container::-webkit-scrollbar-thumb:hover,
+  .q-page::-webkit-scrollbar-thumb:hover,
+  .q-drawer__content::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--klados-ink), #fff 18%);
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Segmented control (SegmentedToggle.vue πάνω στο q-btn-toggle)
+   Πλαίσιο-χάπι γύρω από τις επιλογές και «χάπι» που γλιστρά στην ενεργή.
+   ════════════════════════════════════════════════════════════════════════ */
+.tf-seg {
+  display: inline-flex;
+  vertical-align: middle;
+  max-width: 100%;
+
+  &__frame {
+    position: relative;
+    display: inline-flex;
+    max-width: 100%;
+    padding: 3px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+    isolation: isolate;
+  }
+
+  &--spread,
+  &--spread &__frame {
+    display: flex;
+    width: 100%;
+  }
+  &--spread .q-btn-toggle {
+    flex: 1;
+  }
+
+  /* Το group της Quasar χάνει το δικό του σχήμα· το δίνει το πλαίσιο. */
+  .q-btn-toggle {
+    position: relative;
+    z-index: 1;
+    border-radius: 999px;
+    box-shadow: none;
+    background: transparent;
+    max-width: 100%;
+    overflow: hidden;
+  }
+  .q-btn-toggle .q-btn {
+    border-radius: 999px !important;
+    min-height: 32px;
+    padding-inline: 14px;
+    transition: color var(--dur-medium) var(--ease-standard) 40ms;
+  }
+  /* Το ενεργό κουμπί δεν βάφεται μόνο του: το χρώμα το φέρνει το χάπι από κάτω,
+     ώστε να φαίνεται να γλιστρά. Μένει μόνο το χρώμα κειμένου του. */
+  .q-btn-toggle .q-btn[aria-pressed='true'] {
+    background: transparent !important;
+  }
+  .q-btn-toggle .q-btn:not([aria-pressed='true']) {
+    color: var(--muted) !important;
+  }
+  .q-btn-toggle .q-btn:not([aria-pressed='true']):hover {
+    color: var(--ink) !important;
+    transform: none;
+    box-shadow: none;
+  }
+  .q-btn-toggle .q-btn:active {
+    transform: scale(0.98);
+  }
+  .q-btn-toggle .q-btn .q-focus-helper {
+    border-radius: 999px;
+  }
+
+  &__thumb {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 0;
+    border-radius: 999px;
+    background: var(--klados-color);
+    box-shadow: var(--shadow-1);
+    pointer-events: none;
+    will-change: transform, width;
+  }
+  &--ready &__thumb {
+    transition:
+      transform 220ms var(--ease-emphasized),
+      width 220ms var(--ease-emphasized),
+      height 220ms var(--ease-emphasized),
+      opacity var(--dur-medium) var(--ease-standard);
+  }
+
+  /* Flat παραλλαγή (π.χ. Κείμενο/Προβολή στο MarkdownField): χάπι ως απαλή βαφή
+     και κείμενο στο μελάνι του κλάδου, όχι λευκό. */
+  &--flat &__frame {
+    padding: 2px;
+    background: var(--tint-soft);
+    border-color: transparent;
+  }
+  &--flat &__thumb {
+    background: var(--surface);
+    box-shadow: var(--shadow-1);
+  }
+  &--flat .q-btn-toggle .q-btn[aria-pressed='true'] {
+    color: var(--klados-ink) !important;
+  }
+}
+body.body--dark .tf-seg--flat .tf-seg__thumb {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Το υπόλοιπο «τσίρκο»: ίδια γλώσσα (γωνίες, elevation, κίνηση) σε όλα τα
+   στοιχεία της Quasar που χρησιμοποιεί η εφαρμογή.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* ── Μπάρα: βαθαίνει όταν έχει περιεχόμενο από κάτω της ── */
+.q-header {
+  transition: background-color 200ms ease, box-shadow var(--dur-medium) var(--ease-standard);
+}
+.q-header.is-scrolled {
+  box-shadow: 0 10px 28px rgba(16, 24, 20, 0.18), 0 2px 8px rgba(16, 24, 20, 0.1);
+}
+
+/* ── Κάρτες: μπαίνουν με απαλό ανέβασμα, κλιμακωτά (μόνο οι πρώτες 8 ανά σελίδα) ── */
+@keyframes tf-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.q-page .q-card {
+  animation: tf-rise 260ms var(--ease-emphasized) both;
+}
+@for $i from 1 through 8 {
+  .q-page .q-card:nth-of-type(#{$i}) {
+    animation-delay: #{($i - 1) * 30}ms;
+  }
+}
+
+/* ── Διάλογοι: μεγάλες γωνίες, θολό παρασκήνιο, είσοδος με scale από 96% ── */
+.q-dialog__backdrop {
+  background: rgba(10, 20, 12, 0.38);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+.q-dialog__inner > .q-card,
+.q-dialog__inner > div {
+  border-radius: 20px;
+}
+.q-dialog__inner > .q-card {
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28), 0 6px 16px rgba(0, 0, 0, 0.14);
+}
+.q-dialog__inner--maximized > div {
+  border-radius: 0;
+}
+.q-transition--scale-enter-active,
+.q-transition--scale-leave-active {
+  transition: transform 220ms var(--ease-emphasized), opacity 180ms var(--ease-standard) !important;
+}
+.q-transition--scale-enter-from,
+.q-transition--scale-leave-to {
+  transform: scale(0.96) !important;
+  opacity: 0;
+}
+
+/* ── Μενού, dropdowns, επιλογές select ── */
+.q-menu {
+  border-radius: 14px;
+  border: 1px solid var(--border-soft);
+  box-shadow: var(--shadow-2);
+  padding: 4px;
+}
+.q-menu .q-item {
+  border-radius: 10px;
+  margin: 1px 0;
+  transition: background-color var(--dur-short) var(--ease-standard);
+}
+.q-menu .q-item.q-item--clickable:hover {
+  background: color-mix(in srgb, var(--klados-ink) var(--state-hover), transparent);
+}
+.q-menu .q-item--active,
+.q-menu .q-item.text-primary {
+  background: color-mix(in srgb, var(--klados-ink) 12%, transparent);
+}
+
+/* ── Tooltips & toasts ── */
+.q-tooltip {
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 0.75rem;
+  box-shadow: var(--shadow-1);
+}
+.q-notification {
+  border-radius: 14px;
+  box-shadow: var(--shadow-2);
+}
+
+/* ── Banners ── */
+.q-banner {
+  border-radius: 12px;
+}
+
+/* ── Πεδία: ποτέ πιο πλατιά από τον περιέκτη τους (μεγάλες τιμές σε στενές κάρτες) ── */
+.q-field {
+  min-width: 0;
+  max-width: 100%;
+}
+.q-field__native,
+.q-field__input {
+  min-width: 0;
+}
+
+/* ── Πεδία: «αναπνέουν» στο focus (δαχτυλίδι στο χρώμα του κλάδου) ── */
+.q-field--outlined .q-field__control {
+  transition: box-shadow var(--dur-medium) var(--ease-standard);
+}
+.q-field--outlined.q-field--focused:not(.q-field--error) .q-field__control {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--klados-ink) 16%, transparent);
+}
+.q-field--outlined .q-field__control:before {
+  transition: border-color var(--dur-medium) var(--ease-standard);
+}
+
+/* ── Tabs: πεζά, δείκτης με στρογγυλή μύτη, hover state layer ── */
+.q-tab {
+  text-transform: none;
+  font-weight: 600;
+  letter-spacing: 0;
+  border-radius: 10px 10px 0 0;
+  transition: color var(--dur-medium) var(--ease-standard), background-color var(--dur-medium) var(--ease-standard);
+}
+.q-tab:hover {
+  background: color-mix(in srgb, var(--klados-ink) 6%, transparent);
+}
+.q-tab__indicator {
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+}
+.q-tabs--horizontal .q-tabs__arrow {
+  transition: opacity var(--dur-medium) var(--ease-standard);
+}
+
+/* ── Λίστες & στοιχεία: στρογγυλεμένο hover παντού (όχι μόνο στο συρτάρι) ── */
+.q-item.q-item--clickable {
+  border-radius: 10px;
+}
+.q-list--bordered > .q-item.q-item--clickable,
+.q-list--separator > .q-item.q-item--clickable {
+  border-radius: 0;
+}
+
+/* ── Μπάρες προόδου: γεμίζουν ομαλά ── */
+.q-linear-progress {
+  border-radius: 999px;
+  overflow: hidden;
+}
+.q-linear-progress__model,
+.q-linear-progress__track {
+  transition: transform 500ms var(--ease-emphasized);
+}
+
+/* ── Stepper (οδηγός δράσης) ── */
+.q-stepper {
+  border-radius: var(--radius-card);
+}
+.q-stepper__tab {
+  border-radius: 10px;
+  transition: background-color var(--dur-medium) var(--ease-standard);
+}
+
+/* ── Date / time pickers ── */
+.q-date,
+.q-time {
+  border-radius: 16px;
+  box-shadow: var(--shadow-2);
+}
+
+/* ── Badges: το πλήθος εκκρεμοτήτων στο συρτάρι «ανασαίνει» ── */
+@keyframes tf-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--q-warning) 45%, transparent);
+  }
+  60% {
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--q-warning) 0%, transparent);
+  }
+}
+.q-drawer .q-badge.bg-warning {
+  animation: tf-pulse 2.2s var(--ease-standard) infinite;
+}
+
+/* ── Avatars & chips: λίγο πιο «γεμάτα» ── */
+.q-avatar {
+  transition: transform var(--dur-medium) var(--ease-emphasized);
+}
+.q-item--clickable:hover > .q-item__section--avatar .q-avatar {
+  transform: scale(1.05);
+}
+
+/* ── Κύλιση: ομαλή σε άλματα (άγκυρες, «πάνω») ── */
+.q-page-container {
+  scroll-behavior: smooth;
+}
+
+/* ── Συρτάρι: «ζελέ» στο άνοιγμα ──
+   Το overshoot στην καμπύλη (y > 1) το κάνει να περνά λίγο τη θέση του και να
+   «κάθεται» πίσω· το squash στο περιεχόμενο δίνει την αίσθηση μάζας. Μόνο στο
+   άνοιγμα (κλάση από το MainLayout)· το κλείσιμο μένει γρήγορο και στεγνό. */
+/* Η κλάση του MainLayout πέφτει στον περιέκτη (`.q-drawer-container`), όχι στο
+   ίδιο το `.q-drawer` — η QDrawer δίνει τα attrs στο root της. */
+.q-drawer-container .q-drawer {
+  transition: transform 240ms var(--ease-emphasized), box-shadow var(--dur-medium) var(--ease-standard), background-color var(--dur-medium) var(--ease-standard) !important;
+}
+.q-drawer-container.drawer-bounce .q-drawer {
+  transition: transform 560ms cubic-bezier(0.34, 1.48, 0.64, 1), box-shadow var(--dur-medium) var(--ease-standard), background-color var(--dur-medium) var(--ease-standard) !important;
+}
+.q-drawer-container.drawer-bounce .q-drawer__content {
+  transform-origin: left center;
+  animation: tf-jelly 700ms 80ms var(--ease-standard) both;
+}
+@keyframes tf-jelly {
+  0% {
+    transform: scaleX(1);
+  }
+  30% {
+    transform: scaleX(1.05) scaleY(0.985);
+  }
+  50% {
+    transform: scaleX(0.97) scaleY(1.01);
+  }
+  70% {
+    transform: scaleX(1.015) scaleY(0.997);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+/* Κλείσιμο: καθαρά προς τα αριστερά — καμία κίνηση προς τα μέσα (διαβαζόταν ως
+   «πάει δεξιά και χάνεται»). Το ζελέ είναι μόνο ένα σφίξιμο του περιεχομένου
+   πάνω στην αριστερή άκρη πριν φύγει, σαν να μαζεύεται. */
+.q-drawer-container.drawer-bounce-out .q-drawer {
+  transition: transform 340ms cubic-bezier(0.55, 0, 0.7, 0.2), box-shadow var(--dur-medium) var(--ease-standard), background-color var(--dur-medium) var(--ease-standard) !important;
+}
+.q-drawer-container.drawer-bounce-out .q-drawer__content {
+  transform-origin: left center;
+  animation: tf-jelly-out 340ms var(--ease-standard) both;
+}
+@keyframes tf-jelly-out {
+  0% {
+    transform: scale(1);
+  }
+  30% {
+    transform: scaleX(0.95) scaleY(1.015);
+  }
+  60% {
+    transform: scaleX(1.015) scaleY(0.995);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.q-drawer__backdrop {
+  transition: background-color 240ms var(--ease-standard) !important;
 }

@@ -6,7 +6,7 @@
         {{ rows.length }} άτομα · {{ counts.melos }} παιδιά · {{ counts.stelexos }} στελέχη
       </div>
       <q-space />
-      <q-btn-toggle
+      <SegmentedToggle
         v-model="view"
         dense
         unelevated
@@ -69,7 +69,7 @@
                 <div class="text-right">
                   <div class="text-caption text-grey-7">{{ formatEuro(p.paid) }} / {{ formatEuro(p.due) }}</div>
                   <q-badge
-                    :color="p.balance <= 0 ? 'positive' : p.paid > 0 ? 'orange-7' : 'grey-6'"
+                    :color="p.balance <= 0 ? 'positive' : 'warning'"
                     :label="p.balance <= 0 ? 'εξοφλημένο' : `υπόλοιπο ${formatEuro(p.balance)}`"
                   />
                 </div>
@@ -175,7 +175,7 @@
         </q-card-section>
         <q-card-section class="q-gutter-sm">
           <q-input v-model.number="payment.amount" type="number" label="Ποσό € *" outlined dense step="0.01" :min="0" color="klados" autofocus />
-          <q-btn-toggle
+          <SegmentedToggle
             v-model="payment.method"
             dense
             unelevated

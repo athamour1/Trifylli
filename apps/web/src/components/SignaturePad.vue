@@ -90,7 +90,7 @@ function clear(): void {
 <style scoped>
 .pad {
   position: relative;
-  border: 1px dashed rgba(0, 0, 0, 0.3);
+  border: 1px dashed var(--line-strong);
   background: #fff;
   touch-action: none;
 }

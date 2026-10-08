@@ -25,7 +25,7 @@
             label="Εικόνα"
             @click="pickImage"
           />
-          <q-btn-toggle
+          <SegmentedToggle
             v-model="mode"
             dense flat no-caps size="sm"
             toggle-color="klados"
@@ -344,7 +344,7 @@ onBeforeUnmount(() => {
   code {
     padding: 0.1em 0.35em;
     border-radius: 3px;
-    background: rgba(0, 0, 0, 0.06);
+    background: var(--tint);
     font-size: 0.9em;
   }
 
@@ -352,7 +352,7 @@ onBeforeUnmount(() => {
     padding: 0.7em;
     border-radius: 4px;
     overflow-x: auto;
-    background: rgba(0, 0, 0, 0.06);
+    background: var(--tint);
 
     code {
       padding: 0;
@@ -369,7 +369,7 @@ onBeforeUnmount(() => {
     &.md-img-pending {
       min-width: 120px;
       min-height: 60px;
-      background: rgba(0, 0, 0, 0.05);
+      background: var(--tint);
     }
   }
 
@@ -379,20 +379,20 @@ onBeforeUnmount(() => {
     th,
     td {
       padding: 0.3em 0.6em;
-      border: 1px solid rgba(0, 0, 0, 0.12);
+      border: 1px solid var(--line);
     }
   }
 
   hr {
     border: none;
-    border-top: 1px solid rgba(0, 0, 0, 0.12);
+    border-top: 1px solid var(--line);
   }
 }
 
 .markdown-preview {
   min-height: 96px;
   padding: 11px 14px;
-  border: 1px solid rgba(0, 0, 0, 0.24);
+  border: 1px solid var(--line-strong);
   border-radius: 4px;
 }
 

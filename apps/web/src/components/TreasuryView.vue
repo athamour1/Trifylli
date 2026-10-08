@@ -55,7 +55,7 @@
 
     <!-- Ενέργειες + φίλτρα -->
     <div class="row items-center justify-between q-mb-sm">
-      <q-btn-toggle
+      <SegmentedToggle
         v-model="filters.kind"
         :options="[
           { label: 'Όλα', value: '' },
@@ -384,7 +384,7 @@ function closeReceipt(): void {
 
 <style scoped>
 .bordered-toggle {
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--line);
   border-radius: 8px;
 }
 
