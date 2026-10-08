@@ -6,7 +6,7 @@
 
         <q-toolbar-title class="text-weight-medium">
           <span v-if="activeKlados" class="text-weight-regular">
-            {{ activeKlados.label }} ·
+            {{ $q.screen.lt.sm ? KLADOS_LABEL_SHORT[activeKlados.type] : activeKlados.label }} ·
           </span>
           {{ pageTitle }}
         </q-toolbar-title>
@@ -182,7 +182,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import type { KladosType } from '@trifylli/shared';
+import { KLADOS_LABEL_SHORT, type KladosType } from '@trifylli/shared';
 import { useQuasar, type QDrawer } from 'quasar';
 import { kladosVars } from '../lib/klados-theme';
 import { useKladosThemeStore } from '../stores/klados-theme';

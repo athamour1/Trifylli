@@ -34,6 +34,14 @@ export const KLADOS_LABEL: Record<KladosType, string> = {
   MEGALOI_ODIGOI: 'Μεγάλοι Οδηγοί',
 };
 
+/** Σύντομη μορφή για στενούς χώρους (μπάρα στο κινητό): «ΜΟ», όπως το λένε. */
+export const KLADOS_LABEL_SHORT: Record<KladosType, string> = {
+  ASTERIA: 'Αστέρια',
+  POULIA: 'Πουλιά',
+  ODIGOI: 'Οδηγοί',
+  MEGALOI_ODIGOI: 'ΜΟ',
+};
+
 /** Γενική τη γενική — για φράσεις όπως «Διαχειριστής Πουλιών». */
 export const KLADOS_LABEL_GENITIVE: Record<KladosType, string> = {
   ASTERIA: 'Αστεριών',
