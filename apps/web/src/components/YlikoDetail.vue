@@ -217,7 +217,7 @@ const props = defineProps<{
   /** Η εμβέλεια της σελίδας: κλάδος ή `null` για Τοπικό (Κεντρική αποθήκη). */
   scopeKlados: KladosType | null;
 }>();
-const emit = defineEmits<{ changed: []; loaded: [klados: KladosType | null] }>();
+const emit = defineEmits<{ changed: []; loaded: [klados: KladosType | null]; forbidden: [] }>();
 
 interface Checkout {
   id: string;
@@ -294,7 +294,10 @@ async function load(): Promise<void> {
     emit('loaded', data.value.klados?.type ?? null);
     qr.value = await QRCode.toDataURL(`${window.location.origin}/yliko/item/${props.ylikoId}`, { margin: 1, width: 208 });
   } catch (err) {
-    $q.notify({ type: 'negative', message: err instanceof ApiError ? err.message : 'Αποτυχία φόρτωσης.' });
+    // Όποιος φιλοξενεί την καρτέλα αποφασίζει τι σημαίνει «δεν επιτρέπεται»·
+    // η σελίδα του QR πηγαίνει στη σελίδα «δεν έχεις πρόσβαση».
+    if (err instanceof ApiError && err.status === 403) emit('forbidden');
+    else $q.notify({ type: 'negative', message: err instanceof ApiError ? err.message : 'Αποτυχία φόρτωσης.' });
   } finally {
     loading.value = false;
   }

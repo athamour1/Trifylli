@@ -6,7 +6,7 @@
 
     <q-card flat bordered class="rounded-borders">
       <q-card-section>
-        <YlikoDetail :yliko-id="id" :scope-klados="itemKlados" @loaded="onLoaded" />
+        <YlikoDetail :yliko-id="id" :scope-klados="itemKlados" @loaded="onLoaded" @forbidden="onForbidden" />
       </q-card-section>
     </q-card>
   </q-page>
@@ -32,6 +32,10 @@ const itemKlados = ref<KladosType | null>(null);
 function onLoaded(klados: KladosType | null): void {
   itemKlados.value = klados;
   kladosTheme.declare(klados);
+}
+
+function onForbidden(): void {
+  void router.replace({ name: 'forbidden', query: { from: route.fullPath } });
 }
 
 function goBack(): void {

@@ -5,7 +5,7 @@ declare module 'vue-router' {
   interface RouteMeta {
     title?: string;
     icon?: string;
-    /** Το δικαίωμα που κρύβει τη διαδρομή από το μενού. */
+    /** Το δικαίωμα που χρειάζεται η διαδρομή — το ελέγχουν ο router και το μενού. */
     capability?: Capability;
     /** Μόνο ο υπερδιαχειριστής. */
     superAdmin?: boolean;
@@ -133,6 +133,14 @@ const routes: RouteRecordRaw[] = [
     name: 'session-expired',
     component: () => import('../pages/SessionExpiredPage.vue'),
     meta: { title: 'Η συνεδρία έληξε', public: true },
+  },
+  // Συνδεδεμένος, αλλά η σελίδα δεν είναι δική του (άλλος κλάδος, σελίδα
+  // Τοπικού, δικαίωμα που δεν έχει). Εκτός layout, όπως η 404.
+  {
+    path: '/forbidden',
+    name: 'forbidden',
+    component: () => import('../pages/ForbiddenPage.vue'),
+    meta: { title: 'Χωρίς πρόσβαση' },
   },
   {
     path: '/login',

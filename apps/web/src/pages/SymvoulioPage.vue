@@ -246,7 +246,7 @@ function goBack(): void {
 
 const { data, loading, error, stale, reload } = useAsyncData(
   () => get<SymvoulioDetail>(`/symvoulia/${id}`),
-  { cacheKey: `symvoulio:${id}` },
+  { forbiddenPage: true, cacheKey: `symvoulio:${id}` },
 );
 
 // Η σελίδα ζει εκτός `/k/:klados`: δηλώνει μόνη της τον κλάδο της ώστε τα

@@ -1,4 +1,6 @@
 import { ref, shallowRef, watch, type WatchSource } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import { ApiError } from '../lib/api';
 import { useOfflineStore } from '../stores/offline';
 
 interface AsyncDataOptions {
@@ -10,6 +12,12 @@ interface AsyncDataOptions {
    */
   watchSources?: (WatchSource<unknown> | object)[];
   immediate?: boolean;
+  /**
+   * Τα δεδομένα **είναι** η σελίδα (σελίδα λεπτομέρειας): ένα 403 σημαίνει «δεν
+   * έχεις πρόσβαση εδώ» και πάμε στη σελίδα που το λέει, αντί για κόκκινο
+   * banner. Όχι για widgets μέσα σε σελίδα — εκεί το 403 αφορά μόνο το widget.
+   */
+  forbiddenPage?: boolean;
 }
 
 /**
@@ -24,6 +32,8 @@ export function useAsyncData<T>(fetcher: () => Promise<T>, options: AsyncDataOpt
   const error = ref<string | null>(null);
   const stale = ref(false);
   const offline = useOfflineStore();
+  const router = options.forbiddenPage ? useRouter() : null;
+  const route = options.forbiddenPage ? useRoute() : null;
 
   async function load(): Promise<void> {
     loading.value = true;
@@ -38,6 +48,10 @@ export function useAsyncData<T>(fetcher: () => Promise<T>, options: AsyncDataOpt
         stale.value = false;
       }
     } catch (err) {
+      if (router && route && err instanceof ApiError && err.status === 403) {
+        void router.replace({ name: 'forbidden', query: { from: route.fullPath } });
+        return;
+      }
       error.value = err instanceof Error ? err.message : String(err);
     } finally {
       loading.value = false;

@@ -479,7 +479,7 @@ const numbers = computed(() => {
 
 const { data, loading, error, stale, reload } = useAsyncData(
   () => get<DrasiDetail>(`/draseis/${id}`),
-  { cacheKey: `drasi:${id}` },
+  { forbiddenPage: true, cacheKey: `drasi:${id}` },
 );
 
 // Η σελίδα ζει εκτός `/k/:klados`, οπότε το layout δεν ξέρει τον κλάδο της· τον

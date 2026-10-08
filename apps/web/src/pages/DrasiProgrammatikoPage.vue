@@ -180,7 +180,7 @@ const { data, loading, error, stale, reload } = useAsyncData(
     const [drasi, schedule] = await Promise.all([get<DrasiHead>(`/draseis/${drasiId}`), get<DrasiScheduleView>(`/draseis/${drasiId}/schedule`)]);
     return { drasi, schedule };
   },
-  { cacheKey: `drasi-schedule:${drasiId}` },
+  { forbiddenPage: true, cacheKey: `drasi-schedule:${drasiId}` },
 );
 const drasi = computed(() => data.value?.drasi ?? null);
 const dayOf = computed(() => data.value?.schedule.days.find((d) => d.items.some((i) => i.id === itemId.value)) ?? null);

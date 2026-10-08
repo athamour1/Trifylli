@@ -91,7 +91,7 @@
           @update:model-value="(v: boolean) => toggleSection(klados.type, v)"
         >
           <q-item
-            v-for="link in kladosLinks"
+            v-for="link in linksFor(klados.type)"
             :key="`${klados.type}-${link.name}`"
             clickable
             v-ripple
@@ -243,7 +243,18 @@ const session = useSessionStore();
 
 const pageTitle = computed(() => (route.meta.title as string | undefined) ?? 'Trifylli');
 
-const kladosLinks = KLADOS_LINKS;
+/**
+ * Οι σύνδεσμοι ενός κλάδου που επιτρέπονται — με το `capability` της διαδρομής,
+ * τον ίδιο έλεγχο που κάνει ο router. Έτσι το μενού δεν δείχνει ποτέ πόρτα που
+ * θα έβγαζε στη σελίδα «δεν έχεις πρόσβαση».
+ */
+const capabilityOf = new Map(router.getRoutes().map((r) => [String(r.name), r.meta.capability]));
+function linksFor(klados: KladosType) {
+  return KLADOS_LINKS.filter((link) => {
+    const capability = capabilityOf.get(link.name);
+    return !capability || auth.can(capability, klados);
+  });
+}
 
 /** Ο κλάδος της τρέχουσας σελίδας, όταν βρισκόμαστε μέσα σε κλάδο. */
 const activeKlados = computed(() => {

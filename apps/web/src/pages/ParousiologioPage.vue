@@ -133,7 +133,7 @@ const STATUS_COLOR: Record<ParousiaStatus, string> = {
 
 const { data: sheet, loading, error, stale, reload } = useAsyncData(
   () => get<Sheet>(`/parousiologio/syggentrwsh/${id}`),
-  { cacheKey: `parousiologio:${id}` },
+  { forbiddenPage: true, cacheKey: `parousiologio:${id}` },
 );
 
 // Η σελίδα ζει εκτός `/k/:klados`, οπότε το layout δεν ξέρει τον κλάδο της· τον

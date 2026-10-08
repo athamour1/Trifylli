@@ -251,7 +251,7 @@ const id = String(route.params.id);
 
 const { data, loading, error, stale, reload } = useAsyncData(
   () => get<MemberDetail>(`/meloi/${id}`),
-  { cacheKey: `melos:${id}` },
+  { forbiddenPage: true, cacheKey: `melos:${id}` },
 );
 
 const SYNDROMI_COLOR: Record<SyndromiStatus, string> = {

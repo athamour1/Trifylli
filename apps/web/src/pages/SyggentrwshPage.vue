@@ -581,7 +581,7 @@ function startEditing(): void {
 
 const { data, loading, error, stale, reload } = useAsyncData(
   () => get<Detail>(`/syggentrwseis/${id}`),
-  { cacheKey: `syggentrwsh:${id}` },
+  { forbiddenPage: true, cacheKey: `syggentrwsh:${id}` },
 );
 
 // Η σελίδα ζει εκτός `/k/:klados`, οπότε το layout δεν ξέρει τον κλάδο της· τον

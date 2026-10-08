@@ -42,18 +42,23 @@ export default defineRouter(() => {
     const auth = useAuthStore();
     if (!auth.ready && !auth.error) await auth.load();
 
-    if (to.meta.superAdmin && !auth.isSuperAdmin) {
-      return { name: 'dashboard' };
-    }
+    // Χωρίς πρόσβαση → σελίδα που το λέει (όχι σιωπηλά στην Αρχική: ο χρήστης
+    // θα νόμιζε ότι ο σύνδεσμος είναι χαλασμένος). Το `from` κρατά πού πήγε.
+    // `replace`, ώστε το «Πίσω» να μη γυρίζει στην κλειστή πόρτα.
+    const forbidden = { name: 'forbidden', query: { from: to.fullPath }, replace: true } as const;
+
+    if (to.meta.superAdmin && !auth.isSuperAdmin) return forbidden;
 
     // Κλάδος εκτός εμβέλειας (π.χ. διαχειριστής Αστεριών σε `/k/ODIGOI/...`):
     // χωρίς αυτό οι σελίδες έπεφταν σιωπηλά σε προβολή Τοπικού — «Μητρώο
     // μελών» με τα δικά του μέλη, «Ταμείο Τοπικού» με 403 — ενώ η διεύθυνση
-    // έλεγε άλλον κλάδο. Ίδια αντιμετώπιση με τις σελίδες υπερδιαχειριστή.
+    // έλεγε άλλον κλάδο.
     const klados = to.params.klados as KladosType | undefined;
-    if (klados && auth.ready && !auth.seesKlados(klados)) {
-      return { name: 'dashboard' };
-    }
+    if (klados && auth.ready && !auth.seesKlados(klados)) return forbidden;
+
+    // Το δικαίωμα της διαδρομής, με τον κλάδο της αν έχει — ο ίδιος κανόνας με
+    // το API και το μενού (`can` του `@trifylli/shared`).
+    if (to.meta.capability && auth.ready && !auth.can(to.meta.capability, klados)) return forbidden;
 
     return true;
   });
