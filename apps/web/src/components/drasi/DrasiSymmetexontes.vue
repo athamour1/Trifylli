@@ -17,7 +17,7 @@
           { label: 'Ανά υπεύθυνο', value: 'collectors' },
         ]"
       />
-      <q-btn v-if="canWrite && !locked" flat color="klados" icon="euro" label="Κόστη" @click="openCosts">
+      <q-btn v-if="canSettings && !locked" flat color="klados" icon="euro" label="Κόστη" @click="openCosts">
         <q-tooltip>Προεπιλογές κόστους της δράσης</q-tooltip>
       </q-btn>
       <q-btn
@@ -81,8 +81,8 @@
           <q-card flat class="bg-grey-1">
             <q-card-section class="q-py-sm">
               <div class="row q-gutter-xs q-mb-sm">
-                <q-btn v-if="canWrite && !locked" dense outline color="klados" icon="payments" label="Πληρωμή" @click="openPayment(p)" />
-                <q-btn v-if="canWrite && !locked" dense flat color="klados" icon="tune" label="Κόστος & υπεύθυνος" @click="openFees(p)" />
+                <q-btn v-if="canPay && !locked" dense outline color="klados" icon="payments" label="Πληρωμή" @click="openPayment(p)" />
+                <q-btn v-if="canPay && !locked" dense flat color="klados" icon="tune" label="Κόστος & υπεύθυνος" @click="openFees(p)" />
                 <q-space />
                 <q-btn v-if="canWrite && !locked" dense flat color="negative" icon="person_remove" @click="removeParticipant(p)">
                   <q-tooltip>Αφαίρεση από τη δράση</q-tooltip>
@@ -114,7 +114,7 @@
                   <q-item-section side>
                     <div class="row no-wrap items-center">
                       <q-btn
-                        v-if="canWrite && !locked && nextStage(pay.handlingStatus)"
+                        v-if="canHandover && !locked && nextStage(pay.handlingStatus)"
                         dense
                         flat
                         size="sm"
@@ -123,7 +123,7 @@
                         icon-right="arrow_forward"
                         @click="advance(pay)"
                       />
-                      <q-btn v-if="canWrite && !locked" dense flat round size="sm" icon="delete" color="negative" @click="removePayment(pay)" />
+                      <q-btn v-if="canPay && !locked" dense flat round size="sm" icon="delete" color="negative" @click="removePayment(pay)" />
                     </div>
                   </q-item-section>
                 </q-item>
@@ -151,7 +151,7 @@
                 <div class="col-4"><div class="text-caption text-grey-7">Ανείσπρακτα</div><div :class="c.outstanding > 0 ? 'text-negative' : ''">{{ formatEuro(c.outstanding) }}</div></div>
               </div>
             </q-card-section>
-            <q-card-actions v-if="canWrite && !locked && c.collector && c.holding > 0" align="right">
+            <q-card-actions v-if="canHandover && !locked && c.collector && c.holding > 0" align="right">
               <q-btn flat color="klados" icon="move_down" label="Παραδόθηκαν στο ταμείο" @click="handover(c)" />
             </q-card-actions>
           </q-card>
@@ -294,7 +294,14 @@ const props = defineProps<{
   drasiId: string;
   kladoi: KladosType[];
   guestTopika: DrasiGuestTopikoView[];
+  /** Προσθήκη/αφαίρεση συμμετεχόντων. */
   canWrite: boolean;
+  /** Πληρωμές και κόστος ανά άτομο (ταμίας). */
+  canPay: boolean;
+  /** «Παράδοση στο ταμείο» — μόνο ο ταμίας της δράσης (και η εφεδρεία). */
+  canHandover: boolean;
+  /** Οι προεπιλογές κόστους ανήκουν στις Ρυθμίσεις. */
+  canSettings: boolean;
   /** Κλειστή δράση: τα οικονομικά δεν αλλάζουν. */
   locked: boolean;
   /** Οι προεπιλογές κόστους της δράσης (Decimal από το API ⇒ string). */

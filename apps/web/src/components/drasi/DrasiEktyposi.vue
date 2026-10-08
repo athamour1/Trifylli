@@ -11,7 +11,7 @@
             <div class="text-caption text-grey-7 q-mt-xs">
               Αρχηγείο, μύθος και ρόλοι, πρόγραμμα ανά ημέρα με υπευθύνους, συμμετέχοντες, ομάδες και σκηνές, υλικό, ταμείο, πρακτικά, αξιολόγηση.
             </div>
-            <q-toggle v-model="withHealth" dense color="klados" label="Μαζί με τη σύνοψη υγείας (εμπιστευτικό)" class="q-mt-sm" />
+            <q-toggle v-if="canHealth" v-model="withHealth" dense color="klados" label="Μαζί με τη σύνοψη υγείας (εμπιστευτικό)" class="q-mt-sm" />
           </q-card-section>
           <q-card-actions align="right">
             <q-btn color="klados" text-color="klados-on" unelevated icon="print" label="Εκτύπωση" :loading="busy === 'full'" @click="print('full')" />
@@ -57,7 +57,7 @@ import DrasiPrint, { type DossierMode } from './DrasiPrint.vue';
 import { ApiError, get } from '../../lib/api';
 import { printElement } from '../../lib/print';
 
-const props = defineProps<{ drasiId: string; title: string; hasSkines: boolean }>();
+const props = defineProps<{ drasiId: string; title: string; hasSkines: boolean; /** Βλέπει υγεία (φαρμακείο/αρχηγός/διαχείριση). */ canHealth: boolean }>();
 const $q = useQuasar();
 const busy = ref<DossierMode | null>(null);
 const withHealth = ref(false);

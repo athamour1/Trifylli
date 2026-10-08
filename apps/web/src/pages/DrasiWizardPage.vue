@@ -134,7 +134,6 @@
             v-model:enabled="enabledServices"
             :stelexi-options="stelexiOptions"
             :organiser="form.organiser"
-            :exclude-drasi-id="drasiId ?? undefined"
           />
 
           <q-stepper-navigation class="row q-gutter-sm">
@@ -162,7 +161,6 @@
             v-model:enabled="enabledServices"
             :stelexi-options="stelexiOptions"
             :organiser="form.organiser"
-            :exclude-drasi-id="drasiId ?? undefined"
           />
 
           <q-stepper-navigation class="row q-gutter-sm">

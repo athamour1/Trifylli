@@ -50,21 +50,6 @@
       </q-card-actions>
     </q-card>
 
-    <!-- ── Αρχηγείο & υπηρεσίες ── -->
-    <q-card flat bordered>
-      <q-card-section class="text-subtitle2 q-pb-xs">Αρχηγείο</q-card-section>
-      <q-card-section class="q-pt-none">
-        <DrasiRolesEditor section="arxigeio" v-model="roles" v-model:enabled="enabledServices" :stelexi-options="stelexiOptions" :organiser="organiser" :exclude-drasi-id="drasiId" />
-      </q-card-section>
-      <q-card-section class="text-subtitle2 q-pb-xs">Υπηρεσίες</q-card-section>
-      <q-card-section class="q-pt-none">
-        <DrasiRolesEditor section="ypiresies" v-model="roles" v-model:enabled="enabledServices" :stelexi-options="stelexiOptions" :organiser="organiser" :exclude-drasi-id="drasiId" />
-      </q-card-section>
-      <q-card-actions align="right">
-        <q-btn color="klados" text-color="klados-on" unelevated label="Αποθήκευση" :loading="busy === 'roles'" @click="saveRoles" />
-      </q-card-actions>
-    </q-card>
-
     <!-- ── Κόστη ── -->
     <q-card flat bordered>
       <q-card-section class="text-subtitle2 q-pb-xs">Προεπιλογές κόστους</q-card-section>
@@ -188,8 +173,6 @@ import { useRouter } from 'vue-router';
 import {
   DRASI_STATUS_LABEL,
   DRASI_TYPE_LABEL,
-  DRASI_YPIRESIA_KINDS,
-  DrasiRoleKind,
   KLADOI_IN_ORDER,
   KLADOS_LABEL,
   type DrasiGuestTopikoView,
@@ -197,15 +180,12 @@ import {
   type DrasiStatus,
   type DrasiType,
   type KladosType,
-  type MemberSummary,
-  type Paginated,
 } from '@trifylli/shared';
 import DateField from '../DateField.vue';
 import MarkdownField from '../MarkdownField.vue';
 import TimeField from '../TimeField.vue';
-import DrasiRolesEditor from './DrasiRolesEditor.vue';
 import GuestTopikaEditor from './GuestTopikaEditor.vue';
-import { emptyRoles, type GuestTopikoForm, type RolesMap } from './types';
+import type { GuestTopikoForm } from './types';
 import { ApiError, del, get, patch, post, put } from '../../lib/api';
 import { toISODate } from '../../lib/format';
 
@@ -292,22 +272,6 @@ async function saveWho(): Promise<void> {
     await put(`/draseis/${drasiId.value}/guest-topika`, {
       items: guests.value.map((g) => ({ topikoCode: g.topikoCode, topikoName: g.topikoName, kladoi: g.kladoi, contactName: g.contactName || undefined, contactPhone: g.contactPhone || undefined })),
     });
-  });
-}
-
-// ── Αρχηγείο & υπηρεσίες ──
-const roles = ref<RolesMap>(emptyRoles(Object.values(DrasiRoleKind)));
-const enabledServices = ref<DrasiRoleKind[]>([]);
-const stelexi = ref<MemberSummary[]>([]);
-const stelexiOptions = computed(() => stelexi.value.map((s) => ({ label: `${s.lastName} ${s.firstName}`.trim(), value: s.id, caption: s.leaderTitle ?? '' })));
-async function saveRoles(): Promise<void> {
-  await run('roles', async () => {
-    const payload: { kind: DrasiRoleKind; userId: string }[] = [];
-    for (const kind of Object.values(DrasiRoleKind)) {
-      if (DRASI_YPIRESIA_KINDS.includes(kind) && !enabledServices.value.includes(kind)) continue;
-      for (const userId of roles.value[kind]) payload.push({ kind, userId });
-    }
-    await put(`/draseis/${drasiId.value}/roles`, { roles: payload });
   });
 }
 
@@ -415,21 +379,10 @@ function fill(d: DrasiSettingsData): void {
   });
   kladoi.value = d.kladoi;
   guests.value = d.guestTopika.map((g) => ({ topikoCode: g.topikoCode, topikoName: g.topikoName, kladoi: g.kladoi, contactName: g.contactName ?? '', contactPhone: g.contactPhone ?? '' }));
-  const next = emptyRoles(Object.values(DrasiRoleKind));
-  for (const r of d.roles) next[r.kind].push(r.user.id);
-  roles.value = next;
-  enabledServices.value = DRASI_YPIRESIA_KINDS.filter((k) => next[k].length > 0);
   Object.assign(costs, { costPerPerson: toNum(d.costPerPerson), costReduced: toNum(d.costReduced), costStelexos: toNum(d.costStelexos), transportCost: toNum(d.transportCost) });
 }
 watch(() => props.data, fill, { immediate: true });
 
-onMounted(async () => {
-  try {
-    stelexi.value = (await get<Paginated<MemberSummary>>('/meloi', { params: { kind: 'STELEXOS', pageSize: 500 } })).items;
-  } catch {
-    // Χωρίς στελέχη οι pickers μένουν άδειοι.
-  }
-});
 
 async function run(what: string, action: () => Promise<void>): Promise<void> {
   busy.value = what;

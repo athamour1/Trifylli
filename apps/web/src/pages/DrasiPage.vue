@@ -229,7 +229,7 @@
             </q-tab-panel>
 
             <q-tab-panel name="programma" class="q-pa-none">
-              <DrasiProgramma :drasi-id="id" :organiser="data.klados?.type ?? null" :can-write="canWrite && data.status !== 'KLEISTI'" />
+              <DrasiProgramma :drasi-id="id" :organiser="data.klados?.type ?? null" :can-write="canEdit('programma')" />
             </q-tab-panel>
 
             <q-tab-panel name="participants" class="q-pa-none">
@@ -237,7 +237,10 @@
                 :drasi-id="id"
                 :kladoi="data.kladoi"
                 :guest-topika="data.guestTopika"
-                :can-write="canWrite"
+                :can-write="canEdit('participants')"
+                :can-pay="canEdit('payments')"
+                :can-handover="canEdit('handover')"
+                :can-settings="canEdit('rythmiseis')"
                 :locked="data.status === 'KLEISTI'"
                 :costs="{
                   costPerPerson: data.costPerPerson,
@@ -253,7 +256,7 @@
               <DrasiMythos
                 :drasi-id="id"
                 :organiser="data.klados?.type ?? null"
-                :can-write="canWrite && data.status !== 'KLEISTI'"
+                :can-write="canEdit('mythos')"
               />
             </q-tab-panel>
 
@@ -263,7 +266,7 @@
                 :drasi-id="id"
                 :kladoi="data.kladoi"
                 :organiser="data.klados?.type ?? null"
-                :can-write="canWrite && data.status !== 'KLEISTI'"
+                :can-write="canEdit('omades')"
               />
             </q-tab-panel>
 
@@ -273,16 +276,16 @@
                 :drasi-id="id"
                 :kladoi="data.kladoi"
                 :organiser="data.klados?.type ?? null"
-                :can-write="canWrite && data.status !== 'KLEISTI'"
+                :can-write="canEdit('omades')"
               />
             </q-tab-panel>
 
             <q-tab-panel name="entypa" class="q-pa-none">
-              <DrasiEntypa :drasi-id="id" :can-write="canWrite && data.status !== 'KLEISTI'" />
+              <DrasiEntypa :drasi-id="id" :can-write="canEdit('entypa')" />
             </q-tab-panel>
 
             <q-tab-panel name="farmakeio" class="q-pa-none">
-              <DrasiFarmakeio :drasi-id="id" :can-write="canWrite && data.status !== 'KLEISTI'" />
+              <DrasiFarmakeio :drasi-id="id" :can-write="canEdit('farmakeio')" />
             </q-tab-panel>
 
             <q-tab-panel name="yliko" class="q-pa-none">
@@ -293,7 +296,7 @@
                 :guest-topika="data.guestTopika"
                 :date-start="data.dateStart"
                 :date-end="data.dateEnd"
-                :can-write="canWrite && data.status !== 'KLEISTI'"
+                :can-write="canEdit('yliko')"
               />
             </q-tab-panel>
 
@@ -301,23 +304,33 @@
               <DrasiTamio
                 :drasi-id="id"
                 :organiser="data.klados?.type ?? null"
-                :can-write="canWrite"
-                :can-close="canClose"
+                :can-write="canEditOpen('tamio')"
+                :can-close="canEditOpen('close')"
                 :locked="data.status === 'KLEISTI'"
                 @changed="reload"
               />
             </q-tab-panel>
 
             <q-tab-panel name="symvoulia" class="q-pa-none">
-              <DrasiSymvoulia :drasi-id="id" :can-write="canWrite" />
+              <DrasiSymvoulia :drasi-id="id" :can-write="canEditOpen('symvoulia')" />
             </q-tab-panel>
 
             <q-tab-panel name="axiologisi" class="q-pa-none">
-              <DrasiAxiologisi :drasi-id="id" :can-write="canWrite" :drasi-title="data.title" />
+              <DrasiAxiologisi :drasi-id="id" :can-write="canEditOpen('axiologisi')" :drasi-title="data.title" />
             </q-tab-panel>
 
             <q-tab-panel name="ektyposi" class="q-pa-none">
-              <DrasiEktyposi :drasi-id="id" :title="data.title" :has-skines="drasiHasSkines(data)" />
+              <DrasiEktyposi :drasi-id="id" :title="data.title" :has-skines="drasiHasSkines(data)" :can-health="drasiCan(data.access, 'farmakeio')" />
+            </q-tab-panel>
+
+            <q-tab-panel name="arxigeio" class="q-pa-none">
+              <DrasiArxigeio
+                :drasi-id="id"
+                :roles="data.roles"
+                :organiser="data.klados?.type ?? null"
+                :can-edit="canEdit('arxigeio')"
+                @changed="reload"
+              />
             </q-tab-panel>
 
             <q-tab-panel name="rythmiseis" class="q-pa-none">
@@ -335,6 +348,9 @@
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
+  drasiCan,
+  type DrasiAccess,
+  type DrasiPerm,
   DRASI_GROUP_KINDS_BY_KLADOS,
   DRASI_GROUP_KIND_PLURAL,
   drasiHasSkines,
@@ -356,6 +372,7 @@ import {
 } from '@trifylli/shared';
 import PageState from '../components/PageState.vue';
 import DrasiAxiologisi from '../components/drasi/DrasiAxiologisi.vue';
+import DrasiArxigeio from '../components/drasi/DrasiArxigeio.vue';
 import DrasiEktyposi from '../components/drasi/DrasiEktyposi.vue';
 import DrasiEntypa from '../components/drasi/DrasiEntypa.vue';
 import DrasiFarmakeio from '../components/drasi/DrasiFarmakeio.vue';
@@ -390,6 +407,8 @@ interface DrasiDetail {
   kladoi: KladosType[];
   guestTopika: DrasiGuestTopikoView[];
   roles: DrasiRoleView[];
+  /** Τι μπορεί ο χρήστης σε αυτή τη δράση (βλ. shared `drasiAccess`). */
+  access: DrasiAccess;
   costPerPerson: string | number | null;
   costReduced: string | number | null;
   costStelexos: string | number | null;
@@ -460,9 +479,11 @@ const sections = computed(() => {
     { name: 'symvoulia', label: 'Συμβούλια', icon: 'forum', badge: '' },
     { name: 'axiologisi', label: 'Αξιολόγηση', icon: 'rate_review', badge: '' },
     { name: 'ektyposi', label: 'Εκτύπωση', icon: 'print', badge: '' },
+    { name: 'arxigeio', label: 'Αρχηγείο', icon: 'shield', badge: '' },
+    { name: 'rythmiseis', label: 'Ρυθμίσεις', icon: 'settings', badge: '' },
   ];
-  if (canWrite.value) list.push({ name: 'rythmiseis', label: 'Ρυθμίσεις', icon: 'settings', badge: '' });
-  return list;
+  // Μόνο οι ενότητες που επιτρέπει ο ρόλος του χρήστη στη δράση (σκηνές = ομάδες).
+  return list.filter((x) => drasiCan(data.value?.access, (x.name === 'skines' ? 'omades' : x.name) as DrasiPerm));
 });
 
 /** Οι αριθμοί της επισκόπησης. */
@@ -491,9 +512,19 @@ watch(
   { immediate: true },
 );
 
-const canWrite = computed(() => auth.can('drasi:write', data.value?.klados?.type ?? undefined));
-/** Κλείνει όποιος γράφει στη δράση **και** ο αρχηγός της (ρόλος «Αρχηγός» στο αρχηγείο της). */
-const canClose = computed(() => canWrite.value || !!data.value?.roles.some((r) => r.kind === 'ARXIGOS' && r.user.id === auth.user?.id));
+/** Πλήρης πρόσβαση (διαχείριση) — π.χ. συνέχεια του wizard. */
+const canWrite = computed(() => !!data.value?.access.full);
+/**
+ * Επεξεργασία μιας ενότητας: ό,τι επιτρέπει ο ρόλος στη δράση (shared
+ * `drasiAccess`, ο ίδιος κανόνας με το API) — και η δράση να μην είναι κλειστή.
+ */
+function canEdit(perm: DrasiPerm): boolean {
+  return canEditOpen(perm) && data.value?.status !== 'KLEISTI';
+}
+/** Ίδιο, χωρίς τον έλεγχο «κλειστή» (ταμείο/κλείσιμο το χειρίζονται μόνα τους). */
+function canEditOpen(perm: DrasiPerm): boolean {
+  return drasiCan(data.value?.access, perm, 'edit');
+}
 
 /** Το wizard του διοργανωτή: κάτω από `/k/:klados/`, ή του Τοπικού για δράση Τοπικού. */
 const wizardRoute = computed(() => {
