@@ -302,6 +302,7 @@
                 :drasi-id="id"
                 :organiser="data.klados?.type ?? null"
                 :can-write="canWrite"
+                :can-close="canClose"
                 :locked="data.status === 'KLEISTI'"
                 @changed="reload"
               />
@@ -491,6 +492,8 @@ watch(
 );
 
 const canWrite = computed(() => auth.can('drasi:write', data.value?.klados?.type ?? undefined));
+/** Κλείνει όποιος γράφει στη δράση **και** ο αρχηγός της (ρόλος «Αρχηγός» στο αρχηγείο της). */
+const canClose = computed(() => canWrite.value || !!data.value?.roles.some((r) => r.kind === 'ARXIGOS' && r.user.id === auth.user?.id));
 
 /** Το wizard του διοργανωτή: κάτω από `/k/:klados/`, ή του Τοπικού για δράση Τοπικού. */
 const wizardRoute = computed(() => {

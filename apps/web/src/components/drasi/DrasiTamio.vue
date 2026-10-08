@@ -16,7 +16,8 @@
       />
       <q-space />
       <q-btn flat color="klados" icon="table_view" label="Excel" :loading="exporting" @click="exportXlsx" />
-      <q-btn v-if="canWrite && !locked" flat color="negative" icon="lock" label="Κλείσιμο δράσης" @click="closeDrasi" />
+      <q-btn v-if="canClose && !locked" flat color="negative" icon="lock" label="Κλείσιμο δράσης" @click="closeDrasi" />
+      <q-btn v-if="canClose && locked" flat color="klados" icon="lock_open" label="Άνοιγμα ξανά" @click="reopenDrasi" />
     </div>
 
     <q-banner v-if="locked" rounded class="bg-grey-2 q-mb-md">
@@ -399,6 +400,8 @@ const props = defineProps<{
   /** Ο διοργανωτής — η εμβέλεια των αποδείξεων (`null` = Τοπικό). */
   organiser: KladosType | null;
   canWrite: boolean;
+  /** Κλείσιμο/άνοιγμα: όσοι γράφουν στη δράση + ο αρχηγός της. */
+  canClose: boolean;
   locked: boolean;
 }>();
 const emit = defineEmits<{ changed: [] }>();
@@ -730,7 +733,23 @@ function closeDrasi(): void {
     persistent: true,
   }).onOk(async () => {
     try {
-      await patch(`/draseis/${props.drasiId}`, { status: 'KLEISTI' });
+      await put(`/draseis/${props.drasiId}/closed`, { closed: true });
+      emit('changed');
+      await reload();
+    } catch (err) {
+      notifyError(err, 'Αποτυχία.');
+    }
+  });
+}
+function reopenDrasi(): void {
+  $q.dialog({
+    title: 'Άνοιγμα δράσης',
+    message: 'Το ταμείο ξεκλειδώνει ξανά για κινήσεις και πληρωμές. Συνέχεια;',
+    cancel: { label: 'Άκυρο', flat: true },
+    ok: { label: 'Άνοιγμα', color: 'klados' },
+  }).onOk(async () => {
+    try {
+      await put(`/draseis/${props.drasiId}/closed`, { closed: false });
       emit('changed');
       await reload();
     } catch (err) {

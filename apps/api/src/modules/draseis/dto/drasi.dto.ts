@@ -342,3 +342,9 @@ export class DeleteDrasiDto {
   @MaxLength(200)
   confirmTitle!: string;
 }
+
+export class SetDrasiClosedDto {
+  @ApiProperty({ description: '`true` ⇒ κλείσιμο (κλειδώνει τα οικονομικά), `false` ⇒ άνοιγμα ξανά.' })
+  @IsBoolean()
+  closed!: boolean;
+}

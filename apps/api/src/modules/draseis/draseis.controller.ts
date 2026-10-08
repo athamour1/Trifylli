@@ -24,6 +24,7 @@ import {
   AddParticipantsDto,
   CreateDrasiDto,
   DeleteDrasiDto,
+  SetDrasiClosedDto,
   QueryDraseisDto,
   RolesTemplateQueryDto,
   SetDrasiKladoiDto,
@@ -134,6 +135,17 @@ export class DraseisController {
     // Η αλλαγή κατάστασης (ενεργοποίηση, κλείσιμο) είναι η μόνη που αξίζει ίχνος.
     if (dto.status) await this.audit.record(user, 'drasi.status', 'drasi', id, { status: dto.status });
     return drasi;
+  }
+
+  @Put(':id/closed')
+  // Ο έλεγχος γίνεται στο service: το επιτρέπει και ο αρχηγός της δράσης,
+  // που ως απλό στέλεχος δεν έχει `drasi:write`.
+  @RequireCapability('calendar:read')
+  @ApiOperation({ summary: 'Κλείσιμο ή άνοιγμα ξανά (αρχηγός δράσης, διαχειριστής κλάδου, υπερδιαχειριστής)' })
+  async setClosed(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: SetDrasiClosedDto) {
+    const result = await this.draseis.setClosed(user, id, dto.closed);
+    await this.audit.record(user, 'drasi.status', 'drasi', id, { status: result.status });
+    return result;
   }
 
   @Delete(':id')

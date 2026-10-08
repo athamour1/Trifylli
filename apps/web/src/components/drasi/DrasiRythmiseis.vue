@@ -328,7 +328,9 @@ async function saveCosts(): Promise<void> {
 // ── Κατάσταση ──
 async function setStatus(next: DrasiStatus): Promise<void> {
   await run('status', async () => {
-    await patch(`/draseis/${drasiId.value}`, { status: next });
+    // Κλείσιμο / άνοιγμα από το δικό τους endpoint (κανόνας: και ο αρχηγός της δράσης).
+    if (next === 'KLEISTI' || status.value === 'KLEISTI') await put(`/draseis/${drasiId.value}/closed`, { closed: next === 'KLEISTI' });
+    else await patch(`/draseis/${drasiId.value}`, { status: next });
   });
 }
 function confirmClose(): void {

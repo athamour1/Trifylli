@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { CheckoutStatus, DrasiStatus, DrasiType, MemberKind, Prisma } from '@prisma/client';
 import {
+  can,
   KLADOS_LABEL,
   KLADOS_META,
   type DrasiRolesTemplate,
@@ -11,9 +12,9 @@ import {
 } from '@trifylli/shared';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
-import { assertKladosAccess, scopedKladoi } from '../../common/util/klados-scope';
+import { accessProfileOf, assertKladosAccess, scopedKladoi } from '../../common/util/klados-scope';
 import { EseoClient } from '../integrations/eseo.client';
-import { defaultFee, defaultFeeKind } from './draseis-finance.service';
+import { defaultFeeKind } from './draseis-finance.service';
 import type {
   AddParticipantsDto,
   CreateDrasiDto,
@@ -173,6 +174,37 @@ export class DraseisService {
     this.assertDates(type, dateStart, dateEnd);
 
     return this.prisma.drasi.update({ where: { id }, data: { ...dto } });
+  }
+
+  /**
+   * Κλείσιμο / άνοιγμα ξανά. Ξεχωριστό από την επεξεργασία, γιατί το επιτρέπει
+   * και ο **αρχηγός της δράσης** (ρόλος «Αρχηγός» στο αρχηγείο της), που μπορεί
+   * να είναι απλό στέλεχος χωρίς δικαίωμα επεξεργασίας — εκτός από όσους
+   * γράφουν ήδη στη δράση (διαχειριστής / Αρχηγός κλάδου, υπερδιαχειριστής).
+   */
+  async setClosed(user: RequestUser, id: string, closed: boolean) {
+    const drasi = await this.prisma.drasi.findFirst({
+      where: { id, topikoId: user.topikoId },
+      include: { klados: { select: { type: true } }, roles: { where: { kind: 'ARXIGOS', userId: user.id }, select: { id: true } } },
+    });
+    if (!drasi) throw new NotFoundException('Η δράση δεν βρέθηκε.');
+
+    const organiser = drasi.klados?.type as KladosType | undefined;
+    const writes = can(accessProfileOf(user), 'drasi:write', organiser);
+    if (!writes && drasi.roles.length === 0) {
+      throw new ForbiddenException('Κλείνει ο αρχηγός της δράσης, ο διαχειριστής του κλάδου ή ο υπερδιαχειριστής.');
+    }
+    if (closed && drasi.status !== DrasiStatus.ENERGI) {
+      throw new BadRequestException('Κλείνει μόνο ενεργή δράση.');
+    }
+    if (!closed && drasi.status !== DrasiStatus.KLEISTI) {
+      throw new BadRequestException('Η δράση δεν είναι κλειστή.');
+    }
+    return this.prisma.drasi.update({
+      where: { id },
+      data: { status: closed ? DrasiStatus.KLEISTI : DrasiStatus.ENERGI },
+      select: { id: true, status: true },
+    });
   }
 
   async archive(user: RequestUser, id: string) {
