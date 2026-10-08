@@ -7,7 +7,7 @@
   -->
   <div>
     <div class="row items-center q-mb-sm q-gutter-sm">
-      <q-btn-toggle v-model="dayKey" dense unelevated toggle-color="klados" toggle-text-color="klados-on" :options="dayOptions" />
+      <SegmentedToggle v-model="dayKey" dense unelevated toggle-color="klados" toggle-text-color="klados-on" :options="dayOptions" />
       <q-space />
       <SaveStatus v-if="canWrite && saveStatus !== 'clean'" :status="saveStatus" @retry="saveNow" />
       <q-btn v-if="canWrite && current?.items.length && dayOptions.length > 1" flat color="klados" icon="content_copy" label="Αντιγραφή ημέρας σε…" @click="copyDialog = true" />
@@ -258,6 +258,10 @@ function toRow(it: DrasiScheduleItemView): Row {
 
 // Ό,τι έρχεται από τον server γίνεται η νέα βάση — και το στιγμιότυπο, ώστε
 // η παρακολούθηση αλλαγών να μη θεωρήσει «αλλαγή» την ίδια τη φόρτωση.
+// Τα δύο σύνολα δηλώνονται ΠΡΙΝ τον watcher: με `immediate: true` η συνάρτηση
+// τρέχει εδώ, συγχρονισμένα, και ένα `const` παρακάτω δεν υπάρχει ακόμη (TDZ).
+const snapshots = new Map<string, string>();
+const dirty = new Set<string>();
 watch(
   current,
   (day) => {
@@ -285,8 +289,6 @@ const totalMin = computed(() => rows.value.reduce((s, r) => s + clampMin(r.durat
 // ── Αυτόματη αποθήκευση: ποια γραμμή άλλαξε, PATCH μόνο αυτή ──
 const AUTOSAVE_DELAY_MS = 1000;
 const saveStatus = ref<SaveState>('clean');
-const snapshots = new Map<string, string>();
-const dirty = new Set<string>();
 let timer: ReturnType<typeof setTimeout> | null = null;
 
 watch(
