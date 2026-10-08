@@ -15,8 +15,8 @@
         </div>
         <!-- Μια κάρτα ανά φαρμακείο, με τα τρία κουμπιά της σελίδας του στο OuchTracker
              για γρήγορη πρόσβαση: ό,τι χρειάζεται στο πεδίο χωρίς ενδιάμεση οθόνη. -->
-        <div v-else class="row q-col-gutter-md">
-          <div v-for="k in view.assigned" :key="k.id" class="col-12 col-md-6 col-xl-4">
+        <div v-else class="tf-card-grid" style="--tf-min: 290px">
+          <div v-for="k in view.assigned" :key="k.id">
             <q-card flat bordered class="kit-card full-height column" :style="kladosVars(k.kladosType)">
               <q-card-section class="row items-center no-wrap q-pb-sm">
                 <q-avatar size="34px" :class="k.kladosType ? 'bg-klados text-klados-on' : 'bg-grey-4'" icon="medical_services" class="q-mr-sm" />

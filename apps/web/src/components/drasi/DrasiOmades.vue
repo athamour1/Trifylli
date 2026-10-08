@@ -22,18 +22,16 @@
 
     <q-inner-loading :showing="loading" />
 
-    <div class="row q-col-gutter-md">
+    <div class="tf-with-aside">
       <!-- Ομάδες -->
-      <div class="col-12 col-md-9">
+      <div class="tf-main">
         <div v-if="!currentGroups.length" class="text-center text-grey-6 q-pa-lg">
           <q-icon :name="kind === 'SKINI' ? 'night_shelter' : 'groups_3'" size="40px" class="block q-mb-sm" />
           Καμία {{ kindLower(kind) }} ακόμη.
         </div>
-        <div v-else class="row q-col-gutter-md">
-          <!-- Τρεις στήλες μόνο σε πολύ πλατιές οθόνες: η στήλη περιεχομένου έχει ήδη
-               δεξιά της τους αταξινόμητους και αριστερά το συρτάρι ενοτήτων, και με
-               τρεις κάρτες στα 1440px τα ονόματα δεν χωρούσαν. -->
-          <div v-for="g in currentGroups" :key="g.id" class="col-12 col-sm-6 col-xl-4">
+        <!-- Όσες κάρτες χωρούν στον ΧΩΡΟ της στήλης (όχι του παραθύρου). -->
+        <div v-else class="tf-card-grid" style="--tf-min: 260px">
+          <div v-for="g in currentGroups" :key="g.id">
             <q-card flat bordered class="full-height column">
               <q-card-section class="q-pb-xs">
                 <div class="row items-center no-wrap">
@@ -135,7 +133,7 @@
       </div>
 
       <!-- Αταξινόμητοι -->
-      <div class="col-12 col-md-3">
+      <div class="tf-aside">
         <q-card flat bordered>
           <q-card-section class="q-pb-xs">
             <div class="text-subtitle2">Αταξινόμητοι <q-badge :color="unassigned.length ? 'orange-7' : 'positive'" :label="`${unassigned.length}`" /></div>

@@ -52,19 +52,42 @@
             />
           </div>
 
-          <!-- Σε μικρές οθόνες οι ενότητες γίνονται λωρίδα πάνω από το περιεχόμενο. -->
-          <q-tabs
-            :model-value="section"
-            dense
-            align="left"
-            class="lt-md text-klados q-mb-md"
-            narrow-indicator
-            outside-arrows
-            mobile-arrows
-            @update:model-value="(v: string) => goSection(v)"
+          <!-- Σε μικρές οθόνες: ένα κουμπί με την τρέχουσα ενότητα, που ανοίγει από
+               κάτω πλέγμα με όλες — μια λωρίδα tabs έδειχνε μόλις 2–3 από τις 14. -->
+          <q-btn
+            class="lt-md full-width q-mb-md section-picker"
+            outline
+            no-caps
+            color="klados"
+            align="between"
+            @click="sectionSheet = true"
           >
-            <q-tab v-for="s in sections" :key="s.name" :name="s.name" :label="s.badge ? `${s.label} (${s.badge})` : s.label" />
-          </q-tabs>
+            <div class="row items-center no-wrap q-gutter-sm">
+              <q-icon :name="currentSection?.icon ?? 'menu'" />
+              <span class="text-weight-medium">{{ currentSection?.label ?? 'Ενότητες' }}</span>
+              <q-badge v-if="currentSection?.badge" color="klados" text-color="klados-on" :label="currentSection.badge" />
+            </div>
+            <q-icon name="expand_more" />
+          </q-btn>
+          <q-dialog v-model="sectionSheet" position="bottom">
+            <q-card class="section-sheet">
+              <q-card-section class="text-subtitle2 q-pb-sm">Ενότητες</q-card-section>
+              <q-card-section class="q-pt-none section-sheet__grid">
+                <button
+                  v-for="s in sections"
+                  :key="s.name"
+                  type="button"
+                  class="section-sheet__tile"
+                  :class="{ 'section-sheet__tile--active': s.name === section }"
+                  @click="goSection(s.name); sectionSheet = false"
+                >
+                  <q-icon :name="s.icon" size="24px" />
+                  <span>{{ s.label }}</span>
+                  <q-badge v-if="s.badge" floating rounded color="klados" text-color="klados-on" :label="s.badge" />
+                </button>
+              </q-card-section>
+            </q-card>
+          </q-dialog>
 
           <q-tab-panels :model-value="section" animated transition-prev="slide-down" transition-next="slide-up">
             <!-- ── Επισκόπηση: το γρήγορο βλέμμα ── -->
@@ -116,9 +139,11 @@
               </div>
 
               <!-- Το αρχηγείο: ονόματα και τηλέφωνα — αυτό ψάχνει κανείς στις 7 το πρωί. -->
+      <!-- Στο κινητό αρχηγείο και υπηρεσίες ανοίγουν με πάτημα: είναι μακριές λίστες
+           που αλλιώς σπρώχνουν τα υπόλοιπα πολύ χαμηλά. -->
       <q-card v-if="arxigeio.length" flat bordered class="q-mb-md">
-        <q-card-section class="q-pb-none text-subtitle2">Αρχηγείο</q-card-section>
-        <q-card-section class="row q-col-gutter-sm">
+        <q-expansion-item :default-opened="$q.screen.gt.sm" header-class="text-subtitle2" :label="`Αρχηγείο · ${arxigeio.reduce((n, g) => n + g.roles.length, 0)}`">
+        <q-card-section class="row q-col-gutter-sm q-pt-none">
           <div v-for="group in arxigeio" :key="group.kind" class="col-12 col-sm-6 col-md-4">
             <div class="text-caption text-grey-7">{{ DRASI_ROLE_LABEL[group.kind] }}</div>
             <div v-for="r in group.roles" :key="r.id">
@@ -129,11 +154,12 @@
             </div>
           </div>
         </q-card-section>
+        </q-expansion-item>
       </q-card>
 
               <q-card v-if="ypiresies.length" flat bordered class="q-mb-md">
-                <q-card-section class="q-pb-none text-subtitle2">Υπηρεσίες</q-card-section>
-                <q-card-section class="row q-col-gutter-sm">
+                <q-expansion-item :default-opened="$q.screen.gt.sm" header-class="text-subtitle2" :label="`Υπηρεσίες · ${ypiresies.reduce((n, g) => n + g.roles.length, 0)}`">
+                <q-card-section class="row q-col-gutter-sm q-pt-none">
                   <div v-for="group in ypiresies" :key="group.kind" class="col-12 col-sm-6 col-md-4">
                     <div class="text-caption text-grey-7">{{ DRASI_ROLE_LABEL[group.kind] }}</div>
                     <div v-for="r in group.roles" :key="r.id">
@@ -142,12 +168,13 @@
                     </div>
                   </div>
                 </q-card-section>
+                </q-expansion-item>
               </q-card>
 
               <!-- Το φύλλο που ζητά το Τοπικό πριν την αναχώρηση. -->
               <div class="text-subtitle2 q-mb-xs">Στοιχεία ανά κλάδο</div>
               <PageState :loading="statsLoading" :empty="!stats?.perKlados.length" class="q-mb-md">
-            <q-markup-table v-if="stats" flat bordered>
+            <q-markup-table v-if="stats" flat bordered class="tf-stack tf-stack--compact">
               <thead>
                 <tr>
                   <th class="text-left">Κλάδος</th>
@@ -159,11 +186,11 @@
               </thead>
               <tbody>
                 <tr v-for="k in stats.perKlados" :key="k.kladosType">
-                  <td class="text-left">{{ KLADOS_LABEL[k.kladosType] }}</td>
-                  <td class="text-right">{{ k.stelexi }}</td>
-                  <td class="text-right">{{ k.kataskinotes }}</td>
-                  <td class="text-right text-weight-bold">{{ k.total }}</td>
-                  <td class="text-left">
+                  <td class="text-left tf-stack__head">{{ KLADOS_LABEL[k.kladosType] }}</td>
+                  <td class="text-right" data-label="Στελέχη">{{ k.stelexi }}</td>
+                  <td class="text-right" data-label="Κατασκηνωτές">{{ k.kataskinotes }}</td>
+                  <td class="text-right text-weight-bold" data-label="Σύνολο">{{ k.total }}</td>
+                  <td class="text-left" data-label="Δεσμευμένο υλικό">
                     <span v-if="!k.ylikoCheckedOut.length" class="text-grey-6">—</span>
                     <q-chip
                       v-for="y in k.ylikoCheckedOut"
@@ -177,11 +204,11 @@
                   </td>
                 </tr>
                 <tr class="bg-grey-2">
-                  <td class="text-left text-weight-bold">ΣΥΝΟΛΟ</td>
-                  <td class="text-right text-weight-bold">{{ stats.totals.stelexi }}</td>
-                  <td class="text-right text-weight-bold">{{ stats.totals.kataskinotes }}</td>
-                  <td class="text-right text-weight-bold">{{ stats.totals.total }}</td>
-                  <td />
+                  <td class="text-left text-weight-bold tf-stack__head">ΣΥΝΟΛΟ</td>
+                  <td class="text-right text-weight-bold" data-label="Στελέχη">{{ stats.totals.stelexi }}</td>
+                  <td class="text-right text-weight-bold" data-label="Κατασκηνωτές">{{ stats.totals.kataskinotes }}</td>
+                  <td class="text-right text-weight-bold" data-label="Σύνολο">{{ stats.totals.total }}</td>
+                  <td class="tf-stack__hide" />
                 </tr>
               </tbody>
             </q-markup-table>
@@ -396,6 +423,8 @@ const section = computed(() => {
   const s = typeof route.params.section === 'string' ? route.params.section : '';
   return sections.value.some((x) => x.name === s) ? s : 'episkopisi';
 });
+const sectionSheet = ref(false);
+const currentSection = computed(() => sections.value.find((x) => x.name === section.value) ?? null);
 function goSection(name: string): void {
   void router.replace({ name: 'drasi', params: { id, section: name } });
 }
@@ -498,6 +527,44 @@ watch(
 </script>
 
 <style scoped>
+.section-picker :deep(.q-btn__content) {
+  width: 100%;
+}
+.section-sheet {
+  border-radius: 20px 20px 0 0 !important;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.section-sheet__grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.section-sheet__tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 4px;
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.8rem;
+  text-align: center;
+  cursor: pointer;
+  transition: background-color var(--dur-medium) var(--ease-standard), transform var(--dur-short) var(--ease-standard);
+}
+.section-sheet__tile:active {
+  transform: scale(0.96);
+}
+.section-sheet__tile--active {
+  color: var(--klados-ink);
+  font-weight: 600;
+  border-color: var(--klados-ink);
+  background: color-mix(in srgb, var(--klados-ink) 12%, transparent);
+}
 /* Το συρτάρι της δράσης πιάνει όλο το ύψος της κάρτας, σαν συνέχεια του κύριου συρταριού.
    Σε μεγάλες οθόνες η κάρτα της σελίδας έχει σταθερό ύψος και κυλά μέσα της (app.scss «Πλωτά πάνελ»)·
    εδώ πάμε ένα βήμα παραπέρα: κυλά ΜΟΝΟ η στήλη περιεχομένου, και το συρτάρι μένει ακίνητο — master/detail.

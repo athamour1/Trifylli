@@ -9,8 +9,9 @@
     <q-inner-loading :showing="loading && !view" />
 
     <template v-if="view">
-      <div v-if="canWrite" class="row items-center no-wrap q-mb-md">
-        <q-tabs v-model="tab" dense align="left" class="text-klados col" narrow-indicator>
+      <!-- Στο κινητό τα tabs παίρνουν δική τους γραμμή και οι ενέργειες πάνε από κάτω. -->
+      <div v-if="canWrite" class="row items-center q-mb-md">
+        <q-tabs v-model="tab" dense align="left" class="text-klados col-12 col-sm" narrow-indicator>
           <q-tab name="questions" label="Ερωτήσεις" />
           <q-tab name="responses">
             <div class="row items-center no-wrap q-gutter-xs">
@@ -20,6 +21,7 @@
           </q-tab>
           <q-tab name="settings" label="Ρυθμίσεις" />
         </q-tabs>
+        <div class="row items-center no-wrap justify-end col-12 col-sm-auto">
         <SaveStatus v-if="saveStatus !== 'clean'" :status="saveStatus" class="q-mx-sm" @retry="saveNow" />
         <q-btn flat round dense :color="tab === 'fill' ? 'klados' : 'grey-7'" icon="visibility" @click="tab = 'fill'">
           <q-tooltip>Προεπισκόπηση — όπως τη βλέπει όποιος απαντά</q-tooltip>
@@ -27,6 +29,7 @@
         <q-btn color="klados" text-color="klados-on" unelevated dense icon="send" label="Αποστολή" class="q-ml-sm" :disable="!view.questions.length" @click="openSend">
           <q-tooltip>Σύνδεσμοι προς τους συμμετέχοντες — χωρίς λογαριασμό</q-tooltip>
         </q-btn>
+        </div>
       </div>
 
       <!-- ══════════ Αποστολή: δημόσιοι σύνδεσμοι ανά συμμετέχοντα ══════════ -->
@@ -96,14 +99,14 @@
             </q-banner>
           </q-card-section>
           <q-card-section class="col scroll q-pt-none">
-            <q-markup-table flat bordered dense>
+            <q-markup-table flat bordered dense class="tf-stack">
               <thead>
                 <tr><th class="text-left">Συμμετέχων</th><th class="text-left">Κατάσταση</th><th /></tr>
               </thead>
               <tbody>
                 <tr v-for="i in invites" :key="i.participantId">
-                  <td>{{ i.user.lastName }} {{ i.user.firstName }} <span class="text-caption text-grey-6">{{ i.user.kind === 'STELEXOS' ? '· στέλεχος' : '' }}</span></td>
-                  <td>
+                  <td class="tf-stack__head">{{ i.user.lastName }} {{ i.user.firstName }} <span class="text-caption text-grey-6">{{ i.user.kind === 'STELEXOS' ? '· στέλεχος' : '' }}</span></td>
+                  <td data-label="Κατάσταση">
                     <q-chip dense :color="inviteColor(i.status)" text-color="white" :label="i.status === 'SUBMITTED' ? 'Απάντησε' : DRASI_FORM_STATUS_LABEL[i.status]" />
                     <span v-if="i.answeredAt" class="text-caption text-grey-7">{{ formatDate(i.answeredAt) }}</span>
                     <span v-else-if="i.expiresAt" class="text-caption text-grey-7">έως {{ formatDate(i.expiresAt) }}</span>

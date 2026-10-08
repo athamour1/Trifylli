@@ -31,7 +31,7 @@
     <q-inner-loading :showing="loading" />
 
     <!-- `wrap-cells`: τρεις στήλες με chip, ημερομηνία και κουμπιά δεν χωρούν σε μία γραμμή στη στήλη περιεχομένου· καλύτερα να τυλίγουν παρά οριζόντια κύλιση. -->
-    <q-markup-table v-if="matrix" flat bordered dense wrap-cells>
+    <q-markup-table v-if="matrix" flat bordered dense wrap-cells class="tf-stack">
       <thead>
         <tr>
           <th class="text-left">Συμμετέχων</th>
@@ -41,11 +41,11 @@
       </thead>
       <tbody>
         <tr v-for="p in matrix.participants" :key="p.participantId">
-          <td>
+          <td class="tf-stack__head">
             {{ p.user.lastName }} {{ p.user.firstName }}
             <span class="text-caption text-grey-6">{{ p.isMinor ? '· ανήλικος' : '· ενήλικος' }}</span>
           </td>
-          <td v-for="type in ['SYMMETOXI', 'YGEIA'] as const" :key="type">
+          <td v-for="type in ['SYMMETOXI', 'YGEIA'] as const" :key="type" :data-label="DRASI_FORM_TYPE_LABEL[type]">
             <template v-if="formOf(p, type)">
               <q-chip dense :color="statusColor(formOf(p, type)!.status)" text-color="white" :label="DRASI_FORM_STATUS_LABEL[formOf(p, type)!.status]" />
               <span v-if="formOf(p, type)!.submittedAt" class="text-caption text-grey-7">

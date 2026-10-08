@@ -67,7 +67,15 @@ function measure(): void {
     }
     const a = active.getBoundingClientRect();
     const r = host.getBoundingClientRect();
-    thumb.value = { x: a.left - r.left, y: a.top - r.top, w: a.width, h: a.height };
+    // Το πλαίσιο μπορεί να κυλά (στενές οθόνες): μετράμε μέσα στο περιεχόμενό του.
+    thumb.value = { x: a.left - r.left + host.scrollLeft, y: a.top - r.top + host.scrollTop, w: a.width, h: a.height };
+    // Η ενεργή επιλογή να είναι πάντα ορατή, αν το πλαίσιο κυλά.
+    if (host.scrollWidth > host.clientWidth) {
+      const left = a.left - r.left + host.scrollLeft;
+      if (left < host.scrollLeft || left + a.width > host.scrollLeft + host.clientWidth) {
+        host.scrollTo({ left: Math.max(0, left - 24), behavior: ready.value ? 'smooth' : 'auto' });
+      }
+    }
     // Η πρώτη τοποθέτηση γίνεται χωρίς κίνηση· από εκεί και πέρα γλιστρά.
     if (!ready.value) requestAnimationFrame(() => (ready.value = true));
   });

@@ -465,9 +465,17 @@ a.q-card:hover {
 
 /* ── Προσβασιμότητα: ορατό focus για πληκτρολόγιο + σεβασμός reduced-motion ── */
 :focus-visible {
-  outline: 2px solid var(--q-primary);
+  outline: 2px solid var(--klados-ink);
   outline-offset: 2px;
   border-radius: 6px;
+}
+/* Ο διάλογος εστιάζεται ο ίδιος όταν ανοίγει (για το πληκτρολόγιο)· το outline
+   γύρω από όλη την κάρτα έμοιαζε με γραμμή-σφάλμα. Τα στοιχεία του κρατούν το δικό τους. */
+.q-dialog__inner > div:focus,
+.q-dialog__inner > div:focus-visible,
+.q-dialog__inner:focus,
+.q-dialog__inner:focus-visible {
+  outline: none;
 }
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -686,6 +694,13 @@ body.body--dark {
     border-radius: 999px;
     background: var(--surface);
     isolation: isolate;
+    /* Όταν οι επιλογές δεν χωρούν (π.χ. 4 στο κινητό): κύλιση, όχι κόψιμο. */
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+  }
+  &__frame::-webkit-scrollbar {
+    display: none;
   }
 
   &--spread,
@@ -701,11 +716,13 @@ body.body--dark {
   .q-btn-toggle {
     position: relative;
     z-index: 1;
+    flex: 0 0 auto;
     border-radius: 999px;
     box-shadow: none;
     background: transparent;
-    max-width: 100%;
-    overflow: hidden;
+  }
+  .q-btn-toggle .q-btn {
+    flex: 0 0 auto;
   }
   .q-btn-toggle .q-btn {
     border-radius: 999px !important;
@@ -1028,4 +1045,165 @@ body.body--dark .tf-seg--flat .tf-seg__thumb {
 }
 .q-drawer__backdrop {
   transition: background-color 240ms var(--ease-standard) !important;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Διατάξεις που ακολουθούν τον ΧΩΡΟ, όχι το παράθυρο
+   Το grid της Quasar (col-md-6 κ.λπ.) αποφασίζει με το πλάτος του παραθύρου·
+   μέσα στη Δράση όμως η στήλη περιεχομένου είναι στενή (συρτάρι + ενότητες),
+   και οι κάρτες ξεχείλιζαν. Αυτά αποφασίζουν με τον χώρο που πραγματικά έχουν.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* Πλέγμα καρτών: όσες χωρούν με ελάχιστο πλάτος `--tf-min` (προεπιλογή 260px). */
+.tf-card-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--tf-min, 260px)), 1fr));
+  align-items: stretch;
+}
+/* Χωρίς αυτό ένα στοιχείο του grid έχει ελάχιστο πλάτος το περιεχόμενό του
+   (κουμπί, μεγάλο όνομα) και σπρώχνει την κάρτα έξω από τη στήλη. */
+.tf-card-grid > * {
+  min-width: 0;
+}
+
+/* Περιεχόμενο + πλαϊνή στήλη (π.χ. ομάδες + αταξινόμητοι): δίπλα-δίπλα όσο
+   χωρούν, η πλαϊνή πέφτει από κάτω όταν όχι — χωρίς media queries. */
+.tf-with-aside {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-start;
+}
+.tf-with-aside > .tf-main {
+  flex: 999 1 420px;
+  min-width: 0;
+}
+.tf-with-aside > .tf-aside {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+/* Στήλες μέσα σε flex γραμμές να μπορούν να στενέψουν (αλλιώς το ellipsis δεν
+   δουλεύει και το περιεχόμενο σπρώχνει την κάρτα έξω από τον χώρο της). */
+.row > .col,
+.row > .col-grow {
+  min-width: 0;
+}
+.q-card {
+  min-width: 0;
+}
+/* Chips με μεγάλα ονόματα: κόβονται αντί να ξεχειλίζουν. */
+.q-chip {
+  max-width: 100%;
+}
+.q-chip .q-chip__content {
+  min-width: 0;
+}
+.q-chip .q-chip__content > .ellipsis,
+.q-chip .q-chip__content {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Τα tab panels δεν έχουν δικό τους φόντο: κάθονται μέσα στην κάρτα της
+   σελίδας. Στο κινητό (χωρίς κάρτα) το φόντο τους φαινόταν ως τετράγωνο κουτί. */
+.q-tab-panels,
+.q-tab-panel {
+  background: transparent !important;
+}
+/* Τα panels κυλούν μόνο κάθετα· μια γραμμή με αρνητικά περιθώρια gutter που
+   ξεπερνά 8px έδειχνε αλλιώς οριζόντια μπάρα κύλισης στο χρώμα του κλάδου. */
+.q-tab-panels > .q-panel.scroll {
+  overflow-x: hidden;
+}
+/* Μέσα σε γραμμές με q-gutter το segmented control έχει περιθώριο αριστερά·
+   στο 100% του πλάτους ξεχείλιζε ακριβώς κατά αυτό. */
+.row[class*='q-gutter'] > .tf-seg {
+  max-width: calc(100% - 16px);
+}
+
+/* Πίνακες που στοιβάζονται σε στενές οθόνες (`class="tf-stack"`): κάθε γραμμή
+   γίνεται κάρτα — το πρώτο κελί (`tf-stack__head`) τίτλος, τα υπόλοιπα «ετικέτα:
+   τιμή» από το `data-label`. Αντί για οριζόντια κύλιση στο κινητό. */
+@media (max-width: 599.98px) {
+  .q-markup-table.tf-stack {
+    border: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    /* Ο πίνακας της Quasar κυλά ο ίδιος· στη στοιβαγμένη μορφή όχι. */
+    overflow: visible !important;
+    max-height: none !important;
+  }
+  .q-markup-table.tf-stack .q-table__middle,
+  .q-markup-table.tf-stack table {
+    overflow: visible !important;
+  }
+  /* Σταθερό ύψος γραμμής (48px, 28px στο dense) → οι στοιβαγμένες κάρτες
+     επικαλύπτονταν. */
+  .q-markup-table.tf-stack tbody tr,
+  .q-markup-table.tf-stack.q-table--dense tbody tr {
+    height: auto !important;
+  }
+  .q-markup-table.tf-stack table,
+  .q-markup-table.tf-stack tbody,
+  .q-markup-table.tf-stack tr,
+  .q-markup-table.tf-stack td {
+    display: block;
+    width: 100%;
+  }
+  .q-markup-table.tf-stack thead {
+    display: none;
+  }
+  .q-markup-table.tf-stack tr {
+    margin-bottom: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--border-soft);
+    border-radius: 14px;
+    background: var(--surface);
+  }
+  .q-markup-table.tf-stack td {
+    height: auto !important;
+    padding: 4px 0 !important;
+    border: 0 !important;
+    text-align: left !important;
+    white-space: normal !important;
+  }
+  .q-markup-table.tf-stack td.tf-stack__head {
+    font-weight: 600;
+    padding-bottom: 6px !important;
+  }
+  /* Η Quasar χρησιμοποιεί το td::before ως απόλυτο overlay για το hover· εδώ
+     γίνεται η ετικέτα του πεδίου, άρα πίσω στη ροή του κειμένου. */
+  .q-markup-table.tf-stack td[data-label]::before {
+    content: attr(data-label);
+    position: static !important;
+    display: block;
+    background: none !important;
+    font-size: 0.72rem;
+    color: var(--muted);
+  }
+  .q-markup-table.tf-stack tr,
+  .q-markup-table.tf-stack tr:hover,
+  .q-markup-table.tf-stack tr[class*='bg-'] {
+    background: var(--surface) !important;
+  }
+  .q-markup-table.tf-stack td::after {
+    display: none;
+  }
+  .q-markup-table.tf-stack td.tf-stack__hide {
+    display: none;
+  }
+  /* `tf-stack--compact`: ετικέτα αριστερά, τιμή δεξιά — για αριθμούς. */
+  .q-markup-table.tf-stack--compact td[data-label] {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 2px 12px;
+  }
+  .q-markup-table.tf-stack--compact td[data-label]::before {
+    display: inline;
+    font-size: 0.8rem;
+  }
 }
