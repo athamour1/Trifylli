@@ -354,6 +354,8 @@ export const KLADOS_DUTY_LABEL: Record<KladosDuty, string> = {
   FOTOGRAFIA: 'Φωτογραφία',
   ENIMEROSI: 'Ενημέρωση',
   SOCIAL_MEDIA: 'Social media',
+  PROODOS: 'Ατομική πρόοδος',
+  YLIKO: 'Υλικό',
 };
 
 /** Material icon ανά υπευθυνότητα — για chips και τη σύνοψη του αρχηγείου. */
@@ -364,4 +366,6 @@ export const KLADOS_DUTY_ICON: Record<KladosDuty, string> = {
   FOTOGRAFIA: 'photo_camera',
   ENIMEROSI: 'campaign',
   SOCIAL_MEDIA: 'share',
+  PROODOS: 'trending_up',
+  YLIKO: 'inventory_2',
 };

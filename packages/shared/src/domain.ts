@@ -778,5 +778,7 @@ export const KladosDuty = {
   FOTOGRAFIA: 'FOTOGRAFIA',
   ENIMEROSI: 'ENIMEROSI',
   SOCIAL_MEDIA: 'SOCIAL_MEDIA',
+  PROODOS: 'PROODOS',
+  YLIKO: 'YLIKO',
 } as const;
 export type KladosDuty = (typeof KladosDuty)[keyof typeof KladosDuty];
