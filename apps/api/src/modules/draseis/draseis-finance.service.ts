@@ -3,7 +3,7 @@ import { DrasiFeeKind, DrasiStatus, MemberKind, PaymentHandlingStatus, Prisma } 
 import {
   DRASI_EXPENSE_CATEGORIES,
   DRASI_INCOME_CATEGORIES,
-  PAYMENT_HANDLING_FLOW,
+  DRASI_PAYMENT_HANDLING_FLOW,
   type DrasiBudgetView,
   type DrasiCollectorView,
   type DrasiLedgerAccount,
@@ -178,10 +178,12 @@ export class DraseisFinanceService {
       for (const pay of p.payments) {
         collected += num(pay.amount);
         if (pay.handlingStatus) {
-          const stage = byStage.get(pay.handlingStatus) ?? { amount: 0, count: 0 };
+          // Η δράση έχει δύο φάσεις· παλιές «κατάθεση/τακτοποίηση» = παραδόθηκε.
+          const key = DRASI_PAYMENT_HANDLING_FLOW.includes(pay.handlingStatus) ? pay.handlingStatus : PaymentHandlingStatus.PARADOTHIKE;
+          const stage = byStage.get(key) ?? { amount: 0, count: 0 };
           stage.amount += num(pay.amount);
           stage.count += 1;
-          byStage.set(pay.handlingStatus, stage);
+          byStage.set(key, stage);
         }
       }
     }
@@ -233,7 +235,7 @@ export class DraseisFinanceService {
         collected: round2(collected),
         outstanding: round2(expected - collected),
         byKind: [...byKind.entries()].map(([kind, v]) => ({ kind, count: v.count, amount: round2(v.amount) })),
-        byStage: PAYMENT_HANDLING_FLOW.filter((s) => byStage.has(s)).map((stage) => ({
+        byStage: DRASI_PAYMENT_HANDLING_FLOW.filter((s) => byStage.has(s)).map((stage) => ({
           stage,
           amount: round2(byStage.get(stage)!.amount),
           count: byStage.get(stage)!.count,
@@ -352,10 +354,13 @@ export class DraseisFinanceService {
     await this.access.load(user, id, 'write');
     const payment = await this.prisma.drasiPayment.findFirst({ where: { id: paymentId, participant: { drasiId: id } } });
     if (!payment) throw new NotFoundException('Η πληρωμή δεν βρέθηκε.');
+    if (!DRASI_PAYMENT_HANDLING_FLOW.includes(status)) {
+      throw new BadRequestException('Στη δράση η πληρωμή περνά μόνο από είσπραξη και παράδοση στο ταμείο της.');
+    }
     return this.prisma.drasiPayment.update({ where: { id: paymentId }, data: { handlingStatus: status } });
   }
 
-  /** «Παραδόθηκαν στον Έφορο»: όλα τα μετρητά που κρατά το στέλεχος, με ένα κλικ. */
+  /** «Παραδόθηκαν στο ταμείο της δράσης»: όλα τα μετρητά που κρατά το στέλεχος, με ένα κλικ. */
   async handover(user: RequestUser, id: string, collectorId: string) {
     await this.access.load(user, id, 'write');
     const result = await this.prisma.drasiPayment.updateMany({

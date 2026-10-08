@@ -93,7 +93,7 @@
               <div v-if="summary.fees.byStage.length" class="q-mt-sm">
                 <div v-for="s in summary.fees.byStage" :key="s.stage" class="text-caption">
                   <q-icon name="circle" size="8px" :color="s.stage === 'EISPRAXTHIKE' ? 'orange-7' : 'positive'" class="q-mr-xs" />
-                  {{ PAYMENT_HANDLING_LABEL[s.stage] }}: {{ formatEuro(s.amount) }} ({{ s.count }})
+                  {{ DRASI_PAYMENT_HANDLING_LABEL[s.stage] }}: {{ formatEuro(s.amount) }} ({{ s.count }})
                 </div>
               </div>
             </q-card-section>
@@ -378,7 +378,7 @@ import {
   DRASI_LEDGER_KIND_LABEL,
   DrasiLedgerKind,
   MAX_RECEIPT_BYTES,
-  PAYMENT_HANDLING_LABEL,
+  DRASI_PAYMENT_HANDLING_LABEL,
   TREASURY_CATEGORY_LABEL,
   type DrasiBudgetView,
   type DrasiLedgerAccount,

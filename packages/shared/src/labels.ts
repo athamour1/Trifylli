@@ -324,6 +324,21 @@ export const PAYMENT_HANDLING_LABEL: Record<string, string> = {
 };
 
 /** Σύντομες ετικέτες για μπάρες/chips. */
+/** Ολογράφως, για σύνοψη και εξαγωγή της δράσης. */
+export const DRASI_PAYMENT_HANDLING_LABEL: Record<string, string> = {
+  EISPRAXTHIKE: 'Εισπράχθηκε',
+  PARADOTHIKE: 'Παραδόθηκε στο ταμείο της δράσης',
+  // Παλιές εγγραφές από την κοινή ροή — για τη δράση σημαίνουν «παραδόθηκε».
+  KATATETHIKE: 'Παραδόθηκε στο ταμείο της δράσης',
+  TAKTOPOIITHIKE: 'Παραδόθηκε στο ταμείο της δράσης',
+};
+
+/** Οι φάσεις όπως τις λέει η δράση: η παράδοση γίνεται στο ταμείο της δράσης. */
+export const DRASI_PAYMENT_HANDLING_SHORT: Record<string, string> = {
+  EISPRAXTHIKE: 'Είσπραξη',
+  PARADOTHIKE: 'Παράδοση στο ταμείο',
+};
+
 export const PAYMENT_HANDLING_SHORT: Record<string, string> = {
   EISPRAXTHIKE: 'Είσπραξη',
   PARADOTHIKE: 'Παράδοση',

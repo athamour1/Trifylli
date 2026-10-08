@@ -103,9 +103,9 @@
                     </q-item-label>
                     <q-item-label v-if="pay.handlingStatus" caption>
                       <q-breadcrumbs gutter="xs" separator-color="grey-4">
-                        <q-breadcrumbs-el v-for="(stage, i) in PAYMENT_HANDLING_FLOW" :key="stage">
+                        <q-breadcrumbs-el v-for="(stage, i) in DRASI_PAYMENT_HANDLING_FLOW" :key="stage">
                           <span :class="i <= stageIndex(pay.handlingStatus) ? 'text-klados text-weight-medium' : 'text-grey-5'">
-                            <q-icon v-if="i <= stageIndex(pay.handlingStatus)" name="check" size="12px" />{{ PAYMENT_HANDLING_SHORT[stage] }}
+                            <q-icon v-if="i <= stageIndex(pay.handlingStatus)" name="check" size="12px" />{{ DRASI_PAYMENT_HANDLING_SHORT[stage] }}
                           </span>
                         </q-breadcrumbs-el>
                       </q-breadcrumbs>
@@ -119,7 +119,7 @@
                         flat
                         size="sm"
                         color="klados"
-                        :label="PAYMENT_HANDLING_SHORT[nextStage(pay.handlingStatus)!]"
+                        :label="DRASI_PAYMENT_HANDLING_SHORT[nextStage(pay.handlingStatus)!]"
                         icon-right="arrow_forward"
                         @click="advance(pay)"
                       />
@@ -152,7 +152,7 @@
               </div>
             </q-card-section>
             <q-card-actions v-if="canWrite && !locked && c.collector && c.holding > 0" align="right">
-              <q-btn flat color="klados" icon="move_down" label="Παραδόθηκαν στον Έφορο" @click="handover(c)" />
+              <q-btn flat color="klados" icon="move_down" label="Παραδόθηκαν στο ταμείο" @click="handover(c)" />
             </q-card-actions>
           </q-card>
         </div>
@@ -272,8 +272,8 @@ import { useQuasar } from 'quasar';
 import {
   DRASI_FEE_KIND_LABEL,
   DrasiFeeKind,
-  PAYMENT_HANDLING_FLOW,
-  PAYMENT_HANDLING_SHORT,
+  DRASI_PAYMENT_HANDLING_FLOW,
+  DRASI_PAYMENT_HANDLING_SHORT,
   type DrasiCollectorView,
   type DrasiGuestTopikoView,
   type DrasiParticipantView,
@@ -411,11 +411,14 @@ async function submitPayment(): Promise<void> {
 
 function nextStage(s: PaymentHandlingStatus | null): PaymentHandlingStatus | null {
   if (!s) return null;
-  const i = PAYMENT_HANDLING_FLOW.indexOf(s);
-  return i >= 0 && i < PAYMENT_HANDLING_FLOW.length - 1 ? (PAYMENT_HANDLING_FLOW[i + 1] ?? null) : null;
+  const i = stageIndex(s);
+  return i < DRASI_PAYMENT_HANDLING_FLOW.length - 1 ? (DRASI_PAYMENT_HANDLING_FLOW[i + 1] ?? null) : null;
 }
+/** Παλιές πληρωμές με «κατάθεση/τακτοποίηση» μετρούν ως παραδομένες — η δράση σταματά εκεί. */
 function stageIndex(s: PaymentHandlingStatus | null): number {
-  return s ? PAYMENT_HANDLING_FLOW.indexOf(s) : -1;
+  if (!s) return -1;
+  const i = DRASI_PAYMENT_HANDLING_FLOW.indexOf(s);
+  return i >= 0 ? i : DRASI_PAYMENT_HANDLING_FLOW.length - 1;
 }
 
 async function advance(pay: DrasiPaymentView): Promise<void> {

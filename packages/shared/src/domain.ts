@@ -511,6 +511,13 @@ export type PaymentHandlingStatus =
   (typeof PaymentHandlingStatus)[keyof typeof PaymentHandlingStatus];
 
 /** Η σειρά των σταδίων — για μπάρες προόδου και «επόμενο βήμα». */
+/**
+ * Οι πληρωμές μιας **δράσης** έχουν δύο φάσεις: το στέλεχος εισπράττει και τα
+ * παραδίδει στο ταμείο της δράσης — εκεί σταματά. Κατάθεση/τακτοποίηση αφορούν
+ * τις συνδρομές (βλ. `PAYMENT_HANDLING_FLOW`).
+ */
+export const DRASI_PAYMENT_HANDLING_FLOW: readonly PaymentHandlingStatus[] = ['EISPRAXTHIKE', 'PARADOTHIKE'];
+
 export const PAYMENT_HANDLING_FLOW: readonly PaymentHandlingStatus[] = [
   'EISPRAXTHIKE',
   'PARADOTHIKE',

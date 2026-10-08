@@ -6,7 +6,7 @@ import {
   DRASI_LEDGER_KIND_LABEL,
   DRASI_TYPE_LABEL,
   KLADOS_LABEL,
-  PAYMENT_HANDLING_LABEL,
+  DRASI_PAYMENT_HANDLING_LABEL,
   TREASURY_CATEGORY_LABEL,
   type DrasiType,
   type KladosType,
@@ -194,7 +194,7 @@ export class DraseisExportService {
         p.paid,
         p.balance,
         p.collector ? `${p.collector.lastName} ${p.collector.firstName}` : '',
-        last?.handlingStatus ? PAYMENT_HANDLING_LABEL[last.handlingStatus] : '',
+        last?.handlingStatus ? DRASI_PAYMENT_HANDLING_LABEL[last.handlingStatus] : '',
       ]);
       for (const c of [4, 5, 6, 7]) row.getCell(c).numFmt = money;
     }
