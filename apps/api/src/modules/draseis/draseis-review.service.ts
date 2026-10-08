@@ -9,6 +9,7 @@ import {
   DRASI_REVIEW_SCALE_MAX,
   FORM_LINK_TTL_DAYS,
   can,
+  drasiCan,
   isSuperAdmin,
   type DrasiReviewAnswerValue,
   type DrasiReviewInviteView,
@@ -120,7 +121,9 @@ export class DraseisReviewService {
   }
 
   private manages(user: RequestUser, organiser: KladosType | undefined): boolean {
-    // Τη διαχειρίζεται όποιος γράφει στις δράσεις του διοργανωτή.
+    // Τη διαχειρίζεται όποιος έχει επεξεργασία αξιολόγησης στη δράση (αρχηγός,
+    // λειτουργία — βλ. `drasiAccess`) ή γράφει στις δράσεις του διοργανωτή.
+    if (user.drasiGrant && drasiCan(user.drasiGrant.access, 'axiologisi', 'edit')) return true;
     const profile = accessProfileOf(user);
     return isSuperAdmin(profile) || (organiser ? can(profile, 'drasi:write', organiser) : false);
   }

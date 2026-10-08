@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { CheckoutStatus, DrasiStatus, DrasiType, MemberKind, Prisma } from '@prisma/client';
+import { AccountRole, CheckoutStatus, DrasiStatus, DrasiType, MemberKind, Prisma } from '@prisma/client';
 import {
   can,
   KLADOS_LABEL,
@@ -14,6 +14,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
 import { accessProfileOf, assertKladosAccess, scopedKladoi } from '../../common/util/klados-scope';
 import { EseoClient } from '../integrations/eseo.client';
+import { DrasiAccessService } from './drasi-access.service';
 import { defaultFeeKind } from './draseis-finance.service';
 import type {
   AddParticipantsDto,
@@ -34,6 +35,7 @@ export class DraseisService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly eseo: EseoClient,
+    private readonly drasiAccess: DrasiAccessService,
   ) {}
 
   async list(user: RequestUser, query: QueryDraseisDto): Promise<Paginated<unknown>> {
@@ -68,6 +70,22 @@ export class DraseisService {
           ],
         },
       ];
+    }
+
+    // Στελέχη: μόνο οι δράσεις όπου είναι στελέχη (ρόλος στο αρχηγείο ή στέλεχος
+    // στους συμμετέχοντες) — ή όσες διαχειρίζονται ως Αρχηγοί κλάδου.
+    if (user.role === AccountRole.STELEXOS) {
+      const profile = accessProfileOf(user);
+      const writesIn = user.kladoi.filter((k) => can(profile, 'drasi:write', k));
+      (where.AND as Prisma.DrasiWhereInput[] | undefined)?.push({
+        OR: [
+          { roles: { some: { userId: user.id } } },
+          { participants: { some: { userId: user.id, kind: MemberKind.STELEXOS } } },
+          ...(writesIn.length
+            ? [{ klados: { type: { in: writesIn } } }, { kladoi: { some: { klados: { type: { in: writesIn } } } } }]
+            : []),
+        ],
+      });
     }
 
     const [total, items] = await this.prisma.$transaction([
@@ -133,9 +151,11 @@ export class DraseisService {
     if (!drasi) throw new NotFoundException('Η δράση δεν βρέθηκε.');
 
     const kladoi = drasi.kladoi.map((k) => k.klados.type as KladosType);
-    this.assertReadAccess(user, drasi.klados?.type as KladosType | undefined, kladoi);
+    if (user.drasiGrant?.drasiId !== id) this.assertReadAccess(user, drasi.klados?.type as KladosType | undefined, kladoi);
 
-    return { ...drasi, kladoi };
+    // Τι μπορεί ο χρήστης εδώ — το UI δείχνει μόνο τις ενότητες του ρόλου του.
+    const access = user.drasiGrant?.drasiId === id ? user.drasiGrant.access : await this.drasiAccess.accessFor(user, id);
+    return { ...drasi, kladoi, access };
   }
 
   async create(user: RequestUser, dto: CreateDrasiDto) {
@@ -578,6 +598,8 @@ export class DraseisService {
       include: { klados: { select: { type: true } } },
     });
     if (!drasi) throw new NotFoundException('Η δράση δεν βρέθηκε.');
+    // Εγκεκριμένο από τον `DrasiPermGuard` με τους ρόλους της δράσης.
+    if (user.drasiGrant?.drasiId === id) return drasi;
     assertKladosAccess(user, drasi.klados?.type as KladosType | undefined);
     return drasi;
   }

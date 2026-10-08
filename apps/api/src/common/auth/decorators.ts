@@ -1,10 +1,11 @@
 import { SetMetadata, createParamDecorator, type ExecutionContext } from '@nestjs/common';
-import type { Capability } from '@trifylli/shared';
+import type { Capability, DrasiPerm } from '@trifylli/shared';
 import type { RequestUser } from './types';
 
 export const PUBLIC_KEY = 'trifylli:public';
 export const CAPABILITY_KEY = 'trifylli:capability';
 export const SUPER_ADMIN_KEY = 'trifylli:superAdmin';
+export const DRASI_PERM_KEY = 'trifylli:drasiPerm';
 
 /** Εξαιρεί ένα endpoint από την αυθεντικοποίηση (health, webhooks). */
 export const Public = () => SetMetadata(PUBLIC_KEY, true);
@@ -14,6 +15,13 @@ export const Public = () => SetMetadata(PUBLIC_KEY, true);
  * `CapabilityGuard` ελέγχει **και** την εμβέλεια στον κλάδο.
  */
 export const RequireCapability = (capability: Capability) => SetMetadata(CAPABILITY_KEY, capability);
+
+/**
+ * Endpoint μιας δράσης (`:id`): το επιτρέπει ο ρόλος του χρήστη **μέσα** στη
+ * δράση (βλ. `drasiAccess` στο shared), όχι γενική ικανότητα. Το ελέγχει ο
+ * `DrasiPermGuard`.
+ */
+export const RequireDrasi = (perm: DrasiPerm, mode: 'view' | 'edit' = 'view') => SetMetadata(DRASI_PERM_KEY, { perm, mode });
 
 /** Μόνο ο υπερδιαχειριστής — για ενέργειες επιπέδου Τοπικού. */
 export const SuperAdminOnly = () => SetMetadata(SUPER_ADMIN_KEY, true);

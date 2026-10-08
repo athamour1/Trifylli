@@ -15,7 +15,8 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { AuditService } from '../../common/audit/audit.service';
 import { CapabilityGuard } from '../../common/auth/capability.guard';
-import { CurrentUser, RequireCapability } from '../../common/auth/decorators';
+import { DrasiPermGuard } from './drasi-perm.guard';
+import { CurrentUser, RequireDrasi } from '../../common/auth/decorators';
 import type { RequestUser } from '../../common/auth/types';
 import { DraseisExportService } from './draseis-export.service';
 import { DraseisFinanceService } from './draseis-finance.service';
@@ -33,7 +34,7 @@ import {
 /** Τα οικονομικά μιας δράσης: ταμείο, προϋπολογισμός, κόστη/εισπράξεις, λογαριασμοί, Excel. */
 @ApiTags('Δράσεις — οικονομικά')
 @ApiBearerAuth()
-@UseGuards(CapabilityGuard)
+@UseGuards(CapabilityGuard, DrasiPermGuard)
 @Controller('draseis/:id')
 export class DraseisFinanceController {
   constructor(
@@ -45,21 +46,21 @@ export class DraseisFinanceController {
   // ── Ταμείο ──
 
   @Get('treasury')
-  @RequireCapability('calendar:read')
+  @RequireDrasi('tamio')
   @ApiOperation({ summary: 'Κινήσεις του ταμείου της δράσης' })
   entries(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.finance.entries(user, id);
   }
 
   @Get('treasury/summary')
-  @RequireCapability('calendar:read')
+  @RequireDrasi('tamio')
   @ApiOperation({ summary: 'Σύνοψη: έσοδα/έξοδα, ανά κατηγορία vs προϋπολογισμός, εισπράξεις' })
   summary(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.finance.summary(user, id);
   }
 
   @Post('treasury')
-  @RequireCapability('drasi:write')
+  @RequireDrasi('tamio', 'edit')
   @ApiOperation({ summary: 'Νέα κίνηση (μία απόδειξη = μία γραμμή)' })
   async createEntry(
     @CurrentUser() user: RequestUser,
@@ -77,7 +78,7 @@ export class DraseisFinanceController {
   }
 
   @Delete('treasury/:entryId')
-  @RequireCapability('drasi:write')
+  @RequireDrasi('tamio', 'edit')
   async removeEntry(
     @CurrentUser() user: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,
@@ -89,20 +90,20 @@ export class DraseisFinanceController {
   }
 
   @Get('budget')
-  @RequireCapability('calendar:read')
+  @RequireDrasi('tamio')
   budget(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.finance.budget(user, id);
   }
 
   @Put('budget')
-  @RequireCapability('drasi:write')
+  @RequireDrasi('tamio', 'edit')
   @ApiOperation({ summary: 'Προϋπολογισμός ανά κατηγορία (αντικατάσταση)' })
   setBudget(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: SetBudgetDto) {
     return this.finance.setBudget(user, id, dto);
   }
 
   @Get('export.xlsx')
-  @RequireCapability('calendar:read')
+  @RequireDrasi('tamio')
   @ApiOperation({ summary: 'Το ταμείο της δράσης σε Excel (δομή υποδείγματος)' })
   async exportXlsx(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Res() res: Response) {
     const { filename, buffer } = await this.exporter.workbook(user, id);
@@ -115,21 +116,21 @@ export class DraseisFinanceController {
   // ── Συμμετέχοντες: κόστη & πληρωμές ──
 
   @Get('participants')
-  @RequireCapability('calendar:read')
+  @RequireDrasi('participants')
   @ApiOperation({ summary: 'Συμμετέχοντες με κόστη, πληρωμές και υπεύθυνο είσπραξης' })
   participants(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.finance.participants(user, id);
   }
 
   @Get('collectors')
-  @RequireCapability('calendar:read')
+  @RequireDrasi('participants')
   @ApiOperation({ summary: 'Ανά υπεύθυνο στέλεχος: πόσα παιδιά, πόσα εισέπραξε, πόσα κρατά' })
   collectors(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.finance.collectors(user, id);
   }
 
   @Patch('participants/:memberId/fees')
-  @RequireCapability('drasi:write')
+  @RequireDrasi('payments', 'edit')
   @ApiOperation({ summary: 'Κόστος συμμετοχής, μεταφορικά, υπεύθυνος είσπραξης' })
   updateFees(
     @CurrentUser() user: RequestUser,
@@ -141,7 +142,7 @@ export class DraseisFinanceController {
   }
 
   @Post('participants/:memberId/payments')
-  @RequireCapability('drasi:write')
+  @RequireDrasi('payments', 'edit')
   @ApiOperation({ summary: 'Καταγραφή πληρωμής συμμετοχής' })
   async addPayment(
     @CurrentUser() user: RequestUser,
@@ -159,7 +160,7 @@ export class DraseisFinanceController {
   }
 
   @Delete('payments/:paymentId')
-  @RequireCapability('drasi:write')
+  @RequireDrasi('payments', 'edit')
   async deletePayment(
     @CurrentUser() user: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,
@@ -171,7 +172,7 @@ export class DraseisFinanceController {
   }
 
   @Put('payments/:paymentId/handling')
-  @RequireCapability('drasi:write')
+  @RequireDrasi('handover', 'edit')
   @ApiOperation({ summary: 'Στάδιο μετρητών: εισπράχθηκε → παραδόθηκε → κατατέθηκε → τακτοποιήθηκε' })
   async updateHandling(
     @CurrentUser() user: RequestUser,
@@ -185,7 +186,7 @@ export class DraseisFinanceController {
   }
 
   @Post('payments/handover')
-  @RequireCapability('drasi:write')
+  @RequireDrasi('handover', 'edit')
   @ApiOperation({ summary: 'Μαζική παράδοση: όλα τα μετρητά ενός στελέχους περνούν σε «παραδόθηκε»' })
   async handover(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: HandoverDto) {
     const result = await this.finance.handover(user, id, dto.collectorId);
@@ -196,14 +197,14 @@ export class DraseisFinanceController {
   // ── Λογαριασμοί στελεχών ──
 
   @Get('ledger')
-  @RequireCapability('calendar:read')
+  @RequireDrasi('tamio')
   @ApiOperation({ summary: 'Προκαταβολές, επιστροφές, αποδόσεις — ανά στέλεχος' })
   ledger(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.finance.ledger(user, id);
   }
 
   @Post('ledger')
-  @RequireCapability('drasi:write')
+  @RequireDrasi('tamio', 'edit')
   async addLedger(
     @CurrentUser() user: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,
@@ -219,7 +220,7 @@ export class DraseisFinanceController {
   }
 
   @Delete('ledger/:entryId')
-  @RequireCapability('drasi:write')
+  @RequireDrasi('tamio', 'edit')
   async removeLedger(
     @CurrentUser() user: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,
@@ -231,7 +232,7 @@ export class DraseisFinanceController {
   }
 
   @Post('ledger/settle')
-  @RequireCapability('drasi:write')
+  @RequireDrasi('tamio', 'edit')
   @ApiOperation({ summary: 'Κλείσιμο λογαριασμού στελέχους' })
   settle(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: SettleLedgerDto) {
     return this.finance.settleLedger(user, id, dto.userId);

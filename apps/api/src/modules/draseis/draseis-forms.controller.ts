@@ -5,7 +5,8 @@ import { DrasiFormType } from '@trifylli/shared';
 import { Throttle } from '@nestjs/throttler';
 import { AuditService } from '../../common/audit/audit.service';
 import { CapabilityGuard } from '../../common/auth/capability.guard';
-import { CurrentUser, Public, RequireCapability } from '../../common/auth/decorators';
+import { DrasiPermGuard } from './drasi-perm.guard';
+import { CurrentUser, Public, RequireDrasi } from '../../common/auth/decorators';
 import type { RequestUser } from '../../common/auth/types';
 import { DraseisFormsService } from './draseis-forms.service';
 import { DraseisPharmacyService } from './draseis-pharmacy.service';
@@ -14,7 +15,7 @@ import { IssueFormsDto, SetPharmacyKitsDto, SubmitFormDto } from './dto/drasi-fo
 /** Έντυπα και φαρμακείο μιας δράσης — για τα στελέχη. */
 @ApiTags('Δράσεις — έντυπα & φαρμακείο')
 @ApiBearerAuth()
-@UseGuards(CapabilityGuard)
+@UseGuards(CapabilityGuard, DrasiPermGuard)
 @Controller('draseis/:id')
 export class DraseisFormsController {
   constructor(
@@ -24,14 +25,14 @@ export class DraseisFormsController {
   ) {}
 
   @Get('forms')
-  @RequireCapability('calendar:read')
+  @RequireDrasi('entypa')
   @ApiOperation({ summary: 'Παιδιά × έντυπα, με κατάσταση — «4 από 41 εκκρεμούν»' })
   matrix(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.forms.matrix(user, id);
   }
 
   @Post('forms/issue')
-  @RequireCapability('drasi:write')
+  @RequireDrasi('entypa', 'edit')
   @ApiOperation({ summary: 'Έκδοση συνδέσμων — το token επιστρέφεται μία φορά' })
   issue(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: IssueFormsDto) {
     return this.forms.issue(user, id, dto);
@@ -39,7 +40,7 @@ export class DraseisFormsController {
 
   // Πριν από το `forms/:formId`: αλλιώς το «export.pdf» θα έπεφτε στο ParseUUIDPipe.
   @Get('forms/export.pdf')
-  @RequireCapability('calendar:read')
+  @RequireDrasi('entypa')
   @ApiQuery({ name: 'type', enum: DrasiFormType })
   @ApiOperation({ summary: 'Όλα τα συμπληρωμένα έντυπα ενός είδους — τα πρωτότυπα του Σ.Ε.Ο. συμπληρωμένα, σε ένα PDF' })
   async exportAll(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Query('type') type: string, @Res() res: Response) {
@@ -48,42 +49,42 @@ export class DraseisFormsController {
   }
 
   @Get('forms/:formId/pdf')
-  @RequireCapability('calendar:read')
+  @RequireDrasi('entypa')
   @ApiOperation({ summary: 'Το έντυπο όπως το πρωτότυπο του Σ.Ε.Ο., συμπληρωμένο και υπογεγραμμένο' })
   async exportOne(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Param('formId', ParseUUIDPipe) formId: string, @Res() res: Response) {
     sendPdf(res, await this.forms.pdf(user, id, formId));
   }
 
   @Get('forms/:formId')
-  @RequireCapability('calendar:read')
+  @RequireDrasi('entypa')
   @ApiOperation({ summary: 'Οι απαντήσεις ενός εντύπου (η ανάγνωση ιατρικών καταγράφεται)' })
   view(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Param('formId', ParseUUIDPipe) formId: string) {
     return this.forms.view(user, id, formId);
   }
 
   @Delete('forms/:formId')
-  @RequireCapability('drasi:write')
+  @RequireDrasi('entypa', 'edit')
   @ApiOperation({ summary: 'Ακύρωση συνδέσμου' })
   void(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Param('formId', ParseUUIDPipe) formId: string) {
     return this.forms.void(user, id, formId);
   }
 
   @Get('health')
-  @RequireCapability('calendar:read')
+  @RequireDrasi('farmakeio')
   @ApiOperation({ summary: 'Σύνοψη υγείας για την τσάντα πρώτων βοηθειών (καταγράφεται)' })
   health(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.forms.healthSummary(user, id);
   }
 
   @Get('pharmacy')
-  @RequireCapability('farmakeio:read')
+  @RequireDrasi('farmakeio')
   @ApiOperation({ summary: 'Φαρμακεία της δράσης και ποια μπορούν να της ανατεθούν' })
   pharmacy(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.pharmacies.view(user, id);
   }
 
   @Put('pharmacy')
-  @RequireCapability('farmakeio:write')
+  @RequireDrasi('farmakeio', 'edit')
   @ApiOperation({ summary: 'Ποια φαρμακεία έχει η δράση (αντικατάσταση)' })
   async setPharmacy(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: SetPharmacyKitsDto) {
     const result = await this.pharmacies.setKits(user, id, dto.kitIds);

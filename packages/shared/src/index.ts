@@ -4,3 +4,4 @@ export * from './klados';
 export * from './access';
 export * from './contracts';
 export * from './leader-roles';
+export * from './drasi-access';

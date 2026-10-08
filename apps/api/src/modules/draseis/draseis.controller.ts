@@ -14,7 +14,8 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuditService } from '../../common/audit/audit.service';
 import { CapabilityGuard } from '../../common/auth/capability.guard';
-import { CurrentUser, RequireCapability } from '../../common/auth/decorators';
+import { DrasiPermGuard } from './drasi-perm.guard';
+import { CurrentUser, RequireCapability, RequireDrasi } from '../../common/auth/decorators';
 import type { RequestUser } from '../../common/auth/types';
 import { CheckoutService } from '../yliko/checkout.service';
 import { DraseisGroupsService } from './draseis-groups.service';
@@ -36,7 +37,7 @@ import {
 
 @ApiTags('Δράσεις')
 @ApiBearerAuth()
-@UseGuards(CapabilityGuard)
+@UseGuards(CapabilityGuard, DrasiPermGuard)
 @Controller('draseis')
 export class DraseisController {
   constructor(
@@ -89,13 +90,13 @@ export class DraseisController {
   }
 
   @Get(':id')
-  @RequireCapability('calendar:read')
+  @RequireDrasi('episkopisi')
   findOne(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.draseis.findOne(user, id);
   }
 
   @Get(':id/stats')
-  @RequireCapability('calendar:read')
+  @RequireDrasi('episkopisi')
   @ApiOperation({
     summary: 'Στοιχεία ανά κλάδο',
     description: 'Στελέχη, κατασκηνωτές και δεσμευμένο υλικό ανά κλάδο — το φύλλο πριν την αναχώρηση.',
@@ -105,7 +106,7 @@ export class DraseisController {
   }
 
   @Get(':id/yliko')
-  @RequireCapability('yliko:read')
+  @RequireDrasi('yliko')
   @ApiOperation({ summary: 'Τι υλικό έχει δεσμευτεί για τη δράση' })
   yliko(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.checkouts.listForDrasi(user, id);
@@ -125,7 +126,7 @@ export class DraseisController {
   }
 
   @Patch(':id')
-  @RequireCapability('drasi:write')
+  @RequireDrasi('rythmiseis', 'edit')
   async update(
     @CurrentUser() user: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,
@@ -140,7 +141,7 @@ export class DraseisController {
   @Put(':id/closed')
   // Ο έλεγχος γίνεται στο service: το επιτρέπει και ο αρχηγός της δράσης,
   // που ως απλό στέλεχος δεν έχει `drasi:write`.
-  @RequireCapability('calendar:read')
+  @RequireDrasi('close', 'edit')
   @ApiOperation({ summary: 'Κλείσιμο ή άνοιγμα ξανά (αρχηγός δράσης, διαχειριστής κλάδου, υπερδιαχειριστής)' })
   async setClosed(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: SetDrasiClosedDto) {
     const result = await this.draseis.setClosed(user, id, dto.closed);
@@ -176,7 +177,7 @@ export class DraseisController {
   // ───────────────────────── Wizard ─────────────────────────
 
   @Put(':id/kladoi')
-  @RequireCapability('drasi:write')
+  @RequireDrasi('rythmiseis', 'edit')
   @ApiOperation({ summary: 'Ποιοι δικοί μας κλάδοι συμμετέχουν (αντικατάσταση συνόλου)' })
   setKladoi(
     @CurrentUser() user: RequestUser,
@@ -187,7 +188,7 @@ export class DraseisController {
   }
 
   @Put(':id/guest-topika')
-  @RequireCapability('drasi:write')
+  @RequireDrasi('rythmiseis', 'edit')
   @ApiOperation({ summary: 'Φιλοξενούμενα Τοπικά (αντικατάσταση συνόλου)' })
   setGuestTopika(
     @CurrentUser() user: RequestUser,
@@ -198,7 +199,7 @@ export class DraseisController {
   }
 
   @Put(':id/roles')
-  @RequireCapability('drasi:write')
+  @RequireDrasi('arxigeio', 'edit')
   @ApiOperation({
     summary: 'Αρχηγείο & υπηρεσίες (αντικατάσταση συνόλου)',
     description: 'Υπηρεσία που δεν ισχύει = καμία γραμμή της. Περισσότερα από ένα άτομα ανά ευθύνη επιτρέπονται.',
@@ -214,7 +215,7 @@ export class DraseisController {
   // ───────────────────────── Συμμετέχοντες ─────────────────────────
 
   @Post(':id/participants')
-  @RequireCapability('drasi:write')
+  @RequireDrasi('participants', 'edit')
   @ApiOperation({ summary: 'Προσθήκη συμμετεχόντων (idempotent)' })
   addParticipants(
     @CurrentUser() user: RequestUser,
@@ -225,7 +226,7 @@ export class DraseisController {
   }
 
   @Patch(':id/participants/:memberId')
-  @RequireCapability('drasi:write')
+  @RequireDrasi('participants', 'edit')
   updateParticipant(
     @CurrentUser() user: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,
@@ -236,7 +237,7 @@ export class DraseisController {
   }
 
   @Delete(':id/participants/:memberId')
-  @RequireCapability('drasi:write')
+  @RequireDrasi('participants', 'edit')
   removeParticipant(
     @CurrentUser() user: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,

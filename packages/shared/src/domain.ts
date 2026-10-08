@@ -140,6 +140,8 @@ export const DRASI_ARXIGEIO_KINDS: readonly DrasiRoleKind[] = [
   'TAMIAS',
   'TROFODOSIA',
   'MAGEIRISSA',
+  // Το φαρμακείο δεν είναι υπηρεσία: διαχειρίζεται χαρτιά υγείας και φαρμακεία.
+  'FARMAKEIO',
 ];
 export const DRASI_YPIRESIA_KINDS: readonly DrasiRoleKind[] = [
   'EXORAISMOS',
@@ -147,7 +149,6 @@ export const DRASI_YPIRESIA_KINDS: readonly DrasiRoleKind[] = [
   'MAGEIREMA',
   'SERVIRISMA',
   'KATHARIOTITA',
-  'FARMAKEIO',
   'SOS',
 ];
 

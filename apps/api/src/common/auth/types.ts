@@ -1,4 +1,4 @@
-import type { AuthenticatedUser, Capability } from '@trifylli/shared';
+import type { AuthenticatedUser, Capability, DrasiAccess } from '@trifylli/shared';
 
 /** Ό,τι κρεμάει το JWT strategy στο `request.user`. */
 export type RequestUser = AuthenticatedUser & {
@@ -9,6 +9,12 @@ export type RequestUser = AuthenticatedUser & {
    * κλάδο, όχι απλώς «βλέπει τον κλάδο».
    */
   activeCapability?: Capability;
+  /**
+   * Η πρόσβαση στη δράση του αιτήματος — τη γράφει το `DrasiPermGuard` αφού την
+   * ελέγξει. Τα services της δράσης τη σέβονται αντί να ξαναελέγξουν με τον
+   * γενικό κανόνα κλάδου (που δεν ξέρει τους ρόλους μέσα στη δράση).
+   */
+  drasiGrant?: { drasiId: string; access: DrasiAccess };
 };
 
 declare module 'express' {

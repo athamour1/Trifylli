@@ -3,8 +3,10 @@ import { Throttle } from '@nestjs/throttler';
 import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { CapabilityGuard } from '../../common/auth/capability.guard';
-import { CurrentUser, Public, RequireCapability } from '../../common/auth/decorators';
+import { DrasiPermGuard } from './drasi-perm.guard';
+import { CurrentUser, Public, RequireDrasi } from '../../common/auth/decorators';
 import type { RequestUser } from '../../common/auth/types';
+import { drasiCan } from '@trifylli/shared';
 import { DraseisDossierService } from './draseis-dossier.service';
 import { DraseisReviewService } from './draseis-review.service';
 import { IssueReviewInvitesDto, PublicReviewAnswersDto, SetReviewAnswersDto, SetReviewQuestionsDto, UpdateReviewSettingsDto } from './dto/drasi-review.dto';
@@ -12,7 +14,7 @@ import { IssueReviewInvitesDto, PublicReviewAnswersDto, SetReviewAnswersDto, Set
 /** Αξιολόγηση (φόρμα) και ντοσιέ μιας δράσης. */
 @ApiTags('Δράσεις — αξιολόγηση & ντοσιέ')
 @ApiBearerAuth()
-@UseGuards(CapabilityGuard)
+@UseGuards(CapabilityGuard, DrasiPermGuard)
 @Controller('draseis/:id')
 export class DraseisReviewController {
   constructor(
@@ -21,84 +23,84 @@ export class DraseisReviewController {
   ) {}
 
   @Get('review')
-  @RequireCapability('calendar:read')
+  @RequireDrasi('axiologisi')
   @ApiOperation({ summary: 'Η φόρμα: ρυθμίσεις, ερωτήσεις, οι απαντήσεις μου και (για τον υπεύθυνο) σύνοψη & ατομικά' })
   view(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.review.view(user, id);
   }
 
   @Put('review/questions')
-  @RequireCapability('drasi:write')
+  @RequireDrasi('axiologisi', 'edit')
   @ApiOperation({ summary: 'Οι ερωτήσεις της φόρμας, με τη σειρά τους' })
   setQuestions(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: SetReviewQuestionsDto) {
     return this.review.setQuestions(user, id, dto);
   }
 
   @Patch('review/settings')
-  @RequireCapability('drasi:write')
+  @RequireDrasi('axiologisi', 'edit')
   @ApiOperation({ summary: 'Ρυθμίσεις της φόρμας (αποδοχή απαντήσεων, ανωνυμία, κοινό…)' })
   updateSettings(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateReviewSettingsDto) {
     return this.review.updateSettings(user, id, dto);
   }
 
   @Put('review/answers')
-  @RequireCapability('calendar:read')
+  @RequireDrasi('axiologisi')
   @ApiOperation({ summary: 'Η υποβολή μου — όλες οι απαντήσεις μαζί' })
   setAnswers(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: SetReviewAnswersDto) {
     return this.review.setAnswers(user, id, dto);
   }
 
   @Delete('review/responses/:key')
-  @RequireCapability('drasi:write')
+  @RequireDrasi('axiologisi', 'edit')
   @ApiOperation({ summary: 'Διαγραφή μιας υποβολής (key: `user:<id>` ή `guest:<id>`)' })
   removeResponse(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Param('key') key: string) {
     return this.review.removeResponse(user, id, key);
   }
 
   @Get('review/share')
-  @RequireCapability('calendar:read')
+  @RequireDrasi('axiologisi')
   @ApiOperation({ summary: 'Υπάρχει κοινός σύνδεσμος αξιολόγησης;' })
   shareStatus(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.review.shareStatus(user, id);
   }
 
   @Post('review/share')
-  @RequireCapability('drasi:write')
+  @RequireDrasi('axiologisi', 'edit')
   @ApiOperation({ summary: 'Νέος κοινός σύνδεσμος (ο προηγούμενος παύει) — επιστρέφεται μία φορά' })
   createShare(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.review.createShareLink(user, id);
   }
 
   @Delete('review/share')
-  @RequireCapability('drasi:write')
+  @RequireDrasi('axiologisi', 'edit')
   @ApiOperation({ summary: 'Απενεργοποίηση του κοινού συνδέσμου' })
   revokeShare(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.review.revokeShareLink(user, id);
   }
 
   @Get('review/invites')
-  @RequireCapability('calendar:read')
+  @RequireDrasi('axiologisi')
   @ApiOperation({ summary: 'Ποιος συμμετέχων έχει σύνδεσμο αξιολόγησης και αν απάντησε' })
   invites(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.review.invites(user, id);
   }
 
   @Post('review/invites')
-  @RequireCapability('drasi:write')
+  @RequireDrasi('axiologisi', 'edit')
   @ApiOperation({ summary: 'Έκδοση δημόσιων συνδέσμων αξιολόγησης — το token επιστρέφεται μία φορά' })
   issueInvites(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: IssueReviewInvitesDto) {
     return this.review.issueInvites(user, id, dto);
   }
 
   @Delete('review/invites/:inviteId')
-  @RequireCapability('drasi:write')
+  @RequireDrasi('axiologisi', 'edit')
   @ApiOperation({ summary: 'Ακύρωση συνδέσμου αξιολόγησης' })
   voidInvite(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Param('inviteId', ParseUUIDPipe) inviteId: string) {
     return this.review.voidInvite(user, id, inviteId);
   }
 
   @Get('review/export.xlsx')
-  @RequireCapability('drasi:write')
+  @RequireDrasi('axiologisi')
   @ApiOperation({ summary: 'Οι απαντήσεις σε Excel (μία γραμμή ανά απαντώντα + σύνοψη)' })
   async exportXlsx(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Res() res: Response) {
     const { filename, buffer } = await this.review.workbook(user, id);
@@ -109,7 +111,7 @@ export class DraseisReviewController {
   }
 
   @Get('dossier')
-  @RequireCapability('calendar:read')
+  @RequireDrasi('ektyposi')
   @ApiQuery({ name: 'health', required: false, description: '1 ⇒ μαζί με τη σύνοψη υγείας (καταγράφεται).' })
   @ApiQuery({ name: 'treasury', required: false, description: '1 ⇒ μαζί με το ταμείο.' })
   @ApiOperation({ summary: 'Όλα τα δεδομένα του ντοσιέ σε ένα request' })
@@ -119,7 +121,12 @@ export class DraseisReviewController {
     @Query('health') health?: string,
     @Query('treasury') treasury?: string,
   ) {
-    return this.dossiers.build(user, id, { health: health === '1', treasury: treasury !== '0' });
+    // Ό,τι δεν βλέπει ο ρόλος του στη δράση δεν μπαίνει ούτε στο χαρτί.
+    const access = user.drasiGrant?.access;
+    return this.dossiers.build(user, id, {
+      health: health === '1' && drasiCan(access, 'farmakeio'),
+      treasury: treasury !== '0' && drasiCan(access, 'tamio'),
+    });
   }
 }
 

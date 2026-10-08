@@ -3,6 +3,7 @@ import { FilesModule } from '../files/files.module';
 import { IntegrationsModule } from '../integrations/integrations.module';
 import { YlikoModule } from '../yliko/yliko.module';
 import { DrasiAccessService } from './drasi-access.service';
+import { DrasiPermGuard } from './drasi-perm.guard';
 import { DraseisController } from './draseis.controller';
 import { DraseisDossierService } from './draseis-dossier.service';
 import { DraseisExportService } from './draseis-export.service';
@@ -38,6 +39,7 @@ import { DraseisService } from './draseis.service';
   ],
   providers: [
     DrasiAccessService,
+    DrasiPermGuard,
     DraseisService,
     DraseisFinanceService,
     DraseisExportService,
