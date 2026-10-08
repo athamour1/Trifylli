@@ -163,21 +163,6 @@ export class DraseisFinanceService {
       }
     }
 
-    const plannedByCategory = new Map(budget.map((b) => [b.category, b]));
-    const categories = new Set<string>([...DRASI_EXPENSE_CATEGORIES, ...actualByCategory.keys(), ...plannedByCategory.keys()]);
-    const expenses = [...categories].map((category) => {
-      const actual = actualByCategory.get(category);
-      const planned = plannedByCategory.get(category);
-      return {
-        category,
-        planned: planned ? num(planned.planned) : 0,
-        targetPct: planned?.targetPct != null ? num(planned.targetPct) : null,
-        actual: round2(actual?.amount ?? 0),
-        actualPct: expense > 0 ? round4((actual?.amount ?? 0) / expense) : 0,
-        count: actual?.count ?? 0,
-      };
-    });
-
     // Εισπράξεις συμμετοχών
     let expected = 0;
     let collected = 0;
@@ -200,6 +185,25 @@ export class DraseisFinanceService {
         }
       }
     }
+
+    // Προϋπολογισμός: τα ποσά βγαίνουν από τα ποσοστά επί των αναμενόμενων εσόδων.
+    const expectedIncome = expected + incomeFromEntries;
+    const plannedByCategory = new Map(budget.map((b) => [b.category, b]));
+    const categories = new Set<string>([...DRASI_EXPENSE_CATEGORIES, ...actualByCategory.keys(), ...plannedByCategory.keys()]);
+    const expenses = [...categories].map((category) => {
+      const actual = actualByCategory.get(category);
+      const planned = plannedByCategory.get(category);
+      return {
+        category,
+        // Με ποσοστό: ποσοστό × αναμενόμενα έσοδα (ακολουθεί συμμετέχοντες/κόστη)·
+        // χωρίς ποσοστό: το σταθερό ποσό που αποθηκεύτηκε.
+        planned: planned?.targetPct != null ? round2(num(planned.targetPct) * expectedIncome) : planned ? num(planned.planned) : 0,
+        targetPct: planned?.targetPct != null ? num(planned.targetPct) : null,
+        actual: round2(actual?.amount ?? 0),
+        actualPct: expense > 0 ? round4((actual?.amount ?? 0) / expense) : 0,
+        count: actual?.count ?? 0,
+      };
+    });
 
     // Λογαριασμοί στελεχών
     let given = 0;

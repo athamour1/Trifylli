@@ -410,6 +410,19 @@ export const DRASI_EXPENSE_CATEGORIES: readonly TreasuryCategory[] = [
   'ALLO',
 ];
 
+/**
+ * Η προεπιλεγμένη κατανομή του προϋπολογισμού μιας δράσης (% των εσόδων) —
+ * ό,τι προτείνεται όταν η δράση δεν έχει ακόμα δική της. Σύνολο 100.
+ */
+export const DRASI_BUDGET_DEFAULT_PCT: Readonly<Partial<Record<TreasuryCategory, number>>> = {
+  METAKINISI: 17,
+  LEITOURGIKA: 10,
+  PROGRAMMA: 25,
+  DIATROFI: 35,
+  APROVLEPTA: 8,
+  ALLO: 5,
+};
+
 /** Είδος συμμετοχής στο κόστος της δράσης. */
 export const DrasiFeeKind = {
   PLIRIS: 'PLIRIS',

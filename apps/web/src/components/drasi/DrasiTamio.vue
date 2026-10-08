@@ -243,7 +243,8 @@
               <div class="text-caption text-grey-7">Σύνολο εσόδων</div>
               <div class="text-h6">{{ formatEuro(expectedIncome) }}</div>
               <div class="text-caption" :class="budgetGap >= 0 ? 'text-positive' : 'text-negative'">
-                {{ budgetGap >= 0 ? 'περισσεύουν' : 'λείπουν' }} {{ formatEuro(Math.abs(budgetGap)) }} από τον προϋπολογισμό
+                <template v-if="budgetGap === 0">καλύπτουν ακριβώς τον προϋπολογισμό</template>
+                <template v-else>{{ budgetGap > 0 ? 'περισσεύουν' : 'λείπουν' }} {{ formatEuro(Math.abs(budgetGap)) }} από τον προϋπολογισμό</template>
               </div>
             </div>
           </div>
@@ -252,29 +253,37 @@
 
       <q-markup-table flat bordered dense>
         <thead>
-          <tr><th class="text-left">Κατηγορία</th><th class="text-right">Ποσό €</th><th class="text-right">Στόχος %</th><th class="text-right">Πραγματικό</th></tr>
+          <tr><th class="text-left">Κατηγορία</th><th class="text-right">Ποσοστό</th><th class="text-right">Ποσό</th><th class="text-right">Πραγματικό</th></tr>
         </thead>
         <tbody>
           <tr v-for="line in budgetLines" :key="line.category">
             <td>{{ TREASURY_CATEGORY_LABEL[line.category] ?? line.category }}</td>
-            <td class="text-right" style="width: 140px">
-              <q-input v-model.number="line.planned" type="number" dense outlined step="1" :min="0" :disable="!canWrite || locked" color="klados" input-class="text-right" />
-            </td>
+            <!-- Το ποσό δεν γράφεται: είναι το ποσοστό επί των αναμενόμενων εσόδων. -->
             <td class="text-right" style="width: 120px">
               <q-input v-model.number="line.targetPct" type="number" dense outlined step="1" :min="0" :max="100" :disable="!canWrite || locked" color="klados" input-class="text-right" suffix="%" />
             </td>
+            <td class="text-right text-weight-medium" style="width: 130px">{{ formatEuro(amountFor(line)) }}</td>
             <td class="text-right text-grey-7">{{ formatEuro(actualFor(line.category)) }}</td>
           </tr>
           <tr class="budget-total text-weight-bold">
             <td>Σύνολο</td>
+            <td class="text-right" :class="{ 'text-negative': pctTotal !== 100 }">
+              {{ pctTotal }}%
+              <q-tooltip v-if="pctTotal !== 100">Τα ποσοστά δεν αθροίζουν σε 100%</q-tooltip>
+            </td>
             <td class="text-right">{{ formatEuro(plannedTotal) }}</td>
-            <td class="text-right">{{ budgetLines.reduce((s, l) => s + (l.targetPct || 0), 0) }}%</td>
             <td class="text-right">{{ formatEuro(summary?.expense ?? 0) }}</td>
           </tr>
         </tbody>
       </q-markup-table>
-      <div v-if="canWrite && !locked" class="row justify-end q-mt-sm">
-        <q-btn color="klados" text-color="klados-on" label="Αποθήκευση προϋπολογισμού" :loading="saving" @click="saveBudget" />
+      <div class="row items-center justify-end q-gutter-sm q-mt-sm">
+        <div class="text-caption text-grey-7 col">
+          Ποσό = ποσοστό × αναμενόμενα έσοδα ({{ formatEuro(expectedIncome) }}) — ενημερώνεται μόνο του όταν αλλάζουν οι συμμετέχοντες ή τα κόστη.
+        </div>
+        <q-btn v-if="canWrite && !locked" flat no-caps color="klados" icon="restart_alt" label="Προεπιλογή" @click="resetBudgetPct">
+          <q-tooltip>{{ defaultPctHint }}</q-tooltip>
+        </q-btn>
+        <q-btn v-if="canWrite && !locked" color="klados" text-color="klados-on" label="Αποθήκευση προϋπολογισμού" :loading="saving" @click="saveBudget" />
       </div>
     </template>
 
@@ -361,6 +370,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useQuasar } from 'quasar';
 import {
+  DRASI_BUDGET_DEFAULT_PCT,
   DRASI_EXPENSE_CATEGORIES,
   DRASI_FEE_KIND_LABEL,
   DRASI_INCOME_CATEGORIES,
@@ -419,9 +429,14 @@ async function reload(): Promise<void> {
     entries.value = list;
     participants.value = parts;
     ledger.value = led;
+    // Χωρίς δική της κατανομή, η δράση ξεκινά από την προεπιλεγμένη (αποθηκεύεται με το «Αποθήκευση»).
+    const hasOwn = bud.some((x) => x.targetPct != null);
     budgetLines.value = DRASI_EXPENSE_CATEGORIES.map((category) => {
       const b = bud.find((x) => x.category === category);
-      return { category, planned: b?.planned ?? null, targetPct: b?.targetPct != null ? Math.round(b.targetPct * 100) : null };
+      const targetPct = hasOwn
+        ? (b?.targetPct != null ? Math.round(b.targetPct * 100) : null)
+        : (DRASI_BUDGET_DEFAULT_PCT[category] ?? null);
+      return { category, planned: b?.planned ?? null, targetPct };
     });
   } catch (err) {
     notifyError(err, 'Αποτυχία φόρτωσης ταμείου.');
@@ -599,7 +614,16 @@ function removeEntry(e: TreasuryEntryView): void {
 }
 
 // ── Προϋπολογισμός ──
-const plannedTotal = computed(() => budgetLines.value.reduce((sum, l) => sum + (l.planned || 0), 0));
+/** Το ποσό μιας γραμμής: ποσοστό × αναμενόμενα έσοδα (συμμετοχές + λοιπά έσοδα). */
+function amountFor(line: { targetPct: number | null }): number {
+  return Math.round(expectedIncome.value * (Number(line.targetPct) || 0)) / 100;
+}
+const pctTotal = computed(() => budgetLines.value.reduce((sum, l) => sum + (Number(l.targetPct) || 0), 0));
+const plannedTotal = computed(() => budgetLines.value.reduce((sum, l) => sum + amountFor(l), 0));
+const defaultPctHint = DRASI_EXPENSE_CATEGORIES.map((c) => `${categoryLabel(c)} ${DRASI_BUDGET_DEFAULT_PCT[c] ?? 0}%`).join(' · ');
+function resetBudgetPct(): void {
+  for (const line of budgetLines.value) line.targetPct = DRASI_BUDGET_DEFAULT_PCT[line.category as keyof typeof DRASI_BUDGET_DEFAULT_PCT] ?? null;
+}
 /** Τα έσοδα που περιμένουμε: ό,τι οφείλουν οι συμμετοχές (όχι μόνο όσα μπήκαν) + οι υπόλοιπες κινήσεις εσόδων. */
 const expectedIncome = computed(() => (summary.value ? summary.value.fees.expected + summary.value.incomeFromEntries : 0));
 /** Θετικό ⇒ τα έσοδα καλύπτουν τον προϋπολογισμό εξόδων. */
@@ -612,10 +636,11 @@ async function saveBudget(): Promise<void> {
   try {
     await put(`/draseis/${props.drasiId}/budget`, {
       items: budgetLines.value
-        .filter((l) => (l.planned ?? 0) > 0 || (l.targetPct ?? 0) > 0)
+        .filter((l) => (Number(l.targetPct) || 0) > 0)
         .map((l) => ({
           category: l.category,
-          planned: l.planned ?? 0,
+          // Αποθηκεύεται και το ποσό της στιγμής — για εξαγωγή/ντοσιέ.
+          planned: amountFor(l),
           ...(l.targetPct !== null && l.targetPct !== ('' as unknown) ? { targetPct: l.targetPct / 100 } : {}),
         })),
     });
