@@ -209,7 +209,9 @@ services:
     # Το dxflrs/garage δεν έχει shell· το image `config` έχει το ίδιο binary
     # πάνω σε alpine και το (idempotent) bootstrap.
     image: ghcr.io/athamour1/trifylli/config:${TAG:-latest}
-    restart: on-failure
+    # Λίγες επαναλήψεις, όχι άπειρες: με λάθος ρύθμιση το `up` πρέπει να
+    # αποτύχει με μήνυμα, όχι να περιμένει για πάντα (το api εξαρτάται από εδώ).
+    restart: on-failure:3
     <<: *logging
     command: ['garage-init']
     environment:
