@@ -359,10 +359,13 @@ import DrasiSymmetexontes from '../components/drasi/DrasiSymmetexontes.vue';
 import DrasiTamio from '../components/drasi/DrasiTamio.vue';
 import { useAsyncData } from '../composables/useAsyncData';
 import { useSlidingThumb } from '../composables/useSlidingThumb';
-import { applyKladosTheme, kladosVars } from '../lib/klados-theme';
+import { kladosVars } from '../lib/klados-theme';
+import { useKladosThemeStore } from '../stores/klados-theme';
 import { get } from '../lib/api';
 import { formatDateRange, formatDateTime, formatTime } from '../lib/format';
 import { useAuthStore } from '../stores/auth';
+
+const kladosTheme = useKladosThemeStore();
 
 interface DrasiDetail {
   id: string;
@@ -470,12 +473,9 @@ const { data, loading, error, stale, reload } = useAsyncData(
 
 // Η σελίδα ζει εκτός `/k/:klados`, οπότε το layout δεν ξέρει τον κλάδο της· τον
 // δηλώνει μόνη της ώστε τα κουμπιά της να πάρουν το χρώμα του.
-// Και στην αλλαγή διαδρομής: το layout καθαρίζει το θέμα σε κάθε πλοήγηση, άρα
-// και όταν αλλάζει μόνο η ενότητα/το στοιχείο μέσα στην ίδια σελίδα — ο κλάδος
-// δεν άλλαξε, οπότε μόνο η διαδρομή μάς ξυπνά να το ξαναβάψουμε.
 watch(
-  [() => data.value?.klados?.type, () => route.fullPath],
-  ([klados]) => applyKladosTheme(klados ?? null),
+  () => (data.value ? (data.value.klados?.type ?? null) : undefined),
+  (klados) => kladosTheme.declare(klados),
   { immediate: true },
 );
 

@@ -444,7 +444,7 @@ import DateField from '../components/DateField.vue';
 import TimeField from '../components/TimeField.vue';
 import SyggentrwshPrint from '../components/SyggentrwshPrint.vue';
 import { useAsyncData } from '../composables/useAsyncData';
-import { applyKladosTheme } from '../lib/klados-theme';
+import { useKladosThemeStore } from '../stores/klados-theme';
 import { ApiError, OfflineError, get, patch, put } from '../lib/api';
 import { formatDate, formatDateLong, formatDuration } from '../lib/format';
 import type { PrintFact, PrintSheet } from '../lib/print-sheet';
@@ -452,6 +452,8 @@ import { printElement } from '../lib/print';
 import type { SaveState } from '../lib/save-state';
 import { useAuthStore } from '../stores/auth';
 import { useOfflineStore } from '../stores/offline';
+
+const kladosTheme = useKladosThemeStore();
 
 /**
  * Σχεδιασμός συγκέντρωσης.
@@ -585,8 +587,8 @@ const { data, loading, error, stale, reload } = useAsyncData(
 // Η σελίδα ζει εκτός `/k/:klados`, οπότε το layout δεν ξέρει τον κλάδο της· τον
 // δηλώνει μόνη της ώστε τα κουμπιά της να πάρουν το χρώμα του.
 watch(
-  () => data.value?.klados.type,
-  (klados) => applyKladosTheme(klados ?? null),
+  () => (data.value ? data.value.klados.type : undefined),
+  (klados) => kladosTheme.declare(klados),
   { immediate: true },
 );
 

@@ -52,7 +52,9 @@ import type { PublicReviewView } from '@trifylli/shared';
 import ReviewQuestionsForm, { type ReviewAnswerPayload } from '../components/drasi/ReviewQuestionsForm.vue';
 import { ApiError, get, post } from '../lib/api';
 import { formatDateRange } from '../lib/format';
-import { applyKladosTheme } from '../lib/klados-theme';
+import { useKladosThemeStore } from '../stores/klados-theme';
+
+const kladosTheme = useKladosThemeStore();
 
 const route = useRoute();
 const $q = useQuasar();
@@ -66,8 +68,8 @@ const guestName = ref('');
 
 // Η σελίδα ζει εκτός layout κλάδου· βάφεται μόλις μάθει ποιος διοργανώνει.
 watch(
-  () => view.value?.drasi.klados ?? null,
-  (klados) => applyKladosTheme(klados),
+  () => (view.value ? view.value.drasi.klados : undefined),
+  (klados) => kladosTheme.declare(klados),
   { immediate: true },
 );
 // Ο κοινός σύνδεσμος δεν ξέρει ποιος είσαι· ο browser θυμάται τον «επισκέπτη» σου για να αλλάξεις την απάντησή σου.

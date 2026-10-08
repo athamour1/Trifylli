@@ -89,11 +89,13 @@ import {
 import PageState from '../components/PageState.vue';
 import SaveStatus from '../components/SaveStatus.vue';
 import { useAsyncData } from '../composables/useAsyncData';
-import { applyKladosTheme } from '../lib/klados-theme';
+import { useKladosThemeStore } from '../stores/klados-theme';
 import { ApiError, get } from '../lib/api';
 import { formatDate } from '../lib/format';
 import type { SaveState } from '../lib/save-state';
 import { useOfflineStore } from '../stores/offline';
+
+const kladosTheme = useKladosThemeStore();
 
 interface Sheet {
   syggentrwsh: { id: string; date: string; title: string | null; kladosType: KladosType };
@@ -138,8 +140,8 @@ const { data: sheet, loading, error, stale, reload } = useAsyncData(
 // Η σελίδα ζει εκτός `/k/:klados`, οπότε το layout δεν ξέρει τον κλάδο της· τον
 // δηλώνει μόνη της ώστε τα κουμπιά της να πάρουν το χρώμα του.
 watch(
-  () => sheet.value?.syggentrwsh.kladosType,
-  (klados) => applyKladosTheme(klados ?? null),
+  () => (sheet.value ? (sheet.value.syggentrwsh.kladosType ?? null) : undefined),
+  (klados) => kladosTheme.declare(klados),
   { immediate: true },
 );
 

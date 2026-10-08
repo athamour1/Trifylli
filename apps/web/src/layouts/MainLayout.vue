@@ -183,7 +183,8 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { KladosType } from '@trifylli/shared';
 import { useQuasar, type QDrawer } from 'quasar';
-import { applyKladosTheme, kladosVars, themedKlados } from '../lib/klados-theme';
+import { kladosVars } from '../lib/klados-theme';
+import { useKladosThemeStore } from '../stores/klados-theme';
 import { useAuthStore } from '../stores/auth';
 import { useOfflineStore } from '../stores/offline';
 import { useSessionStore } from '../stores/session';
@@ -254,21 +255,20 @@ const activeKlados = computed(() => {
  *
  * Παρακολουθούμε τη **διαδρομή** και όχι τον `activeKlados`: ανάμεσα σε δύο
  * σελίδες εκτός κλάδου ο κλάδος είναι `null` και στις δύο, οπότε ο watcher δεν
- * θα πυροδοτούνταν και το χρώμα της προηγούμενης σελίδας θα κολλούσε.
- *
- * Κάθε αλλαγή διαδρομής καθαρίζει· οι σελίδες λεπτομέρειας, που ζουν εκτός
- * `/k/:klados`, το ξαναβάφουν μόλις φορτώσουν τα δεδομένα τους.
+ * θα πυροδοτούνταν και το χρώμα της προηγούμενης σελίδας θα κολλούσε. Τις
+ * σελίδες λεπτομέρειας τις χειρίζεται το store (βλ. `useKladosThemeStore`).
  */
+const kladosTheme = useKladosThemeStore();
 watch(
   () => route.fullPath,
-  () => applyKladosTheme(activeKlados.value?.type ?? null),
+  () => kladosTheme.follow(route, activeKlados.value?.type ?? null),
   { immediate: true },
 );
 
 /**
  * Σελίδες λεπτομέρειας εκτός `/k/:klados` → ποιος σύνδεσμος του κλάδου τους
  * «ανήκει». Ο κλάδος τους δεν είναι στη διαδρομή· τον μαθαίνουμε από το θέμα
- * που βάφει η ίδια η σελίδα μόλις φορτώσει (`themedKlados`).
+ * που βάφει η ίδια η σελίδα μόλις φορτώσει (`kladosTheme.klados`).
  */
 const DETAIL_LINK: Record<string, string> = {
   drasi: 'klados-draseis',
@@ -281,7 +281,7 @@ const DETAIL_LINK: Record<string, string> = {
 };
 const detailLink = computed(() => DETAIL_LINK[String(route.name)] ?? null);
 /** Ο κλάδος «πού είμαστε»: από τη διαδρομή, αλλιώς από το θέμα της σελίδας λεπτομέρειας. */
-const contextKlados = computed<KladosType | null>(() => activeKlados.value?.type ?? (detailLink.value ? themedKlados.value : null));
+const contextKlados = computed<KladosType | null>(() => activeKlados.value?.type ?? (detailLink.value ? kladosTheme.klados : null));
 
 /**
  * Το τμήμα «Τοπικό» υπάρχει μόνο για τον υπερδιαχειριστή — ο διαχειριστής

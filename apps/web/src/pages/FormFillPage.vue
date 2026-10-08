@@ -148,7 +148,9 @@ import {
 import SignaturePad from '../components/SignaturePad.vue';
 import { ApiError, get, post } from '../lib/api';
 import { formatDate, formatDateRange } from '../lib/format';
-import { applyKladosTheme } from '../lib/klados-theme';
+import { useKladosThemeStore } from '../stores/klados-theme';
+
+const kladosTheme = useKladosThemeStore();
 
 const route = useRoute();
 const token = String(route.params.token ?? '');
@@ -171,8 +173,8 @@ const done = ref(false);
 
 // Η σελίδα ζει εκτός layout κλάδου· βάφεται μόλις μάθει ποιος διοργανώνει.
 watch(
-  () => form.value?.drasi.klados ?? null,
-  (klados) => applyKladosTheme(klados),
+  () => (form.value ? form.value.drasi.klados : undefined),
+  (klados) => kladosTheme.declare(klados),
   { immediate: true },
 );
 

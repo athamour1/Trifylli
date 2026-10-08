@@ -192,10 +192,12 @@ import PageState from '../components/PageState.vue';
 import SaveStatus from '../components/SaveStatus.vue';
 import { useAsyncData } from '../composables/useAsyncData';
 import { ApiError, OfflineError, get, patch, post } from '../lib/api';
-import { applyKladosTheme } from '../lib/klados-theme';
+import { useKladosThemeStore } from '../stores/klados-theme';
 import type { SaveState } from '../lib/save-state';
 import { useAuthStore } from '../stores/auth';
 import { useOfflineStore } from '../stores/offline';
+
+const kladosTheme = useKladosThemeStore();
 
 /**
  * Ένα συμβούλιο: τι θα πούμε, τι είπαμε, ποιοι ήταν εκεί.
@@ -250,8 +252,8 @@ const { data, loading, error, stale, reload } = useAsyncData(
 // Η σελίδα ζει εκτός `/k/:klados`: δηλώνει μόνη της τον κλάδο της ώστε τα
 // κουμπιά της να πάρουν το χρώμα του.
 watch(
-  () => data.value?.klados?.type,
-  (klados) => applyKladosTheme(klados ?? null),
+  () => (data.value ? (data.value.klados?.type ?? null) : undefined),
+  (klados) => kladosTheme.declare(klados),
   { immediate: true },
 );
 

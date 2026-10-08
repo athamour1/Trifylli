@@ -14,11 +14,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onUnmounted, ref } from 'vue';
+import { computed, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import type { KladosType } from '@trifylli/shared';
 import YlikoDetail from '../components/YlikoDetail.vue';
-import { applyKladosTheme } from '../lib/klados-theme';
+import { useKladosThemeStore } from '../stores/klados-theme';
+
+const kladosTheme = useKladosThemeStore();
 
 const route = useRoute();
 const router = useRouter();
@@ -30,9 +32,8 @@ const id = computed(() => String(route.params.id));
 const itemKlados = ref<KladosType | null>(null);
 function onLoaded(klados: KladosType | null): void {
   itemKlados.value = klados;
-  applyKladosTheme(klados);
+  kladosTheme.declare(klados);
 }
-onUnmounted(() => applyKladosTheme(null));
 
 function goBack(): void {
   if (window.history.length > 1) router.back();

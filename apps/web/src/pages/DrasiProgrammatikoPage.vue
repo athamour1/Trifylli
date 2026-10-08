@@ -127,10 +127,12 @@ import StelexosPicker from '../components/StelexosPicker.vue';
 import { useAsyncData } from '../composables/useAsyncData';
 import { ApiError, OfflineError, del, get, patch } from '../lib/api';
 import { formatDateLong, formatDuration } from '../lib/format';
-import { applyKladosTheme } from '../lib/klados-theme';
+import { useKladosThemeStore } from '../stores/klados-theme';
 import type { SaveState } from '../lib/save-state';
 import { useAuthStore } from '../stores/auth';
 import { useOfflineStore } from '../stores/offline';
+
+const kladosTheme = useKladosThemeStore();
 
 interface DrasiHead {
   id: string;
@@ -189,12 +191,9 @@ const neighbours = computed(() => {
   return { prev: items[idx - 1]?.id ?? null, next: items[idx + 1]?.id ?? null };
 });
 
-// Και στην αλλαγή διαδρομής: το layout καθαρίζει το θέμα σε κάθε πλοήγηση, άρα
-// και όταν αλλάζει μόνο η ενότητα/το στοιχείο μέσα στην ίδια σελίδα — ο κλάδος
-// δεν άλλαξε, οπότε μόνο η διαδρομή μάς ξυπνά να το ξαναβάψουμε.
 watch(
-  [() => drasi.value?.klados?.type, () => route.fullPath],
-  ([klados]) => applyKladosTheme(klados ?? null),
+  () => (drasi.value ? (drasi.value.klados?.type ?? null) : undefined),
+  (klados) => kladosTheme.declare(klados),
   { immediate: true },
 );
 

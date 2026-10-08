@@ -1,4 +1,3 @@
-import { ref, watch } from 'vue';
 import { KLADOS_META, type KladosType } from '@trifylli/shared';
 import { inkOnDark, inkOnDarkLarge, inkOnWhite, inkOnWhiteLarge, readableOnLarge } from './color';
 import { isDark } from './theme';
@@ -46,19 +45,11 @@ export function kladosVars(klados: KladosType | null | undefined): Record<string
  * ένα κουμπί «Δέσμευση» μέσα σε διάλογο θα έμενε εκτός κληρονομιάς και θα
  * γύριζε στο προεπιλεγμένο χρώμα.
  *
- * Το `null` καθαρίζει — τότε ισχύει η εφεδρεία του `app.scss`.
+ * Το `null` καθαρίζει — τότε ισχύει η εφεδρεία του `app.scss`. Ποιος κλάδος
+ * ισχύει το αποφασίζει το `useKladosThemeStore`· αυτό εδώ μόνο βάφει.
  */
-/**
- * Ο κλάδος που βάφει αυτή τη στιγμή τη σελίδα — reactive, ώστε το layout να
- * ξέρει «πού είμαστε» και στις σελίδες λεπτομέρειας που ζουν εκτός `/k/:klados`
- * (να ανοίγει τη σωστή ενότητα του συρταριού και να φωτίζει τον σωστό σύνδεσμο).
- */
-export const themedKlados = ref<KladosType | null>(null);
-
-export function applyKladosTheme(klados: KladosType | null | undefined): void {
-  themedKlados.value = klados ?? null;
+export function paintKladosVars(klados: KladosType | null | undefined): void {
   if (typeof document === 'undefined') return;
-
   const vars = kladosVars(klados);
   for (const name of ['--klados-color', '--klados-on', '--klados-on-bar', '--klados-ink', '--klados-ink-lg']) {
     const value = vars[name];
@@ -66,7 +57,3 @@ export function applyKladosTheme(klados: KladosType | null | undefined): void {
     else document.body.style.removeProperty(name);
   }
 }
-
-// Οι μεταβλητές στο `body` είναι inline και δεν ξέρουν από θέμα· με κάθε
-// εναλλαγή τις ξαναγράφουμε για τον ίδιο κλάδο.
-watch(isDark, () => applyKladosTheme(themedKlados.value));
