@@ -229,7 +229,7 @@ export const TREASURY_CATEGORY_LABEL: Record<string, string> = {
 
 export const DRASI_FEE_KIND_LABEL: Record<DrasiFeeKind, string> = {
   PLIRIS: 'Πλήρης',
-  MEIOMENI: 'Μειωμένη',
+  MEIOMENI: 'Μειωμένη (αδέρφια)',
   STELEXOS: 'Στέλεχος',
   DOREAN: 'Δωρεάν',
 };

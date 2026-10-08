@@ -69,7 +69,7 @@
     <q-card flat bordered>
       <q-card-section class="text-subtitle2 q-pb-xs">Προεπιλογές κόστους</q-card-section>
       <q-card-section class="q-pt-none">
-        <div class="text-caption text-grey-7 q-mb-sm">Ισχύουν για όποιον προστίθεται από εδώ και πέρα· οι υπάρχοντες συμμετέχοντες αλλάζουν ένας-ένας.</div>
+        <div class="text-caption text-grey-7 q-mb-sm">Ισχύουν για όλους τους συμμετέχοντες — και για όσους υπάρχουν ήδη — εκτός όσων έχουν δικό τους ποσό. Τη μειωμένη την παίρνουν όσοι σημειώσεις έτσι (π.χ. αδέρφια).</div>
         <div class="row q-col-gutter-sm">
           <div class="col-6 col-md-3"><q-input v-model.number="costs.costPerPerson" type="number" label="Πλήρης συμμετοχή €" outlined dense step="0.01" :min="0" color="klados" /></div>
           <div class="col-6 col-md-3"><q-input v-model.number="costs.costReduced" type="number" label="Μειωμένη συμμετοχή €" outlined dense step="0.01" :min="0" color="klados" /></div>

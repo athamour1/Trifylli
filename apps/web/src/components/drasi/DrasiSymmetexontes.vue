@@ -89,8 +89,8 @@
                 </q-btn>
               </div>
               <div class="text-caption text-grey-7">
-                Συμμετοχή {{ formatEuro(p.feeKind === 'DOREAN' ? 0 : p.feeAmount ?? 0) }}
-                <span v-if="p.transportAmount"> · μεταφορικά {{ formatEuro(p.transportAmount) }}</span>
+                Συμμετοχή {{ formatEuro(p.fee) }}
+                <span v-if="p.transport"> · μεταφορικά {{ formatEuro(p.transport) }}</span>
               </div>
               <div v-if="!p.payments.length" class="text-caption text-grey-6 q-mt-xs">Καμία πληρωμή.</div>
               <q-list v-else dense class="q-mt-xs">
@@ -203,7 +203,7 @@
       <q-card style="min-width: min(420px, 94vw)">
         <q-card-section class="text-subtitle1 text-weight-medium q-pb-none">Προεπιλογές κόστους</q-card-section>
         <q-card-section class="text-caption text-grey-7 q-pb-none">
-          Ισχύουν για όποιον προστίθεται από εδώ και πέρα· οι υπάρχοντες αλλάζουν ένας-ένας.
+          Ισχύουν για όλους τους συμμετέχοντες, εκτός όσων έχουν δικό τους ποσό.
         </q-card-section>
         <q-card-section class="q-gutter-sm">
           <q-input v-model.number="costs.costPerPerson" type="number" label="Πλήρης συμμετοχή €" outlined dense step="0.01" :min="0" color="klados" />
@@ -246,9 +246,14 @@
             :min="0"
             color="klados"
             :disable="fees.feeKind === 'DOREAN'"
-            hint="Κενό ⇒ από τις προεπιλογές της δράσης"
+            :placeholder="defaultFeeFor(fees.feeKind) !== null ? String(defaultFeeFor(fees.feeKind)) : undefined"
+            :hint="defaultFeeFor(fees.feeKind) !== null ? `Κενό ⇒ ${formatEuro(defaultFeeFor(fees.feeKind)!)} από τις Ρυθμίσεις της δράσης` : 'Κενό ⇒ από τις Ρυθμίσεις της δράσης (δεν έχει οριστεί ποσό)'"
           />
-          <q-input v-model.number="fees.transportAmount" type="number" label="Μεταφορικά €" outlined dense step="0.01" :min="0" color="klados" />
+          <q-input
+            v-model.number="fees.transportAmount" type="number" label="Μεταφορικά €" outlined dense step="0.01" :min="0" color="klados"
+            :placeholder="costs.transportCost != null ? String(costs.transportCost) : undefined"
+            :hint="costs.transportCost != null ? `Κενό ⇒ ${formatEuro(costs.transportCost)} από τις Ρυθμίσεις` : undefined"
+          />
           <q-input v-model="fees.feeNote" label="Σημείωση (γιατί μειωμένη/δωρεάν)" outlined dense color="klados" />
           <StelexosPicker v-model="fees.collector" label="Υπεύθυνο στέλεχος είσπραξης" :options="stelexiOptions" />
         </q-card-section>
@@ -499,6 +504,14 @@ const fees = reactive({
   feeNote: '',
   collector: [] as string[],
 });
+
+/** Η προεπιλογή των Ρυθμίσεων ανά είδος — ό,τι ισχύει όταν το ποσό μείνει κενό. */
+function defaultFeeFor(kind: DrasiFeeKind): number | null {
+  if (kind === 'DOREAN') return 0;
+  if (kind === 'MEIOMENI') return costs.costReduced ?? costs.costPerPerson;
+  if (kind === 'STELEXOS') return costs.costStelexos;
+  return costs.costPerPerson;
+}
 
 function openFees(p: DrasiParticipantView): void {
   target.value = p;

@@ -184,7 +184,7 @@ export class DraseisFinanceService {
     const byKind = new Map<DrasiFeeKind, { count: number; amount: number }>();
     const byStage = new Map<PaymentHandlingStatus, { amount: number; count: number }>();
     for (const p of participants) {
-      const due = dueOf(p);
+      const due = dueOf(p, drasi);
       expected += due;
       const kind = byKind.get(p.feeKind) ?? { count: 0, amount: 0 };
       kind.count += 1;
@@ -242,7 +242,7 @@ export class DraseisFinanceService {
   // ───────────────────────── Συμμετέχοντες: κόστη & πληρωμές ─────────────────────────
 
   async participants(user: RequestUser, id: string): Promise<DrasiParticipantView[]> {
-    await this.access.load(user, id, 'read');
+    const drasi = await this.access.load(user, id, 'read');
     const rows = await this.prisma.drasiParticipant.findMany({
       where: { drasiId: id },
       include: {
@@ -269,11 +269,11 @@ export class DraseisFinanceService {
       },
       orderBy: [{ kind: 'desc' }, { user: { lastName: 'asc' } }, { user: { firstName: 'asc' } }],
     });
-    return rows.map(toParticipantView);
+    return rows.map((row) => toParticipantView(row, drasi));
   }
 
   async updateFees(user: RequestUser, id: string, memberId: string, dto: UpdateParticipantFeesDto) {
-    const drasi = await this.access.load(user, id, 'write');
+    await this.access.load(user, id, 'write');
     const participant = await this.participant(id, memberId);
 
     if (dto.collectorId) {
@@ -285,12 +285,13 @@ export class DraseisFinanceService {
     }
 
     const feeKind = dto.feeKind ?? participant.feeKind;
-    // Αλλαγή είδους χωρίς ρητό ποσό: το ποσό ξαναβγαίνει από τις προεπιλογές της δράσης.
+    // Αλλαγή είδους χωρίς ρητό ποσό (π.χ. «Μειωμένη» για αδέρφια): ακολουθεί την
+    // προεπιλογή του νέου είδους από τις Ρυθμίσεις — όχι αντίγραφό της.
     const feeAmount =
       dto.feeAmount !== undefined
         ? dto.feeAmount
         : dto.feeKind && dto.feeKind !== participant.feeKind
-          ? defaultFee(drasi, feeKind)
+          ? null
           : num(participant.feeAmount, null);
 
     return this.prisma.drasiParticipant.update({
@@ -366,7 +367,7 @@ export class DraseisFinanceService {
 
   /** Η όψη ανά υπεύθυνο στέλεχος — αυτή που λύνει το «ποιος κρατά τι». */
   async collectors(user: RequestUser, id: string): Promise<DrasiCollectorView[]> {
-    await this.access.load(user, id, 'read');
+    const drasi = await this.access.load(user, id, 'read');
     const rows = await this.prisma.drasiParticipant.findMany({
       where: { drasiId: id },
       include: {
@@ -387,7 +388,7 @@ export class DraseisFinanceService {
 
     for (const p of rows) {
       const b = bucket(p.collector);
-      const due = dueOf(p);
+      const due = dueOf(p, drasi);
       b.participants += 1;
       b.expected += due;
       for (const pay of p.payments) {
@@ -540,9 +541,32 @@ type ParticipantWithFees = {
 };
 
 /** Τι οφείλει ένας συμμετέχων: συμμετοχή (0 αν δωρεάν) + μεταφορικά. */
-export function dueOf(p: ParticipantWithFees): number {
-  const fee = p.feeKind === DrasiFeeKind.DOREAN ? 0 : num(p.feeAmount);
-  return fee + num(p.transportAmount);
+/** Τα κόστη της δράσης (Ρυθμίσεις) — οι προεπιλογές κάθε συμμετέχοντα. */
+export type DrasiCosts = {
+  costPerPerson: Prisma.Decimal | null;
+  costReduced: Prisma.Decimal | null;
+  costStelexos: Prisma.Decimal | null;
+  transportCost: Prisma.Decimal | null;
+};
+
+/**
+ * Το ποσό συμμετοχής που ισχύει. Κενό στον συμμετέχοντα ⇒ **ακολουθεί** τις
+ * Ρυθμίσεις της δράσης (και τις αλλαγές τους)· ρητό ποσό ⇒ δική του εξαίρεση.
+ * Παλιότερα το ποσό αντιγραφόταν μία φορά κατά την προσθήκη, και όποιος
+ * προστέθηκε πριν οριστούν τα κόστη έμενε για πάντα στα 0 €.
+ */
+export function feeOf(p: ParticipantWithFees, drasi: DrasiCosts): number {
+  if (p.feeKind === DrasiFeeKind.DOREAN) return 0;
+  return p.feeAmount !== null ? num(p.feeAmount) : (defaultFee(drasi, p.feeKind) ?? 0);
+}
+
+/** Τα μεταφορικά που ισχύουν — ίδιος κανόνας με το `feeOf`. */
+export function transportOf(p: ParticipantWithFees, drasi: DrasiCosts): number {
+  return p.transportAmount !== null ? num(p.transportAmount) : num(drasi.transportCost);
+}
+
+export function dueOf(p: ParticipantWithFees, drasi: DrasiCosts): number {
+  return feeOf(p, drasi) + transportOf(p, drasi);
 }
 
 /** Η προεπιλογή ποσού ανά είδος συμμετοχής, από τα πεδία κόστους της δράσης. */
@@ -589,8 +613,8 @@ function toParticipantView(p: {
     guestTopikoName: string | null;
     memberships: { klados: { type: string } }[];
   };
-}): DrasiParticipantView {
-  const due = dueOf(p);
+}, drasi: DrasiCosts): DrasiParticipantView {
+  const due = dueOf(p, drasi);
   const paid = p.payments.reduce((s, x) => s + num(x.amount), 0);
   return {
     id: p.id,
@@ -601,6 +625,10 @@ function toParticipantView(p: {
     feeKind: p.feeKind,
     feeAmount: num(p.feeAmount, null),
     transportAmount: num(p.transportAmount, null),
+    fee: round2(feeOf(p, drasi)),
+    transport: round2(transportOf(p, drasi)),
+    defaultFee: p.feeKind === DrasiFeeKind.DOREAN ? 0 : defaultFee(drasi, p.feeKind),
+    defaultTransport: num(drasi.transportCost, null),
     feeNote: p.feeNote,
     due: round2(due),
     paid: round2(paid),

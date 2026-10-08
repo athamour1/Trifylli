@@ -428,8 +428,15 @@ export interface DrasiParticipantView {
   attended: boolean | null;
   note: string | null;
   feeKind: DrasiFeeKind;
+  /** Ρητό ποσό του συμμετέχοντα· `null` ⇒ ακολουθεί τις Ρυθμίσεις της δράσης. */
   feeAmount: number | null;
   transportAmount: number | null;
+  /** Τα ποσά που ισχύουν (ρητό ή από τις Ρυθμίσεις). */
+  fee: number;
+  transport: number;
+  /** Η προεπιλογή των Ρυθμίσεων για το είδος του — για την υπόδειξη στο κενό πεδίο. */
+  defaultFee: number | null;
+  defaultTransport: number | null;
   feeNote: string | null;
   /** Τι οφείλει συνολικά (συμμετοχή + μεταφορικά). */
   due: number;

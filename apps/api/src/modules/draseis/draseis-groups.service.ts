@@ -13,7 +13,6 @@ import {
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
 import { DrasiAccessService } from './drasi-access.service';
-import { defaultFee } from './draseis-finance.service';
 import type { CreateGroupDto, CreateGuestDto, SetGroupMembersDto, UpdateGroupDto } from './dto/drasi-groups.dto';
 
 const memberUserSelect = {
@@ -71,7 +70,6 @@ export class DraseisGroupsService {
     const drasi = await this.access.load(user, id, 'write');
     const kind = dto.kind ?? MemberKind.MELOS;
     const feeKind = kind === MemberKind.STELEXOS ? DrasiFeeKind.STELEXOS : DrasiFeeKind.PLIRIS;
-    const feeAmount = defaultFee(drasi, feeKind);
 
     const created = await this.prisma.user.create({
       data: {
@@ -93,8 +91,6 @@ export class DraseisGroupsService {
             drasiId: id,
             kind,
             feeKind,
-            feeAmount: feeAmount === null ? null : new Prisma.Decimal(feeAmount),
-            transportAmount: drasi.transportCost,
           },
         },
       },

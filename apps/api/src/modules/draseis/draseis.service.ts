@@ -375,8 +375,8 @@ export class DraseisService {
     await this.prisma.$transaction(
       valid.map((member) => {
         // Προεπιλογές κόστους από τη δράση: 40 παιδιά δεν ζητούν 40 φορές το ποσό.
+        // Κενά ποσά ⇒ ακολουθούν τις Ρυθμίσεις της δράσης (βλ. `feeOf`).
         const feeKind = defaultFeeKind(dto.kind ?? member.kind);
-        const feeAmount = defaultFee(drasi, feeKind);
         return this.prisma.drasiParticipant.upsert({
           where: { drasiId_userId: { drasiId: id, userId: member.id } },
           create: {
@@ -385,8 +385,6 @@ export class DraseisService {
             kind: dto.kind ?? member.kind,
             confirmed: dto.confirmed ?? false,
             feeKind,
-            feeAmount: feeAmount === null ? null : new Prisma.Decimal(feeAmount),
-            transportAmount: drasi.transportCost,
           },
           update: {
             kind: dto.kind ?? member.kind,
