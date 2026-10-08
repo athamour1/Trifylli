@@ -66,10 +66,6 @@
         <q-card-section class="q-pt-none">
           <DrasiRolesEditor section="arxigeio" v-model="roles" v-model:enabled="enabledServices" :stelexi-options="stelexiOptions" :organiser="organiser" />
         </q-card-section>
-        <q-card-section class="text-subtitle2 q-pb-xs">Υπηρεσίες</q-card-section>
-        <q-card-section class="q-pt-none">
-          <DrasiRolesEditor section="ypiresies" v-model="roles" v-model:enabled="enabledServices" :stelexi-options="stelexiOptions" :organiser="organiser" />
-        </q-card-section>
         <q-card-actions align="right">
           <q-btn color="klados" text-color="klados-on" unelevated no-caps label="Αποθήκευση" :loading="saving" @click="save" />
         </q-card-actions>
@@ -86,7 +82,7 @@
           <q-item>
             <q-item-section avatar><q-icon name="groups" size="18px" class="role-card__icon" /></q-item-section>
             <q-item-section>
-              <q-item-label>Υπηρεσίες & υπόλοιπα στελέχη</q-item-label>
+              <q-item-label>Υπεύθυνοι υπηρεσιών & υπόλοιπα στελέχη</q-item-label>
               <q-item-label caption>Βλέπουν τη δράση εκτός από ταμείο, υλικό και φαρμακείο.</q-item-label>
             </q-item-section>
           </q-item>
@@ -120,18 +116,6 @@
       </div>
     </div>
 
-    <template v-if="services.length">
-      <div class="text-subtitle1 text-weight-medium q-mt-lg q-mb-xs">Υπηρεσίες</div>
-      <div class="text-caption text-grey-7 q-mb-sm">Βλέπουν τη δράση εκτός από ταμείο, υλικό και φαρμακείο.</div>
-      <q-list bordered separator class="rounded-borders">
-        <q-item v-for="s in services" :key="s.kind">
-          <q-item-section>
-            <q-item-label>{{ DRASI_ROLE_LABEL[s.kind] }}</q-item-label>
-            <q-item-label caption>{{ s.names.join(', ') }}</q-item-label>
-          </q-item-section>
-        </q-item>
-      </q-list>
-    </template>
     </template>
   </div>
 </template>
@@ -142,7 +126,6 @@ import { useQuasar } from 'quasar';
 import {
   DRASI_ARXIGEIO_KINDS,
   DRASI_ROLE_LABEL,
-  DRASI_YPIRESIA_KINDS,
   DrasiRoleKind,
   type DrasiExternalCreated,
   type DrasiExternalView,
@@ -185,9 +168,6 @@ const ROLE_ICON: Partial<Record<DrasiRoleKind, string>> = {
 };
 
 const holders = (kind: DrasiRoleKind) => props.roles.filter((r) => r.kind === kind);
-const services = computed(() =>
-  DRASI_YPIRESIA_KINDS.map((kind) => ({ kind, names: holders(kind).map((r) => `${r.user.lastName} ${r.user.firstName}`) })).filter((s) => s.names.length),
-);
 
 // ── Επεξεργασία ──
 const roles = ref<RolesMap>(emptyRoles(Object.values(DrasiRoleKind)));
@@ -198,7 +178,6 @@ watch(
     const next = emptyRoles(Object.values(DrasiRoleKind));
     for (const r of list) next[r.kind].push(r.user.id);
     roles.value = next;
-    enabledServices.value = DRASI_YPIRESIA_KINDS.filter((k) => next[k].length > 0);
   },
   { immediate: true },
 );
@@ -294,7 +273,7 @@ async function save(): Promise<void> {
   try {
     const payload: { kind: DrasiRoleKind; userId: string }[] = [];
     for (const kind of Object.values(DrasiRoleKind)) {
-      if (DRASI_YPIRESIA_KINDS.includes(kind) && !enabledServices.value.includes(kind)) continue;
+      if (!DRASI_ARXIGEIO_KINDS.includes(kind)) continue;
       for (const userId of roles.value[kind]) payload.push({ kind, userId });
     }
     await put(`/draseis/${props.drasiId}/roles`, { roles: payload });

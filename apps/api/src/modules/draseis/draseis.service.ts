@@ -81,6 +81,7 @@ export class DraseisService {
         OR: [
           { roles: { some: { userId: user.id } } },
           { participants: { some: { userId: user.id, kind: MemberKind.STELEXOS } } },
+          { ypiresies: { some: { responsibles: { some: { userId: user.id } } } } },
           ...(writesIn.length
             ? [{ klados: { type: { in: writesIn } } }, { kladoi: { some: { klados: { type: { in: writesIn } } } } }]
             : []),
@@ -122,7 +123,11 @@ export class DraseisService {
         topikoId: user.topikoId,
         archivedAt: null,
         ...(user.role === AccountRole.EXTERNAL ? { status: { not: DrasiStatus.KLEISTI } } : {}),
-        OR: [{ roles: { some: { userId: user.id } } }, { participants: { some: { userId: user.id, kind: MemberKind.STELEXOS } } }],
+        OR: [
+          { roles: { some: { userId: user.id } } },
+          { participants: { some: { userId: user.id, kind: MemberKind.STELEXOS } } },
+          { ypiresies: { some: { responsibles: { some: { userId: user.id } } } } },
+        ],
       },
       orderBy: { dateStart: 'desc' },
       take: 50,
@@ -159,6 +164,10 @@ export class DraseisService {
         roles: {
           include: { user: { select: roleUserSelect } },
           orderBy: [{ kind: 'asc' }, { user: { lastName: 'asc' } }],
+        },
+        ypiresies: {
+          orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
+          select: { id: true, name: true, responsibles: { select: { user: { select: roleUserSelect } } } },
         },
         participants: {
           include: {

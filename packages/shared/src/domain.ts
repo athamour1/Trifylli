@@ -807,3 +807,11 @@ export const KladosDuty = {
   YLIKO: 'YLIKO',
 } as const;
 export type KladosDuty = (typeof KladosDuty)[keyof typeof KladosDuty];
+
+/** Πώς εναλλάσσονται οι υπηρεσίες ανάμεσα στις ομάδες. */
+export const YpiresiesRotation = {
+  NONE: 'NONE',
+  DAILY: 'DAILY',
+  TWICE_DAILY: 'TWICE_DAILY',
+} as const;
+export type YpiresiesRotation = (typeof YpiresiesRotation)[keyof typeof YpiresiesRotation];

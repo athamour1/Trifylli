@@ -7,6 +7,7 @@ import { DraseisFinanceService } from './draseis-finance.service';
 import { DraseisFormsService } from './draseis-forms.service';
 import { DraseisGroupsService } from './draseis-groups.service';
 import { DraseisMythosService } from './draseis-mythos.service';
+import { DraseisYpiresiesService } from './draseis-ypiresies.service';
 import { DraseisPlanService } from './draseis-plan.service';
 import { DraseisReviewService } from './draseis-review.service';
 import { DraseisService } from './draseis.service';
@@ -26,13 +27,14 @@ export class DraseisDossierService {
     private readonly forms: DraseisFormsService,
     private readonly groups: DraseisGroupsService,
     private readonly mythos: DraseisMythosService,
+    private readonly ypiresies: DraseisYpiresiesService,
     private readonly plan: DraseisPlanService,
     private readonly review: DraseisReviewService,
   ) {}
 
   async build(user: RequestUser, id: string, options: { health: boolean; treasury: boolean }): Promise<DrasiDossier> {
     const drasi = await this.access.load(user, id, 'read');
-    const [full, schedule, participants, groups, loading, matrix, symvoulia, reviewView, topiko, mythos] = await Promise.all([
+    const [full, schedule, participants, groups, loading, matrix, symvoulia, reviewView, topiko, mythos, ypiresies] = await Promise.all([
       this.draseis.findOne(user, id),
       this.plan.scheduleView(user, id),
       this.finance.participants(user, id),
@@ -47,6 +49,7 @@ export class DraseisDossierService {
       this.review.view(user, id),
       this.prisma.topiko.findUnique({ where: { id: user.topikoId }, select: { name: true } }),
       this.mythos.forDossier(user, id),
+      this.ypiresies.view(user, id),
     ]);
 
 
@@ -99,6 +102,7 @@ export class DraseisDossierService {
       review: reviewView.summary,
       formsPending: { pending: matrix.pending, total: matrix.total },
       mythos,
+      ypiresies,
     };
   }
 }

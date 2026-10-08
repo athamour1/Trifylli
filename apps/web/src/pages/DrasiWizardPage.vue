@@ -1,7 +1,7 @@
 <template>
   <q-page padding>
     <div class="text-caption text-grey-7 q-mb-md">
-      Τέσσερα βήματα — τα δύο τελευταία παραλείπονται. Τίποτα δεν κλειδώνει: ό,τι
+      Τρία βήματα — το τελευταίο παραλείπεται. Τίποτα δεν κλειδώνει: ό,τι
       συμπληρώσεις εδώ αλλάζει και μετά, από την ίδια τη δράση.
     </div>
 
@@ -127,7 +127,7 @@
         </q-step>
 
         <!-- ── 3. Αρχηγείο ── -->
-        <q-step :name="3" title="Αρχηγείο" caption="ποιος έχει τι" icon="military_tech" :done="step > 3">
+        <q-step :name="3" title="Αρχηγείο" caption="ποιος έχει τι · προαιρετικό" icon="military_tech">
           <DrasiRolesEditor
             section="arxigeio"
             v-model="roles"
@@ -135,33 +135,7 @@
             :stelexi-options="stelexiOptions"
             :organiser="form.organiser"
           />
-
-          <q-stepper-navigation class="row q-gutter-sm">
-            <q-btn
-              color="klados"
-              text-color="klados-on"
-              unelevated
-              label="Συνέχεια"
-              icon-right="arrow_forward"
-              :loading="saving"
-              @click="next"
-            />
-            <q-btn flat color="klados" label="Παράλειψη" :loading="saving" @click="skip" />
-            <q-btn flat color="klados" label="Αποθήκευση & έξοδος" :loading="saving" @click="saveAndExit" />
-            <q-space />
-            <q-btn flat label="Πίσω" @click="step = 2" />
-          </q-stepper-navigation>
-        </q-step>
-
-        <!-- ── 4. Υπηρεσίες ── -->
-        <q-step :name="4" title="Υπηρεσίες" caption="προαιρετικό" icon="cleaning_services">
-          <DrasiRolesEditor
-            section="ypiresies"
-            v-model="roles"
-            v-model:enabled="enabledServices"
-            :stelexi-options="stelexiOptions"
-            :organiser="form.organiser"
-          />
+          <div class="text-caption text-grey-7 q-mt-sm">Οι υπηρεσίες ορίζονται μετά, από την ενότητα «Υπηρεσίες» της δράσης.</div>
 
           <q-stepper-navigation class="row q-gutter-sm">
             <q-btn
@@ -175,7 +149,7 @@
             />
             <q-btn flat color="klados" label="Αποθήκευση & έξοδος" :loading="saving" @click="saveAndExit" />
             <q-space />
-            <q-btn flat label="Πίσω" @click="step = 3" />
+            <q-btn flat label="Πίσω" @click="step = 2" />
           </q-stepper-navigation>
         </q-step>
       </q-stepper>
@@ -190,7 +164,6 @@ import { useQuasar } from 'quasar';
 import {
   DRASI_ARXIGEIO_KINDS,
   DRASI_TYPE_LABEL,
-  DRASI_YPIRESIA_KINDS,
   DrasiRoleKind,
   KLADOI_IN_ORDER,
   KLADOS_LABEL,
@@ -378,15 +351,11 @@ async function saveStep2(): Promise<boolean> {
   return true;
 }
 
-/** Αρχηγείο + υπηρεσίες μαζί: το API αντικαθιστά το σύνολο. */
+/** Το αρχηγείο: το API αντικαθιστά το σύνολο. */
 async function saveRoles(): Promise<boolean> {
   if (!drasiId.value) return false;
   const payload: { kind: DrasiRoleKind; userId: string }[] = [];
   for (const kind of DRASI_ARXIGEIO_KINDS) for (const userId of roles.value[kind]) payload.push({ kind, userId });
-  for (const kind of DRASI_YPIRESIA_KINDS) {
-    if (!enabledServices.value.includes(kind)) continue;
-    for (const userId of roles.value[kind]) payload.push({ kind, userId });
-  }
   await put(`/draseis/${drasiId.value}/roles`, { roles: payload });
   return true;
 }
@@ -411,12 +380,6 @@ async function run(action: () => Promise<void>, failure: string): Promise<void> 
 function next(): void {
   void run(async () => {
     if (await saveCurrent()) step.value += 1;
-  }, 'Αποτυχία αποθήκευσης.');
-}
-
-function skip(): void {
-  void run(async () => {
-    if (await saveRoles()) step.value += 1;
   }, 'Αποτυχία αποθήκευσης.');
 }
 
@@ -467,12 +430,11 @@ async function resume(): Promise<void> {
       next[kind] = d.roles.filter((r) => r.kind === kind).map((r) => r.user.id);
     }
     roles.value = next;
-    enabledServices.value = DRASI_YPIRESIA_KINDS.filter((kind) => next[kind].length > 0);
 
     // Ξεκινάμε από το πρώτο βήμα που δεν έχει συμπληρωθεί.
     const hasRoles = d.roles.length > 0;
     const hasWho = d.kladoi.length > 1 || d.guestTopika.length > 0;
-    step.value = hasRoles ? 4 : hasWho ? 3 : 2;
+    step.value = hasRoles || hasWho ? 3 : 2;
   } catch (err) {
     loadError.value = err instanceof Error ? err.message : String(err);
   } finally {

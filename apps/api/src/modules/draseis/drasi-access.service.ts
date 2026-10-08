@@ -33,6 +33,7 @@ export class DrasiAccessService {
         kladoi: { select: { klados: { select: { type: true } } } },
         roles: { where: { userId: user.id }, select: { kind: true } },
         participants: { where: { userId: user.id, kind: MemberKind.STELEXOS }, select: { id: true } },
+        ypiresies: { where: { responsibles: { some: { userId: user.id } } }, select: { id: true } },
       },
     });
     if (!drasi) throw new NotFoundException('Η δράση δεν βρέθηκε.');
@@ -46,7 +47,8 @@ export class DrasiAccessService {
     const participatingAdmin = drasi.kladoi.some((k) => can(profile, 'drasi:write', k.klados.type as KladosType));
     return drasiAccess({
       full,
-      staff: drasi.participants.length > 0 || participatingAdmin,
+      // Υπεύθυνος υπηρεσίας = στέλεχος της δράσης (όπως όταν οι υπηρεσίες ήταν ρόλοι).
+      staff: drasi.participants.length > 0 || drasi.ypiresies.length > 0 || participatingAdmin,
       roles: drasi.roles.map((r) => r.kind as DrasiRoleKind),
     });
   }

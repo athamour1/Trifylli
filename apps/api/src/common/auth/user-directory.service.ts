@@ -237,7 +237,11 @@ export class UserDirectoryService {
     const count = await this.prisma.drasi.count({
       where: {
         ...open,
-        OR: [{ roles: { some: { userId } } }, { participants: { some: { userId, kind: MemberKind.STELEXOS } } }],
+        OR: [
+          { roles: { some: { userId } } },
+          { participants: { some: { userId, kind: MemberKind.STELEXOS } } },
+          { ypiresies: { some: { responsibles: { some: { userId } } } } },
+        ],
       },
     });
     return count > 0;

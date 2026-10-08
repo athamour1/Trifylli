@@ -25,14 +25,28 @@
     </header>
 
     <!-- ── Αρχηγείο & υπηρεσίες ── -->
-    <section v-if="mode === 'full' && roleGroups.length" class="ds-section">
+    <section v-if="mode === 'full' && (roleGroups.length || serviceLines.length)" class="ds-section">
       <h2 :style="{ color: accent }">Αρχηγείο &amp; υπηρεσίες</h2>
       <dl class="ds-facts">
-        <div v-for="g in roleGroups" :key="g.kind" class="ds-fact">
-          <dt>{{ DRASI_ROLE_LABEL[g.kind] }}</dt>
-          <dd>{{ g.names.join(', ') }}</dd>
+        <div v-for="g in [...roleGroups, ...serviceLines]" :key="g.label" class="ds-fact">
+          <dt>{{ g.label }}</dt>
+          <dd>{{ g.names.join(', ') || '—' }}</dd>
         </div>
       </dl>
+    </section>
+
+    <!-- ── Χρονοδιάγραμμα υπηρεσιών: βάρδια × ομάδα ── -->
+    <section v-if="mode === 'full' && d.ypiresies.slots.length && d.ypiresies.groups.length" class="ds-section">
+      <h2 :style="{ color: accent }">Χρονοδιάγραμμα υπηρεσιών</h2>
+      <table class="ds-table ds-small">
+        <thead><tr><th>Πότε</th><th v-for="g in d.ypiresies.groups" :key="g.id">{{ g.name }}</th></tr></thead>
+        <tbody>
+          <tr v-for="sh in d.ypiresies.shifts" :key="`${sh.date}:${sh.half}`">
+            <td>{{ shiftLabel(sh.date, sh.half) }}</td>
+            <td v-for="g in d.ypiresies.groups" :key="g.id">{{ slotOf(sh.date, sh.half, g.id) || '—' }}</td>
+          </tr>
+        </tbody>
+      </table>
     </section>
 
     <!-- ── Μύθος: η κεντρική ιδέα και ποιο στέλεχος παίζει ποιον ── -->
@@ -235,7 +249,6 @@ import {
   DRASI_ROLE_LABEL,
   DRASI_SCHEDULE_KIND_LABEL,
   DRASI_TYPE_LABEL,
-  DRASI_YPIRESIA_KINDS,
   KLADOS_LABEL,
   KLADOS_META,
   TREASURY_CATEGORY_LABEL,
@@ -253,10 +266,20 @@ const accent = computed(() => (d.value.drasi.organiser ? KLADOS_META[d.value.dra
 const md = (source: string): string => renderMarkdown(source, () => null);
 
 const roleGroups = computed(() =>
-  [...DRASI_ARXIGEIO_KINDS, ...DRASI_YPIRESIA_KINDS]
-    .map((kind: DrasiRoleKind) => ({ kind, names: d.value.drasi.roles.filter((r) => r.kind === kind).map((r) => `${r.user.lastName} ${r.user.firstName}`) }))
+  [...DRASI_ARXIGEIO_KINDS]
+    .map((kind: DrasiRoleKind) => ({ kind, label: DRASI_ROLE_LABEL[kind], names: d.value.drasi.roles.filter((r) => r.kind === kind).map((r) => `${r.user.lastName} ${r.user.firstName}`) }))
     .filter((g) => g.names.length > 0),
 );
+/** Υπηρεσίες με υπευθύνους — από το δικό τους μοντέλο, όχι από τους ρόλους. */
+const serviceLines = computed(() =>
+  d.value.ypiresies.services.map((s) => ({ id: s.id, label: s.name, names: s.responsibles.map((u) => `${u.lastName} ${u.firstName}`) })),
+);
+/** Το χρονοδιάγραμμα: γραμμή ανά βάρδια, στήλη ανά ομάδα. */
+const serviceName = (id: string): string => d.value.ypiresies.services.find((s) => s.id === id)?.name ?? '';
+const slotOf = (date: string, half: number, groupId: string): string =>
+  serviceName(d.value.ypiresies.slots.find((x) => x.date === date && x.half === half && x.groupId === groupId)?.ypiresiaId ?? '');
+const shiftLabel = (date: string, half: number): string =>
+  d.value.ypiresies.rotation === 'NONE' ? 'Όλη η δράση' : `${formatDate(date)}${d.value.ypiresies.rotation === 'TWICE_DAILY' ? (half ? ' · απόγευμα' : ' · πρωί') : ''}`;
 const skines = computed(() => d.value.groups.filter((g) => g.kind === 'SKINI'));
 const groupsNoSkini = computed(() => d.value.groups.filter((g) => g.kind !== 'SKINI'));
 const unassignedSkini = computed(() => {

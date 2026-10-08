@@ -11,6 +11,7 @@ import {
   DrasiReviewKind,
   DrasiRoleKind,
   KladosDuty,
+  YpiresiesRotation,
   DrasiScheduleKind,
   DrasiStatus,
   DrasiType,
@@ -395,4 +396,10 @@ export const KLADOS_DUTY_ICON: Record<KladosDuty, string> = {
   SOCIAL_MEDIA: 'share',
   PROODOS: 'trending_up',
   YLIKO: 'inventory_2',
+};
+
+export const YPIRESIES_ROTATION_LABEL: Record<YpiresiesRotation, string> = {
+  NONE: 'Σταθερές',
+  DAILY: 'Ανά ημέρα',
+  TWICE_DAILY: 'Δύο φορές τη μέρα',
 };

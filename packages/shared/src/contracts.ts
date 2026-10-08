@@ -14,6 +14,7 @@ import type {
   DrasiScheduleKind,
   DrasiType,
   KladosDuty,
+  YpiresiesRotation,
   KladosType,
   MemberKind,
   MemberStatus,
@@ -803,6 +804,8 @@ export interface DrasiDossier {
   formsPending: { pending: number; total: number };
   /** Ο μύθος και οι ρόλοι· `null` όταν δεν έχει γραφτεί τίποτα. */
   mythos: Omit<DrasiMythosView, 'stelexi'> | null;
+  /** Υπηρεσίες, υπεύθυνοι και χρονοδιάγραμμα. */
+  ypiresies: DrasiYpiresiesView;
 }
 
 /** Το ωρολόγιο όπως το βλέπει η καρτέλα: ημέρες με ώρα έναρξης και στοιχεία. */
@@ -861,4 +864,33 @@ export interface MyDrasiView {
   dateEnd: string;
   klados: KladosType | null;
   roles: DrasiRoleKind[];
+}
+
+// ───────────────────────── Δράσεις: υπηρεσίες ─────────────────────────
+
+export interface DrasiYpiresiaView {
+  id: string;
+  name: string;
+  /** Προκαθορισμένη (`EXORAISMOS`, `PIATA`…) ή `null` για πρόσθετη της δράσης. */
+  kind: DrasiRoleKind | null;
+  order: number;
+  responsibles: { id: string; firstName: string; lastName: string; phone: string | null }[];
+}
+
+/** Μια «βάρδια»: ημέρα + μισό (0 = πρωί / όλη μέρα, 1 = απόγευμα). */
+export interface DrasiYpiresiaSlotView {
+  date: string;
+  half: number;
+  groupId: string;
+  ypiresiaId: string;
+}
+
+export interface DrasiYpiresiesView {
+  rotation: YpiresiesRotation;
+  services: DrasiYpiresiaView[];
+  /** Οι ομάδες που κάνουν υπηρεσίες: ενωμοτίες, φωλιές, πεντάδες, ΟΕ. */
+  groups: { id: string; name: string; kind: DrasiGroupKind; kladosType: KladosType | null }[];
+  /** Οι βάρδιες της δράσης κατά τη ρύθμιση κύλισης. */
+  shifts: { date: string; half: number }[];
+  slots: DrasiYpiresiaSlotView[];
 }

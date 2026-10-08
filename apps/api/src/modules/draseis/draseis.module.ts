@@ -8,6 +8,8 @@ import { DraseisController } from './draseis.controller';
 import { DraseisDossierService } from './draseis-dossier.service';
 import { DraseisExportService } from './draseis-export.service';
 import { DraseisExternalsController } from './draseis-externals.controller';
+import { DraseisYpiresiesController } from './draseis-ypiresies.controller';
+import { DraseisYpiresiesService } from './draseis-ypiresies.service';
 import { DraseisExternalsService } from './draseis-externals.service';
 import { DraseisFinanceController } from './draseis-finance.controller';
 import { DraseisFinanceService } from './draseis-finance.service';
@@ -37,6 +39,7 @@ import { DraseisService } from './draseis.service';
     DraseisPlanController,
     DraseisMythosController,
     DraseisExternalsController,
+    DraseisYpiresiesController,
     DraseisReviewController,
     PublicReviewController,
   ],
@@ -52,6 +55,7 @@ import { DraseisService } from './draseis.service';
     DraseisPlanService,
     DraseisMythosService,
     DraseisExternalsService,
+    DraseisYpiresiesService,
     DraseisReviewService,
     DraseisDossierService,
   ],

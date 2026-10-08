@@ -157,15 +157,16 @@
         </q-expansion-item>
       </q-card>
 
-              <q-card v-if="ypiresies.length" flat bordered class="q-mb-md">
-                <q-expansion-item :default-opened="$q.screen.gt.sm" header-class="text-subtitle2" :label="`Υπηρεσίες · ${ypiresies.reduce((n, g) => n + g.roles.length, 0)}`">
+              <q-card v-if="data.ypiresies.length" flat bordered class="q-mb-md">
+                <q-expansion-item :default-opened="$q.screen.gt.sm" header-class="text-subtitle2" :label="`Υπηρεσίες · ${data.ypiresies.length}`">
                 <q-card-section class="row q-col-gutter-sm q-pt-none">
-                  <div v-for="group in ypiresies" :key="group.kind" class="col-12 col-sm-6 col-md-4">
-                    <div class="text-caption text-grey-7">{{ DRASI_ROLE_LABEL[group.kind] }}</div>
-                    <div v-for="r in group.roles" :key="r.id">
+                  <div v-for="y in data.ypiresies" :key="y.id" class="col-12 col-sm-6 col-md-4">
+                    <div class="text-caption text-grey-7">{{ y.name }}</div>
+                    <div v-for="r in y.responsibles" :key="r.user.id">
                       {{ r.user.lastName }} {{ r.user.firstName }}
                       <a v-if="r.user.phone" :href="`tel:${r.user.phone}`" class="text-klados text-caption q-ml-xs">{{ r.user.phone }}</a>
                     </div>
+                    <div v-if="!y.responsibles.length" class="text-caption text-grey-6">Χωρίς υπεύθυνο</div>
                   </div>
                 </q-card-section>
                 </q-expansion-item>
@@ -280,6 +281,10 @@
               />
             </q-tab-panel>
 
+            <q-tab-panel name="ypiresies" class="q-pa-none">
+              <DrasiYpiresies :drasi-id="id" :can-edit="canEdit('ypiresies')" @changed="reload" />
+            </q-tab-panel>
+
             <q-tab-panel name="entypa" class="q-pa-none">
               <DrasiEntypa :drasi-id="id" :can-write="canEdit('entypa')" />
             </q-tab-panel>
@@ -358,7 +363,6 @@ import {
   DRASI_ROLE_LABEL,
   DRASI_STATUS_LABEL,
   DRASI_TYPE_LABEL,
-  DRASI_YPIRESIA_KINDS,
   KLADOS_LABEL,
   KLADOS_META,
   type DrasiGuestTopikoView,
@@ -381,6 +385,7 @@ import DrasiOmades from '../components/drasi/DrasiOmades.vue';
 import DrasiProgramma from '../components/drasi/DrasiProgramma.vue';
 import DrasiRythmiseis from '../components/drasi/DrasiRythmiseis.vue';
 import DrasiSymvoulia from '../components/drasi/DrasiSymvoulia.vue';
+import DrasiYpiresies from '../components/drasi/DrasiYpiresies.vue';
 import DrasiYliko from '../components/drasi/DrasiYliko.vue';
 import DrasiSymmetexontes from '../components/drasi/DrasiSymmetexontes.vue';
 import DrasiTamio from '../components/drasi/DrasiTamio.vue';
@@ -407,6 +412,7 @@ interface DrasiDetail {
   kladoi: KladosType[];
   guestTopika: DrasiGuestTopikoView[];
   roles: DrasiRoleView[];
+  ypiresies: { id: string; name: string; responsibles: { user: DrasiRoleView['user'] }[] }[];
   /** Τι μπορεί ο χρήστης σε αυτή τη δράση (βλ. shared `drasiAccess`). */
   access: DrasiAccess;
   costPerPerson: string | number | null;
@@ -472,6 +478,7 @@ const sections = computed(() => {
     ...(data.value?.klados && data.value.kladoi.length ? [{ name: 'omades', label: groupsLabel.value, icon: 'diversity_3', badge: '' }] : []),
     // Οι σκηνές έχουν δική τους ενότητα — μόνο όπου η δράση έχει (όχι μονοήμερες, ρύθμιση ανοιχτή).
     ...(data.value && drasiHasSkines(data.value) ? [{ name: 'skines', label: 'Σκηνές', icon: 'night_shelter', badge: '' }] : []),
+    { name: 'ypiresies', label: 'Υπηρεσίες', icon: 'cleaning_services', badge: '' },
     { name: 'entypa', label: 'Έντυπα', icon: 'assignment', badge: '' },
     { name: 'farmakeio', label: 'Φαρμακείο', icon: 'medical_services', badge: '' },
     { name: 'yliko', label: 'Υλικό', icon: 'inventory_2', badge: '' },
@@ -545,7 +552,6 @@ function groupRoles(kinds: readonly DrasiRoleKind[]): RoleGroup[] {
 }
 
 const arxigeio = computed(() => groupRoles(DRASI_ARXIGEIO_KINDS));
-const ypiresies = computed(() => groupRoles(DRASI_YPIRESIA_KINDS));
 
 const stats = ref<KataskinosiStats | null>(null);
 const statsLoading = ref(false);

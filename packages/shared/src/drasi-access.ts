@@ -20,6 +20,8 @@ export type DrasiPerm =
   | 'mythos'
   | 'participants'
   | 'omades'
+  /** Υπηρεσίες: υπεύθυνοι, χρονοδιάγραμμα, ρυθμίσεις. */
+  | 'ypiresies'
   | 'entypa'
   | 'farmakeio'
   | 'yliko'
@@ -37,7 +39,7 @@ export type DrasiPerm =
   | 'close';
 
 export const DRASI_PERMS: readonly DrasiPerm[] = [
-  'episkopisi', 'programma', 'mythos', 'participants', 'omades', 'entypa', 'farmakeio', 'yliko', 'tamio',
+  'episkopisi', 'programma', 'mythos', 'participants', 'omades', 'ypiresies', 'entypa', 'farmakeio', 'yliko', 'tamio',
   'symvoulia', 'axiologisi', 'ektyposi', 'arxigeio', 'rythmiseis', 'payments', 'handover', 'close',
 ];
 
@@ -50,7 +52,7 @@ export interface DrasiAccess {
 
 /** Ό,τι βλέπει κάθε στέλεχος της δράσης, χωρίς ρόλο. */
 const STAFF_VIEW: readonly DrasiPerm[] = [
-  'episkopisi', 'programma', 'mythos', 'participants', 'omades', 'entypa', 'symvoulia', 'axiologisi', 'ektyposi', 'arxigeio',
+  'episkopisi', 'programma', 'mythos', 'participants', 'omades', 'ypiresies', 'entypa', 'symvoulia', 'axiologisi', 'ektyposi', 'arxigeio',
 ];
 
 /** Τι προσθέτει κάθε ρόλος (πέρα από τα του στελέχους). */
@@ -61,7 +63,8 @@ const ROLE_ACCESS: Partial<Record<DrasiRoleKind, { view: readonly DrasiPerm[]; e
     edit: DRASI_PERMS.filter((p) => p !== 'tamio' && p !== 'payments' && p !== 'handover'),
   },
   PROGRAMMA: { view: [], edit: ['mythos', 'programma'] },
-  LEITOURGIA: { view: ['yliko', 'tamio'], edit: ['omades', 'entypa', 'yliko', 'axiologisi'] },
+  // Η λειτουργία τρέχει και τις υπηρεσίες (ποια ομάδα έχει τι, πότε).
+  LEITOURGIA: { view: ['yliko', 'tamio'], edit: ['omades', 'ypiresies', 'entypa', 'yliko', 'axiologisi'] },
   // Μόνο ο ταμίας καταχωρεί έσοδα/έξοδα, πληρωμές και παραδόσεις.
   TAMIAS: { view: ['tamio'], edit: ['tamio', 'payments', 'handover'] },
   FARMAKEIO: { view: ['farmakeio'], edit: ['farmakeio', 'entypa'] },

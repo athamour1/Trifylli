@@ -348,6 +348,7 @@ model User {
   treasuryEntries TreasuryEntry[]        @relation("TreasuryAuthor")
   collectedPayments Payment[]            @relation("PaymentCollector")
   drasiRoles      DrasiRole[]            @relation("DrasiRoleUser")
+  ypiresiesResponsible DrasiYpiresiaResponsible[]
   drasiFeesCollected DrasiParticipant[]  @relation("DrasiFeeCollector")
   drasiPaymentsCollected DrasiPayment[]  @relation("DrasiPaymentCollector")
   drasiLedger     DrasiLedgerEntry[]     @relation("DrasiLedgerUser")
@@ -523,6 +524,8 @@ model Drasi {
   /// Έχει σκηνές η δράση; Μετρά μόνο σε πολυήμερες/κατασκηνώσεις (οι μονοήμερες δεν
   /// έχουν ποτέ). Το `false` ΚΡΥΒΕΙ τις σκηνές — δεν τις σβήνει.
   hasSkines Boolean @default(true)
+  /// Κύλιση υπηρεσιών: σταθερές για όλη τη δράση, ανά ημέρα ή δύο φορές τη μέρα.
+  ypiresiesRotation YpiresiesRotation @default(DAILY)
   /// Ο μύθος — η κεντρική ιδέα που δένει τη δράση (π.χ. «Το χαμένο ημερολόγιο
   /// του Αργοναύτη»). Μόνο για τα στελέχη· τα παιδιά τον ζουν, δεν τον διαβάζουν.
   mythosTitle String?
@@ -540,6 +543,8 @@ model Drasi {
   klados       Klados?            @relation(fields: [kladosId], references: [id], onDelete: SetNull)
   participants DrasiParticipant[]
   characters   DrasiCharacter[]
+  ypiresies    DrasiYpiresia[]
+  ypiresiaSlots DrasiYpiresiaSlot[]
   syggentrwseis Syggentrwsh[]
   checkouts    YlikoCheckout[]
   incidents    Incident[]
@@ -820,6 +825,7 @@ model DrasiGroup {
 
   @@unique([drasiId, kind, name])
   @@map("drasi_group")
+  ypiresiaSlots DrasiYpiresiaSlot[]
 }
 
 /// Το `kind` επαναλαμβάνεται εδώ ώστε η βάση να επιβάλλει «ένα παιδί σε ΜΙΑ ομάδα
@@ -1600,4 +1606,63 @@ model KladosResponsibility {
   @@unique([kladosId, userId, duty])
   @@index([kladosId, duty])
   @@map("klados_responsibility")
+}
+
+enum YpiresiesRotation {
+  /// Ίδια υπηρεσία για όλη τη δράση.
+  NONE
+  /// Αλλάζει κάθε μέρα.
+  DAILY
+  /// Αλλάζει δύο φορές τη μέρα (πρωί / απόγευμα).
+  TWICE_DAILY
+}
+
+/// Υπηρεσία μιας δράσης (εξωραϊσμός, πιάτα… ή custom). `kind` = προκαθορισμένη,
+/// `null` = πρόσθετη που όρισε η δράση.
+model DrasiYpiresia {
+  id        String         @id @default(uuid()) @db.Uuid
+  drasiId   String         @db.Uuid
+  name      String
+  kind      DrasiRoleKind?
+  order     Int            @default(0)
+  createdAt DateTime       @default(now())
+
+  drasi        Drasi                      @relation(fields: [drasiId], references: [id], onDelete: Cascade)
+  responsibles DrasiYpiresiaResponsible[]
+  slots        DrasiYpiresiaSlot[]
+
+  @@unique([drasiId, name])
+  @@index([drasiId, order])
+  @@map("drasi_ypiresia")
+}
+
+/// Υπεύθυνο στέλεχος υπηρεσίας (ένα ή περισσότερα).
+model DrasiYpiresiaResponsible {
+  ypiresiaId String @db.Uuid
+  userId     String @db.Uuid
+
+  ypiresia DrasiYpiresia @relation(fields: [ypiresiaId], references: [id], onDelete: Cascade)
+  user     User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([ypiresiaId, userId])
+  @@map("drasi_ypiresia_responsible")
+}
+
+/// Χρονοδιάγραμμα: ποια ομάδα (ενωμοτία/φωλιά/πεντάδα/ΟΕ) έχει ποια υπηρεσία,
+/// ποια μέρα (`half` 0 = πρωί ή όλη μέρα, 1 = απόγευμα).
+model DrasiYpiresiaSlot {
+  id         String   @id @default(uuid()) @db.Uuid
+  drasiId    String   @db.Uuid
+  date       DateTime @db.Date
+  half       Int      @default(0)
+  groupId    String   @db.Uuid
+  ypiresiaId String   @db.Uuid
+
+  drasi    Drasi         @relation(fields: [drasiId], references: [id], onDelete: Cascade)
+  group    DrasiGroup    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  ypiresia DrasiYpiresia @relation(fields: [ypiresiaId], references: [id], onDelete: Cascade)
+
+  @@unique([drasiId, date, half, groupId])
+  @@index([drasiId, date])
+  @@map("drasi_ypiresia_slot")
 }
