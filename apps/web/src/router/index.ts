@@ -33,13 +33,25 @@ export default defineRouter(() => {
     if (!session.ready) await session.init();
 
     if (!session.authenticated) {
-      return { name: 'login', query: { returnTo: to.fullPath } };
+      // Είχε συνεδρία και χάθηκε → «έσβησε η φωτιά»· δεν είχε ποτέ → σύνδεση.
+      return session.expired
+        ? { name: 'session-expired', query: { returnTo: to.fullPath } }
+        : { name: 'login', query: { returnTo: to.fullPath } };
     }
 
     const auth = useAuthStore();
     if (!auth.ready && !auth.error) await auth.load();
 
     if (to.meta.superAdmin && !auth.isSuperAdmin) {
+      return { name: 'dashboard' };
+    }
+
+    // Κλάδος εκτός εμβέλειας (π.χ. διαχειριστής Αστεριών σε `/k/ODIGOI/...`):
+    // χωρίς αυτό οι σελίδες έπεφταν σιωπηλά σε προβολή Τοπικού — «Μητρώο
+    // μελών» με τα δικά του μέλη, «Ταμείο Τοπικού» με 403 — ενώ η διεύθυνση
+    // έλεγε άλλον κλάδο. Ίδια αντιμετώπιση με τις σελίδες υπερδιαχειριστή.
+    const klados = to.params.klados as KladosType | undefined;
+    if (klados && auth.ready && !auth.seesKlados(klados)) {
       return { name: 'dashboard' };
     }
 

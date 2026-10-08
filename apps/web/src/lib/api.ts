@@ -49,6 +49,23 @@ export function setAccessToken(token: string | null): void {
   accessToken = token;
 }
 
+/**
+ * Τι γίνεται όταν το API απαντά 401 σε αίτημα που είχε token: επιστρέφει νέο
+ * token (και το αίτημα επαναλαμβάνεται) ή `null` (η συνεδρία τελείωσε και ο
+ * χειριστής έχει ήδη στείλει τον χρήστη στη σύνδεση). Το ορίζει το session
+ * store — εδώ δεν ξέρουμε από OIDC.
+ */
+type UnauthorizedHandler = () => Promise<string | null>;
+let onUnauthorized: UnauthorizedHandler | null = null;
+/** Μία ανανέωση τη φορά: δέκα αιτήματα που σκάνε μαζί δεν ανοίγουν δέκα iframes. */
+let recovering: Promise<string | null> | null = null;
+
+export function setUnauthorizedHandler(handler: UnauthorizedHandler | null): void {
+  onUnauthorized = handler;
+}
+
+type RetriableConfig = AxiosRequestConfig & { _retriedAfter401?: boolean };
+
 http.interceptors.request.use((config) => {
   if (accessToken) config.headers.Authorization = `Bearer ${accessToken}`;
   // Δυναμικά δεδομένα — ποτέ από το HTTP cache του browser. Χωρίς αυτό, μια
@@ -61,10 +78,27 @@ http.interceptors.request.use((config) => {
 
 http.interceptors.response.use(
   (response) => response,
-  (error: unknown) => {
+  async (error: unknown) => {
     if (axios.isAxiosError(error)) {
       // Χωρίς `response` σημαίνει ότι το αίτημα δεν έφτασε ποτέ.
       if (!error.response) throw new OfflineError(error);
+
+      // 401 με token: ή έληξε στο ενδιάμεσο ή πέθανε η συνεδρία στο Authentik
+      // (άλλαξε κωδικός, αποσύνδεση από αλλού). Ένα κόκκινο «Unauthorized» σε
+      // σελίδα που δεν λειτουργεί δεν βοηθά κανέναν· ανανεώνουμε ή πάμε για
+      // σύνδεση. Μόνο μία επανάληψη ανά αίτημα, μην κάνουμε βρόχο.
+      const cfg = error.config as RetriableConfig | undefined;
+      if (error.response.status === 401 && accessToken && onUnauthorized && cfg && !cfg._retriedAfter401) {
+        recovering ??= onUnauthorized().finally(() => {
+          recovering = null;
+        });
+        const token = await recovering;
+        if (token) {
+          cfg._retriedAfter401 = true;
+          // Ο request interceptor ξαναβάζει το Authorization από το νέο token.
+          return http.request(cfg);
+        }
+      }
 
       const data = error.response.data as { message?: unknown } | undefined;
       const raw = data?.message;
