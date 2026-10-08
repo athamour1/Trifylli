@@ -13,8 +13,37 @@
           Κανένα φαρμακείο ακόμη. Διάλεξε από τα δικά σας ή όσα είναι δανεισμένα σε εσάς· για δανεισμό από
           άλλον κλάδο, ο κάτοχος το δανείζει από τη σελίδα «Φαρμακεία».
         </div>
-        <div v-else class="row q-gutter-sm">
-          <q-chip v-for="k in view.assigned" :key="k.id" icon="medical_services" :label="k.name" :style="kladosVars(k.kladosType)" :class="k.kladosType ? 'bg-klados text-klados-on' : ''" />
+        <!-- Μια κάρτα ανά φαρμακείο, με τα τρία κουμπιά της σελίδας του στο OuchTracker
+             για γρήγορη πρόσβαση: ό,τι χρειάζεται στο πεδίο χωρίς ενδιάμεση οθόνη. -->
+        <div v-else class="row q-col-gutter-md">
+          <div v-for="k in view.assigned" :key="k.id" class="col-12 col-md-6 col-xl-4">
+            <q-card flat bordered class="kit-card full-height column" :style="kladosVars(k.kladosType)">
+              <q-card-section class="row items-center no-wrap q-pb-sm">
+                <q-avatar size="34px" :class="k.kladosType ? 'bg-klados text-klados-on' : 'bg-grey-4'" icon="medical_services" class="q-mr-sm" />
+                <div class="col ellipsis text-subtitle1 text-weight-medium">{{ k.name }}</div>
+                <q-btn v-if="ouchBase" flat dense round size="sm" icon="open_in_new" color="klados" @click="openInOuch(k.ouchtrackerKitId)">
+                  <q-tooltip>Η σελίδα του φαρμακείου στο OuchTracker</q-tooltip>
+                </q-btn>
+              </q-card-section>
+              <q-card-section class="q-pt-none column kit-actions">
+                <q-btn
+                  unelevated no-caps color="negative" icon="warning" label="Καταχώρηση περιστατικού"
+                  :disable="!ouchBase" @click="openInOuch(k.ouchtrackerKitId, 'incident')"
+                />
+                <q-btn
+                  unelevated no-caps color="secondary" icon="inventory_2" label="Περιεχόμενο"
+                  :disable="!ouchBase" @click="openInOuch(k.ouchtrackerKitId, 'contents')"
+                />
+                <q-btn
+                  unelevated no-caps color="teal" icon="fact_check" label="Επιθεώρηση"
+                  :disable="!ouchBase" @click="openInOuch(k.ouchtrackerKitId, 'inspect')"
+                />
+              </q-card-section>
+              <q-card-section v-if="!ouchBase" class="q-pt-none text-caption text-grey-7">
+                Δεν έχει οριστεί διεύθυνση OuchTracker.
+              </q-card-section>
+            </q-card>
+          </div>
         </div>
       </q-card-section>
     </q-card>
@@ -88,6 +117,25 @@ import { KLADOS_LABEL, type DrasiPharmacyView, type HealthSummaryEntry } from '@
 import { ApiError, get, put } from '../../lib/api';
 import { kladosVars } from '../../lib/klados-theme';
 import { printElement } from '../../lib/print';
+import { OUCHTRACKER_URL } from '../../lib/runtime-config';
+
+const ouchBase = OUCHTRACKER_URL.replace(/\/$/, '');
+
+/**
+ * Οι σελίδες του OuchTracker για ένα φαρμακείο — ίδιες με τα τρία κουμπιά της
+ * σελίδας του (KitLandingPage): περιστατικό, περιεχόμενο, επιθεώρηση.
+ * Το `from=qr` φέρνει τον χρήστη πίσω στη σελίδα του φαρμακείου όταν τελειώσει.
+ */
+const OUCH_PATHS = {
+  landing: (id: string) => `/kit/${id}`,
+  incident: (id: string) => `/kit/${id}/incident?from=qr`,
+  contents: (id: string) => `/my-kits/${id}`,
+  inspect: (id: string) => `/my-kits/${id}/inspect?from=qr`,
+} as const;
+
+function openInOuch(kitId: string, page: keyof typeof OUCH_PATHS = 'landing'): void {
+  if (ouchBase) window.open(`${ouchBase}${OUCH_PATHS[page](kitId)}`, '_blank', 'noopener');
+}
 
 const props = defineProps<{ drasiId: string; canWrite: boolean }>();
 const $q = useQuasar();
@@ -149,6 +197,27 @@ function notifyError(err: unknown, fallback: string): void {
 </script>
 
 <style scoped>
+.kit-card {
+  min-width: 0;
+}
+.kit-actions {
+  gap: 8px;
+}
+/* Τα κουμπιά πιάνουν όλο το πλάτος της κάρτας και δεν ξεχειλίζουν: μία γραμμή,
+   με αποσιωπητικά μόνο αν η κάρτα στενέψει πολύ. */
+.kit-actions .q-btn {
+  width: 100%;
+  min-width: 0;
+}
+.kit-actions .q-btn :deep(.q-btn__content) {
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+.kit-actions .q-btn :deep(.q-btn__content .block) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 @media print {
   .health-card {
     break-inside: avoid;
