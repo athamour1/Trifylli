@@ -439,17 +439,31 @@ export const DrasiGroupKind = {
   FOLIA: 'FOLIA',
   ENOMOTIA: 'ENOMOTIA',
   SKINI: 'SKINI',
-  ALLO: 'ALLO',
+  EPITROPI: 'EPITROPI',
+  OE: 'OE',
 } as const;
 export type DrasiGroupKind = (typeof DrasiGroupKind)[keyof typeof DrasiGroupKind];
 
-/** Ποιο είδος υποομάδας έχει κάθε κλάδος (οι Μεγάλοι «έχουν άλλα» — προς το παρόν `ALLO`). */
-export const DRASI_GROUP_KIND_BY_KLADOS: Record<KladosType, DrasiGroupKind> = {
-  ASTERIA: 'PENTADA',
-  POULIA: 'FOLIA',
-  ODIGOI: 'ENOMOTIA',
-  MEGALOI_ODIGOI: 'ALLO',
+/**
+ * Ποια είδη ομάδων έχει κάθε κλάδος. Οι Μεγάλοι Οδηγοί έχουν δύο, ανεξάρτητα:
+ * επιτροπές (ετοιμάζουν τα προγραμματικά — παιδιά ή/και στελέχη) και Ομάδες
+ * Ενδιαφέροντος (παιδιά με ένα υπεύθυνο στέλεχος). Το πρώτο είδος κάθε κλάδου
+ * είναι αυτό που ανοίγει πρώτο.
+ */
+export const DRASI_GROUP_KINDS_BY_KLADOS: Record<KladosType, readonly DrasiGroupKind[]> = {
+  ASTERIA: ['PENTADA'],
+  POULIA: ['FOLIA'],
+  ODIGOI: ['ENOMOTIA'],
+  MEGALOI_ODIGOI: ['EPITROPI', 'OE'],
 };
+
+/**
+ * Έχει σκηνές η δράση; Οι μονοήμερες ποτέ· οι υπόλοιπες όπως λέει η ρύθμιση.
+ * Η ρύθμιση `false` κρύβει τις σκηνές, δεν τις σβήνει.
+ */
+export function drasiHasSkines(drasi: { type: DrasiType; hasSkines: boolean }): boolean {
+  return drasi.type !== 'MONOIMERI' && drasi.hasSkines;
+}
 
 /** Ποιες κατηγορίες προτείνονται ανά είδος κίνησης. */
 export const TREASURY_INCOME_CATEGORIES: readonly TreasuryCategory[] = [

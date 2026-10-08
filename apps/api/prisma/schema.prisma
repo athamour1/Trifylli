@@ -127,7 +127,10 @@ enum DrasiGroupKind {
   FOLIA
   ENOMOTIA
   SKINI
-  ALLO
+  /// Μεγάλοι Οδηγοί: επιτροπή που ετοιμάζει ένα προγραμματικό· παιδιά ή/και στελέχη.
+  EPITROPI
+  /// Μεγάλοι Οδηγοί: Ομάδα Ενδιαφέροντος· παιδιά, με ένα υπεύθυνο στέλεχος.
+  OE
 }
 
 /// Ευθύνες μέσα σε δράση: αρχηγείο + υπηρεσίες σε ΕΝΑ enum (βλ. shared `DrasiRoleKind`).
@@ -510,6 +513,9 @@ model Drasi {
   /// Κοινός σύνδεσμος αξιολόγησης (ένας για όλους, χωρίς λογαριασμό): μόνο το hash του token.
   reviewShareTokenHash String?   @unique
   reviewShareCreatedAt DateTime?
+  /// Έχει σκηνές η δράση; Μετρά μόνο σε πολυήμερες/κατασκηνώσεις (οι μονοήμερες δεν
+  /// έχουν ποτέ). Το `false` ΚΡΥΒΕΙ τις σκηνές — δεν τις σβήνει.
+  hasSkines Boolean @default(true)
   /// Προεπιλογή `ENERGI` ώστε seed και απλές κλήσεις API να φτιάχνουν «κανονική»
   /// δράση· το wizard ζητά ρητά `PROSXEDIO` μέχρι να ολοκληρωθεί.
   status    DrasiStatus @default(ENERGI)
@@ -575,6 +581,7 @@ model DrasiScheduleItem {
   responsible User?               @relation("ScheduleResponsible", fields: [responsibleId], references: [id], onDelete: SetNull)
   executor    User?               @relation("ScheduleExecutor", fields: [executorId], references: [id], onDelete: SetNull)
   yliko       DrasiScheduleYliko[]
+  epitropi    DrasiGroup?
 
   @@index([drasiId, date, order])
   @@map("drasi_schedule_item")
@@ -784,15 +791,19 @@ model DrasiGroup {
   name      String
   /// Σε ποιον κλάδο ανήκει η κατάταξη· `null` για σκηνές (συχνά μεικτές).
   kladosId  String?        @db.Uuid
-  /// Ομαδάρχης/ενωμοτάρχης — παιδί, όχι στέλεχος.
+  /// Ομαδάρχης/ενωμοτάρχης (παιδί, μέλος της ομάδας)· στις ΟΕ το υπεύθυνο στέλεχος
+  /// (όχι μέλος). Οι επιτροπές δεν έχουν.
   leaderParticipantId String? @db.Uuid
+  /// Επιτροπή: το προγραμματικό του ωρολογίου που ετοιμάζει — ένα ανά επιτροπή.
+  scheduleItemId String? @unique @db.Uuid
   order     Int            @default(0)
   createdAt DateTime       @default(now())
 
-  drasi   Drasi             @relation(fields: [drasiId], references: [id], onDelete: Cascade)
-  klados  Klados?           @relation(fields: [kladosId], references: [id], onDelete: SetNull)
-  leader  DrasiParticipant? @relation("DrasiGroupLeader", fields: [leaderParticipantId], references: [id], onDelete: SetNull)
-  members DrasiGroupMember[]
+  drasi        Drasi              @relation(fields: [drasiId], references: [id], onDelete: Cascade)
+  klados       Klados?            @relation(fields: [kladosId], references: [id], onDelete: SetNull)
+  leader       DrasiParticipant?  @relation("DrasiGroupLeader", fields: [leaderParticipantId], references: [id], onDelete: SetNull)
+  scheduleItem DrasiScheduleItem? @relation(fields: [scheduleItemId], references: [id], onDelete: SetNull)
+  members      DrasiGroupMember[]
 
   @@unique([drasiId, kind, name])
   @@map("drasi_group")

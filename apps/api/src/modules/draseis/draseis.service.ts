@@ -156,6 +156,8 @@ export class DraseisService {
         costReduced: dto.costReduced,
         costStelexos: dto.costStelexos,
         transportCost: dto.transportCost,
+        // Μονοήμερη ⇒ ποτέ σκηνές· αλλιώς ό,τι διάλεξε ο wizard (προεπιλογή: ναι).
+        hasSkines: dto.type === 'MONOIMERI' ? false : (dto.hasSkines ?? true),
         status: dto.draft ? DrasiStatus.PROSXEDIO : DrasiStatus.ENERGI,
         // Ο διοργανωτής συμμετέχει εξ ορισμού — το «ποιοι έρχονται» ξεκινά από εδώ.
         ...(kladosId ? { kladoi: { create: { kladosId } } } : {}),

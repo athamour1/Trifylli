@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="text-caption text-grey-7 q-mb-md">
-      Τρεις εκτυπώσεις, γιατί δεν πάνε στα ίδια χέρια. Ανοίγει ο διάλογος εκτύπωσης — «Αποθήκευση ως PDF» για αρχείο.
+      Εκτυπώσεις χωριστές, γιατί δεν πάνε στα ίδια χέρια. Ανοίγει ο διάλογος εκτύπωσης — «Αποθήκευση ως PDF» για αρχείο.
     </div>
     <div class="row q-col-gutter-md">
       <div class="col-12 col-md-4">
@@ -29,7 +29,7 @@
           </q-card-actions>
         </q-card>
       </div>
-      <div class="col-12 col-md-4">
+      <div v-if="hasSkines" class="col-12 col-md-4">
         <q-card flat bordered class="full-height column">
           <q-card-section class="col">
             <div class="text-subtitle1 text-weight-medium"><q-icon name="night_shelter" color="klados" class="q-mr-xs" />Σκηνές</div>
@@ -57,7 +57,7 @@ import DrasiPrint, { type DossierMode } from './DrasiPrint.vue';
 import { ApiError, get } from '../../lib/api';
 import { printElement } from '../../lib/print';
 
-const props = defineProps<{ drasiId: string; title: string }>();
+const props = defineProps<{ drasiId: string; title: string; hasSkines: boolean }>();
 const $q = useQuasar();
 const busy = ref<DossierMode | null>(null);
 const withHealth = ref(false);

@@ -455,7 +455,10 @@ export interface DrasiGroupView {
   kind: DrasiGroupKind;
   name: string;
   kladosType: KladosType | null;
+  /** Ομαδάρχης (μέλος) ή, στις ΟΕ, το υπεύθυνο στέλεχος (όχι μέλος). */
   leaderParticipantId: string | null;
+  /** Επιτροπή: το προγραμματικό που ετοιμάζει. */
+  scheduleItem: { id: string; title: string; date: string } | null;
   order: number;
   members: DrasiGroupMemberView[];
 }

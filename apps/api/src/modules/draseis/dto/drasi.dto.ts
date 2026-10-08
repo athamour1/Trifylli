@@ -82,6 +82,11 @@ export class CreateDrasiDto {
   @Min(0)
   transportCost?: number;
 
+  @ApiPropertyOptional({ description: 'Έχει σκηνές; Αγνοείται στις μονοήμερες. Το false κρύβει τις σκηνές, δεν τις σβήνει.' })
+  @IsOptional()
+  @IsBoolean()
+  hasSkines?: boolean;
+
   @ApiPropertyOptional({
     description:
       'true ⇒ η δράση γεννιέται ως ΠΡΟΣΧΕΔΙΟ (το wizard δεν τελείωσε): δεν μετράει σε ημερολόγιο ' +
@@ -154,6 +159,11 @@ export class UpdateDrasiDto {
   @IsNumber()
   @Min(0)
   transportCost?: number;
+
+  @ApiPropertyOptional({ description: 'Έχει σκηνές; Αγνοείται στις μονοήμερες. Το false κρύβει τις σκηνές, δεν τις σβήνει.' })
+  @IsOptional()
+  @IsBoolean()
+  hasSkines?: boolean;
 
   @ApiPropertyOptional({
     enum: DrasiStatus,

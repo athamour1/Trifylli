@@ -94,6 +94,11 @@ export class CreateGroupDto {
   @IsOptional()
   @IsEnum(KladosType)
   kladosType?: KladosType;
+
+  @ApiPropertyOptional({ format: 'uuid', description: 'Επιτροπή: το προγραμματικό του ωρολογίου που ετοιμάζει.' })
+  @IsOptional()
+  @IsUUID()
+  scheduleItemId?: string;
 }
 
 export class UpdateGroupDto {
@@ -103,10 +108,19 @@ export class UpdateGroupDto {
   @MaxLength(60)
   name?: string;
 
-  @ApiPropertyOptional({ format: 'uuid', nullable: true, description: 'Ομαδάρχης — id συμμετέχοντα (participant).' })
+  @ApiPropertyOptional({
+    format: 'uuid',
+    nullable: true,
+    description: 'Ομαδάρχης (μέλος της ομάδας) ή, στις ΟΕ, το υπεύθυνο στέλεχος — id συμμετέχοντα (participant).',
+  })
   @IsOptional()
   @IsUUID()
   leaderParticipantId?: string | null;
+
+  @ApiPropertyOptional({ format: 'uuid', nullable: true, description: 'Επιτροπή: το προγραμματικό που ετοιμάζει.' })
+  @IsOptional()
+  @IsUUID()
+  scheduleItemId?: string | null;
 
   @ApiPropertyOptional()
   @IsOptional()

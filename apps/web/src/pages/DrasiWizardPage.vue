@@ -52,13 +52,17 @@
 
             <div class="col-12">
               <div class="text-caption text-grey-7 q-mb-xs">Τύπος</div>
-              <q-btn-toggle
+              <SegmentedToggle
                 v-model="form.type"
                 unelevated
                 toggle-color="klados"
                 toggle-text-color="klados-on"
                 :options="typeOptions"
               />
+            </div>
+            <div v-if="form.type !== 'MONOIMERI'" class="col-12">
+              <q-toggle v-model="form.hasSkines" color="klados" label="Η δράση έχει σκηνές" />
+              <div class="text-caption text-grey-7">Χωρίς σκηνές η κατάταξη σε σκηνές κρύβεται από τις Ομάδες και την Εκτύπωση. Ό,τι υπάρχει δεν σβήνεται — επιστρέφει αν το ξανανοίξεις.</div>
             </div>
 
             <div class="col-8 col-sm-4 col-md-3">
@@ -230,6 +234,7 @@ interface DrasiForWizard {
     contactPhone: string | null;
   }[];
   roles: { kind: DrasiRoleKind; user: { id: string } }[];
+  hasSkines: boolean;
 }
 
 const $q = useQuasar();
@@ -255,6 +260,8 @@ const form = reactive({
   dateEnd: '',
   timeEnd: '17:00',
   location: '',
+  /** Πολυήμερες/κατασκηνώσεις: έχει σκηνές; (οι μονοήμερες ποτέ) */
+  hasSkines: true,
   /** Ο κλάδος που διοργανώνει· `null` = το Τοπικό (μόνο ο υπερδιαχειριστής). */
   organiser: routeKlados.value as KladosType | null,
 });
@@ -342,6 +349,7 @@ async function saveStep1(): Promise<boolean> {
     dateStart: at(form.dateStart, form.timeStart),
     dateEnd: at(form.type === 'MONOIMERI' ? form.dateStart : form.dateEnd, form.timeEnd || form.timeStart),
     location: form.location.trim() || undefined,
+    ...(form.type !== 'MONOIMERI' ? { hasSkines: form.hasSkines } : {}),
   };
 
   if (drasiId.value) {
@@ -449,6 +457,7 @@ async function resume(): Promise<void> {
     form.dateEnd = toISODate(new Date(d.dateEnd));
     form.timeEnd = hm(d.dateEnd);
     form.location = d.location ?? '';
+    form.hasSkines = d.hasSkines;
     form.organiser = d.klados?.type ?? null;
     kladoi.value = d.kladoi;
     guests.value = d.guestTopika.map((g) => ({

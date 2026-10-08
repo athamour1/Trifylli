@@ -5,11 +5,13 @@
     «Επισκόπηση», είναι το γρήγορο βλέμμα: ποιοι έρχονται, αρχηγείο, πλήθη.
     Η ενότητα ζει στη διαδρομή (/draseis/:id/:section) ώστε να ανοίγει με link.
   -->
-  <q-page>
+  <q-page class="drasi-page">
     <PageState :loading="loading && !data" :error="error" :stale="stale" @retry="reload">
       <div v-if="data" class="row no-wrap drasi-body">
         <!-- ── Συρτάρι ενοτήτων ── -->
-        <nav class="drasi-nav gt-sm">
+        <nav ref="navEl" class="drasi-nav gt-sm" :class="{ 'drasi-nav--ready': navReady }">
+          <!-- Το highlight της ενεργής ενότητας: ένα χάπι που γλιστρά στη νέα θέση. -->
+          <span class="drasi-nav__thumb" :style="navThumb" aria-hidden="true" />
           <q-list padding>
             <q-item-label header class="q-pb-xs">Ενότητες</q-item-label>
             <q-item
@@ -222,6 +224,17 @@
 
             <q-tab-panel name="omades" class="q-pa-none">
               <DrasiOmades
+                mode="groups"
+                :drasi-id="id"
+                :kladoi="data.kladoi"
+                :organiser="data.klados?.type ?? null"
+                :can-write="canWrite && data.status !== 'KLEISTI'"
+              />
+            </q-tab-panel>
+
+            <q-tab-panel name="skines" class="q-pa-none">
+              <DrasiOmades
+                mode="skines"
                 :drasi-id="id"
                 :kladoi="data.kladoi"
                 :organiser="data.klados?.type ?? null"
@@ -268,7 +281,7 @@
             </q-tab-panel>
 
             <q-tab-panel name="ektyposi" class="q-pa-none">
-              <DrasiEktyposi :drasi-id="id" :title="data.title" />
+              <DrasiEktyposi :drasi-id="id" :title="data.title" :has-skines="drasiHasSkines(data)" />
             </q-tab-panel>
 
             <q-tab-panel name="rythmiseis" class="q-pa-none">
@@ -286,6 +299,9 @@
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
+  DRASI_GROUP_KINDS_BY_KLADOS,
+  DRASI_GROUP_KIND_PLURAL,
+  drasiHasSkines,
   DRASI_ARXIGEIO_KINDS,
   DRASI_ROLE_LABEL,
   DRASI_STATUS_LABEL,
@@ -315,6 +331,7 @@ import DrasiYliko from '../components/drasi/DrasiYliko.vue';
 import DrasiSymmetexontes from '../components/drasi/DrasiSymmetexontes.vue';
 import DrasiTamio from '../components/drasi/DrasiTamio.vue';
 import { useAsyncData } from '../composables/useAsyncData';
+import { useSlidingThumb } from '../composables/useSlidingThumb';
 import { applyKladosTheme, kladosVars } from '../lib/klados-theme';
 import { get } from '../lib/api';
 import { formatDateRange, formatDateTime, formatTime } from '../lib/format';
@@ -337,6 +354,7 @@ interface DrasiDetail {
   costReduced: string | number | null;
   costStelexos: string | number | null;
   transportCost: string | number | null;
+  hasSkines: boolean;
   participants: {
     id: string;
     kind: MemberKind;
@@ -360,6 +378,15 @@ interface DrasiDetail {
 }
 
 const route = useRoute();
+
+const groupsLabel = computed(() => {
+  const kinds = [...new Set((data.value?.kladoi ?? []).flatMap((k) => DRASI_GROUP_KINDS_BY_KLADOS[k]))];
+  return kinds.length ? kinds.map((k) => DRASI_GROUP_KIND_PLURAL[k]).join(' / ') : 'Ομάδες';
+});
+
+/** Το χάπι του συρταριού ενοτήτων — βλ. useSlidingThumb. */
+const navEl = ref<HTMLElement | null>(null);
+const { thumbStyle: navThumb, ready: navReady } = useSlidingThumb(navEl, '.drasi-nav__active');
 const auth = useAuthStore();
 const id = String(route.params.id);
 const router = useRouter();
@@ -378,7 +405,10 @@ const sections = computed(() => {
     { name: 'episkopisi', label: 'Επισκόπηση', icon: 'dashboard', badge: '' },
     { name: 'programma', label: 'Πρόγραμμα', icon: 'schedule', badge: '' },
     { name: 'participants', label: 'Συμμετέχοντες', icon: 'groups', badge: String(data.value?.participants.length ?? '') },
-    { name: 'omades', label: 'Ομάδες', icon: 'diversity_3', badge: '' },
+    // Το όνομα της υποομάδας του κλάδου: Πεντάδες / Φωλιές / Ενωμοτίες — με πολλούς κλάδους, όλες.
+    ...(data.value?.kladoi.length ? [{ name: 'omades', label: groupsLabel.value, icon: 'diversity_3', badge: '' }] : []),
+    // Οι σκηνές έχουν δική τους ενότητα — μόνο όπου η δράση έχει (όχι μονοήμερες, ρύθμιση ανοιχτή).
+    ...(data.value && drasiHasSkines(data.value) ? [{ name: 'skines', label: 'Σκηνές', icon: 'night_shelter', badge: '' }] : []),
     { name: 'entypa', label: 'Έντυπα', icon: 'assignment', badge: '' },
     { name: 'farmakeio', label: 'Φαρμακείο', icon: 'medical_services', badge: '' },
     { name: 'yliko', label: 'Υλικό', icon: 'inventory_2', badge: '' },
@@ -468,23 +498,76 @@ watch(
 </script>
 
 <style scoped>
-/* Το συρτάρι της δράσης: κολλάει κάτω από την κεφαλίδα και πιάνει όλο το ύψος, σαν συνέχεια του κύριου συρταριού.
-   `top: 0` και όχι το ύψος της κεφαλίδας: όταν η σελίδα ξεχειλίζει, κυλά ο περιέκτης της σελίδας (που ξεκινά ήδη
-   κάτω από την κεφαλίδα) και όχι το παράθυρο — με `top: 50px` το συρτάρι έπεφτε 50px χαμηλότερα από το περιεχόμενο. */
+/* Το συρτάρι της δράσης πιάνει όλο το ύψος της κάρτας, σαν συνέχεια του κύριου συρταριού.
+   Σε μεγάλες οθόνες η κάρτα της σελίδας έχει σταθερό ύψος και κυλά μέσα της (app.scss «Πλωτά πάνελ»)·
+   εδώ πάμε ένα βήμα παραπέρα: κυλά ΜΟΝΟ η στήλη περιεχομένου, και το συρτάρι μένει ακίνητο — master/detail.
+   Το συρτάρι υπάρχει μόνο από 1024px και πάνω (`gt-sm`), οπότε η διάταξη είναι μία. */
 .drasi-nav {
   flex: 0 0 224px;
   width: 224px;
-  position: sticky;
-  top: 0;
-  align-self: flex-start;
-  min-height: calc(100vh - 50px);
-  border-right: 1px solid rgba(0, 0, 0, 0.12);
-  background: #fafafa;
+  border-right: 1px solid var(--line);
+  background: var(--surface-2);
 }
+@media (min-width: 1024px) {
+  .drasi-page {
+    display: flex;
+    flex-direction: column;
+  }
+  /* Το root του PageState (ανάμεσα στην q-page και το σώμα) πρέπει να περάσει το ύψος κάτω. */
+  .drasi-page > :deep(div) {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .drasi-body {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+  .drasi-nav {
+    min-height: 0;
+    overflow-y: auto;
+  }
+  .drasi-content {
+    min-height: 0;
+    overflow-y: auto;
+    scroll-behavior: smooth;
+  }
+}
+.drasi-nav {
+  position: relative;
+}
+/* Το χρώμα του ενεργού στοιχείου το φέρνει το χάπι από κάτω, όχι το ίδιο. */
 .drasi-nav__active {
   color: var(--klados-ink);
-  background: color-mix(in srgb, var(--klados-ink) 10%, transparent);
   font-weight: 600;
+}
+.drasi-nav :deep(.q-item) {
+  position: relative;
+  z-index: 1;
+  border-radius: 10px;
+  margin: 0 6px;
+  padding-inline: 10px;
+}
+.drasi-nav :deep(.q-item__section--avatar) {
+  min-width: 40px;
+}
+.drasi-nav__thumb {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 0;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--klados-ink) 12%, transparent);
+  pointer-events: none;
+  will-change: transform, height;
+}
+.drasi-nav--ready .drasi-nav__thumb {
+  transition:
+    transform 280ms var(--ease-emphasized),
+    height 280ms var(--ease-emphasized),
+    width 280ms var(--ease-emphasized),
+    opacity var(--dur-medium) var(--ease-standard);
 }
 .drasi-content {
   min-width: 0;

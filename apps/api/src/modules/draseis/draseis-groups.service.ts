@@ -1,8 +1,9 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { DrasiGroupKind, MemberKind, Prisma } from '@prisma/client';
+import { DrasiGroupKind, DrasiType, MemberKind, Prisma } from '@prisma/client';
 import {
   DRASI_GROUP_KIND_LABEL,
   DrasiFeeKind,
+  drasiHasSkines,
   type DrasiGroupMemberView,
   type DrasiGroupsView,
   type DrasiGroupView,
@@ -105,13 +106,16 @@ export class DraseisGroupsService {
   // ───────────────────────── Ομάδες ─────────────────────────
 
   async groups(user: RequestUser, id: string): Promise<DrasiGroupsView> {
-    await this.access.load(user, id, 'read');
+    const drasi = await this.access.load(user, id, 'read');
     const [groups, participants] = await Promise.all([
       this.prisma.drasiGroup.findMany({
-        where: { drasiId: id },
+        // Χωρίς σκηνές στη δράση: οι σκηνές κρύβονται (δεν σβήνονται) — από εδώ
+        // τροφοδοτούνται και η ενότητα Ομάδες και το ντοσιέ.
+        where: { drasiId: id, ...(drasiHasSkines(drasi) ? {} : { kind: { not: DrasiGroupKind.SKINI } }) },
         orderBy: [{ kind: 'asc' }, { order: 'asc' }, { name: 'asc' }],
         include: {
           klados: { select: { type: true } },
+          scheduleItem: { select: scheduleItemSelect },
           members: {
             include: { participant: { include: { user: { select: memberUserSelect } } } },
             orderBy: { participant: { user: { lastName: 'asc' } } },
@@ -132,6 +136,7 @@ export class DraseisGroupsService {
         name: g.name,
         kladosType: (g.klados?.type as KladosType | undefined) ?? null,
         leaderParticipantId: g.leaderParticipantId,
+        scheduleItem: toScheduleItemRef(g.scheduleItem),
         order: g.order,
         members: g.members.map((m) => toMemberView(m.participant)),
       })),
@@ -140,7 +145,9 @@ export class DraseisGroupsService {
   }
 
   async createGroup(user: RequestUser, id: string, dto: CreateGroupDto): Promise<DrasiGroupView> {
-    await this.access.load(user, id, 'write');
+    const drasi = await this.access.load(user, id, 'write');
+    this.assertKindAvailable(drasi, dto.kind);
+    if (dto.scheduleItemId) await this.assertScheduleItem(id, dto.kind, dto.scheduleItemId, null);
     const kladosId = dto.kladosType ? await this.kladosId(user, dto.kladosType) : null;
     const last = await this.prisma.drasiGroup.findFirst({
       where: { drasiId: id, kind: dto.kind },
@@ -148,8 +155,15 @@ export class DraseisGroupsService {
       select: { order: true },
     });
     const group = await this.prisma.drasiGroup.create({
-      data: { drasiId: id, kind: dto.kind, name: dto.name.trim(), kladosId, order: (last?.order ?? -1) + 1 },
-      include: { klados: { select: { type: true } } },
+      data: {
+        drasiId: id,
+        kind: dto.kind,
+        name: dto.name.trim(),
+        kladosId,
+        scheduleItemId: dto.scheduleItemId ?? null,
+        order: (last?.order ?? -1) + 1,
+      },
+      include: { klados: { select: { type: true } }, scheduleItem: { select: scheduleItemSelect } },
     });
     return {
       id: group.id,
@@ -157,6 +171,7 @@ export class DraseisGroupsService {
       name: group.name,
       kladosType: (group.klados?.type as KladosType | undefined) ?? null,
       leaderParticipantId: null,
+      scheduleItem: toScheduleItemRef(group.scheduleItem),
       order: group.order,
       members: [],
     };
@@ -165,17 +180,17 @@ export class DraseisGroupsService {
   async updateGroup(user: RequestUser, id: string, groupId: string, dto: UpdateGroupDto) {
     await this.access.load(user, id, 'write');
     const group = await this.group(id, groupId);
-    if (dto.leaderParticipantId) {
-      const member = await this.prisma.drasiGroupMember.findUnique({
-        where: { groupId_participantId: { groupId, participantId: dto.leaderParticipantId } },
-      });
-      if (!member) throw new BadRequestException('Ο ομαδάρχης πρέπει να είναι μέλος της ομάδας.');
+    if (dto.leaderParticipantId) await this.assertLeader(id, group, dto.leaderParticipantId);
+    if (dto.scheduleItemId) await this.assertScheduleItem(id, group.kind, dto.scheduleItemId, group.id);
+    if (dto.scheduleItemId !== undefined && group.kind !== DrasiGroupKind.EPITROPI) {
+      throw new BadRequestException('Μόνο οι επιτροπές συνδέονται με προγραμματικό.');
     }
     return this.prisma.drasiGroup.update({
       where: { id: group.id },
       data: {
         ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
         ...(dto.leaderParticipantId !== undefined ? { leaderParticipantId: dto.leaderParticipantId } : {}),
+        ...(dto.scheduleItemId !== undefined ? { scheduleItemId: dto.scheduleItemId } : {}),
         ...(dto.order !== undefined ? { order: dto.order } : {}),
       },
     });
@@ -199,9 +214,15 @@ export class DraseisGroupsService {
 
     const valid = await this.prisma.drasiParticipant.findMany({
       where: { id: { in: ids }, drasiId: id },
-      select: { id: true },
+      select: { id: true, kind: true },
     });
     if (valid.length !== ids.length) throw new BadRequestException('Κάποιος από τους συμμετέχοντες δεν ανήκει στη δράση.');
+    // Οι ΟΕ είναι παιδιά· το στέλεχος μπαίνει ως υπεύθυνος, όχι ως μέλος.
+    if (group.kind === DrasiGroupKind.OE && valid.some((p) => p.kind !== MemberKind.MELOS)) {
+      throw new BadRequestException('Μέλη μιας ΟΕ είναι μόνο παιδιά — το στέλεχος ορίζεται ως υπεύθυνο.');
+    }
+    // Στις ΟΕ ο υπεύθυνος ΔΕΝ είναι μέλος, οπότε οι αλλαγές μελών δεν τον αγγίζουν.
+    const leaderIsMember = group.kind !== DrasiGroupKind.OE;
 
     await this.prisma.$transaction([
       // Φεύγουν από οποιαδήποτε ομάδα του ίδιου είδους (και από αυτή).
@@ -210,13 +231,17 @@ export class DraseisGroupsService {
       this.prisma.drasiGroupMember.createMany({ data: ids.map((participantId) => ({ groupId, participantId, kind: group.kind })) }),
       // Ομαδάρχης που έφυγε από την ομάδα του (είτε από αυτήν, είτε από άλλη του
       // ίδιου είδους επειδή μεταφέρθηκε εδώ) παύει να είναι ομαδάρχης.
-      ...(group.leaderParticipantId && !ids.includes(group.leaderParticipantId)
+      ...(leaderIsMember && group.leaderParticipantId && !ids.includes(group.leaderParticipantId)
         ? [this.prisma.drasiGroup.update({ where: { id: groupId }, data: { leaderParticipantId: null } })]
         : []),
-      this.prisma.drasiGroup.updateMany({
-        where: { drasiId: id, kind: group.kind, id: { not: groupId }, leaderParticipantId: { in: ids } },
-        data: { leaderParticipantId: null },
-      }),
+      ...(leaderIsMember
+        ? [
+            this.prisma.drasiGroup.updateMany({
+              where: { drasiId: id, kind: group.kind, id: { not: groupId }, leaderParticipantId: { in: ids } },
+              data: { leaderParticipantId: null },
+            }),
+          ]
+        : []),
     ]);
     return { members: ids.length };
   }
@@ -227,7 +252,8 @@ export class DraseisGroupsService {
    * ομάδες του είδους, γεμίζουν οι μικρότερες· αλλιώς φτιάχνονται `count`.
    */
   async autoGroups(user: RequestUser, id: string, dto: AutoGroupsDto) {
-    await this.access.load(user, id, 'write');
+    const drasi = await this.access.load(user, id, 'write');
+    this.assertKindAvailable(drasi, dto.kind);
     const kladosId = dto.kladosType ? await this.kladosId(user, dto.kladosType) : null;
 
     const participants = await this.prisma.drasiParticipant.findMany({
@@ -292,6 +318,46 @@ export class DraseisGroupsService {
 
   // ───────────────────────── Εσωτερικά ─────────────────────────
 
+  /** Σκηνές μόνο όπου η δράση έχει (όχι μονοήμερες, όχι με τη ρύθμιση κλειστή). */
+  private assertKindAvailable(drasi: { type: DrasiType; hasSkines: boolean }, kind: DrasiGroupKind): void {
+    if (kind === DrasiGroupKind.SKINI && !drasiHasSkines(drasi)) {
+      throw new BadRequestException('Η δράση δεν έχει σκηνές — ενεργοποιήστε τις από τις Ρυθμίσεις.');
+    }
+  }
+
+  /**
+   * Ποιος μπορεί να είναι υπεύθυνος: στις ΟΕ ένα στέλεχος της δράσης (όχι μέλος
+   * της ομάδας)· στις πεντάδες/φωλιές/ενωμοτίες ένα παιδί-μέλος· επιτροπές και
+   * σκηνές δεν έχουν.
+   */
+  private async assertLeader(drasiId: string, group: { id: string; kind: DrasiGroupKind }, participantId: string): Promise<void> {
+    if (group.kind === DrasiGroupKind.SKINI || group.kind === DrasiGroupKind.EPITROPI) {
+      throw new BadRequestException(`${DRASI_GROUP_KIND_LABEL[group.kind]}: δεν ορίζεται υπεύθυνος.`);
+    }
+    if (group.kind === DrasiGroupKind.OE) {
+      const p = await this.prisma.drasiParticipant.findFirst({ where: { id: participantId, drasiId }, select: { kind: true } });
+      if (!p || p.kind !== MemberKind.STELEXOS) throw new BadRequestException('Υπεύθυνος ΟΕ είναι στέλεχος της δράσης.');
+      return;
+    }
+    const member = await this.prisma.drasiGroupMember.findUnique({
+      where: { groupId_participantId: { groupId: group.id, participantId } },
+    });
+    if (!member) throw new BadRequestException('Ο ομαδάρχης πρέπει να είναι μέλος της ομάδας.');
+  }
+
+  /** Το προγραμματικό ανήκει στη δράση και δεν το έχει ήδη άλλη επιτροπή. */
+  private async assertScheduleItem(drasiId: string, kind: DrasiGroupKind, scheduleItemId: string, selfId: string | null): Promise<void> {
+    if (kind !== DrasiGroupKind.EPITROPI) throw new BadRequestException('Μόνο οι επιτροπές συνδέονται με προγραμματικό.');
+    const item = await this.prisma.drasiScheduleItem.findFirst({
+      where: { id: scheduleItemId, drasiId },
+      select: { epitropi: { select: { id: true, name: true } } },
+    });
+    if (!item) throw new BadRequestException('Το προγραμματικό δεν ανήκει στη δράση.');
+    if (item.epitropi && item.epitropi.id !== selfId) {
+      throw new BadRequestException(`Το προγραμματικό το έχει ήδη η επιτροπή «${item.epitropi.name}».`);
+    }
+  }
+
   private async group(drasiId: string, groupId: string) {
     const group = await this.prisma.drasiGroup.findFirst({ where: { id: groupId, drasiId } });
     if (!group) throw new NotFoundException('Η ομάδα δεν βρέθηκε.');
@@ -306,6 +372,12 @@ export class DraseisGroupsService {
     if (!klados) throw new BadRequestException(`Ο κλάδος ${type} δεν υπάρχει στο Τοπικό.`);
     return klados.id;
   }
+}
+
+const scheduleItemSelect = { id: true, title: true, date: true } as const;
+
+function toScheduleItemRef(item: { id: string; title: string; date: Date } | null) {
+  return item ? { id: item.id, title: item.title, date: item.date.toISOString().slice(0, 10) } : null;
 }
 
 function toMemberView(p: {

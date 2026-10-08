@@ -14,7 +14,12 @@
             <q-input :model-value="organiser ? KLADOS_LABEL[organiser] : 'Το Τοπικό'" label="Ποιος διοργανώνει" outlined dense readonly hint="Δεν αλλάζει μετά τη δημιουργία." />
           </div>
           <div class="col-12">
-            <q-btn-toggle v-model="basic.type" unelevated toggle-color="klados" toggle-text-color="klados-on" :options="typeOptions" />
+            <SegmentedToggle v-model="basic.type" unelevated toggle-color="klados" toggle-text-color="klados-on" :options="typeOptions" />
+          </div>
+          <!-- Οι μονοήμερες δεν έχουν ποτέ σκηνές· η επιλογή υπάρχει μόνο για τις υπόλοιπες. -->
+          <div v-if="basic.type !== 'MONOIMERI'" class="col-12">
+            <q-toggle v-model="basic.hasSkines" color="klados" label="Η δράση έχει σκηνές" />
+              <div class="text-caption text-grey-7">Χωρίς σκηνές η κατάταξη σε σκηνές κρύβεται από τις Ομάδες και την Εκτύπωση. Ό,τι υπάρχει δεν σβήνεται — επιστρέφει αν το ξανανοίξεις.</div>
           </div>
           <div class="col-8 col-sm-4 col-md-3"><DateField v-model="basic.dateStart" :label="basic.type === 'MONOIMERI' ? 'Ημερομηνία' : 'Έναρξη'" /></div>
           <div class="col-4 col-sm-2 col-md-2"><TimeField v-model="basic.timeStart" label="Ώρα" hint="Αρχή του προγράμματος" /></div>
@@ -145,6 +150,7 @@ export interface DrasiSettingsData {
   costReduced: string | number | null;
   costStelexos: string | number | null;
   transportCost: string | number | null;
+  hasSkines: boolean;
 }
 
 const props = defineProps<{ data: DrasiSettingsData }>();
@@ -166,7 +172,7 @@ const toNum = (v: string | number | null): number | null => (v === null || v ===
 
 // ── Βασικά ──
 const typeOptions = (Object.keys(DRASI_TYPE_LABEL) as DrasiType[]).map((value) => ({ label: DRASI_TYPE_LABEL[value], value }));
-const basic = reactive({ title: '', type: 'MONOIMERI' as DrasiType, dateStart: '', timeStart: '09:00', dateEnd: '', timeEnd: '17:00', location: '', description: '' });
+const basic = reactive({ title: '', type: 'MONOIMERI' as DrasiType, dateStart: '', timeStart: '09:00', dateEnd: '', timeEnd: '17:00', location: '', description: '', hasSkines: true });
 const basicError = computed(() => {
   if (!basic.title.trim()) return 'Η δράση θέλει τίτλο.';
   if (!basic.dateStart || !basic.timeStart) return 'Διάλεξε ημερομηνία και ώρα έναρξης.';
@@ -194,6 +200,8 @@ async function saveBasic(): Promise<void> {
       dateEnd: at(basic.type === 'MONOIMERI' ? basic.dateStart : basic.dateEnd, basic.timeEnd || basic.timeStart),
       location: basic.location.trim() || undefined,
       description: basic.description.trim() || undefined,
+      // Στη μονοήμερη δεν στέλνουμε τίποτα: η ρύθμιση μένει όπως ήταν, για αν ξαναγίνει πολυήμερη.
+      ...(basic.type !== 'MONOIMERI' ? { hasSkines: basic.hasSkines } : {}),
     });
   });
 }
@@ -285,6 +293,7 @@ function fill(d: DrasiSettingsData): void {
     timeEnd: hm(d.dateEnd),
     location: d.location ?? '',
     description: d.description ?? '',
+    hasSkines: d.hasSkines,
   });
   kladoi.value = d.kladoi;
   guests.value = d.guestTopika.map((g) => ({ topikoCode: g.topikoCode, topikoName: g.topikoName, kladoi: g.kladoi, contactName: g.contactName ?? '', contactPhone: g.contactPhone ?? '' }));

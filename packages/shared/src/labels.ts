@@ -228,14 +228,34 @@ export const DRASI_GROUP_KIND_LABEL: Record<DrasiGroupKind, string> = {
   FOLIA: 'Φωλιά',
   ENOMOTIA: 'Ενωμοτία',
   SKINI: 'Σκηνή',
-  ALLO: 'Ομάδα',
+  EPITROPI: 'Επιτροπή',
+  OE: 'ΟΕ',
 };
 export const DRASI_GROUP_KIND_PLURAL: Record<DrasiGroupKind, string> = {
   PENTADA: 'Πεντάδες',
   FOLIA: 'Φωλιές',
   ENOMOTIA: 'Ενωμοτίες',
   SKINI: 'Σκηνές',
-  ALLO: 'Ομάδες',
+  EPITROPI: 'Επιτροπές',
+  OE: 'ΟΕ',
+};
+/** Ολογράφως, όπου χωράει (τίτλοι, tooltips) — η ΟΕ είναι συντομογραφία. */
+export const DRASI_GROUP_KIND_FULL: Record<DrasiGroupKind, string> = {
+  PENTADA: 'Πεντάδες',
+  FOLIA: 'Φωλιές',
+  ENOMOTIA: 'Ενωμοτίες',
+  SKINI: 'Σκηνές',
+  EPITROPI: 'Επιτροπές',
+  OE: 'Ομάδες Ενδιαφέροντος',
+};
+/** Πώς λέγεται ο υπεύθυνος κάθε ομάδας· `null` όπου δεν υπάρχει (επιτροπές, σκηνές). */
+export const DRASI_GROUP_LEADER_LABEL: Record<DrasiGroupKind, string | null> = {
+  PENTADA: 'Ομαδάρχης',
+  FOLIA: 'Ομαδάρχης',
+  ENOMOTIA: 'Ενωμοτάρχης',
+  SKINI: null,
+  EPITROPI: null,
+  OE: 'Υπεύθυνο στέλεχος',
 };
 
 export const DRASI_FORM_TYPE_LABEL: Record<DrasiFormType, string> = {
