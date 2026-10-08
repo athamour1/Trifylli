@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { CheckoutStatus, DrasiStatus, DrasiType, MemberKind, Prisma } from '@prisma/client';
 import {
   KLADOS_LABEL,
@@ -178,6 +178,45 @@ export class DraseisService {
   async archive(user: RequestUser, id: string) {
     await this.assertAccess(user, id);
     return this.prisma.drasi.update({ where: { id }, data: { archivedAt: new Date() } });
+  }
+
+  /**
+   * Τι εμποδίζει την οριστική διαγραφή.
+   *
+   * Η διαγραφή σβήνει ό,τι κρέμεται από τη δράση. Τα περισσότερα είναι δικά της
+   * (πρόγραμμα, ομάδες, έντυπα), αλλά τα χρήματα και το υλικό έχουν ζωή και
+   * έξω από αυτήν: μια πληρωμή ή κίνηση ταμείου που χάνεται αλλάζει το υπόλοιπο
+   * του κλάδου, και ένα αντικείμενο που δεν γύρισε χάνεται από την αποθήκη.
+   * Εκεί η απάντηση είναι η αρχειοθέτηση.
+   */
+  async deletionBlockers(user: RequestUser, id: string): Promise<string[]> {
+    await this.assertAccess(user, id);
+    const [payments, ledger, treasury, outstanding] = await Promise.all([
+      this.prisma.drasiPayment.count({ where: { participant: { drasiId: id } } }),
+      this.prisma.drasiLedgerEntry.count({ where: { drasiId: id } }),
+      this.prisma.treasuryEntry.count({ where: { drasiId: id } }),
+      this.prisma.ylikoCheckout.count({ where: { drasiId: id, status: CheckoutStatus.PARALAVI } }),
+    ]);
+    const blockers: string[] = [];
+    if (payments) blockers.push(`${payments} ${payments === 1 ? 'πληρωμή συμμετεχόντων' : 'πληρωμές συμμετεχόντων'}`);
+    if (ledger) blockers.push(`${ledger} ${ledger === 1 ? 'κίνηση' : 'κινήσεις'} στο ταμείο της δράσης`);
+    if (treasury) blockers.push(`${treasury} ${treasury === 1 ? 'κίνηση' : 'κινήσεις'} στο ταμείο του κλάδου/Τοπικού`);
+    if (outstanding) blockers.push(`${outstanding} ${outstanding === 1 ? 'είδος υλικού' : 'είδη υλικού'} που δεν έχουν επιστραφεί`);
+    return blockers;
+  }
+
+  /** Οριστική διαγραφή — μόνο χωρίς χρήματα και εκκρεμές υλικό, και με τον τίτλο ως επιβεβαίωση. */
+  async remove(user: RequestUser, id: string, confirmTitle: string): Promise<{ id: string; title: string }> {
+    const drasi = await this.assertAccess(user, id);
+    if (confirmTitle.trim() !== drasi.title.trim()) {
+      throw new BadRequestException('Ο τίτλος δεν ταιριάζει — η δράση δεν σβήστηκε.');
+    }
+    const blockers = await this.deletionBlockers(user, id);
+    if (blockers.length) {
+      throw new ConflictException(`Η δράση έχει ${blockers.join(', ')} — αρχειοθέτησέ την αντί να τη σβήσεις.`);
+    }
+    await this.prisma.drasi.delete({ where: { id } });
+    return { id, title: drasi.title };
   }
 
   // ───────────────────────── Wizard: ποιοι έρχονται ─────────────────────────

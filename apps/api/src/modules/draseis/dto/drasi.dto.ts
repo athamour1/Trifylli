@@ -334,3 +334,11 @@ export class RolesTemplateQueryDto {
   @IsUUID()
   exclude?: string;
 }
+
+/** Οριστική διαγραφή: ο τίτλος γράφεται ξανά, για να μη γίνει από λάθος πάτημα. */
+export class DeleteDrasiDto {
+  @ApiProperty({ description: 'Ο τίτλος της δράσης, ακριβώς.' })
+  @IsString()
+  @MaxLength(200)
+  confirmTitle!: string;
+}

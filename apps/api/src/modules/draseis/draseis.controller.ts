@@ -23,6 +23,7 @@ import { QueryGuestsDto } from './dto/drasi-groups.dto';
 import {
   AddParticipantsDto,
   CreateDrasiDto,
+  DeleteDrasiDto,
   QueryDraseisDto,
   RolesTemplateQueryDto,
   SetDrasiKladoiDto,
@@ -141,6 +142,23 @@ export class DraseisController {
     const result = await this.draseis.archive(user, id);
     await this.audit.record(user, 'drasi.archive', 'drasi', id);
     return result;
+  }
+
+  @Get(':id/deletion')
+  @RequireCapability('drasi:write')
+  @ApiOperation({ summary: 'Τι εμποδίζει την οριστική διαγραφή (χρήματα, υλικό που δεν γύρισε)' })
+  async deletion(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
+    return { blockers: await this.draseis.deletionBlockers(user, id) };
+  }
+
+  @Post(':id/delete')
+  @RequireCapability('drasi:write')
+  @ApiOperation({ summary: 'Οριστική διαγραφή — με τον τίτλο της δράσης ως επιβεβαίωση' })
+  async remove(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: DeleteDrasiDto) {
+    const removed = await this.draseis.remove(user, id, dto.confirmTitle);
+    // Η εγγραφή φεύγει· το ίχνος κρατά τον τίτλο για να ξέρουμε τι ήταν.
+    await this.audit.record(user, 'drasi.delete', 'drasi', id, { title: removed.title });
+    return { ok: true };
   }
 
   // ───────────────────────── Wizard ─────────────────────────

@@ -99,9 +99,85 @@
         <q-btn v-if="status === 'PROSXEDIO'" color="klados" text-color="klados-on" unelevated icon="check" label="Ενεργοποίηση" :loading="busy === 'status'" @click="setStatus('ENERGI')" />
         <q-btn v-if="status === 'ENERGI'" flat color="negative" icon="lock" label="Κλείσιμο δράσης" :loading="busy === 'status'" @click="confirmClose" />
         <q-btn v-if="status === 'KLEISTI'" flat color="klados" icon="lock_open" label="Άνοιγμα ξανά" :loading="busy === 'status'" @click="setStatus('ENERGI')" />
-        <q-btn flat color="negative" icon="archive" label="Αρχειοθέτηση" @click="confirmArchive" />
       </q-card-actions>
     </q-card>
+
+    <!--
+      ── Επικίνδυνη ζώνη ──
+      Όπως στα repos: ό,τι δεν γυρίζει πίσω εύκολα, μαζεμένο σε ένα κόκκινο
+      πλαίσιο στο τέλος, μακριά από τα κουμπιά αποθήκευσης.
+    -->
+    <q-card flat class="danger-zone">
+      <q-card-section class="row items-center no-wrap q-pb-sm">
+        <q-icon name="warning" color="negative" size="22px" class="q-mr-sm" />
+        <div class="text-subtitle1 text-weight-medium text-negative">Επικίνδυνη ζώνη</div>
+      </q-card-section>
+
+      <div class="danger-zone__list">
+        <div class="danger-zone__row">
+          <div class="danger-zone__text">
+            <div class="text-weight-medium">Αρχειοθέτηση</div>
+            <div class="text-caption text-grey-7">Φεύγει από λίστες και ημερολόγιο. Τα δεδομένα της, ταμείο και ιστορικό, μένουν όπως είναι.</div>
+          </div>
+          <q-btn outline no-caps color="negative" icon="archive" label="Αρχειοθέτηση" class="danger-zone__btn" @click="confirmArchive" />
+        </div>
+
+        <div class="danger-zone__row">
+          <div class="danger-zone__text">
+            <div class="text-weight-medium">Οριστική διαγραφή</div>
+            <div class="text-caption text-grey-7">
+              Σβήνει τη δράση μαζί με πρόγραμμα, μύθο, συμμετέχοντες, ομάδες, έντυπα και συμβούλια της. Δεν αναιρείται.
+            </div>
+            <div v-if="deletion.blockers.length" class="danger-zone__blockers q-mt-sm">
+              <div class="text-caption text-weight-medium">Δεν γίνεται όσο υπάρχουν:</div>
+              <ul class="q-my-xs q-pl-md">
+                <li v-for="b in deletion.blockers" :key="b" class="text-caption">{{ b }}</li>
+              </ul>
+              <div class="text-caption">Αρχειοθέτησέ τη — τα χρήματα και το υλικό θέλουν το ιστορικό τους.</div>
+            </div>
+          </div>
+          <q-btn
+            unelevated no-caps color="negative" icon="delete_forever" label="Διαγραφή δράσης"
+            class="danger-zone__btn"
+            :disable="deletion.loading || deletion.blockers.length > 0"
+            :loading="deletion.loading"
+            @click="openDelete"
+          />
+        </div>
+      </div>
+    </q-card>
+
+    <!-- Επιβεβαίωση με τον τίτλο: ένα πάτημα δεν φτάνει για κάτι που δεν γυρίζει. -->
+    <q-dialog v-model="deletion.open" persistent>
+      <!-- Τα πεδία ακολουθούν το χρώμα του κλάδου (app.scss)· εδώ θέλουμε κόκκινο. -->
+      <q-card style="width: 460px; max-width: 100%; --klados-color: var(--q-negative); --klados-ink: var(--q-negative)">
+        <q-card-section class="row items-center no-wrap">
+          <q-avatar icon="delete_forever" color="negative" text-color="white" size="40px" class="q-mr-md" />
+          <div class="text-h6">Διαγραφή δράσης</div>
+        </q-card-section>
+        <q-card-section class="q-pt-none">
+          <p class="q-mb-sm">
+            Η <b>«{{ data.title }}»</b> θα σβηστεί οριστικά, μαζί με ό,τι περιέχει. Αυτό <b>δεν αναιρείται</b>.
+          </p>
+          <div class="text-caption text-grey-7 q-mb-xs">Γράψε τον τίτλο της δράσης για επιβεβαίωση:</div>
+          <q-input
+            v-model="deletion.typed"
+            outlined dense autofocus color="negative"
+            :placeholder="data.title"
+            @keyup.enter="titleMatches && remove()"
+          />
+        </q-card-section>
+        <q-card-actions align="right">
+          <q-btn v-close-popup flat no-caps label="Άκυρο" :disable="deletion.busy" />
+          <q-btn
+            unelevated no-caps color="negative" icon="delete_forever" label="Το καταλαβαίνω, διαγραφή"
+            :disable="!titleMatches"
+            :loading="deletion.busy"
+            @click="remove"
+          />
+        </q-card-actions>
+      </q-card>
+    </q-dialog>
   </div>
 </template>
 
@@ -130,7 +206,7 @@ import TimeField from '../TimeField.vue';
 import DrasiRolesEditor from './DrasiRolesEditor.vue';
 import GuestTopikaEditor from './GuestTopikaEditor.vue';
 import { emptyRoles, type GuestTopikoForm, type RolesMap } from './types';
-import { ApiError, del, get, patch, put } from '../../lib/api';
+import { ApiError, del, get, patch, post, put } from '../../lib/api';
 import { toISODate } from '../../lib/format';
 
 export interface DrasiSettingsData {
@@ -275,11 +351,51 @@ function confirmArchive(): void {
     try {
       await del(`/draseis/${drasiId.value}`);
       $q.notify({ type: 'positive', message: 'Η δράση αρχειοθετήθηκε.' });
-      await router.push(organiser.value ? { name: 'klados-draseis', params: { klados: organiser.value } } : { name: 'dashboard' });
+      await router.push(draseisRoute.value);
     } catch (err) {
       notifyError(err, 'Αποτυχία.');
     }
   });
+}
+
+/** Πού γυρίζουμε όταν η δράση φύγει: οι δράσεις του διοργανωτή, ή του Τοπικού. */
+const draseisRoute = computed(() =>
+  organiser.value ? { name: 'klados-draseis', params: { klados: organiser.value } } : { name: 'draseis' },
+);
+
+// ── Οριστική διαγραφή ──
+const deletion = reactive({ open: false, typed: '', busy: false, loading: false, blockers: [] as string[] });
+const titleMatches = computed(() => deletion.typed.trim() === props.data.title.trim());
+async function loadBlockers(): Promise<void> {
+  deletion.loading = true;
+  try {
+    deletion.blockers = (await get<{ blockers: string[] }>(`/draseis/${drasiId.value}/deletion`)).blockers;
+  } catch {
+    // Αν δεν φορτώσει, ο server ελέγχει ξανά στη διαγραφή — το κουμπί μένει ενεργό.
+    deletion.blockers = [];
+  } finally {
+    deletion.loading = false;
+  }
+}
+onMounted(loadBlockers);
+function openDelete(): void {
+  deletion.typed = '';
+  deletion.open = true;
+}
+async function remove(): Promise<void> {
+  if (!titleMatches.value) return;
+  deletion.busy = true;
+  try {
+    await post(`/draseis/${drasiId.value}/delete`, { confirmTitle: deletion.typed });
+    deletion.open = false;
+    $q.notify({ type: 'positive', icon: 'delete_forever', message: `Η «${props.data.title}» διαγράφηκε.` });
+    await router.push(draseisRoute.value);
+  } catch (err) {
+    notifyError(err, 'Η δράση δεν διαγράφηκε.');
+    await loadBlockers();
+  } finally {
+    deletion.busy = false;
+  }
 }
 
 // ── Φόρτωση από τα δεδομένα της δράσης ──
@@ -329,3 +445,39 @@ function notifyError(err: unknown, fallback: string): void {
   $q.notify({ type: 'negative', message: err instanceof ApiError ? err.message : fallback });
 }
 </script>
+
+<style scoped lang="scss">
+.danger-zone {
+  border: 1px solid color-mix(in srgb, var(--q-negative) 55%, transparent);
+  border-radius: 16px;
+  overflow: hidden;
+}
+.danger-zone__list {
+  margin: 0 12px 12px;
+  border: 1px solid var(--line, rgba(0, 0, 0, 0.12));
+  border-radius: 12px;
+}
+.danger-zone__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  padding: 14px 16px;
+  & + & {
+    border-top: 1px solid var(--line, rgba(0, 0, 0, 0.12));
+  }
+}
+.danger-zone__text {
+  flex: 1 1 280px;
+  min-width: 0;
+}
+.danger-zone__btn {
+  flex: none;
+}
+.danger-zone__blockers {
+  padding: 8px 12px;
+  border-radius: 10px;
+  color: var(--q-negative);
+  background: color-mix(in srgb, var(--q-negative) 9%, transparent);
+}
+</style>
