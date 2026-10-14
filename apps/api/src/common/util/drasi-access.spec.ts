@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { drasiAccess, drasiCan } from '@trifylli/shared';
+import { CHARACTER_OWN_FIELDS, SCHEDULE_ITEM_OWN_FIELDS, drasiAccess, drasiCan, drasiEditScope, fieldsOutside } from '@trifylli/shared';
 
 describe('δικαιώματα μέσα στη δράση', () => {
   it('όποιος δεν είναι στέλεχος της δράσης δεν βλέπει τίποτα', () => {
@@ -55,5 +55,50 @@ describe('δικαιώματα μέσα στη δράση', () => {
     const a = drasiAccess({ full: true, staff: false, roles: [] });
     expect(drasiCan(a, 'tamio', 'edit')).toBe(true);
     expect(drasiCan(a, 'handover', 'edit')).toBe(true);
+  });
+});
+
+describe('το δικό του κομμάτι: υπεύθυνος στοιχείου, ρόλος του μύθου', () => {
+  const staff = drasiAccess({ full: false, staff: true, roles: [] });
+  const programma = drasiAccess({ full: false, staff: true, roles: ['PROGRAMMA'] });
+  const outsider = drasiAccess({ full: false, staff: false, roles: [] });
+
+  it('ρόλος με δικαίωμα αλλαγής: τα πάντα, δικά του ή όχι', () => {
+    expect(drasiEditScope(programma, 'programma', false)).toBe('all');
+    expect(drasiEditScope(programma, 'programma', true)).toBe('all');
+    expect(drasiEditScope(programma, 'mythos', false)).toBe('all');
+  });
+
+  it('στέλεχος χωρίς ρόλο: μόνο ό,τι είναι δικό του', () => {
+    expect(drasiEditScope(staff, 'programma', true)).toBe('own');
+    expect(drasiEditScope(staff, 'mythos', true)).toBe('own');
+    expect(drasiEditScope(staff, 'programma', false)).toBe('none');
+    expect(drasiEditScope(staff, 'mythos', false)).toBe('none');
+  });
+
+  it('χωρίς πρόσβαση στη δράση (π.χ. εξωτερικός σε κλειστή), ούτε το δικό του', () => {
+    expect(drasiEditScope(outsider, 'programma', true)).toBe('none');
+    expect(drasiEditScope(null, 'mythos', true)).toBe('none');
+  });
+});
+
+describe('πεδία έξω από όσα επιτρέπονται', () => {
+  it('ό,τι δεν στάλθηκε (undefined) δεν μετράει· το null («σβήσε») μετράει', () => {
+    expect(fieldsOutside({ description: 'x', title: undefined, durationMin: 45, responsibleIds: null }, SCHEDULE_ITEM_OWN_FIELDS)).toEqual([
+      'durationMin',
+      'responsibleIds',
+    ]);
+  });
+
+  it('ο υπεύθυνος γράφει κείμενο, χώρο και υλικό — όχι τίτλο, λεπτά, είδος, ημέρα, υπεύθυνους', () => {
+    expect(fieldsOutside({ location: 'Δάσος', description: '# Πορεία', ylikoNotes: 'σχοινιά', yliko: [] }, SCHEDULE_ITEM_OWN_FIELDS)).toEqual([]);
+    for (const f of ['title', 'durationMin', 'kind', 'date', 'responsibleIds', 'executorIds']) {
+      expect(fieldsOutside({ [f]: 'κάτι' }, SCHEDULE_ITEM_OWN_FIELDS)).toEqual([f]);
+    }
+  });
+
+  it('στον ρόλο του μύθου: όνομα και lore — όχι ποιος τον παίζει', () => {
+    expect(fieldsOutside({ name: 'Η Μάγισσα', lore: 'Ζει στο δάσος.' }, CHARACTER_OWN_FIELDS)).toEqual([]);
+    expect(fieldsOutside({ participantId: null }, CHARACTER_OWN_FIELDS)).toEqual(['participantId']);
   });
 });

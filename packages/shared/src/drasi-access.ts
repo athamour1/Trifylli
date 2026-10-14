@@ -93,3 +93,33 @@ export function drasiCan(access: DrasiAccess | null | undefined, perm: DrasiPerm
   if (!access) return false;
   return (mode === 'edit' ? access.edit : access.view).includes(perm);
 }
+
+/**
+ * Πόσο αλλάζει κάποιος ένα κομμάτι της δράσης: όλο (ο ρόλος του δίνει `edit`),
+ * μόνο ό,τι είναι δικό του (υπεύθυνος του στοιχείου του ωρολογίου, στέλεχος που
+ * παίζει τον ρόλο του μύθου) ή τίποτα. Το δικό του θέλει πρόσβαση στη δράση:
+ * ένας εξωτερικός σε κλειστή δράση δεν αλλάζει ούτε αυτό.
+ */
+export type DrasiEditScope = 'all' | 'own' | 'none';
+
+export function drasiEditScope(access: DrasiAccess | null | undefined, perm: DrasiPerm, own: boolean): DrasiEditScope {
+  if (drasiCan(access, perm, 'edit')) return 'all';
+  return own && drasiCan(access, perm) ? 'own' : 'none';
+}
+
+/**
+ * Ό,τι γράφει ο υπεύθυνος (διεξαγωγής ή υλοποίησης) στο δικό του στοιχείο.
+ * Τίτλος, λεπτά, είδος, ημέρα και υπεύθυνοι μένουν στο Πρόγραμμα: είναι η γραμμή
+ * του ωρολογίου και μετακινούν όλη την ημέρα.
+ */
+export const SCHEDULE_ITEM_OWN_FIELDS = ['location', 'description', 'ylikoNotes', 'yliko'] as const;
+
+/** Ό,τι αλλάζει το στέλεχος στον ρόλο που παίζει· ποιος τον παίζει, σειρά, διαγραφή μένουν στο Πρόγραμμα. */
+export const CHARACTER_OWN_FIELDS = ['name', 'lore'] as const;
+
+/** Τα πεδία μιας αλλαγής έξω από όσα επιτρέπονται. Ό,τι δεν στάλθηκε (`undefined`) δεν μετράει. */
+export function fieldsOutside(change: object, allowed: readonly string[]): string[] {
+  return Object.entries(change)
+    .filter(([key, value]) => value !== undefined && !allowed.includes(key))
+    .map(([key]) => key);
+}
