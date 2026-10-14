@@ -1,15 +1,21 @@
 <template>
   <q-page padding>
-    <!-- Δύο λίστες: όσοι διαχειρίζονται (λίγοι, φτιάχνονται με το χέρι) και τα
-         στελέχη των κλάδων (πολλά, ενεργοποιούνται μαζικά από το e-SEO). -->
+    <!-- Τρεις λίστες: όσοι διαχειρίζονται (λίγοι, φτιάχνονται με το χέρι), τα
+         στελέχη των κλάδων (πολλά, ενεργοποιούνται μαζικά από το e-SEO) και τα
+         εξωτερικά στελέχη (τα προσθέτουν οι δράσεις — εδώ μόνο η εικόνα και η ανάκληση). -->
     <q-tabs v-model="tab" dense align="left" no-caps class="q-mb-md" active-color="primary" indicator-color="primary" narrow-indicator>
       <q-tab name="admins" icon="admin_panel_settings" label="Διαχείριση" />
       <q-tab name="stelexi" icon="groups" label="Στελέχη" />
+      <q-tab name="externals" icon="badge" label="Εξωτερικά" />
     </q-tabs>
 
     <q-tab-panels v-model="tab" animated keep-alive class="bg-transparent">
     <q-tab-panel name="stelexi" class="q-pa-none">
       <StelexiAccess />
+    </q-tab-panel>
+
+    <q-tab-panel name="externals" class="q-pa-none">
+      <ExternalAccounts />
     </q-tab-panel>
 
     <q-tab-panel name="admins" class="q-pa-none">
@@ -219,6 +225,7 @@ import {
   type AccountSummary,
   type KladosType,
 } from '@trifylli/shared';
+import ExternalAccounts from '../components/ExternalAccounts.vue';
 import PageState from '../components/PageState.vue';
 import StelexiAccess from '../components/StelexiAccess.vue';
 import { useAsyncData } from '../composables/useAsyncData';
@@ -244,7 +251,8 @@ const auth = useAuthStore();
 const route = useRoute();
 const router = useRouter();
 /** Η καρτέλα ζει στο URL (`?tab=stelexi`), ώστε να ανοίγει απευθείας από σύνδεσμο. */
-const tab = ref<'admins' | 'stelexi'>(route.query.tab === 'stelexi' ? 'stelexi' : 'admins');
+type AccountsTab = 'admins' | 'stelexi' | 'externals';
+const tab = ref<AccountsTab>(route.query.tab === 'stelexi' || route.query.tab === 'externals' ? route.query.tab : 'admins');
 watch(tab, (value) => void router.replace({ query: { ...route.query, tab: value === 'admins' ? undefined : value } }));
 
 const { data, loading, error, stale, reload } = useAsyncData(
