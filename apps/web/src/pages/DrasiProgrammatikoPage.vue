@@ -47,10 +47,8 @@
                 <template #prepend><q-icon :name="KIND_ICON[form.kind]" :color="KIND_COLOR[form.kind]" /></template>
               </q-select>
               <q-input v-model="form.location" :readonly="!editable" label="Χώρος" outlined dense color="klados" />
-              <StelexosPicker v-if="editAll" v-model="form.responsible" label="Υπεύθυνοι διεξαγωγής" :options="stelexiOptions" />
-              <q-input v-else :model-value="namesOf(form.responsible)" label="Υπεύθυνοι διεξαγωγής" outlined dense readonly />
-              <StelexosPicker v-if="editAll" v-model="form.executor" label="Υπεύθυνοι υλοποίησης" :options="stelexiOptions" />
-              <q-input v-else :model-value="namesOf(form.executor)" label="Υπεύθυνοι υλοποίησης" outlined dense readonly />
+              <StelexosPicker v-if="editAll" v-model="form.responsible" :label="responsiblesLabel(form.responsible.length)" :options="stelexiOptions" />
+              <q-input v-else :model-value="namesOf(form.responsible)" :label="responsiblesLabel(form.responsible.length)" outlined dense readonly />
             </q-card-section>
             <q-card-actions v-if="editAll" align="right">
               <q-btn flat no-caps color="negative" icon="delete" label="Διαγραφή στοιχείου" @click="remove" />
@@ -124,6 +122,7 @@ import MarkdownField from '../components/MarkdownField.vue';
 import PageState from '../components/PageState.vue';
 import SaveStatus from '../components/SaveStatus.vue';
 import StelexosPicker from '../components/StelexosPicker.vue';
+import { responsiblesLabel } from '../components/drasi/types';
 import { useAsyncData } from '../composables/useAsyncData';
 import { ApiError, OfflineError, del, get, patch } from '../lib/api';
 import { formatDateLong, formatDuration } from '../lib/format';
@@ -199,10 +198,10 @@ watch(
 );
 
 // ── Ποιος αλλάζει τι (ο ίδιος κανόνας με το API) ──
-/** Υπεύθυνος (διεξαγωγής ή υλοποίησης) αυτού του στοιχείου. */
+/** Υπεύθυνος αυτού του στοιχείου. */
 const mine = computed(() => {
   const me = auth.user?.id;
-  return !!me && !!item.value && [...item.value.responsibles, ...item.value.executors].some((p) => p.id === me);
+  return !!me && !!item.value && item.value.responsibles.some((p) => p.id === me);
 });
 /** Όλα (ρόλος Προγράμματος/Αρχηγός), μόνο το προγραμματικό (υπεύθυνος) ή τίποτα· κλειστή δράση δεν αλλάζει. */
 const scope = computed<DrasiEditScope>(() =>
@@ -224,7 +223,7 @@ const stelexiOptions = computed(() => {
     caption: s.guestTopikoName ?? '',
   }));
   // Όσοι ορίστηκαν πριν μετρήσουν μόνο τα στελέχη της δράσης: φαίνονται, για να βγουν.
-  for (const p of [...(item.value?.responsibles ?? []), ...(item.value?.executors ?? [])]) {
+  for (const p of item.value?.responsibles ?? []) {
     if (!options.some((o) => o.value === p.id)) {
       options.push({ label: `${p.lastName} ${p.firstName}`.trim(), value: p.id, caption: 'Δεν είναι στους συμμετέχοντες' });
     }
@@ -263,7 +262,6 @@ const form = reactive({
   kind: 'DRASTIRIOTITA' as DrasiScheduleKind,
   location: '',
   responsible: [] as string[],
-  executor: [] as string[],
   description: '',
   yliko: [] as string[],
   ylikoNotes: '',
@@ -281,7 +279,6 @@ watch(
       kind: it.kind,
       location: it.location ?? '',
       responsible: it.responsibles.map((p) => p.id),
-      executor: it.executors.map((p) => p.id),
       description: it.description ?? '',
       yliko: it.yliko.map((y) => y.ylikoId),
       ylikoNotes: it.ylikoNotes ?? '',
@@ -328,7 +325,6 @@ async function saveNow(): Promise<void> {
     location: form.location.trim() || null,
     description: form.description || null,
     responsibleIds: form.responsible,
-    executorIds: form.executor,
     ylikoNotes: form.ylikoNotes.trim() || null,
     ...(canPickYliko.value ? { yliko: form.yliko.map((ylikoId) => ({ ylikoId, qty: 1 })) } : {}),
   };

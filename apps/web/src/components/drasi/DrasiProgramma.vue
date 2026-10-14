@@ -95,8 +95,7 @@
             <div class="text-caption text-grey-6 ellipsis">
               {{ DRASI_SCHEDULE_KIND_LABEL[row.kind] }}
               <span v-if="row.location"> · {{ row.location }}</span>
-              <span v-if="row.responsible"> · διεξαγωγή: {{ row.responsible }}</span>
-              <span v-if="row.executor"> · υλοποίηση: {{ row.executor }}</span>
+              <span v-if="row.responsibles.length"> · {{ responsiblesLabel(row.responsibles.length).toLocaleLowerCase('el') }}: {{ row.responsibles.join(', ') }}</span>
             </div>
           </q-item-section>
           <q-item-section side>
@@ -162,6 +161,7 @@ import SaveStatus from '../SaveStatus.vue';
 import TimeField from '../TimeField.vue';
 import { ApiError, OfflineError, get, patch, post, put } from '../../lib/api';
 import { formatDate, formatDuration } from '../../lib/format';
+import { responsiblesLabel } from './types';
 import type { SaveState } from '../../lib/save-state';
 
 const props = defineProps<{
@@ -237,14 +237,10 @@ interface Row {
   kind: DrasiScheduleKind;
   /** Μόνο για τη λεζάντα — αλλάζουν από τη σελίδα του προγραμματικού. */
   location: string | null;
-  responsible: string | null;
-  executor: string | null;
+  responsibles: string[];
   hasProgramma: boolean;
 }
 const rows = ref<Row[]>([]);
-
-const names = (people: DrasiScheduleItemView['responsibles']): string | null =>
-  people.map((p) => `${p.lastName} ${p.firstName}`).join(', ') || null;
 
 function toRow(it: DrasiScheduleItemView): Row {
   return {
@@ -253,8 +249,7 @@ function toRow(it: DrasiScheduleItemView): Row {
     durationMin: it.durationMin,
     kind: it.kind,
     location: it.location,
-    responsible: names(it.responsibles),
-    executor: names(it.executors),
+    responsibles: it.responsibles.map((p) => `${p.lastName} ${p.firstName}`),
     hasProgramma: it.hasProgramma,
   };
 }

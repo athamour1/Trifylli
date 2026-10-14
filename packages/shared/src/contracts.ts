@@ -609,10 +609,8 @@ export interface DrasiScheduleItemView {
   kind: DrasiScheduleKind;
   location: string | null;
   description: string | null;
-  /** Υπεύθυνοι διεξαγωγής: το τρέχουν τη στιγμή που γίνεται. */
+  /** Οι υπεύθυνοι: ένα ή περισσότερα στελέχη της δράσης. */
   responsibles: { id: string; firstName: string; lastName: string }[];
-  /** Υπεύθυνοι υλοποίησης: το ετοιμάζουν πριν (υλικά, εκτυπώσεις, στήσιμο). */
-  executors: { id: string; firstName: string; lastName: string }[];
   ylikoNotes: string | null;
   yliko: { ylikoId: string; name: string; unit: string | null; qty: number }[];
   /** Έχει γραφτεί προγραμματικό (περιγραφή ή υπεύθυνος ή υλικό). */

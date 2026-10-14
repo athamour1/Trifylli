@@ -70,19 +70,12 @@ export class CreateScheduleItemDto {
   @MaxLength(20_000)
   description?: string | null;
 
-  @ApiPropertyOptional({ type: [String], format: 'uuid', description: 'Υπεύθυνοι διεξαγωγής (στελέχη της δράσης) — αντικαθιστά τη λίστα όταν δίνεται.' })
+  @ApiPropertyOptional({ type: [String], format: 'uuid', description: 'Οι υπεύθυνοι (στελέχη της δράσης) — αντικαθιστά τη λίστα όταν δίνεται.' })
   @IsOptional()
   @IsArray()
   @ArrayMaxSize(20)
   @IsUUID(undefined, { each: true })
   responsibleIds?: string[] | null;
-
-  @ApiPropertyOptional({ type: [String], format: 'uuid', description: 'Υπεύθυνοι υλοποίησης (στελέχη της δράσης) — αντικαθιστά τη λίστα όταν δίνεται.' })
-  @IsOptional()
-  @IsArray()
-  @ArrayMaxSize(20)
-  @IsUUID(undefined, { each: true })
-  executorIds?: string[] | null;
 
   @ApiPropertyOptional()
   @IsOptional()

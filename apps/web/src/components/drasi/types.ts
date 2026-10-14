@@ -80,3 +80,8 @@ export function externalStelexosOption(e: DrasiExternalView): { label: string; v
 export function looksLikeEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
+
+/** Η ετικέτα των υπευθύνων ενός στοιχείου: «Υπεύθυνος» για έναν (ή όσο δεν έχει οριστεί κανείς), «Υπεύθυνοι» από δύο και πάνω. */
+export function responsiblesLabel(count: number): string {
+  return count > 1 ? 'Υπεύθυνοι' : 'Υπεύθυνος';
+}

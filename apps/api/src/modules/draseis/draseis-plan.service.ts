@@ -18,7 +18,7 @@ import {
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
 import { DrasiAccessService } from './drasi-access.service';
-import { planAssignees, type ScheduleAssignee } from './schedule-assignees';
+import { planResponsibles } from './schedule-assignees';
 import type {
   CopyDayDto,
   CreateDrasiSymvoulioDto,
@@ -32,7 +32,7 @@ import type {
 } from './dto/drasi-plan.dto';
 
 const scheduleInclude = {
-  assignees: { select: { duty: true, user: { select: { id: true, firstName: true, lastName: true } } } },
+  assignees: { select: { user: { select: { id: true, firstName: true, lastName: true } } } },
   yliko: { include: { yliko: { select: { id: true, name: true, unit: true } } } },
 } as const;
 
@@ -112,8 +112,8 @@ export class DraseisPlanService {
   async addScheduleItem(user: RequestUser, id: string, dto: CreateScheduleItemDto): Promise<DrasiScheduleItemView> {
     await this.access.load(user, id, 'write');
     await this.assertYliko(user, dto);
-    const { create: assignees } = planAssignees([], { DIEXAGOGI: dto.responsibleIds, YLOPOIISI: dto.executorIds });
-    await this.assertDrasiStelexi(id, assignees);
+    const { create: responsibles } = planResponsibles([], dto.responsibleIds);
+    await this.assertDrasiStelexi(id, responsibles);
     const date = dateColumn(dto.date);
     const last = await this.prisma.drasiScheduleItem.findFirst({ where: { drasiId: id, date }, orderBy: { order: 'desc' }, select: { order: true } });
     const row = await this.prisma.drasiScheduleItem.create({
@@ -127,7 +127,7 @@ export class DraseisPlanService {
         location: dto.location?.trim() || null,
         description: dto.description?.trim() || null,
         ylikoNotes: dto.ylikoNotes?.trim() || null,
-        ...(assignees.length ? { assignees: { create: assignees } } : {}),
+        ...(responsibles.length ? { assignees: { create: responsibles.map((userId) => ({ userId })) } } : {}),
         ...(dto.yliko?.length ? { yliko: { create: dto.yliko.map((y) => ({ ylikoId: y.ylikoId, qty: y.qty ?? 1 })) } } : {}),
       },
       include: scheduleInclude,
@@ -144,7 +144,7 @@ export class DraseisPlanService {
     await this.access.load(user, id, 'write');
     const item = await this.prisma.drasiScheduleItem.findFirst({
       where: { id: itemId, drasiId: id },
-      include: { assignees: { select: { userId: true, duty: true } } },
+      include: { assignees: { select: { userId: true } } },
     });
     if (!item) throw new NotFoundException('Το στοιχείο του ωρολογίου δεν βρέθηκε.');
     const grant = user.drasiGrant?.drasiId === id ? user.drasiGrant.access : null;
@@ -154,8 +154,11 @@ export class DraseisPlanService {
       throw new ForbiddenException('Ως υπεύθυνος αλλάζεις το προγραμματικό, τον χώρο και το υλικό — τα υπόλοιπα τα ορίζει το Πρόγραμμα.');
     }
     await this.assertYliko(user, dto);
-    const assignees = planAssignees(item.assignees, { DIEXAGOGI: dto.responsibleIds, YLOPOIISI: dto.executorIds });
-    await this.assertDrasiStelexi(id, assignees.create);
+    const responsibles = planResponsibles(
+      item.assignees.map((a) => a.userId),
+      dto.responsibleIds,
+    );
+    await this.assertDrasiStelexi(id, responsibles.create);
 
     // Μεταφορά σε άλλη ημέρα: πάει στο τέλος της.
     let move: { date: Date; order: number } | null = null;
@@ -166,11 +169,11 @@ export class DraseisPlanService {
     }
 
     await this.prisma.$transaction(async (tx) => {
-      if (assignees.remove.length) {
-        await tx.drasiScheduleAssignee.deleteMany({ where: { itemId, OR: assignees.remove } });
+      if (responsibles.remove.length) {
+        await tx.drasiScheduleAssignee.deleteMany({ where: { itemId, userId: { in: responsibles.remove } } });
       }
-      if (assignees.create.length) {
-        await tx.drasiScheduleAssignee.createMany({ data: assignees.create.map((a) => ({ itemId, ...a })) });
+      if (responsibles.create.length) {
+        await tx.drasiScheduleAssignee.createMany({ data: responsibles.create.map((userId) => ({ itemId, userId })) });
       }
       if (dto.yliko) {
         await tx.drasiScheduleYliko.deleteMany({ where: { itemId } });
@@ -233,7 +236,7 @@ export class DraseisPlanService {
     const source = await this.prisma.drasiScheduleItem.findMany({
       where: { drasiId: id, date: dateColumn(dto.from) },
       orderBy: { order: 'asc' },
-      include: { yliko: true, assignees: { select: { userId: true, duty: true } } },
+      include: { yliko: true, assignees: { select: { userId: true } } },
     });
     if (source.length === 0) throw new BadRequestException('Η ημέρα προέλευσης δεν έχει στοιχεία.');
     const last = await this.prisma.drasiScheduleItem.findFirst({ where: { drasiId: id, date: dateColumn(dto.to) }, orderBy: { order: 'desc' }, select: { order: true } });
@@ -279,8 +282,8 @@ export class DraseisPlanService {
    * Οι νέοι υπεύθυνοι πρέπει να είναι στελέχη στους συμμετέχοντες της δράσης.
    * Όσοι ήταν ήδη (από πριν ισχύσει ο κανόνας) μένουν μέχρι να βγουν.
    */
-  private async assertDrasiStelexi(drasiId: string, added: readonly ScheduleAssignee[]): Promise<void> {
-    const ids = [...new Set(added.map((a) => a.userId))];
+  private async assertDrasiStelexi(drasiId: string, added: readonly string[]): Promise<void> {
+    const ids = [...new Set(added)];
     if (!ids.length) return;
     const found = await this.prisma.drasiParticipant.count({ where: { drasiId, kind: MemberKind.STELEXOS, userId: { in: ids } } });
     if (found !== ids.length) throw new BadRequestException('Υπεύθυνοι γίνονται μόνο στελέχη που συμμετέχουν στη δράση.');
@@ -606,20 +609,16 @@ export function toScheduleView(
     kind: DrasiScheduleItemView['kind'];
     location: string | null;
     description: string | null;
-    assignees: { duty: ScheduleAssignee['duty']; user: { id: string; firstName: string; lastName: string } }[];
+    assignees: { user: { id: string; firstName: string; lastName: string } }[];
     ylikoNotes: string | null;
     yliko: { ylikoId: string; qty: number; yliko: { name: string; unit: string | null } }[];
   },
   startsAt: Date,
   endsAt: Date,
 ): DrasiScheduleItemView {
-  const people = (duty: ScheduleAssignee['duty']) =>
-    r.assignees
-      .filter((a) => a.duty === duty)
-      .map((a) => a.user)
-      .sort((a, b) => a.lastName.localeCompare(b.lastName, 'el') || a.firstName.localeCompare(b.firstName, 'el'));
-  const responsibles = people('DIEXAGOGI');
-  const executors = people('YLOPOIISI');
+  const responsibles = r.assignees
+    .map((a) => a.user)
+    .sort((a, b) => a.lastName.localeCompare(b.lastName, 'el') || a.firstName.localeCompare(b.firstName, 'el'));
   return {
     id: r.id,
     date: dayKey(r.date),
@@ -632,10 +631,9 @@ export function toScheduleView(
     location: r.location,
     description: r.description,
     responsibles,
-    executors,
     ylikoNotes: r.ylikoNotes,
     yliko: r.yliko.map((y) => ({ ylikoId: y.ylikoId, name: y.yliko.name, unit: y.yliko.unit, qty: y.qty })),
-    hasProgramma: Boolean(r.description || responsibles.length || executors.length || r.ylikoNotes || r.yliko.length),
+    hasProgramma: Boolean(r.description || responsibles.length || r.ylikoNotes || r.yliko.length),
   };
 }
 

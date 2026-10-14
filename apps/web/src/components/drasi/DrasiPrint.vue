@@ -71,7 +71,7 @@
       <div v-for="(day, i) in d.days" :key="day.date" class="ds-day">
         <h3>Ημέρα {{ i + 1 }} <small>{{ formatDate(day.date) }}</small></h3>
         <table class="ds-table">
-          <thead><tr><th style="width: 11%">Ώρα</th><th style="width: 35%">Τι γίνεται</th><th style="width: 16%">Διεξαγωγή</th><th style="width: 16%">Υλοποίηση</th><th>Υλικό</th></tr></thead>
+          <thead><tr><th style="width: 11%">Ώρα</th><th style="width: 40%">Τι γίνεται</th><th style="width: 22%">Υπεύθυνοι</th><th>Υλικό</th></tr></thead>
           <tbody>
             <tr v-for="it in day.items" :key="it.id">
               <td>{{ formatTime(it.startsAt) }}<span v-if="it.endsAt">–{{ formatTime(it.endsAt) }}</span></td>
@@ -81,7 +81,6 @@
                 <div v-if="it.description" class="markdown-body ds-md" v-html="md(it.description)" />
               </td>
               <td>{{ names(it.responsibles) }}</td>
-              <td>{{ names(it.executors) }}</td>
               <td>{{ [...it.yliko.map((y) => `${y.name}${y.qty > 1 ? ` ×${y.qty}` : ''}`), it.ylikoNotes ?? ''].filter(Boolean).join(', ') }}</td>
             </tr>
           </tbody>

@@ -92,7 +92,7 @@ describe('πεδία έξω από όσα επιτρέπονται', () => {
 
   it('ο υπεύθυνος γράφει κείμενο, χώρο και υλικό — όχι τίτλο, λεπτά, είδος, ημέρα, υπεύθυνους', () => {
     expect(fieldsOutside({ location: 'Δάσος', description: '# Πορεία', ylikoNotes: 'σχοινιά', yliko: [] }, SCHEDULE_ITEM_OWN_FIELDS)).toEqual([]);
-    for (const f of ['title', 'durationMin', 'kind', 'date', 'responsibleIds', 'executorIds']) {
+    for (const f of ['title', 'durationMin', 'kind', 'date', 'responsibleIds']) {
       expect(fieldsOutside({ [f]: 'κάτι' }, SCHEDULE_ITEM_OWN_FIELDS)).toEqual([f]);
     }
   });

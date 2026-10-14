@@ -104,14 +104,6 @@ enum SignerRole {
   IDIOS
 }
 
-/// Οι δύο ευθύνες ενός στοιχείου του ωρολογίου.
-enum DrasiScheduleDuty {
-  /// Το τρέχει τη στιγμή που γίνεται.
-  DIEXAGOGI
-  /// Το ετοιμάζει πριν: υλικά, εκτυπώσεις, στήσιμο.
-  YLOPOIISI
-}
-
 /// Είδος στοιχείου στο ωρολόγιο της δράσης — για χρώμα και γρήγορη ανάγνωση.
 enum DrasiScheduleKind {
   DRASTIRIOTITA
@@ -600,7 +592,7 @@ model DrasiScheduleItem {
   updatedAt     DateTime           @updatedAt
 
   drasi       Drasi               @relation(fields: [drasiId], references: [id], onDelete: Cascade)
-  /// Υπεύθυνοι διεξαγωγής και υλοποίησης — περισσότερα στελέχη σε καθεμία.
+  /// Οι υπεύθυνοι — ένα ή περισσότερα στελέχη της δράσης.
   assignees   DrasiScheduleAssignee[]
   yliko       DrasiScheduleYliko[]
   epitropi    DrasiGroup?
@@ -614,14 +606,13 @@ model DrasiScheduleItem {
 /// (κείμενο, χώρο, υλικό), βλ. `SCHEDULE_ITEM_OWN_FIELDS`. Όποιος βγει από τη
 /// δράση φεύγει και από εδώ.
 model DrasiScheduleAssignee {
-  itemId String            @db.Uuid
-  userId String            @db.Uuid
-  duty   DrasiScheduleDuty
+  itemId String @db.Uuid
+  userId String @db.Uuid
 
   item DrasiScheduleItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
   user User              @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@id([itemId, duty, userId])
+  @@id([itemId, userId])
   @@index([userId])
   @@map("drasi_schedule_assignee")
 }
