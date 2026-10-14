@@ -52,9 +52,10 @@
     <!--
       Κάθε στοιχείο: λαβή (σύρε για αλλαγή σειράς), ώρες (υπολογισμένες),
       είδος (πάτα το εικονίδιο), τίτλος και λεπτά γράφονται ΕΠΙ ΤΟΠΟΥ — όπως ο
-      τίτλος της συγκέντρωσης — και σώζονται μόνα τους. Το προγραμματικό έχει
-      δική του σελίδα (εικονίδιο στα δεξιά) — εκεί γράφεται το markdown. Στο
-      κινητό η γραμμή σπάει σε δύο: τίτλος πάνω, λεζάντα και λεπτά κάτω.
+      τίτλος της συγκέντρωσης — και σώζονται μόνα τους. Το κολατσιό (κρουασάν)
+      μπαίνει στο διατροφολόγιο. Το προγραμματικό έχει δική του σελίδα
+      (εικονίδιο στα δεξιά) — εκεί γράφεται το markdown. Στο κινητό η γραμμή
+      σπάει σε δύο: τίτλος πάνω, λεζάντα με κολατσιό και λεπτά κάτω.
     -->
     <q-list v-else-if="current" bordered class="rounded-borders">
       <div
@@ -84,21 +85,47 @@
                   <q-item-section avatar><q-icon :name="KIND_ICON[k.value]" :color="KIND_COLOR[k.value]" /></q-item-section>
                   <q-item-section>{{ k.label }}</q-item-section>
                 </q-item>
-                <!-- Κολατσιό μέσα στο στοιχείο: μπαίνει στο διατροφολόγιο. Δεύτερο κλικ το βγάζει. -->
-                <q-separator />
-                <q-item-label header>Κολατσιό</q-item-label>
-                <q-item v-for="sn in snackOptions" :key="sn.value" clickable :active="sn.value === row.snack" active-class="text-klados" @click="row.snack = row.snack === sn.value ? null : sn.value">
-                  <q-item-section avatar><q-icon name="bakery_dining" color="orange-7" /></q-item-section>
-                  <q-item-section>{{ sn.label }}</q-item-section>
-                </q-item>
               </q-list>
             </q-menu>
           </q-btn>
           <q-input v-model="row.title" :readonly="!canWrite" borderless dense class="si-title" placeholder="Τι γίνεται" />
           <div class="si-caption text-caption text-grey-6 ellipsis">
-            <q-badge v-if="row.snack" color="orange-7" class="q-mr-xs" :label="DRASI_SNACK_LABEL[row.snack]" />
             {{ scheduleCaption({ kindLabel: DRASI_SCHEDULE_KIND_LABEL[row.kind], location: row.location, responsibles: row.responsibles }, $q.screen.xs) }}
           </div>
+          <!--
+            Κολατσιό μέσα στο στοιχείο: μπαίνει στο διατροφολόγιο. Χωρίς: γκρι
+            κρουασάν. Με: το ίδιο κουμπί γίνεται πορτοκαλί ετικέτα (πάτα για αλλαγή).
+          -->
+          <q-btn
+            v-if="canWrite"
+            class="si-snack"
+            :class="{ 'si-snack--set': row.snack }"
+            dense
+            no-caps
+            :size="row.snack ? '12px' : 'sm'"
+            :flat="!row.snack"
+            :round="!row.snack"
+            :unelevated="!!row.snack"
+            :rounded="!!row.snack"
+            :icon="row.snack ? undefined : 'bakery_dining'"
+            :label="row.snack ? DRASI_SNACK_LABEL[row.snack] : undefined"
+            :color="row.snack ? 'orange-7' : 'grey-5'"
+            :aria-label="row.snack ? `Κολατσιό: ${DRASI_SNACK_LABEL[row.snack]}` : 'Κολατσιό'"
+          >
+            <q-tooltip v-if="!row.snack">Κολατσιό</q-tooltip>
+            <q-menu auto-close>
+              <q-list dense>
+                <q-item-label header>Κολατσιό</q-item-label>
+                <q-item v-for="sn in snackOptions" :key="sn.value" clickable :active="sn.value === row.snack" active-class="text-klados" @click="row.snack = sn.value">
+                  <q-item-section>{{ sn.label }}</q-item-section>
+                </q-item>
+                <q-item v-if="row.snack" clickable @click="row.snack = null">
+                  <q-item-section class="text-grey-7">Χωρίς κολατσιό</q-item-section>
+                </q-item>
+              </q-list>
+            </q-menu>
+          </q-btn>
+          <q-badge v-else-if="row.snack" class="si-snack" color="orange-7" :label="DRASI_SNACK_LABEL[row.snack]" />
           <div class="si-dur">
             <q-input
               v-if="canWrite"
@@ -428,15 +455,15 @@ function notifyError(err: unknown, fallback: string): void {
 <style scoped>
 /*
   Μία γραμμή στον υπολογιστή: ώρα έναρξης στο ύψος του τίτλου, λήξη στο ύψος
-  της λεζάντας. Ό,τι λείπει (η λαβή, χωρίς δικαίωμα) αφήνει τη στήλη του
-  μηδενική — γι' αυτό περιθώρια, όχι gap.
+  της λεζάντας. Τα κομμάτια που λείπουν (λαβή, κολατσιό χωρίς δικαίωμα) αφήνουν
+  τη στήλη τους μηδενική — γι' αυτό περιθώρια, όχι gap.
 */
 .schedule-item {
   display: grid;
-  grid-template-columns: auto auto auto minmax(0, 1fr) auto auto;
+  grid-template-columns: auto auto auto minmax(0, 1fr) auto auto auto;
   grid-template-areas:
-    'drag start kind title   dur doc'
-    'drag end   kind caption dur doc';
+    'drag start kind title   snack dur doc'
+    'drag end   kind caption snack dur doc';
   align-items: center;
   padding: 4px 16px;
 }
@@ -474,6 +501,25 @@ function notifyError(err: unknown, fallback: string): void {
 .si-caption {
   grid-area: caption;
 }
+.si-snack {
+  grid-area: snack;
+  margin-left: 8px;
+}
+/* Αν δεν χωρά (πολύ στενό κινητό), η ετικέτα κόβεται με «…» — όχι η ώρα ή τα λεπτά. */
+.si-snack--set {
+  min-width: 0;
+  padding: 0 10px;
+  font-weight: 500;
+}
+.si-snack--set :deep(.q-btn__content) {
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+.si-snack--set :deep(.block) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .si-dur {
   grid-area: dur;
   margin-left: 8px;
@@ -488,16 +534,16 @@ function notifyError(err: unknown, fallback: string): void {
 }
 /*
   Κινητό: ο τίτλος παίρνει όλη την πρώτη γραμμή ως το εικονίδιο του
-  προγραμματικού· τα λεπτά πάνε κάτω, δίπλα στη λήξη. Η τελευταία στήλη
-  έχει σταθερό πλάτος (εικονίδιο + περιθώριο), αλλιώς φάρδαινε όσο τα
+  προγραμματικού· κολατσιό και λεπτά πάνε κάτω, δίπλα στη λήξη. Η τελευταία
+  στήλη έχει σταθερό πλάτος (εικονίδιο + περιθώριο), αλλιώς φάρδαινε όσο τα
   λεπτά από κάτω και έτρωγε τον τίτλο. Πεδία 32px αντί για 40.
 */
 @media (max-width: 599.98px) {
   .schedule-item {
-    grid-template-columns: auto auto auto minmax(0, 1fr) auto 28px;
+    grid-template-columns: auto auto auto minmax(0, 1fr) auto auto 28px;
     grid-template-areas:
-      'drag start kind title   title doc'
-      'drag end   kind caption dur   dur';
+      'drag start kind title   title title doc'
+      'drag end   kind caption snack dur   dur';
     padding: 4px 10px 6px;
   }
   .si-drag {
