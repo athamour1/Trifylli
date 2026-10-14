@@ -201,6 +201,7 @@ import {
 import DateField from '../DateField.vue';
 import { ApiError, get, post } from '../../lib/api';
 import { newGuestRequest, type NewGuestForm } from './new-guest';
+import { looksLikeEmail } from './types';
 
 const props = defineProps<{
   modelValue: boolean;
@@ -293,7 +294,7 @@ const guestForm = reactive<NewGuestForm>({
 });
 /** Στέλεχος με email: θα πάρει πρόσκληση και πρόσβαση στη δράση. */
 const willInvite = computed(() => guestForm.kind === 'STELEXOS' && !!guestForm.email.trim());
-const emailInvalid = computed(() => willInvite.value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestForm.email.trim()));
+const emailInvalid = computed(() => willInvite.value && !looksLikeEmail(guestForm.email));
 
 async function loadGuests(): Promise<void> {
   guestLoading.value = true;
