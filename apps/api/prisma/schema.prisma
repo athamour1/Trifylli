@@ -603,6 +603,8 @@ model DrasiScheduleItem {
   assignees   DrasiScheduleAssignee[]
   /// Το υλικό του — λίστα όπως στις συγκεντρώσεις.
   yliko       DrasiScheduleYlikoItem[]
+  /// Το μενού του, αν είναι γεύμα — βλ. `DrasiMeal`.
+  meal        DrasiMeal?
   epitropi    DrasiGroup?
 
   @@index([drasiId, date, order])
@@ -623,6 +625,40 @@ model DrasiScheduleAssignee {
   @@id([itemId, userId])
   @@index([userId])
   @@map("drasi_schedule_assignee")
+}
+
+/// Το διατροφολόγιο ενός γεύματος του ωρολογίου (στοιχείο «Γεύμα» ή με ετικέτα
+/// κολατσιού): τι τρώμε, η συνταγή (Markdown με εικόνες) και το ποσολόγιο. Το
+/// γράφουν μαγείρισσα και τροφοδοσία. Αν το στοιχείο πάψει να είναι γεύμα, μένει
+/// κρυμμένο· σβήνεται μόνο μαζί με το στοιχείο.
+model DrasiMeal {
+  itemId    String   @id @db.Uuid
+  /// Τι τρώμε — σύντομο κείμενο.
+  menu      String?
+  /// Η συνταγή — Markdown.
+  recipe    String?
+  updatedAt DateTime @updatedAt
+
+  item        DrasiScheduleItem     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  ingredients DrasiMealIngredient[]
+
+  @@map("drasi_meal")
+}
+
+/// Γραμμή του ποσολογίου: υλικό, συνολική ποσότητα (κείμενο, π.χ. «2 kg») και αν αγοράστηκε.
+model DrasiMealIngredient {
+  id     String  @id @default(uuid()) @db.Uuid
+  itemId String  @db.Uuid
+  /// Σειρά εμφάνισης· χωρίς unique, γιατί η λίστα γράφεται ολόκληρη κάθε φορά.
+  order  Int
+  label  String
+  qty    String  @default("")
+  bought Boolean @default(false)
+
+  meal DrasiMeal @relation(fields: [itemId], references: [itemId], onDelete: Cascade)
+
+  @@index([itemId, order])
+  @@map("drasi_meal_ingredient")
 }
 
 /// Το υλικό ενός στοιχείου του ωρολογίου: λίστα όπως στις συγκεντρώσεις (όνομα,

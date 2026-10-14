@@ -255,6 +255,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: 'Προγραμματικό' },
       },
       {
+        path: 'draseis/:id/diatrofologio/:itemId',
+        name: 'drasi-gevma',
+        component: () => import('../pages/DrasiGevmaPage.vue'),
+        meta: { title: 'Γεύμα' },
+      },
+      {
         path: 'symvoulia/:id',
         name: 'symvoulio',
         component: () => import('../pages/SymvoulioPage.vue'),

@@ -102,3 +102,29 @@ describe('πεδία έξω από όσα επιτρέπονται', () => {
     expect(fieldsOutside({ participantId: null }, CHARACTER_OWN_FIELDS)).toEqual(['participantId']);
   });
 });
+
+describe('διατροφολόγιο', () => {
+  it('κάθε στέλεχος το βλέπει, χωρίς να το αλλάζει', () => {
+    const a = drasiAccess({ full: false, staff: true, roles: [] });
+    expect(drasiCan(a, 'diatrofologio')).toBe(true);
+    expect(drasiCan(a, 'diatrofologio', 'edit')).toBe(false);
+  });
+
+  it('το γράφουν η μαγείρισσα και η τροφοδοσία', () => {
+    for (const role of ['MAGEIRISSA', 'TROFODOSIA'] as const) {
+      expect(drasiCan(drasiAccess({ full: false, staff: true, roles: [role] }), 'diatrofologio', 'edit')).toBe(true);
+    }
+  });
+
+  it('ο αρχηγός της δράσης και οι άλλοι ρόλοι μόνο το βλέπουν', () => {
+    for (const role of ['ARXIGOS', 'PROGRAMMA', 'LEITOURGIA', 'TAMIAS', 'FARMAKEIO'] as const) {
+      const a = drasiAccess({ full: false, staff: true, roles: [role] });
+      expect(drasiCan(a, 'diatrofologio')).toBe(true);
+      expect(drasiCan(a, 'diatrofologio', 'edit')).toBe(false);
+    }
+  });
+
+  it('η εφεδρεία (πλήρης πρόσβαση) το γράφει', () => {
+    expect(drasiCan(drasiAccess({ full: true, staff: false, roles: [] }), 'diatrofologio', 'edit')).toBe(true);
+  });
+});

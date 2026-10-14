@@ -17,6 +17,8 @@ import type { DrasiRoleKind } from './domain';
 export type DrasiPerm =
   | 'episkopisi'
   | 'programma'
+  /** Μενού, συνταγές και ποσολόγιο των γευμάτων — το γράφουν μαγείρισσα και τροφοδοσία. */
+  | 'diatrofologio'
   | 'mythos'
   | 'participants'
   | 'omades'
@@ -39,8 +41,8 @@ export type DrasiPerm =
   | 'close';
 
 export const DRASI_PERMS: readonly DrasiPerm[] = [
-  'episkopisi', 'programma', 'mythos', 'participants', 'omades', 'ypiresies', 'entypa', 'farmakeio', 'yliko', 'tamio',
-  'symvoulia', 'axiologisi', 'ektyposi', 'arxigeio', 'rythmiseis', 'payments', 'handover', 'close',
+  'episkopisi', 'programma', 'diatrofologio', 'mythos', 'participants', 'omades', 'ypiresies', 'entypa', 'farmakeio', 'yliko',
+  'tamio', 'symvoulia', 'axiologisi', 'ektyposi', 'arxigeio', 'rythmiseis', 'payments', 'handover', 'close',
 ];
 
 export interface DrasiAccess {
@@ -52,15 +54,16 @@ export interface DrasiAccess {
 
 /** Ό,τι βλέπει κάθε στέλεχος της δράσης, χωρίς ρόλο. */
 const STAFF_VIEW: readonly DrasiPerm[] = [
-  'episkopisi', 'programma', 'mythos', 'participants', 'omades', 'ypiresies', 'entypa', 'symvoulia', 'axiologisi', 'ektyposi', 'arxigeio',
+  'episkopisi', 'programma', 'diatrofologio', 'mythos', 'participants', 'omades', 'ypiresies', 'entypa', 'symvoulia', 'axiologisi', 'ektyposi', 'arxigeio',
 ];
 
 /** Τι προσθέτει κάθε ρόλος (πέρα από τα του στελέχους). */
 const ROLE_ACCESS: Partial<Record<DrasiRoleKind, { view: readonly DrasiPerm[]; edit: readonly DrasiPerm[] }>> = {
-  // Ο αρχηγός της δράσης: τα πάντα — εκτός από τα χρήματα, που τα κινεί ο ταμίας.
+  // Ο αρχηγός της δράσης: τα πάντα — εκτός από τα χρήματα, που τα κινεί ο ταμίας,
+  // και το διατροφολόγιο, που το γράφουν μαγείρισσα και τροφοδοσία.
   ARXIGOS: {
     view: DRASI_PERMS.filter((p) => p !== 'handover' && p !== 'payments'),
-    edit: DRASI_PERMS.filter((p) => p !== 'tamio' && p !== 'payments' && p !== 'handover'),
+    edit: DRASI_PERMS.filter((p) => p !== 'tamio' && p !== 'payments' && p !== 'handover' && p !== 'diatrofologio'),
   },
   PROGRAMMA: { view: [], edit: ['mythos', 'programma'] },
   // Η λειτουργία τρέχει και τις υπηρεσίες (ποια ομάδα έχει τι, πότε).
@@ -68,7 +71,9 @@ const ROLE_ACCESS: Partial<Record<DrasiRoleKind, { view: readonly DrasiPerm[]; e
   // Μόνο ο ταμίας καταχωρεί έσοδα/έξοδα, πληρωμές και παραδόσεις.
   TAMIAS: { view: ['tamio'], edit: ['tamio', 'payments', 'handover'] },
   FARMAKEIO: { view: ['farmakeio'], edit: ['farmakeio', 'entypa'] },
-  // Τροφοδοσία / μαγείρισσα: δικές τους σελίδες αργότερα — προς το παρόν όπως κάθε στέλεχος.
+  // Μόνο αυτές οι δύο γράφουν το διατροφολόγιο (μενού, συνταγές, ποσολόγιο).
+  TROFODOSIA: { view: [], edit: ['diatrofologio'] },
+  MAGEIRISSA: { view: [], edit: ['diatrofologio'] },
 };
 
 export function drasiAccess(input: { full: boolean; staff: boolean; roles: readonly DrasiRoleKind[] }): DrasiAccess {

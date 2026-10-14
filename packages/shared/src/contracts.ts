@@ -809,6 +809,52 @@ export interface DrasiScheduleView {
   stelexi: DrasiScheduleStelexos[];
 }
 
+// ───────────────────────── Δράσεις: διατροφολόγιο ─────────────────────────
+
+/** Γραμμή του ποσολογίου ενός γεύματος. */
+export interface DrasiMealIngredient {
+  label: string;
+  /** Συνολική ποσότητα ως κείμενο — «2 kg», «3 πακέτα». */
+  qty: string;
+  bought: boolean;
+}
+
+/** Γεύμα του διατροφολογίου: στοιχείο του ωρολογίου με είδος «Γεύμα» ή ετικέτα κολατσιού. */
+export interface DrasiMealSummary {
+  itemId: string;
+  title: string;
+  kind: DrasiScheduleKind;
+  snack: DrasiSnack | null;
+  startsAt: string;
+  endsAt: string;
+  /** Τι τρώμε· `null` όσο δεν έχει γραφτεί. */
+  menu: string | null;
+  hasRecipe: boolean;
+  ingredients: number;
+  bought: number;
+}
+
+export interface DrasiDiatrofologioView {
+  /** Όλες οι ημέρες της δράσης, όπως στο πρόγραμμα — και όσες δεν έχουν γεύμα. */
+  days: { date: string; meals: DrasiMealSummary[] }[];
+}
+
+/** Η σελίδα ενός γεύματος. */
+export interface DrasiMealView {
+  itemId: string;
+  /** YYYY-MM-DD στη ζώνη του Τοπικού. */
+  date: string;
+  title: string;
+  kind: DrasiScheduleKind;
+  snack: DrasiSnack | null;
+  startsAt: string;
+  endsAt: string;
+  menu: string | null;
+  /** Η συνταγή — Markdown με εικόνες. */
+  recipe: string | null;
+  ingredients: DrasiMealIngredient[];
+}
+
 export interface DrasiScheduleStelexos {
   /** Το id του χρήστη — αυτό γράφεται στους υπεύθυνους. */
   id: string;

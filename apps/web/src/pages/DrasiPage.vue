@@ -264,6 +264,10 @@
               />
             </q-tab-panel>
 
+            <q-tab-panel name="diatrofologio" class="q-pa-none">
+              <DrasiDiatrofologio :drasi-id="id" />
+            </q-tab-panel>
+
             <q-tab-panel name="mythos" class="q-pa-none">
               <DrasiMythos
                 :drasi-id="id"
@@ -392,6 +396,7 @@ import DrasiArxigeio from '../components/drasi/DrasiArxigeio.vue';
 import DrasiEktyposi from '../components/drasi/DrasiEktyposi.vue';
 import DrasiEntypa from '../components/drasi/DrasiEntypa.vue';
 import DrasiFarmakeio from '../components/drasi/DrasiFarmakeio.vue';
+import DrasiDiatrofologio from '../components/drasi/DrasiDiatrofologio.vue';
 import DrasiMythos from '../components/drasi/DrasiMythos.vue';
 import DrasiOmades from '../components/drasi/DrasiOmades.vue';
 import DrasiProgramma from '../components/drasi/DrasiProgramma.vue';
@@ -483,6 +488,7 @@ const sections = computed(() => {
   const list = [
     { name: 'episkopisi', label: 'Επισκόπηση', icon: 'dashboard', badge: '' },
     { name: 'programma', label: 'Πρόγραμμα', icon: 'schedule', badge: '' },
+    { name: 'diatrofologio', label: 'Διατροφολόγιο', icon: 'restaurant_menu', badge: '' },
     { name: 'mythos', label: 'Μύθος', icon: 'auto_stories', badge: '' },
     { name: 'participants', label: 'Συμμετέχοντες', icon: 'groups', badge: String(data.value?.participants.length ?? '') },
     // Το όνομα της υποομάδας του κλάδου: Πεντάδες / Φωλιές / Ενωμοτίες — με πολλούς κλάδους, όλες.

@@ -111,3 +111,23 @@ export function sameYliko(rows: readonly YlikoRow[], server: readonly { label: s
   const mine = ylikoPayload(rows);
   return mine.length === server.length && mine.every((r, i) => r.label === server[i]!.label && r.qty === server[i]!.qty && r.packed === server[i]!.packed);
 }
+
+/** Γραμμή του ποσολογίου ενός γεύματος: υλικό, συνολική ποσότητα (κείμενο) και αν αγοράστηκε. */
+export interface IngredientRow {
+  /** Κλειδί για το `v-for` — μένει ίδιο όσο υπάρχει η γραμμή. */
+  key: number;
+  label: string;
+  qty: string;
+  bought: boolean;
+}
+
+/** Ό,τι φεύγει για αποθήκευση: χωρίς τις άδειες γραμμές (ο server τις πετά). */
+export function ingredientPayload(rows: readonly IngredientRow[]): { label: string; qty: string; bought: boolean }[] {
+  return rows.filter((r) => r.label.trim()).map((r) => ({ label: r.label.trim(), qty: r.qty.trim(), bought: r.bought }));
+}
+
+/** Όπως το `sameYliko`: η λίστα της σελίδας είναι ήδη αυτή του server; Τότε δεν ξαναγράφεται. */
+export function sameIngredients(rows: readonly IngredientRow[], server: readonly { label: string; qty: string; bought: boolean }[]): boolean {
+  const mine = ingredientPayload(rows);
+  return mine.length === server.length && mine.every((r, i) => r.label === server[i]!.label && r.qty === server[i]!.qty && r.bought === server[i]!.bought);
+}

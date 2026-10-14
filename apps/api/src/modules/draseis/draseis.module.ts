@@ -5,6 +5,8 @@ import { YlikoModule } from '../yliko/yliko.module';
 import { DrasiAccessService } from './drasi-access.service';
 import { DrasiPermGuard } from './drasi-perm.guard';
 import { DraseisController } from './draseis.controller';
+import { DraseisDiatrofologioController } from './draseis-diatrofologio.controller';
+import { DraseisDiatrofologioService } from './draseis-diatrofologio.service';
 import { DraseisDossierService } from './draseis-dossier.service';
 import { DraseisExportService } from './draseis-export.service';
 import { DraseisExternalsController } from './draseis-externals.controller';
@@ -37,6 +39,7 @@ import { DraseisService } from './draseis.service';
     DraseisFormsController,
     PublicFormsController,
     DraseisPlanController,
+    DraseisDiatrofologioController,
     DraseisMythosController,
     DraseisExternalsController,
     DraseisYpiresiesController,
@@ -53,6 +56,7 @@ import { DraseisService } from './draseis.service';
     DraseisFormsService,
     DraseisPharmacyService,
     DraseisPlanService,
+    DraseisDiatrofologioService,
     DraseisMythosService,
     DraseisExternalsService,
     DraseisYpiresiesService,
