@@ -11,6 +11,10 @@
 # Χωρίς αυτό το blueprint το Authentik δεν έχει ροή `recovery`: η οθόνη σύνδεσης
 # δεν δείχνει «Ξέχασα τον κωδικό» και το `recovery_email` του API απαντά 404.
 #
+# Στο τέλος ο χρήστης είναι ήδη συνδεδεμένος (στάδιο `user_login`) και γυρίζει
+# στο Trifylli — όχι στη λίστα εφαρμογών του Authentik. Η εφαρμογή ξεκινά το
+# OIDC, η ροή εξουσιοδότησης δεν έχει στάδια, οπότε μπαίνει χωρίς δεύτερη οθόνη.
+#
 # Προϋπόθεση: ρυθμισμένος SMTP (`AUTHENTIK_EMAIL__*` στο compose). Στο dev τα
 # μηνύματα πάνε στο Mailpit — http://localhost:8025.
 #
@@ -21,6 +25,10 @@ metadata:
   name: Trifylli — ορισμός & επαναφορά κωδικού
   labels:
     blueprints.goauthentik.io/instantiate: 'true'
+
+context:
+  # Η διεύθυνση της PWA — ίδια μεταβλητή με το trifylli-oidc.yaml.
+  TRIFYLLI_APP_URL: !Env [TRIFYLLI_APP_URL, 'http://localhost:8080/']
 
 entries:
   # ── Η ροή ──
@@ -204,6 +212,7 @@ entries:
       invalid_response_action: retry
 
   - model: authentik_flows.flowstagebinding
+    id: trifylli-recovery-binding-write
     identifiers:
       target: !KeyOf trifylli-recovery-flow
       stage: !KeyOf trifylli-recovery-user-write
@@ -211,6 +220,31 @@ entries:
     attrs:
       evaluate_on_plan: true
       invalid_response_action: retry
+
+  # Η επιστροφή στο Trifylli. Το `?next=` δεν βοηθά: ο σύνδεσμος του email δεν
+  # το κουβαλά, και ο executor δέχεται μόνο σχετικό. Το κλειδί `redirect` στο
+  # πλάνο το ορίζει πολιτική (όπως στο trifylli-password-change.yaml). Ζυγίζεται
+  # όταν φτιάχνεται το πλάνο — και για τον σύνδεσμο του email, που το πλάνο του
+  # φτιάχνεται τη στιγμή που φεύγει η πρόσκληση — οπότε ταξιδεύει μαζί του.
+  - model: authentik_policies_expression.expressionpolicy
+    id: trifylli-recovery-redirect
+    identifiers:
+      name: trifylli-recovery-redirect
+    attrs:
+      execution_logging: false
+      expression: !Format
+        - |
+          plan = request.context.get("flow_plan")
+          if plan:
+              plan.context["redirect"] = "%s"
+          return True
+        - !Context TRIFYLLI_APP_URL
+
+  - model: authentik_policies.policybinding
+    identifiers:
+      policy: !KeyOf trifylli-recovery-redirect
+      target: !KeyOf trifylli-recovery-binding-write
+      order: 0
 
   - model: authentik_flows.flowstagebinding
     identifiers:

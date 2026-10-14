@@ -609,6 +609,9 @@ layout + bucket + key (idempotent) στο πρώτο boot.
   κωδικός δεν φεύγει ποτέ), χωρίς zxcvbn. Με το MFA προαιρετικό, αυτά μαζί με
   το φρένο brute force είναι όλη η προστασία της σύνδεσης. Το Trifylli δεν
   βλέπει κωδικό.
+* **Μετά τον ορισμό κωδικού** (πρόσκληση ή «Ξέχασα τον κωδικό») ο χρήστης
+  γυρίζει συνδεδεμένος στο Trifylli (`TRIFYLLI_APP_URL`), όχι στη λίστα
+  εφαρμογών του Authentik.
 * **Το API μιλά στο Authentik ως service account** με πέντε δικαιώματα (χρήστης:
   δημιουργία/ανάγνωση/αλλαγή/επαναφορά, ανάγνωση email stage) — όχι superuser.
   Το token το φτιάχνει το blueprint από το `AUTHENTIK_API_TOKEN`.
