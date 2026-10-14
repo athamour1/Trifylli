@@ -196,6 +196,9 @@ const emit = defineEmits<{ 'update:modelValue': [boolean]; added: [count: number
 const $q = useQuasar();
 const source = ref<'registry' | 'guests'>('registry');
 const saving = ref(false);
+// Εδώ και όχι στους φιλοξενούμενους: το καθαρίζει ο immediate watcher του μητρώου,
+// που τρέχει ήδη στο setup με κλειστό διάλογο.
+const selectedGuests = ref<string[]>([]);
 
 // ── Μητρώο ──
 const loading = ref(false);
@@ -251,7 +254,6 @@ async function submitRegistry(): Promise<void> {
 const guestQuery = ref('');
 const guestLoading = ref(false);
 const guests = ref<GuestMemberView[]>([]);
-const selectedGuests = ref<string[]>([]);
 const guestCandidates = computed(() => {
   const existing = new Set(props.existingIds);
   return guests.value.filter((g) => !existing.has(g.id));
