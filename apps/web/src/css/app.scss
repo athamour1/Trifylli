@@ -519,34 +519,26 @@ body,
 /* ── Μπάρα κύλισης στο χρώμα του ενεργού κλάδου (ή του Τοπικού = πράσινο) ──
    Χρησιμοποιεί το `--klados-ink` (ευανάγνωστη απόχρωση πάνω στο λευκό) που
    αλλάζει ανά διαδρομή, ώστε να ακολουθεί τη μπάρα — ακόμη και για το ανοιχτό
-   κίτρινο των Πουλιών μένει ορατή. */
-.q-page-container,
-.q-page,
-.q-drawer__content {
+   κίτρινο των Πουλιών μένει ορατή. Παντού, όχι μόνο σελίδα και συρτάρι: και
+   διάλογοι, λίστες επιλογής, πίνακες. Όπου κρύβεται (segmented control), το
+   κρύβει πιο ειδικός κανόνας. */
+* {
   scrollbar-width: thin;
   scrollbar-color: var(--klados-ink) transparent;
 }
-.q-page-container::-webkit-scrollbar,
-.q-page::-webkit-scrollbar,
-.q-drawer__content::-webkit-scrollbar {
+*::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
-.q-page-container::-webkit-scrollbar-track,
-.q-page::-webkit-scrollbar-track,
-.q-drawer__content::-webkit-scrollbar-track {
+*::-webkit-scrollbar-track {
   background: transparent;
 }
-.q-page-container::-webkit-scrollbar-thumb,
-.q-page::-webkit-scrollbar-thumb,
-.q-drawer__content::-webkit-scrollbar-thumb {
+*::-webkit-scrollbar-thumb {
   background: var(--klados-ink);
   border-radius: 999px;
   border: 2px solid var(--surface);
 }
-.q-page-container::-webkit-scrollbar-thumb:hover,
-.q-page::-webkit-scrollbar-thumb:hover,
-.q-drawer__content::-webkit-scrollbar-thumb:hover {
+*::-webkit-scrollbar-thumb:hover {
   background: color-mix(in srgb, var(--klados-ink), #000 18%);
 }
 
@@ -669,9 +661,7 @@ body.body--dark {
     background: rgba(102, 187, 106, 0.16) !important;
   }
 
-  .q-page-container::-webkit-scrollbar-thumb:hover,
-  .q-page::-webkit-scrollbar-thumb:hover,
-  .q-drawer__content::-webkit-scrollbar-thumb:hover {
+  *::-webkit-scrollbar-thumb:hover {
     background: color-mix(in srgb, var(--klados-ink), #fff 18%);
   }
 }
