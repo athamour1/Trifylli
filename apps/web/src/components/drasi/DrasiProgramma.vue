@@ -32,12 +32,12 @@
 
     <!-- Γρήγορη προσθήκη: τίτλος + διάρκεια, Enter -->
     <q-card v-if="canWrite" flat bordered class="q-pa-sm q-mb-md">
-      <div class="row q-col-gutter-sm items-start">
+      <div class="row q-col-gutter-sm items-center">
         <div class="col-12 col-sm-5"><q-input v-model="draft.title" label="Τι γίνεται" outlined dense color="klados" @keyup.enter="add" /></div>
-        <div class="col-5 col-sm-2"><q-input v-model.number="draft.durationMin" type="number" label="Λεπτά" outlined dense :min="1" :max="1440" color="klados" @keyup.enter="add" /></div>
+        <div class="col-3 col-sm-2"><q-input v-model.number="draft.durationMin" type="number" label="Λεπτά" outlined dense :min="1" :max="1440" color="klados" @keyup.enter="add" /></div>
         <div class="col-7 col-sm-4"><q-select v-model="draft.kind" :options="kindOptions" label="Είδος" outlined dense emit-value map-options color="klados" /></div>
-        <div class="col-12 col-sm-1 row items-center">
-          <q-btn round dense color="klados" text-color="klados-on" icon="add" :disable="!draft.title.trim() || !draft.durationMin" :loading="saving" @click="add" />
+        <div class="col-2 col-sm-1 row justify-center">
+          <q-btn round dense color="klados" text-color="klados-on" icon="add" aria-label="Προσθήκη" :disable="!draft.title.trim() || !draft.durationMin" :loading="saving" @click="add" />
         </div>
       </div>
     </q-card>
