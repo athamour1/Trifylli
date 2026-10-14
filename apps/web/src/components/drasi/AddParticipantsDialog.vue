@@ -116,7 +116,7 @@
                 emit-value
                 map-options
                 color="klados"
-                :hint="!guestTopika.length ? 'Δήλωσε πρώτα το Τοπικό στο «Στήσιμο → Ποιοι έρχονται».' : undefined"
+                :hint="!guestTopika.length ? 'Δήλωσε πρώτα το Τοπικό στις «Ρυθμίσεις → Ποιοι έρχονται».' : undefined"
               />
             </div>
             <div class="col-6"><q-input v-model="guestForm.lastName" label="Επώνυμο *" outlined dense color="klados" /></div>
