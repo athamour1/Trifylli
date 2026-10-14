@@ -185,7 +185,7 @@ import DateField from '../DateField.vue';
 import MarkdownField from '../MarkdownField.vue';
 import TimeField from '../TimeField.vue';
 import GuestTopikaEditor from './GuestTopikaEditor.vue';
-import type { GuestTopikoForm } from './types';
+import { guestTopikaErrors, guestTopikaPayload, toGuestTopikoForm, type GuestTopikoForm } from './types';
 import { ApiError, del, get, patch, post, put } from '../../lib/api';
 import { toISODate } from '../../lib/format';
 
@@ -267,11 +267,14 @@ const kladoi = ref<KladosType[]>([]);
 const guests = ref<GuestTopikoForm[]>([]);
 const kladosOptions = computed(() => KLADOI_IN_ORDER.map((k) => ({ label: KLADOS_LABEL[k], value: k, disable: k === organiser.value })));
 async function saveWho(): Promise<void> {
+  const guestError = guestTopikaErrors(guests.value).find((e) => e !== null);
+  if (guestError) {
+    $q.notify({ type: 'warning', message: guestError });
+    return;
+  }
   await run('who', async () => {
     await put(`/draseis/${drasiId.value}/kladoi`, { kladoi: kladoi.value });
-    await put(`/draseis/${drasiId.value}/guest-topika`, {
-      items: guests.value.map((g) => ({ topikoName: g.topikoName, kladoi: g.kladoi, contactName: g.contactName || undefined, contactPhone: g.contactPhone || undefined })),
-    });
+    await put(`/draseis/${drasiId.value}/guest-topika`, guestTopikaPayload(guests.value));
   });
 }
 
@@ -378,7 +381,7 @@ function fill(d: DrasiSettingsData): void {
     hasSkines: d.hasSkines,
   });
   kladoi.value = d.kladoi;
-  guests.value = d.guestTopika.map((g) => ({ topikoName: g.topikoName, kladoi: g.kladoi, contactName: g.contactName ?? '', contactPhone: g.contactPhone ?? '' }));
+  guests.value = d.guestTopika.map(toGuestTopikoForm);
   Object.assign(costs, { costPerPerson: toNum(d.costPerPerson), costReduced: toNum(d.costReduced), costStelexos: toNum(d.costStelexos), transportCost: toNum(d.transportCost) });
 }
 watch(() => props.data, fill, { immediate: true });

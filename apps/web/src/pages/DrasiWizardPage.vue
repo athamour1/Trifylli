@@ -167,6 +167,7 @@ import {
   DrasiRoleKind,
   KLADOI_IN_ORDER,
   KLADOS_LABEL,
+  type DrasiGuestTopikoView,
   type DrasiStatus,
   type DrasiType,
   type KladosType,
@@ -178,7 +179,14 @@ import PageState from '../components/PageState.vue';
 import TimeField from '../components/TimeField.vue';
 import DrasiRolesEditor from '../components/drasi/DrasiRolesEditor.vue';
 import GuestTopikaEditor from '../components/drasi/GuestTopikaEditor.vue';
-import { emptyRoles, type GuestTopikoForm, type RolesMap } from '../components/drasi/types';
+import {
+  emptyRoles,
+  guestTopikaErrors,
+  guestTopikaPayload,
+  toGuestTopikoForm,
+  type GuestTopikoForm,
+  type RolesMap,
+} from '../components/drasi/types';
 import { useKladosScope } from '../composables/useKladosScope';
 import { ApiError, get, patch, post, put } from '../lib/api';
 import { toISODate } from '../lib/format';
@@ -194,12 +202,7 @@ interface DrasiForWizard {
   location: string | null;
   klados: { type: KladosType } | null;
   kladoi: KladosType[];
-  guestTopika: {
-    topikoName: string;
-    kladoi: KladosType[];
-    contactName: string | null;
-    contactPhone: string | null;
-  }[];
+  guestTopika: DrasiGuestTopikoView[];
   roles: { kind: DrasiRoleKind; user: { id: string } }[];
   hasSkines: boolean;
 }
@@ -337,15 +340,15 @@ async function saveStep1(): Promise<boolean> {
 
 async function saveStep2(): Promise<boolean> {
   if (!drasiId.value) return false;
+  const guestError = guestTopikaErrors(guests.value).find((e) => e !== null);
+  if (guestError) {
+    $q.notify({ type: 'warning', message: guestError });
+    return false;
+  }
   await put(`/draseis/${drasiId.value}/kladoi`, { kladoi: kladoi.value });
-  await put(`/draseis/${drasiId.value}/guest-topika`, {
-    items: guests.value.map((g) => ({
-      topikoName: g.topikoName,
-      kladoi: g.kladoi,
-      contactName: g.contactName || undefined,
-      contactPhone: g.contactPhone || undefined,
-    })),
-  });
+  const saved = await put<DrasiGuestTopikoView[]>(`/draseis/${drasiId.value}/guest-topika`, guestTopikaPayload(guests.value));
+  // Τα νέα παίρνουν id: αν ο χρήστης γυρίσει πίσω και μετονομάσει, μένει το ίδιο Τοπικό.
+  guests.value = saved.map(toGuestTopikoForm);
   return true;
 }
 
@@ -416,12 +419,7 @@ async function resume(): Promise<void> {
     form.hasSkines = d.hasSkines;
     form.organiser = d.klados?.type ?? null;
     kladoi.value = d.kladoi;
-    guests.value = d.guestTopika.map((g) => ({
-      topikoName: g.topikoName,
-      kladoi: g.kladoi,
-      contactName: g.contactName ?? '',
-      contactPhone: g.contactPhone ?? '',
-    }));
+    guests.value = d.guestTopika.map(toGuestTopikoForm);
     const next = emptyRoles(Object.values(DrasiRoleKind));
     for (const kind of Object.values(DrasiRoleKind)) {
       next[kind] = d.roles.filter((r) => r.kind === kind).map((r) => r.user.id);
