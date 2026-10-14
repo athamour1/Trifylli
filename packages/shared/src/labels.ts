@@ -13,6 +13,7 @@ import {
   KladosDuty,
   YpiresiesRotation,
   DrasiScheduleKind,
+  DrasiSnack,
   DrasiStatus,
   DrasiType,
   KladosType,
@@ -297,6 +298,11 @@ export const DRASI_SCHEDULE_KIND_LABEL: Record<DrasiScheduleKind, string> = {
   TELETI: 'Τελετή',
   YPIRESIA: 'Υπηρεσία',
   ALLO: 'Άλλο',
+};
+
+export const DRASI_SNACK_LABEL: Record<DrasiSnack, string> = {
+  DEKATIANO: 'Δεκατιανό',
+  APOGEVMATINO: 'Απογευματινό',
 };
 
 export const DRASI_REVIEW_KIND_LABEL: Record<DrasiReviewKind, string> = {

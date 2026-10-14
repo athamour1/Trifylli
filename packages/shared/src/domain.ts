@@ -763,6 +763,17 @@ export const DrasiScheduleKind = {
 } as const;
 export type DrasiScheduleKind = (typeof DrasiScheduleKind)[keyof typeof DrasiScheduleKind];
 
+/**
+ * Κολατσιό που σερβίρεται μέσα σε ένα στοιχείο του ωρολογίου (π.χ. δεκατιανό σε
+ * μια δραστηριότητα). Ετικέτα πάνω στο στοιχείο, όχι δικό του είδος — μπαίνει
+ * στο διατροφολόγιο μαζί με τα «Γεύματα».
+ */
+export const DrasiSnack = {
+  DEKATIANO: 'DEKATIANO',
+  APOGEVMATINO: 'APOGEVMATINO',
+} as const;
+export type DrasiSnack = (typeof DrasiSnack)[keyof typeof DrasiSnack];
+
 /** Είδη ερώτησης της φόρμας αξιολόγησης. */
 export const DrasiReviewKind = {
   TEXT: 'TEXT',

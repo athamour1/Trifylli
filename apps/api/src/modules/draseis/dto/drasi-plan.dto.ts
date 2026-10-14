@@ -17,7 +17,7 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
-import { DrasiScheduleKind, KladosType, TreasuryCategory } from '@trifylli/shared';
+import { DrasiScheduleKind, DrasiSnack, KladosType, TreasuryCategory } from '@trifylli/shared';
 
 // ───────────────────────── Ωρολόγιο & προγραμματικό (F7) ─────────────────────────
 
@@ -65,6 +65,11 @@ export class CreateScheduleItemDto {
   @IsOptional()
   @IsEnum(DrasiScheduleKind)
   kind?: DrasiScheduleKind;
+
+  @ApiPropertyOptional({ enum: DrasiSnack, nullable: true, description: 'Κολατσιό μέσα σε αυτό το στοιχείο — μπαίνει στο διατροφολόγιο.' })
+  @IsOptional()
+  @IsEnum(DrasiSnack)
+  snack?: DrasiSnack | null;
 
   @ApiPropertyOptional()
   @IsOptional()

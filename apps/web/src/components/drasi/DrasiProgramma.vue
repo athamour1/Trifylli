@@ -86,6 +86,13 @@
                     <q-item-section avatar><q-icon :name="KIND_ICON[k.value]" :color="KIND_COLOR[k.value]" /></q-item-section>
                     <q-item-section>{{ k.label }}</q-item-section>
                   </q-item>
+                  <!-- Κολατσιό μέσα στο στοιχείο: μπαίνει στο διατροφολόγιο. Δεύτερο κλικ το βγάζει. -->
+                  <q-separator />
+                  <q-item-label header>Κολατσιό</q-item-label>
+                  <q-item v-for="sn in snackOptions" :key="sn.value" clickable :active="sn.value === row.snack" active-class="text-klados" @click="row.snack = row.snack === sn.value ? null : sn.value">
+                    <q-item-section avatar><q-icon name="bakery_dining" color="orange-7" /></q-item-section>
+                    <q-item-section>{{ sn.label }}</q-item-section>
+                  </q-item>
                 </q-list>
               </q-menu>
             </q-btn>
@@ -94,6 +101,7 @@
             <q-input v-model="row.title" :readonly="!canWrite" borderless dense class="row-title" placeholder="Τι γίνεται" />
             <div class="text-caption text-grey-6 ellipsis">
               {{ DRASI_SCHEDULE_KIND_LABEL[row.kind] }}
+              <q-badge v-if="row.snack" color="orange-7" class="q-ml-xs" :label="DRASI_SNACK_LABEL[row.snack]" />
               <span v-if="row.location"> · {{ row.location }}</span>
               <span v-if="row.responsibles.length"> · {{ responsiblesLabel(row.responsibles.length).toLocaleLowerCase('el') }}: {{ row.responsibles.join(', ') }}</span>
             </div>
@@ -152,7 +160,9 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useQuasar } from 'quasar';
 import {
   DRASI_SCHEDULE_KIND_LABEL,
+  DRASI_SNACK_LABEL,
   DrasiScheduleKind,
+  DrasiSnack,
   type DrasiScheduleItemView,
   type DrasiScheduleView,
   type KladosType,
@@ -194,6 +204,7 @@ const KIND_COLOR: Record<DrasiScheduleKind, string> = {
   ALLO: 'grey-6',
 };
 const kindOptions = (Object.keys(DrasiScheduleKind) as DrasiScheduleKind[]).map((k) => ({ label: DRASI_SCHEDULE_KIND_LABEL[k], value: k }));
+const snackOptions = (Object.keys(DrasiSnack) as DrasiSnack[]).map((k) => ({ label: DRASI_SNACK_LABEL[k], value: k }));
 
 const dayOptions = computed(() => (view.value?.days ?? []).map((d) => ({ label: formatDate(d.date), value: d.date })));
 const dayKey = ref('');
@@ -235,6 +246,8 @@ interface Row {
   title: string;
   durationMin: number;
   kind: DrasiScheduleKind;
+  /** Δεκατιανό/απογευματινό μέσα στο στοιχείο — το γεύμα του μπαίνει στο διατροφολόγιο. */
+  snack: DrasiSnack | null;
   /** Μόνο για τη λεζάντα — αλλάζουν από τη σελίδα του προγραμματικού. */
   location: string | null;
   responsibles: string[];
@@ -248,6 +261,7 @@ function toRow(it: DrasiScheduleItemView): Row {
     title: it.title,
     durationMin: it.durationMin,
     kind: it.kind,
+    snack: it.snack,
     location: it.location,
     responsibles: it.responsibles.map((p) => `${p.lastName} ${p.firstName}`),
     hasProgramma: it.hasProgramma,
@@ -325,6 +339,7 @@ async function saveNow(): Promise<void> {
         ...(r.title.trim() ? { title: r.title.trim() } : {}),
         durationMin: clampMin(r.durationMin),
         kind: r.kind,
+        snack: r.snack,
       });
     }
     saveStatus.value = dirty.size ? 'pending' : 'saved';

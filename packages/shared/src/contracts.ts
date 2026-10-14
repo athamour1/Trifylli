@@ -12,6 +12,7 @@ import type {
   DrasiReviewSettings,
   DrasiRoleKind,
   DrasiScheduleKind,
+  DrasiSnack,
   DrasiType,
   KladosDuty,
   YpiresiesRotation,
@@ -607,6 +608,8 @@ export interface DrasiScheduleItemView {
   endsAt: string;
   title: string;
   kind: DrasiScheduleKind;
+  /** Κολατσιό μέσα σε αυτό το στοιχείο (δεκατιανό/απογευματινό) — μπαίνει στο διατροφολόγιο. */
+  snack: DrasiSnack | null;
   location: string | null;
   description: string | null;
   /** Οι υπεύθυνοι: ένα ή περισσότερα στελέχη της δράσης. */

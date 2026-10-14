@@ -125,6 +125,7 @@ export class DraseisPlanService {
         durationMin: dto.durationMin ?? 30,
         title: dto.title.trim(),
         kind: dto.kind ?? 'DRASTIRIOTITA',
+        snack: dto.snack ?? null,
         location: dto.location?.trim() || null,
         description: dto.description?.trim() || null,
         ...(responsibles.length ? { assignees: { create: responsibles.map((userId) => ({ userId })) } } : {}),
@@ -186,6 +187,7 @@ export class DraseisPlanService {
           ...(dto.durationMin !== undefined ? { durationMin: dto.durationMin } : {}),
           ...(dto.title !== undefined ? { title: dto.title.trim() } : {}),
           ...(dto.kind !== undefined ? { kind: dto.kind } : {}),
+          ...(dto.snack !== undefined ? { snack: dto.snack } : {}),
           ...(dto.location !== undefined ? { location: dto.location?.trim() || null } : {}),
           ...(dto.description !== undefined ? { description: dto.description?.trim() || null } : {}),
         },
@@ -247,6 +249,7 @@ export class DraseisPlanService {
           durationMin: i.durationMin,
           title: i.title,
           kind: i.kind,
+          snack: i.snack,
           location: i.location,
           description: i.description,
           ...(i.assignees.length ? { assignees: { create: i.assignees } } : {}),
@@ -596,6 +599,7 @@ export function toScheduleView(
     durationMin: number;
     title: string;
     kind: DrasiScheduleItemView['kind'];
+    snack: DrasiScheduleItemView['snack'];
     location: string | null;
     description: string | null;
     assignees: { user: { id: string; firstName: string; lastName: string } }[];
@@ -616,6 +620,7 @@ export function toScheduleView(
     endsAt: endsAt.toISOString(),
     title: r.title,
     kind: r.kind,
+    snack: r.snack,
     location: r.location,
     description: r.description,
     responsibles,

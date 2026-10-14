@@ -104,6 +104,13 @@ enum SignerRole {
   IDIOS
 }
 
+/// Κολατσιό που σερβίρεται μέσα σε ένα στοιχείο του ωρολογίου — μπαίνει κι αυτό
+/// στο διατροφολόγιο, μαζί με τα «Γεύματα».
+enum DrasiSnack {
+  DEKATIANO
+  APOGEVMATINO
+}
+
 /// Είδος στοιχείου στο ωρολόγιο της δράσης — για χρώμα και γρήγορη ανάγνωση.
 enum DrasiScheduleKind {
   DRASTIRIOTITA
@@ -583,6 +590,8 @@ model DrasiScheduleItem {
   durationMin   Int                @default(30)
   title         String
   kind          DrasiScheduleKind  @default(DRASTIRIOTITA)
+  /// Δεκατιανό/απογευματινό μέσα σε αυτό το στοιχείο (π.χ. σε μια δραστηριότητα).
+  snack         DrasiSnack?
   location      String?
   /// Το προγραμματικό: οδηγίες, κανόνες, εναλλακτική — Markdown.
   description   String?
