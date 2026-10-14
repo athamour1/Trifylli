@@ -166,7 +166,7 @@ export class DraseisExternalsService {
     return { sent: true };
   }
 
-  /** Βγαίνει από τη δράση (ρόλοι + συμμετοχή). Χωρίς άλλη ανοιχτή δράση, δεν μπαίνει πια. */
+  /** Βγαίνει από τη δράση (ρόλοι, υπεύθυνος στο ωρολόγιο, συμμετοχή). Χωρίς άλλη ανοιχτή δράση, δεν μπαίνει πια. */
   async remove(user: RequestUser, id: string, userId: string): Promise<{ removed: true }> {
     await this.access.load(user, id, 'write');
     await this.external(id, userId);
@@ -174,6 +174,7 @@ export class DraseisExternalsService {
     if (payments) throw new BadRequestException('Έχει πληρωμές στη δράση — σβήσε τες πρώτα από τους συμμετέχοντες.');
     await this.prisma.$transaction([
       this.prisma.drasiRole.deleteMany({ where: { drasiId: id, userId } }),
+      this.prisma.drasiScheduleAssignee.deleteMany({ where: { userId, item: { drasiId: id } } }),
       this.prisma.drasiParticipant.deleteMany({ where: { drasiId: id, userId } }),
     ]);
     return { removed: true };
