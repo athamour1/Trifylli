@@ -958,6 +958,21 @@ body.body--dark .tf-seg--flat .tf-seg__thumb {
   border-radius: 16px;
   box-shadow: var(--shadow-2);
 }
+/* Ο picker είναι ήδη κάρτα: το μενού που τον ανοίγει (DateField/TimeField) δεν
+   βάζει γύρω του δεύτερο πλαίσιο με τα περιγράμματα των dropdowns. */
+.q-menu.tf-picker-menu {
+  padding: 0;
+  border: 0;
+  border-radius: 16px;
+  background: transparent;
+  box-shadow: none;
+}
+/* Ένα πλαίσιο, στην ίδια την κάρτα και στο χρώμα του κλάδου: χωρίς αυτό ο
+   picker χάνεται πάνω σε κάρτες ίδιου χρώματος (δεν φαίνεται πού τελειώνει). */
+.tf-picker-menu .q-date,
+.tf-picker-menu .q-time {
+  border: 1px solid var(--klados-color);
+}
 
 /* ── Badges: το πλήθος εκκρεμοτήτων στο συρτάρι «ανασαίνει» ── */
 @keyframes tf-pulse {

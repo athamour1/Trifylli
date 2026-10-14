@@ -18,7 +18,7 @@
     <template #prepend>
       <q-icon name="schedule" :style="{ color: 'var(--klados-ink)' }" />
     </template>
-    <q-popup-proxy v-if="editable" cover transition-show="scale" transition-hide="scale">
+    <q-popup-proxy v-if="editable" class="tf-picker-menu" cover transition-show="scale" transition-hide="scale">
       <q-time
         :model-value="modelValue || null"
         mask="HH:mm"

@@ -18,7 +18,7 @@
       <q-icon name="event" :style="{ color: 'var(--klados-ink)' }" />
     </template>
     <!-- Πάτημα οπουδήποτε ανοίγει το ημερολόγιο· ένα εικονίδιο αρκεί (βλ. TimeField). -->
-    <q-popup-proxy v-if="editable" cover transition-show="scale" transition-hide="scale">
+    <q-popup-proxy v-if="editable" class="tf-picker-menu" cover transition-show="scale" transition-hide="scale">
       <q-date
         :model-value="modelValue || null"
         mask="YYYY-MM-DD"
