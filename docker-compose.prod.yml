@@ -125,9 +125,10 @@ services:
       # Το κλειδί του token του service account `trifylli-api` (ίδια τιμή με το
       # AUTHENTIK_API_TOKEN του API). Υποχρεωτικό: χωρίς αυτό δεν φεύγουν προσκλήσεις.
       TRIFYLLI_API_TOKEN: ${AUTHENTIK_API_TOKEN:?AUTHENTIK_API_TOKEN is required (openssl rand -hex 32)}
-      # MFA: `configure` = όποιος δεν έχει authenticator στήνει TOTP στην πρώτη
-      # σύνδεση. `skip` μόνο αν συνειδητά δεν θέλεις MFA.
-      TRIFYLLI_MFA_NOT_CONFIGURED: ${AUTHENTIK_MFA_MODE:-configure}
+      # MFA: `skip` = προαιρετικό — ζητείται μόνο από όποιον έχει στήσει
+      # authenticator (επιλογή του Τοπικού). `configure` = υποχρεωτικό στήσιμο
+      # TOTP στην πρώτη σύνδεση.
+      TRIFYLLI_MFA_NOT_CONFIGURED: ${AUTHENTIK_MFA_MODE:-skip}
       # Αν ο reverse proxy ΔΕΝ είναι σε ιδιωτική IP (default: 10/8, 172.16/12,
       # 192.168/16, 127/8), δήλωσέ τον εδώ — αλλιώς το Authentik βλέπει την IP
       # του proxy και το φρένο brute force κλειδώνει όλους μαζί.

@@ -602,8 +602,9 @@ layout + bucket + key (idempotent) στο πρώτο boot.
 * **Brute force**: reputation policy στη ροή σύνδεσης — πέντε αποτυχίες από μια
   IP και η ροή αρνείται για 24 ώρες. Το API μετρά ανά IP μόνο αν ξέρει πόσοι
   proxies μεσολαβούν (`TRUST_PROXY_HOPS`, ποτέ `true`).
-* **MFA**: στην παραγωγή (`AUTHENTIK_MFA_MODE=configure`) όποιος δεν έχει
-  authenticator στήνει TOTP στην πρώτη σύνδεση. Στο dev παρακάμπτεται.
+* **MFA**: προαιρετικό και στην παραγωγή (`AUTHENTIK_MFA_MODE=skip`, επιλογή
+  του Τοπικού) — ζητείται μόνο από όποιον έχει στήσει authenticator.
+  `AUTHENTIK_MFA_MODE=configure` το κάνει υποχρεωτικό στην πρώτη σύνδεση.
 * **Κωδικοί**: ≥ 12 χαρακτήρες, zxcvbn ≥ 3, έλεγχος Have I Been Pwned
   (k-anonymity — ο κωδικός δεν φεύγει ποτέ). Το Trifylli δεν βλέπει κωδικό.
 * **Το API μιλά στο Authentik ως service account** με πέντε δικαιώματα (χρήστης:

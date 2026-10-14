@@ -8,8 +8,9 @@
 #   2. Email και username read-only για τον χρήστη: το API δένει λογαριασμό με
 #      email στην πρώτη σύνδεση — αν ο χρήστης μπορεί να γράψει το email ενός
 #      άλλου στις ρυθμίσεις του, μπορεί να «κληρονομήσει» τον λογαριασμό του.
-#   3. MFA: στην παραγωγή ο χρήστης χωρίς authenticator στήνει TOTP στην πρώτη
-#      σύνδεση· στο development παρακάμπτεται (ρυθμίζεται με `!Env`).
+#   3. MFA: προαιρετικό σε dev και παραγωγή (επιλογή του Τοπικού) — ζητείται
+#      μόνο από όποιον έχει στήσει authenticator· `configure` το κάνει
+#      υποχρεωτικό στην πρώτη σύνδεση (ρυθμίζεται με `!Env`).
 #   4. Service account για το API με ΜΟΝΟ τα δικαιώματα που χρειάζεται (πρόσκληση
 #      και επαναφορά κωδικού) — όχι το superuser token του bootstrap.
 #
@@ -25,8 +26,8 @@ metadata:
     blueprints.goauthentik.io/instantiate: 'true'
 
 context:
-  # `skip` = χωρίς MFA όταν δεν υπάρχει authenticator (development).
-  # `configure` = υποχρεωτικό στήσιμο TOTP στην πρώτη σύνδεση (παραγωγή).
+  # `skip` = χωρίς MFA όταν δεν υπάρχει authenticator (dev και παραγωγή).
+  # `configure` = υποχρεωτικό στήσιμο TOTP στην πρώτη σύνδεση.
   TRIFYLLI_MFA_NOT_CONFIGURED: !Env [TRIFYLLI_MFA_NOT_CONFIGURED, 'skip']
   # Το κλειδί του token του API. Έρχεται από το περιβάλλον ώστε API και Authentik
   # να μοιράζονται την ίδια τιμή χωρίς χειροκίνητο βήμα στο admin UI.
