@@ -11,7 +11,8 @@
       <div class="tf-toolbar q-mb-md">
         <div class="text-caption text-grey-7" style="flex: 1 1 280px">
           Στελέχη που δεν είναι στο e-SEO του Τοπικού (π.χ. από άλλο Τοπικό). Παίρνουν email για κωδικό, βλέπουν τη δράση
-          σύμφωνα με τον ρόλο που τους δίνεις στο αρχηγείο, και η πρόσβαση λήγει μόνη της όταν κλείσει η δράση.
+          σύμφωνα με τον ρόλο που τους δίνεις στο αρχηγείο, και η πρόσβαση λήγει μόνη της όταν κλείσει η δράση. Όσα μπήκαν
+          από τους συμμετέχοντες χωρίς email φαίνονται «Χωρίς πρόσβαση» — με «Δώσε πρόσβαση» παίρνουν λογαριασμό.
         </div>
         <q-btn unelevated no-caps color="klados" text-color="klados-on" icon="person_add" label="Νέο εξωτερικό στέλεχος" class="q-ml-auto" @click="openExternal" />
       </div>
@@ -25,13 +26,16 @@
             <q-item-label class="ellipsis">{{ e.lastName }} {{ e.firstName }}</q-item-label>
             <q-item-label caption class="ellipsis">{{ [e.email, e.phone, e.origin].filter(Boolean).join(' · ') }}</q-item-label>
             <div class="row items-center q-gutter-xs q-mt-xs">
-              <q-badge :color="e.active ? 'positive' : 'orange-8'" :label="e.active ? 'Ενεργό' : 'Προσκλήθηκε'" />
+              <q-badge v-if="!e.account" color="grey-7" label="Χωρίς πρόσβαση" />
+              <q-badge v-else :color="e.active ? 'positive' : 'orange-8'" :label="e.active ? 'Ενεργό' : 'Προσκλήθηκε'" />
               <q-chip v-for="r in e.roles" :key="r" dense square class="q-ma-none role-chip" :label="DRASI_ROLE_LABEL[r]" />
               <span v-if="!e.roles.length" class="text-caption text-warning">Χωρίς ρόλο — δώσε του από την καρτέλα «Ρόλοι»</span>
             </div>
           </q-item-section>
           <q-item-section side>
-            <div class="row no-wrap items-center">
+            <!-- Χωρίς λογαριασμό: μόνο «Δώσε πρόσβαση»· η αφαίρεση γίνεται από τους συμμετέχοντες. -->
+            <q-btn v-if="!e.account" outline no-caps dense color="klados" icon="key" label="Δώσε πρόσβαση" class="q-px-sm" @click="openAccess(e)" />
+            <div v-else class="row no-wrap items-center">
               <q-btn flat round dense icon="forward_to_inbox" color="klados" @click="resend(e)"><q-tooltip>Ξανά αποστολή πρόσκλησης</q-tooltip></q-btn>
               <q-btn flat round dense icon="person_remove" color="negative" @click="removeExternal(e)"><q-tooltip>Αφαίρεση από τη δράση</q-tooltip></q-btn>
             </div>
@@ -54,6 +58,40 @@
           <q-card-actions align="right">
             <q-btn v-close-popup flat no-caps label="Άκυρο" :disable="extDialog.saving" />
             <q-btn unelevated no-caps color="klados" text-color="klados-on" label="Προσθήκη & πρόσκληση" :loading="extDialog.saving" @click="addExternal" />
+          </q-card-actions>
+        </q-card>
+      </q-dialog>
+
+      <q-dialog v-model="accessDialog.open">
+        <q-card style="width: 440px; max-width: 100%">
+          <q-card-section class="text-h6">Πρόσβαση στη δράση</q-card-section>
+          <q-card-section class="q-pt-none">
+            <div class="text-body2 q-mb-sm">{{ accessDialog.name }} παίρνει λογαριασμό για τη δράση· ό,τι έχει ήδη (ρόλοι, πληρωμές) μένει.</div>
+            <q-input
+              v-model="accessDialog.email"
+              type="email"
+              label="Email *"
+              outlined
+              dense
+              color="klados"
+              autofocus
+              :error="accessEmailInvalid"
+              error-message="Μη έγκυρο email."
+              hint="Εδώ φτάνει ο σύνδεσμος για τον κωδικό."
+            />
+          </q-card-section>
+          <q-card-actions align="right">
+            <q-btn v-close-popup flat no-caps label="Άκυρο" :disable="accessDialog.saving" />
+            <q-btn
+              unelevated
+              no-caps
+              color="klados"
+              text-color="klados-on"
+              label="Πρόσβαση & πρόσκληση"
+              :disable="!accessDialog.email.trim() || accessEmailInvalid"
+              :loading="accessDialog.saving"
+              @click="grantAccess"
+            />
           </q-card-actions>
         </q-card>
       </q-dialog>
@@ -135,7 +173,7 @@ import {
   type Paginated,
 } from '@trifylli/shared';
 import DrasiRolesEditor from './DrasiRolesEditor.vue';
-import { emptyRoles, type RolesMap } from './types';
+import { emptyRoles, externalStelexosOption, looksLikeEmail, type RolesMap } from './types';
 import { ApiError, del, get, post, put } from '../../lib/api';
 
 const props = defineProps<{
@@ -186,7 +224,7 @@ const stelexi = ref<MemberSummary[]>([]);
 /** Στελέχη του μητρώου + τα εξωτερικά της δράσης — όλοι μπορούν να πάρουν ρόλο. */
 const stelexiOptions = computed(() => [
   ...stelexi.value.map((s) => ({ label: `${s.lastName} ${s.firstName}`.trim(), value: s.id, caption: s.leaderTitle ?? '' })),
-  ...externals.value.map((e) => ({ label: `${e.lastName} ${e.firstName}`.trim(), value: e.userId, caption: `Εξωτερικό${e.origin ? ` · ${e.origin}` : ''}` })),
+  ...externals.value.map(externalStelexosOption),
 ]);
 onMounted(async () => {
   if (!props.canEdit) return;
@@ -265,6 +303,33 @@ function removeExternal(e: DrasiExternalView): void {
       }
     })();
   });
+}
+
+// Στέλεχος που μπήκε από τους συμμετέχοντες χωρίς email: λογαριασμός για τη δράση.
+const accessDialog = reactive({ open: false, saving: false, userId: '', name: '', email: '' });
+const accessEmailInvalid = computed(() => !!accessDialog.email.trim() && !looksLikeEmail(accessDialog.email));
+function openAccess(e: DrasiExternalView): void {
+  Object.assign(accessDialog, { open: true, saving: false, userId: e.userId, name: `${e.lastName} ${e.firstName}`.trim(), email: '' });
+}
+async function grantAccess(): Promise<void> {
+  accessDialog.saving = true;
+  try {
+    const r = await post<DrasiExternalCreated>(`/draseis/${props.drasiId}/externals/${accessDialog.userId}/access`, {
+      email: accessDialog.email.trim(),
+    });
+    accessDialog.open = false;
+    $q.notify(
+      r.invited
+        ? { type: 'positive', icon: 'forward_to_inbox', message: `Στάλθηκε πρόσκληση στο ${r.external.email}. Δώσε του ρόλο από την καρτέλα «Ρόλοι».` }
+        : { type: 'warning', message: `Πήρε λογαριασμό, αλλά η πρόσκληση δεν έφυγε: ${r.inviteError}` },
+    );
+    await loadExternals();
+    emit('changed');
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err instanceof ApiError ? err.message : 'Δεν δόθηκε πρόσβαση.' });
+  } finally {
+    accessDialog.saving = false;
+  }
 }
 
 const saving = ref(false);

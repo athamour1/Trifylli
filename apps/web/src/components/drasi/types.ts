@@ -1,4 +1,4 @@
-import { guestTopikoKey, type DrasiGuestTopikoView, type DrasiRoleKind, type KladosType } from '@trifylli/shared';
+import { guestTopikoKey, type DrasiExternalView, type DrasiGuestTopikoView, type DrasiRoleKind, type KladosType } from '@trifylli/shared';
 
 /** Φιλοξενούμενο Τοπικό όπως το κρατά η φόρμα (wizard & ρυθμίσεις). */
 export interface GuestTopikoForm {
@@ -68,4 +68,15 @@ export type RolesMap = Record<DrasiRoleKind, string[]>;
 
 export function emptyRoles(kinds: readonly DrasiRoleKind[]): RolesMap {
   return Object.fromEntries(kinds.map((k) => [k, [] as string[]])) as RolesMap;
+}
+
+/** Εξωτερικό στέλεχος ως επιλογή σε ρόλους/υπηρεσίες — όσοι δεν έχουν λογαριασμό το γράφουν. */
+export function externalStelexosOption(e: DrasiExternalView): { label: string; value: string; caption: string } {
+  const kind = e.account ? 'Εξωτερικό' : 'Χωρίς πρόσβαση';
+  return { label: `${e.lastName} ${e.firstName}`.trim(), value: e.userId, caption: e.origin ? `${kind} · ${e.origin}` : kind };
+}
+
+/** Πρόχειρος έλεγχος πριν το API (που απαντά με αγγλικό μήνυμα του class-validator). */
+export function looksLikeEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }

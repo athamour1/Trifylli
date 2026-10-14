@@ -161,6 +161,7 @@ import {
 import StelexosPicker from '../StelexosPicker.vue';
 import { ApiError, del, get, patch, post, put } from '../../lib/api';
 import { formatDate } from '../../lib/format';
+import { externalStelexosOption } from './types';
 
 const props = defineProps<{ drasiId: string; canEdit: boolean }>();
 const emit = defineEmits<{ changed: [] }>();
@@ -248,7 +249,7 @@ const stelexi = ref<MemberSummary[]>([]);
 const externals = ref<DrasiExternalView[]>([]);
 const stelexiOptions = computed(() => [
   ...stelexi.value.map((s) => ({ label: `${s.lastName} ${s.firstName}`.trim(), value: s.id, caption: s.leaderTitle ?? '' })),
-  ...externals.value.map((e) => ({ label: `${e.lastName} ${e.firstName}`.trim(), value: e.userId, caption: `Εξωτερικό${e.origin ? ` · ${e.origin}` : ''}` })),
+  ...externals.value.map(externalStelexosOption),
 ]);
 async function setResponsibles(s: DrasiYpiresiaView, userIds: string[]): Promise<void> {
   try {
