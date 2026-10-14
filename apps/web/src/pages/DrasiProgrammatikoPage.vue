@@ -31,8 +31,8 @@
         </div>
 
         <!-- ── Το προγραμματικό, με τα στοιχεία και το υλικό στο πλάι (δεξιά) ── -->
-        <div class="programmatiko-layout">
-          <q-card flat bordered class="programmatiko-layout__details">
+        <div class="tf-split">
+          <q-card flat bordered class="tf-split__head">
             <q-card-section class="text-subtitle1 text-weight-medium q-py-sm">Στοιχεία</q-card-section>
             <q-separator />
             <q-card-section class="q-gutter-sm">
@@ -49,7 +49,7 @@
             </q-card-actions>
           </q-card>
 
-          <q-card flat bordered class="programmatiko-layout__text">
+          <q-card flat bordered class="tf-split__main">
             <q-card-section>
               <MarkdownField
                 v-model="form.description"
@@ -64,7 +64,7 @@
           </q-card>
 
           <!-- Το υλικό σε μία λίστα, όπως στη συγκέντρωση -->
-          <q-card flat bordered class="programmatiko-layout__yliko">
+          <q-card flat bordered class="tf-split__tail">
             <q-card-section class="row items-center justify-between q-py-sm">
               <div class="text-subtitle1 text-weight-medium">Υλικό</div>
               <q-chip v-if="ylikoCount" dense outline :label="`${packedCount}/${ylikoCount}`" />
@@ -367,32 +367,3 @@ function remove(): void {
   });
 }
 </script>
-
-<style scoped lang="scss">
-// Όπως στη συγκέντρωση: το κείμενο στα δύο τρίτα, τα στοιχεία και το υλικό σε στήλη
-// δεξιά. Η στήλη δεν στενεύει κάτω από 280px, για να χωρά ένα όνομα δίπλα στην
-// ετικέτα. Στο κινητό μία στήλη: στοιχεία → κείμενο → υλικό.
-.programmatiko-layout {
-  display: grid;
-  gap: 16px;
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-areas: 'details' 'text' 'yliko';
-}
-.programmatiko-layout__details {
-  grid-area: details;
-}
-.programmatiko-layout__text {
-  grid-area: text;
-}
-.programmatiko-layout__yliko {
-  grid-area: yliko;
-}
-@media (min-width: 1024px) {
-  .programmatiko-layout {
-    grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
-    grid-template-rows: auto 1fr;
-    grid-template-areas: 'text details' 'text yliko';
-    align-items: start;
-  }
-}
-</style>

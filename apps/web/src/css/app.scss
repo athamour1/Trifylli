@@ -873,6 +873,34 @@ body.body--dark .tf-seg--flat .tf-seg__thumb {
   border-radius: 12px;
 }
 
+/* ── Σελίδα με κείμενο και στήλη στο πλάι (προγραμματικό, γεύμα) ──
+   Όπως η συγκέντρωση: το κείμενο (`__main`) στα δύο τρίτα, δύο κάρτες σε στήλη
+   δεξιά (`__head`, `__tail`). Η στήλη δεν στενεύει κάτω από 280px, για να χωρά
+   ένα όνομα δίπλα στην ετικέτα. Στο κινητό μία στήλη: head → main → tail. */
+.tf-split {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: 'head' 'main' 'tail';
+}
+.tf-split__head {
+  grid-area: head;
+}
+.tf-split__main {
+  grid-area: main;
+}
+.tf-split__tail {
+  grid-area: tail;
+}
+@media (min-width: 1024px) {
+  .tf-split {
+    grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+    grid-template-rows: auto 1fr;
+    grid-template-areas: 'main head' 'main tail';
+    align-items: start;
+  }
+}
+
 /* ── Πεδία: ποτέ πιο πλατιά από τον περιέκτη τους (μεγάλες τιμές σε στενές κάρτες) ── */
 .q-field {
   min-width: 0;
