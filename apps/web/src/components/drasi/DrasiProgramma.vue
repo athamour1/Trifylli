@@ -77,7 +77,16 @@
           </div>
           <div class="si-start text-weight-medium">{{ times[idx]?.start }}</div>
           <div class="si-end text-caption text-grey-6">{{ times[idx]?.end }}</div>
-          <q-btn class="si-kind" flat round dense :icon="KIND_ICON[row.kind]" :color="KIND_COLOR[row.kind]" :disable="!canWrite">
+          <q-btn
+            class="si-kind"
+            flat
+            round
+            dense
+            :icon="KIND_ICON[row.kind]"
+            :color="KIND_COLOR[row.kind]"
+            :disable="!canWrite"
+            :aria-label="`Είδος: ${DRASI_SCHEDULE_KIND_LABEL[row.kind]}`"
+          >
             <q-tooltip>{{ DRASI_SCHEDULE_KIND_LABEL[row.kind] }}</q-tooltip>
             <q-menu v-if="canWrite" auto-close>
               <q-list dense>
@@ -150,6 +159,7 @@
             :icon="row.hasProgramma ? 'description' : 'note_add'"
             :color="row.hasProgramma ? 'klados' : 'grey-5'"
             :to="{ name: 'drasi-programmatiko', params: { id: drasiId, itemId: row.id } }"
+            :aria-label="row.hasProgramma ? 'Άνοιγμα προγραμματικού' : 'Χωρίς προγραμματικό — γράψε'"
           >
             <q-tooltip>{{ row.hasProgramma ? 'Άνοιγμα προγραμματικού' : 'Χωρίς προγραμματικό — γράψε' }}</q-tooltip>
           </q-btn>
