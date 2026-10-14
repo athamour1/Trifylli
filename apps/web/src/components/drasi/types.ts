@@ -86,6 +86,17 @@ export function responsiblesLabel(count: number): string {
   return count > 1 ? 'Υπεύθυνοι' : 'Υπεύθυνος';
 }
 
+/**
+ * Η λεζάντα κάτω από τον τίτλο ενός στοιχείου του ωρολογίου: είδος · τόπος · υπεύθυνοι.
+ * Στο κινητό (`compact`) χωρά λίγο: το είδος μένει έξω — το λέει ήδη το
+ * εικονίδιο — και τα ονόματα μπαίνουν χωρίς το «υπεύθυνος:».
+ */
+export function scheduleCaption(item: { kindLabel: string; location: string | null; responsibles: string[] }, compact: boolean): string {
+  const names = item.responsibles.join(', ');
+  const who = !names ? null : compact ? names : `${responsiblesLabel(item.responsibles.length).toLocaleLowerCase('el')}: ${names}`;
+  return [compact ? null : item.kindLabel, item.location, who].filter(Boolean).join(' · ');
+}
+
 /** Γραμμή της λίστας υλικού ενός στοιχείου, όπως στις συγκεντρώσεις. */
 export interface YlikoRow {
   /** Κλειδί για το `v-for` — μένει ίδιο όσο υπάρχει η γραμμή. */

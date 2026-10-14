@@ -50,10 +50,11 @@
     </div>
 
     <!--
-      Κάθε στοιχείο μία γραμμή: λαβή (σύρε για αλλαγή σειράς), ώρες (υπολογισμένες),
+      Κάθε στοιχείο: λαβή (σύρε για αλλαγή σειράς), ώρες (υπολογισμένες),
       είδος (πάτα το εικονίδιο), τίτλος και λεπτά γράφονται ΕΠΙ ΤΟΠΟΥ — όπως ο
       τίτλος της συγκέντρωσης — και σώζονται μόνα τους. Το προγραμματικό έχει
-      δική του σελίδα (εικονίδιο στα δεξιά) — εκεί γράφεται το markdown.
+      δική του σελίδα (εικονίδιο στα δεξιά) — εκεί γράφεται το markdown. Στο
+      κινητό η γραμμή σπάει σε δύο: τίτλος πάνω, λεζάντα και λεπτά κάτω.
     -->
     <q-list v-else-if="current" bordered class="rounded-borders">
       <div
@@ -69,44 +70,36 @@
         @dragend="onDragEnd"
       >
         <q-separator v-if="idx > 0" />
-        <q-item class="q-py-xs items-center">
-          <q-item-section v-if="canWrite" side class="drag-handle" @mousedown="dragArmed = row.id" @touchstart.passive="dragArmed = row.id">
-            <q-icon name="drag_indicator" color="grey-5" />
-          </q-item-section>
-          <q-item-section side class="clock">
-            <div class="text-weight-medium">{{ times[idx]?.start }}</div>
-            <div class="text-caption text-grey-6">{{ times[idx]?.end }}</div>
-          </q-item-section>
-          <q-item-section avatar>
-            <q-btn flat round dense :icon="KIND_ICON[row.kind]" :color="KIND_COLOR[row.kind]" :disable="!canWrite">
-              <q-tooltip>{{ DRASI_SCHEDULE_KIND_LABEL[row.kind] }}</q-tooltip>
-              <q-menu v-if="canWrite" auto-close>
-                <q-list dense>
-                  <q-item v-for="k in kindOptions" :key="k.value" clickable :active="k.value === row.kind" active-class="text-klados" @click="row.kind = k.value">
-                    <q-item-section avatar><q-icon :name="KIND_ICON[k.value]" :color="KIND_COLOR[k.value]" /></q-item-section>
-                    <q-item-section>{{ k.label }}</q-item-section>
-                  </q-item>
-                  <!-- Κολατσιό μέσα στο στοιχείο: μπαίνει στο διατροφολόγιο. Δεύτερο κλικ το βγάζει. -->
-                  <q-separator />
-                  <q-item-label header>Κολατσιό</q-item-label>
-                  <q-item v-for="sn in snackOptions" :key="sn.value" clickable :active="sn.value === row.snack" active-class="text-klados" @click="row.snack = row.snack === sn.value ? null : sn.value">
-                    <q-item-section avatar><q-icon name="bakery_dining" color="orange-7" /></q-item-section>
-                    <q-item-section>{{ sn.label }}</q-item-section>
-                  </q-item>
-                </q-list>
-              </q-menu>
-            </q-btn>
-          </q-item-section>
-          <q-item-section>
-            <q-input v-model="row.title" :readonly="!canWrite" borderless dense class="row-title" placeholder="Τι γίνεται" />
-            <div class="text-caption text-grey-6 ellipsis">
-              {{ DRASI_SCHEDULE_KIND_LABEL[row.kind] }}
-              <q-badge v-if="row.snack" color="orange-7" class="q-ml-xs" :label="DRASI_SNACK_LABEL[row.snack]" />
-              <span v-if="row.location"> · {{ row.location }}</span>
-              <span v-if="row.responsibles.length"> · {{ responsiblesLabel(row.responsibles.length).toLocaleLowerCase('el') }}: {{ row.responsibles.join(', ') }}</span>
-            </div>
-          </q-item-section>
-          <q-item-section side>
+        <div class="schedule-item">
+          <div v-if="canWrite" class="si-drag" @mousedown="dragArmed = row.id" @touchstart.passive="dragArmed = row.id">
+            <q-icon name="drag_indicator" color="grey-5" size="24px" />
+          </div>
+          <div class="si-start text-weight-medium">{{ times[idx]?.start }}</div>
+          <div class="si-end text-caption text-grey-6">{{ times[idx]?.end }}</div>
+          <q-btn class="si-kind" flat round dense :icon="KIND_ICON[row.kind]" :color="KIND_COLOR[row.kind]" :disable="!canWrite">
+            <q-tooltip>{{ DRASI_SCHEDULE_KIND_LABEL[row.kind] }}</q-tooltip>
+            <q-menu v-if="canWrite" auto-close>
+              <q-list dense>
+                <q-item v-for="k in kindOptions" :key="k.value" clickable :active="k.value === row.kind" active-class="text-klados" @click="row.kind = k.value">
+                  <q-item-section avatar><q-icon :name="KIND_ICON[k.value]" :color="KIND_COLOR[k.value]" /></q-item-section>
+                  <q-item-section>{{ k.label }}</q-item-section>
+                </q-item>
+                <!-- Κολατσιό μέσα στο στοιχείο: μπαίνει στο διατροφολόγιο. Δεύτερο κλικ το βγάζει. -->
+                <q-separator />
+                <q-item-label header>Κολατσιό</q-item-label>
+                <q-item v-for="sn in snackOptions" :key="sn.value" clickable :active="sn.value === row.snack" active-class="text-klados" @click="row.snack = row.snack === sn.value ? null : sn.value">
+                  <q-item-section avatar><q-icon name="bakery_dining" color="orange-7" /></q-item-section>
+                  <q-item-section>{{ sn.label }}</q-item-section>
+                </q-item>
+              </q-list>
+            </q-menu>
+          </q-btn>
+          <q-input v-model="row.title" :readonly="!canWrite" borderless dense class="si-title" placeholder="Τι γίνεται" />
+          <div class="si-caption text-caption text-grey-6 ellipsis">
+            <q-badge v-if="row.snack" color="orange-7" class="q-mr-xs" :label="DRASI_SNACK_LABEL[row.snack]" />
+            {{ scheduleCaption({ kindLabel: DRASI_SCHEDULE_KIND_LABEL[row.kind], location: row.location, responsibles: row.responsibles }, $q.screen.xs) }}
+          </div>
+          <div class="si-dur">
             <q-input
               v-if="canWrite"
               v-model.number="row.durationMin"
@@ -120,21 +113,20 @@
               class="row-duration"
             />
             <span v-else class="text-caption text-grey-7">{{ formatDuration(row.durationMin) }}</span>
-          </q-item-section>
-          <q-item-section side>
-            <q-btn
-              flat
-              dense
-              round
-              size="sm"
-              :icon="row.hasProgramma ? 'description' : 'note_add'"
-              :color="row.hasProgramma ? 'klados' : 'grey-5'"
-              :to="{ name: 'drasi-programmatiko', params: { id: drasiId, itemId: row.id } }"
-            >
-              <q-tooltip>{{ row.hasProgramma ? 'Άνοιγμα προγραμματικού' : 'Χωρίς προγραμματικό — γράψε' }}</q-tooltip>
-            </q-btn>
-          </q-item-section>
-        </q-item>
+          </div>
+          <q-btn
+            class="si-doc"
+            flat
+            dense
+            round
+            size="sm"
+            :icon="row.hasProgramma ? 'description' : 'note_add'"
+            :color="row.hasProgramma ? 'klados' : 'grey-5'"
+            :to="{ name: 'drasi-programmatiko', params: { id: drasiId, itemId: row.id } }"
+          >
+            <q-tooltip>{{ row.hasProgramma ? 'Άνοιγμα προγραμματικού' : 'Χωρίς προγραμματικό — γράψε' }}</q-tooltip>
+          </q-btn>
+        </div>
       </div>
     </q-list>
 
@@ -171,7 +163,7 @@ import SaveStatus from '../SaveStatus.vue';
 import TimeField from '../TimeField.vue';
 import { ApiError, OfflineError, get, patch, post, put } from '../../lib/api';
 import { formatDate, formatDuration } from '../../lib/format';
-import { responsiblesLabel } from './types';
+import { scheduleCaption } from './types';
 import type { SaveState } from '../../lib/save-state';
 
 const props = defineProps<{
@@ -434,25 +426,110 @@ function notifyError(err: unknown, fallback: string): void {
 </script>
 
 <style scoped>
-.clock {
-  min-width: 56px;
-  text-align: right;
+/*
+  Μία γραμμή στον υπολογιστή: ώρα έναρξης στο ύψος του τίτλου, λήξη στο ύψος
+  της λεζάντας. Ό,τι λείπει (η λαβή, χωρίς δικαίωμα) αφήνει τη στήλη του
+  μηδενική — γι' αυτό περιθώρια, όχι gap.
+*/
+.schedule-item {
+  display: grid;
+  grid-template-columns: auto auto auto minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    'drag start kind title   dur doc'
+    'drag end   kind caption dur doc';
+  align-items: center;
+  padding: 4px 16px;
 }
-.drag-handle {
+.si-drag {
+  grid-area: drag;
+  display: flex;
   cursor: grab;
   padding-right: 4px;
+}
+/* Ισοπλατή ψηφία: η στήλη της ώρας έχει ίδιο πλάτος σε κάθε γραμμή — κάθε γραμμή είναι δικό της grid. */
+.si-start,
+.si-end {
+  padding-right: 16px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.si-start {
+  grid-area: start;
+}
+.si-end {
+  grid-area: end;
+}
+.si-kind {
+  grid-area: kind;
+  justify-self: center;
+  margin-right: 12px;
+}
+.si-title {
+  grid-area: title;
+}
+.si-title :deep(input) {
+  font-weight: 500;
+  padding: 0;
+}
+.si-caption {
+  grid-area: caption;
+}
+.si-dur {
+  grid-area: dur;
+  margin-left: 8px;
+}
+.si-doc {
+  grid-area: doc;
+  justify-self: end;
+  margin-left: 4px;
+}
+.row-duration {
+  width: 92px;
+}
+/*
+  Κινητό: ο τίτλος παίρνει όλη την πρώτη γραμμή ως το εικονίδιο του
+  προγραμματικού· τα λεπτά πάνε κάτω, δίπλα στη λήξη. Η τελευταία στήλη
+  έχει σταθερό πλάτος (εικονίδιο + περιθώριο), αλλιώς φάρδαινε όσο τα
+  λεπτά από κάτω και έτρωγε τον τίτλο. Πεδία 32px αντί για 40.
+*/
+@media (max-width: 599.98px) {
+  .schedule-item {
+    grid-template-columns: auto auto auto minmax(0, 1fr) auto 28px;
+    grid-template-areas:
+      'drag start kind title   title doc'
+      'drag end   kind caption dur   dur';
+    padding: 4px 10px 6px;
+  }
+  .si-drag {
+    padding-right: 2px;
+  }
+  .si-start,
+  .si-end {
+    padding-right: 8px;
+  }
+  .si-kind {
+    margin-right: 4px;
+  }
+  .row-duration {
+    width: 72px;
+  }
+  .si-title :deep(.q-field__control),
+  .si-title :deep(.q-field__marginal),
+  .row-duration :deep(.q-field__control),
+  .row-duration :deep(.q-field__marginal) {
+    height: 32px;
+  }
+  .si-title :deep(.q-field__native),
+  .row-duration :deep(.q-field__native),
+  .row-duration :deep(.q-field__suffix) {
+    padding-top: 2px;
+    padding-bottom: 2px;
+  }
 }
 .schedule-row--dragging {
   opacity: 0.4;
 }
 .schedule-row--over {
   box-shadow: inset 0 3px 0 var(--klados-ink);
-}
-.row-title :deep(input) {
-  font-weight: 500;
-  padding: 0;
-}
-.row-duration {
-  width: 92px;
 }
 </style>
