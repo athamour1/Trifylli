@@ -16,14 +16,13 @@
       />
       <q-space />
       <q-btn flat color="klados" icon="table_view" label="Excel" :loading="exporting" @click="exportXlsx" />
-      <q-btn v-if="canClose && !locked" flat color="negative" icon="lock" label="Κλείσιμο δράσης" @click="closeDrasi" />
-      <q-btn v-if="canClose && locked" flat color="klados" icon="lock_open" label="Άνοιγμα ξανά" @click="reopenDrasi" />
     </div>
 
     <q-banner v-if="locked" rounded class="bg-grey-2 q-mb-md">
       <template #avatar><q-icon name="lock" color="grey-7" /></template>
       Η δράση είναι κλειστή: το ταμείο της δεν δέχεται αλλαγές.
       <span v-if="summary"> Υπόλοιπο κλεισίματος: <b>{{ formatEuro(summary.balance) }}</b>.</span>
+      Ανοίγει ξανά από τις Ρυθμίσεις της δράσης.
     </q-banner>
 
     <q-inner-loading :showing="loading" />
@@ -400,11 +399,9 @@ const props = defineProps<{
   /** Ο διοργανωτής — η εμβέλεια των αποδείξεων (`null` = Τοπικό). */
   organiser: KladosType | null;
   canWrite: boolean;
-  /** Κλείσιμο/άνοιγμα: όσοι γράφουν στη δράση + ο αρχηγός της. */
-  canClose: boolean;
+  /** Κλειστή δράση: το ταμείο μόνο διαβάζεται. Κλείνει και ανοίγει από τις Ρυθμίσεις. */
   locked: boolean;
 }>();
-const emit = defineEmits<{ changed: [] }>();
 
 const $q = useQuasar();
 const view = ref<'summary' | 'entries' | 'budget' | 'ledger'>('summary');
@@ -721,41 +718,6 @@ async function exportXlsx(): Promise<void> {
   } finally {
     exporting.value = false;
   }
-}
-
-// ── Κλείσιμο ──
-function closeDrasi(): void {
-  $q.dialog({
-    title: 'Κλείσιμο δράσης',
-    message: `Το ταμείο κλειδώνει: καμία κίνηση, πληρωμή ή λογαριασμός δεν αλλάζει μετά. Υπόλοιπο: ${formatEuro(summary.value?.balance ?? 0)}. Συνέχεια;`,
-    cancel: { label: 'Άκυρο', flat: true },
-    ok: { label: 'Κλείσιμο', color: 'negative' },
-    persistent: true,
-  }).onOk(async () => {
-    try {
-      await put(`/draseis/${props.drasiId}/closed`, { closed: true });
-      emit('changed');
-      await reload();
-    } catch (err) {
-      notifyError(err, 'Αποτυχία.');
-    }
-  });
-}
-function reopenDrasi(): void {
-  $q.dialog({
-    title: 'Άνοιγμα δράσης',
-    message: 'Το ταμείο ξεκλειδώνει ξανά για κινήσεις και πληρωμές. Συνέχεια;',
-    cancel: { label: 'Άκυρο', flat: true },
-    ok: { label: 'Άνοιγμα', color: 'klados' },
-  }).onOk(async () => {
-    try {
-      await put(`/draseis/${props.drasiId}/closed`, { closed: false });
-      emit('changed');
-      await reload();
-    } catch (err) {
-      notifyError(err, 'Αποτυχία.');
-    }
-  });
 }
 
 // ── Απόδειξη ──

@@ -326,9 +326,7 @@
                 :drasi-id="id"
                 :organiser="data.klados?.type ?? null"
                 :can-write="canEditOpen('tamio')"
-                :can-close="canEditOpen('close')"
                 :locked="data.status === 'KLEISTI'"
-                @changed="reload"
               />
             </q-tab-panel>
 
