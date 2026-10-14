@@ -112,7 +112,7 @@ export function drasiEditScope(access: DrasiAccess | null | undefined, perm: Dra
  * Τίτλος, λεπτά, είδος, ημέρα και υπεύθυνοι μένουν στο Πρόγραμμα: είναι η γραμμή
  * του ωρολογίου και μετακινούν όλη την ημέρα.
  */
-export const SCHEDULE_ITEM_OWN_FIELDS = ['location', 'description', 'ylikoNotes', 'yliko'] as const;
+export const SCHEDULE_ITEM_OWN_FIELDS = ['location', 'description', 'yliko'] as const;
 
 /** Ό,τι αλλάζει το στέλεχος στον ρόλο που παίζει· ποιος τον παίζει, σειρά, διαγραφή μένουν στο Πρόγραμμα. */
 export const CHARACTER_OWN_FIELDS = ['name', 'lore'] as const;

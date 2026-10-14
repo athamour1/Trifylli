@@ -85,3 +85,29 @@ export function looksLikeEmail(value: string): boolean {
 export function responsiblesLabel(count: number): string {
   return count > 1 ? 'Υπεύθυνοι' : 'Υπεύθυνος';
 }
+
+/** Γραμμή της λίστας υλικού ενός στοιχείου, όπως στις συγκεντρώσεις. */
+export interface YlikoRow {
+  /** Κλειδί για το `v-for` — μένει ίδιο όσο υπάρχει η γραμμή. */
+  key: number;
+  label: string;
+  qty: number;
+  packed: boolean;
+}
+
+/** Ό,τι φεύγει για αποθήκευση: χωρίς τις άδειες γραμμές (ο server τις πετά), με ακέραια ποσότητα ≥ 1. */
+export function ylikoPayload(rows: readonly YlikoRow[]): { label: string; qty: number; packed: boolean }[] {
+  return rows
+    .filter((r) => r.label.trim())
+    .map((r) => ({ label: r.label.trim(), qty: Number.isFinite(r.qty) ? Math.max(1, Math.round(r.qty)) : 1, packed: r.packed }));
+}
+
+/**
+ * Η λίστα της σελίδας είναι ήδη αυτή του server; Τότε η επαναφόρτωση μετά την
+ * αποθήκευση δεν ξαναγράφει τις γραμμές: κρατά κλειδιά, focus και την άδεια
+ * γραμμή που μόλις προστέθηκε.
+ */
+export function sameYliko(rows: readonly YlikoRow[], server: readonly { label: string; qty: number; packed: boolean }[]): boolean {
+  const mine = ylikoPayload(rows);
+  return mine.length === server.length && mine.every((r, i) => r.label === server[i]!.label && r.qty === server[i]!.qty && r.packed === server[i]!.packed);
+}

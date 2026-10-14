@@ -586,15 +586,14 @@ model DrasiScheduleItem {
   location      String?
   /// Το προγραμματικό: οδηγίες, κανόνες, εναλλακτική — Markdown.
   description   String?
-  /// Υλικό σε ελεύθερο κείμενο (ό,τι δεν είναι είδος αποθήκης).
-  ylikoNotes    String?
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
 
   drasi       Drasi               @relation(fields: [drasiId], references: [id], onDelete: Cascade)
   /// Οι υπεύθυνοι — ένα ή περισσότερα στελέχη της δράσης.
   assignees   DrasiScheduleAssignee[]
-  yliko       DrasiScheduleYliko[]
+  /// Το υλικό του — λίστα όπως στις συγκεντρώσεις.
+  yliko       DrasiScheduleYlikoItem[]
   epitropi    DrasiGroup?
 
   @@index([drasiId, date, order])
@@ -617,17 +616,22 @@ model DrasiScheduleAssignee {
   @@map("drasi_schedule_assignee")
 }
 
-/// Απαιτούμενο υλικό ανά στοιχείο ωρολογίου (πρόθεση, όχι δέσμευση).
-model DrasiScheduleYliko {
-  itemId  String @db.Uuid
-  ylikoId String @db.Uuid
-  qty     Int    @default(1)
+/// Το υλικό ενός στοιχείου του ωρολογίου: λίστα όπως στις συγκεντρώσεις (όνομα,
+/// ποσότητα, «μπήκε στο σακίδιο»). Ελεύθερο κείμενο — δεν δείχνει στην αποθήκη.
+model DrasiScheduleYlikoItem {
+  id     String  @id @default(uuid()) @db.Uuid
+  itemId String  @db.Uuid
+  /// Σειρά εμφάνισης· χωρίς unique, γιατί η λίστα γράφεται ολόκληρη κάθε φορά.
+  order  Int
+  label  String
+  qty    Int     @default(1)
+  /// Τσεκαρισμένο όταν μπήκε στο σακίδιο.
+  packed Boolean @default(false)
 
-  item  DrasiScheduleItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  yliko Yliko             @relation(fields: [ylikoId], references: [id], onDelete: Cascade)
+  item DrasiScheduleItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
-  @@id([itemId, ylikoId])
-  @@map("drasi_schedule_yliko")
+  @@index([itemId, order])
+  @@map("drasi_schedule_yliko_item")
 }
 
 /// Πρόσκληση αξιολόγησης προς συμμετέχοντα ΧΩΡΙΣ λογαριασμό (παιδιά): δημόσιος
@@ -1295,7 +1299,6 @@ model Yliko {
   maintenance YlikoMaintenance[]
   timelineUses TimelineBlockYliko[]
   fromShopping DrasiShoppingItem[]
-  scheduleUses DrasiScheduleYliko[]
 
   @@unique([topikoId, externalId])
   @@index([topikoId, category])

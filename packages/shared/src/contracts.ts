@@ -611,8 +611,8 @@ export interface DrasiScheduleItemView {
   description: string | null;
   /** Οι υπεύθυνοι: ένα ή περισσότερα στελέχη της δράσης. */
   responsibles: { id: string; firstName: string; lastName: string }[];
-  ylikoNotes: string | null;
-  yliko: { ylikoId: string; name: string; unit: string | null; qty: number }[];
+  /** Το υλικό: λίστα όπως στις συγκεντρώσεις (`packed` = μπήκε στο σακίδιο). */
+  yliko: { label: string; qty: number; packed: boolean }[];
   /** Έχει γραφτεί προγραμματικό (περιγραφή ή υπεύθυνος ή υλικό). */
   hasProgramma: boolean;
 }

@@ -69,28 +69,40 @@
             </q-card-section>
           </q-card>
 
+          <!-- Το υλικό σε μία λίστα, όπως στη συγκέντρωση -->
           <q-card flat bordered class="programmatiko-layout__yliko">
-            <q-card-section class="text-subtitle1 text-weight-medium q-py-sm">Υλικό</q-card-section>
+            <q-card-section class="row items-center justify-between q-py-sm">
+              <div class="text-subtitle1 text-weight-medium">Υλικό</div>
+              <q-chip v-if="ylikoCount" dense outline :label="`${packedCount}/${ylikoCount}`" />
+            </q-card-section>
             <q-separator />
-            <q-card-section class="q-gutter-sm">
-              <q-select
-                v-if="editable && canPickYliko"
-                v-model="form.yliko"
-                :options="ylikoOptions"
-                label="Από τις αποθήκες"
-                outlined
-                dense
-                multiple
-                use-chips
-                use-input
-                emit-value
-                map-options
-                color="klados"
-                input-debounce="300"
-                @filter="filterYliko"
-              />
-              <q-input v-else :model-value="form.yliko.map(ylikoName).join(', ') || '—'" label="Από τις αποθήκες" outlined dense readonly />
-              <q-input v-model="form.ylikoNotes" :readonly="!editable" label="Άλλο υλικό (ελεύθερο κείμενο)" outlined dense color="klados" />
+            <q-card-section class="q-py-sm">
+              <div v-if="!form.yliko.length" class="text-caption text-grey-6 q-pb-sm">
+                {{ editable ? 'Κενή λίστα.' : 'Δεν έχει δηλωθεί υλικό.' }}
+              </div>
+              <div v-for="(row, index) in form.yliko" :key="row.key" class="row items-center q-col-gutter-xs q-mb-xs">
+                <div class="col-auto">
+                  <q-checkbox v-model="row.packed" :disable="!editable" dense color="klados" />
+                </div>
+                <div class="col">
+                  <q-input
+                    v-model="row.label"
+                    :readonly="!editable"
+                    dense
+                    outlined
+                    placeholder="π.χ. σπάγκος"
+                    :class="row.packed ? 'text-grey-6' : ''"
+                    @keydown.enter.prevent="addYlikoAfter(index)"
+                  />
+                </div>
+                <div class="col-auto" style="width: 76px">
+                  <q-input v-model.number="row.qty" :readonly="!editable" type="number" min="1" dense outlined />
+                </div>
+                <div v-if="editable" class="col-auto">
+                  <q-btn dense flat round size="sm" icon="close" color="negative" @click="form.yliko.splice(index, 1)" />
+                </div>
+              </div>
+              <q-btn v-if="editable" flat dense no-caps color="klados" icon="add" label="Προσθήκη" @click="addYlikoAfter(form.yliko.length - 1)" />
             </q-card-section>
           </q-card>
         </div>
@@ -106,7 +118,6 @@ import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 import {
   DRASI_SCHEDULE_KIND_LABEL,
   DrasiScheduleKind,
-  KLADOS_LABEL,
   SCHEDULE_ITEM_OWN_FIELDS,
   drasiEditScope,
   type DrasiAccess,
@@ -115,14 +126,12 @@ import {
   type DrasiScheduleView,
   type DrasiStatus,
   type KladosType,
-  type Paginated,
-  type YlikoAvailability,
 } from '@trifylli/shared';
 import MarkdownField from '../components/MarkdownField.vue';
 import PageState from '../components/PageState.vue';
 import SaveStatus from '../components/SaveStatus.vue';
 import StelexosPicker from '../components/StelexosPicker.vue';
-import { responsiblesLabel } from '../components/drasi/types';
+import { responsiblesLabel, sameYliko, ylikoPayload, type YlikoRow } from '../components/drasi/types';
 import { useAsyncData } from '../composables/useAsyncData';
 import { ApiError, OfflineError, del, get, patch } from '../lib/api';
 import { formatDateLong, formatDuration } from '../lib/format';
@@ -211,10 +220,8 @@ const scope = computed<DrasiEditScope>(() =>
 const editable = computed(() => scope.value !== 'none');
 /** Τίτλος, λεπτά, είδος, υπεύθυνοι, διαγραφή — η γραμμή του ωρολογίου. */
 const editAll = computed(() => scope.value === 'all');
-/** Τις αποθήκες τις ψάχνει όποιος τις βλέπει — όχι ένα στέλεχος άλλου Τοπικού. */
-const canPickYliko = computed(() => auth.can('yliko:read', drasi.value?.klados?.type ?? undefined));
 
-// ── Στελέχη & υλικό για τους pickers ──
+// ── Στελέχη για τον picker ──
 /** Μόνο τα στελέχη της δράσης (δικά μας, φιλοξενούμενα, εξωτερικά). */
 const stelexiOptions = computed(() => {
   const options = (data.value?.schedule.stelexi ?? []).map((s) => ({
@@ -232,24 +239,6 @@ const stelexiOptions = computed(() => {
 });
 const namesOf = (ids: string[]): string =>
   ids.map((id) => stelexiOptions.value.find((o) => o.value === id)?.label ?? '').filter(Boolean).join(', ') || '—';
-const knownNames = new Map<string, string>();
-const ylikoOptions = ref<{ label: string; value: string }[]>([]);
-const ylikoName = (id: string): string => ylikoOptions.value.find((o) => o.value === id)?.label ?? knownNames.get(id) ?? '';
-
-async function filterYliko(needle: string, update: (fn: () => void) => void): Promise<void> {
-  try {
-    const page = await get<Paginated<YlikoAvailability>>('/yliko', {
-      params: { pageSize: 50, ...(drasi.value?.klados ? { klados: drasi.value.klados.type } : {}), ...(needle ? { q: needle } : {}) },
-    });
-    update(() => {
-      const chosen = ylikoOptions.value.filter((o) => form.yliko.includes(o.value));
-      const fresh = page.items.map((y) => ({ label: `${y.name}${y.ownerKladosType ? ` (${KLADOS_LABEL[y.ownerKladosType]})` : ''}`, value: y.ylikoId }));
-      ylikoOptions.value = [...chosen, ...fresh.filter((f) => !chosen.some((c) => c.value === f.value))];
-    });
-  } catch {
-    update(() => undefined);
-  }
-}
 
 // ── Τοπική κατάσταση ──
 const AUTOSAVE_DELAY_MS = 1200;
@@ -263,10 +252,12 @@ const form = reactive({
   location: '',
   responsible: [] as string[],
   description: '',
-  yliko: [] as string[],
-  ylikoNotes: '',
+  yliko: [] as YlikoRow[],
 });
 let hydrating = false;
+/** Το στοιχείο που γέμισε τελευταίο τη φόρμα — σε άλλο στοιχείο η λίστα υλικού ξαναγράφεται. */
+let hydratedId: string | null = null;
+let ylikoKey = 0;
 watch(
   item,
   (it) => {
@@ -280,13 +271,13 @@ watch(
       location: it.location ?? '',
       responsible: it.responsibles.map((p) => p.id),
       description: it.description ?? '',
-      yliko: it.yliko.map((y) => y.ylikoId),
-      ylikoNotes: it.ylikoNotes ?? '',
     });
-    for (const y of it.yliko) {
-      knownNames.set(y.ylikoId, y.name);
-      if (!ylikoOptions.value.some((o) => o.value === y.ylikoId)) ylikoOptions.value.push({ label: y.name, value: y.ylikoId });
+    // Μετά την αποθήκευση η λίστα είναι ήδη αυτή του server: δεν ξαναγράφεται,
+    // ώστε να μένουν το focus και η άδεια γραμμή που μόλις προστέθηκε.
+    if (it.id !== hydratedId || !sameYliko(form.yliko, it.yliko)) {
+      form.yliko = it.yliko.map((y) => ({ key: ++ylikoKey, label: y.label, qty: y.qty, packed: y.packed }));
     }
+    hydratedId = it.id;
     dirty.value = false;
     if (saveStatus.value !== 'saved') saveStatus.value = 'clean';
     // Ο watcher της φόρμας τρέχει μετά από αυτό το sync block (pre-flush), οπότε
@@ -325,8 +316,7 @@ async function saveNow(): Promise<void> {
     location: form.location.trim() || null,
     description: form.description || null,
     responsibleIds: form.responsible,
-    ylikoNotes: form.ylikoNotes.trim() || null,
-    ...(canPickYliko.value ? { yliko: form.yliko.map((ylikoId) => ({ ylikoId, qty: 1 })) } : {}),
+    yliko: ylikoPayload(form.yliko),
   };
   // Ο υπεύθυνος στέλνει μόνο ό,τι του επιτρέπεται — τα υπόλοιπα τα απορρίπτει το API.
   const allowed: readonly string[] = SCHEDULE_ITEM_OWN_FIELDS;
@@ -355,6 +345,13 @@ watch(
 onBeforeRouteLeave(() => {
   if (dirty.value) void saveNow();
 });
+
+// ── Υλικό ──
+const ylikoCount = computed(() => ylikoPayload(form.yliko).length);
+const packedCount = computed(() => ylikoPayload(form.yliko).filter((y) => y.packed).length);
+function addYlikoAfter(index: number): void {
+  form.yliko.splice(index + 1, 0, { key: ++ylikoKey, label: '', qty: 1, packed: false });
+}
 
 // ── Πλοήγηση ──
 function goBack(): void {

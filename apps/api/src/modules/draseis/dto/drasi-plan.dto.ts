@@ -3,6 +3,7 @@ import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
+  IsBoolean,
   IsDate,
   IsEnum,
   IsInt,
@@ -20,10 +21,12 @@ import { DrasiScheduleKind, KladosType, TreasuryCategory } from '@trifylli/share
 
 // ───────────────────────── Ωρολόγιο & προγραμματικό (F7) ─────────────────────────
 
-export class ScheduleYlikoDto {
-  @ApiProperty({ format: 'uuid' })
-  @IsUUID()
-  ylikoId!: string;
+/** Γραμμή της λίστας υλικού ενός στοιχείου, όπως στις συγκεντρώσεις. */
+export class ScheduleYlikoItemDto {
+  @ApiProperty({ description: 'Ελεύθερο κείμενο — δεν δείχνει στην αποθήκη. Οι άδειες γραμμές πέφτουν.' })
+  @IsString()
+  @MaxLength(200)
+  label!: string;
 
   @ApiPropertyOptional({ minimum: 1, default: 1 })
   @IsOptional()
@@ -31,6 +34,11 @@ export class ScheduleYlikoDto {
   @IsInt()
   @Min(1)
   qty?: number;
+
+  @ApiPropertyOptional({ default: false, description: 'Μπήκε στο σακίδιο.' })
+  @IsOptional()
+  @IsBoolean()
+  packed?: boolean;
 }
 
 /** Το πλαίσιο (ωρολόγιο) ΚΑΙ το προγραμματικό — τα προγραμματικά πεδία είναι προαιρετικά. */
@@ -77,19 +85,13 @@ export class CreateScheduleItemDto {
   @IsUUID(undefined, { each: true })
   responsibleIds?: string[] | null;
 
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  @MaxLength(2000)
-  ylikoNotes?: string | null;
-
-  @ApiPropertyOptional({ type: [ScheduleYlikoDto], description: 'Αντικαθιστά το υλικό του στοιχείου όταν δίνεται.' })
+  @ApiPropertyOptional({ type: [ScheduleYlikoItemDto], description: 'Η λίστα υλικού — αντικαθιστά ολόκληρη τη λίστα όταν δίνεται.' })
   @IsOptional()
   @IsArray()
-  @ArrayMaxSize(50)
+  @ArrayMaxSize(100)
   @ValidateNested({ each: true })
-  @Type(() => ScheduleYlikoDto)
-  yliko?: ScheduleYlikoDto[];
+  @Type(() => ScheduleYlikoItemDto)
+  yliko?: ScheduleYlikoItemDto[];
 }
 
 export class UpdateScheduleItemDto extends CreateScheduleItemDto {

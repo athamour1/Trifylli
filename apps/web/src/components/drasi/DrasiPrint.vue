@@ -81,7 +81,7 @@
                 <div v-if="it.description" class="markdown-body ds-md" v-html="md(it.description)" />
               </td>
               <td>{{ names(it.responsibles) }}</td>
-              <td>{{ [...it.yliko.map((y) => `${y.name}${y.qty > 1 ? ` ×${y.qty}` : ''}`), it.ylikoNotes ?? ''].filter(Boolean).join(', ') }}</td>
+              <td>{{ it.yliko.map((y) => `${y.label}${y.qty > 1 ? ` ×${y.qty}` : ''}`).join(', ') }}</td>
             </tr>
           </tbody>
         </table>
