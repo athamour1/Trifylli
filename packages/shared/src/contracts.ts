@@ -495,6 +495,8 @@ export interface DrasiGroupsView {
 /** Στέλεχος της δράσης, όπως εμφανίζεται δίπλα σε έναν ρόλο. */
 export interface DrasiMythosStelexos {
   participantId: string;
+  /** Ο λογαριασμός του — για να ξέρει η σελίδα ποιος ρόλος είναι «δικός μου». */
+  userId: string;
   firstName: string;
   lastName: string;
 }

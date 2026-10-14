@@ -268,7 +268,8 @@
               <DrasiMythos
                 :drasi-id="id"
                 :organiser="data.klados?.type ?? null"
-                :can-write="canEdit('mythos')"
+                :access="data.access"
+                :closed="data.status === 'KLEISTI'"
               />
             </q-tab-panel>
 

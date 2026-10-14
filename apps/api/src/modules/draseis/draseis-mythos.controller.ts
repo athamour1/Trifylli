@@ -42,8 +42,11 @@ export class DraseisMythosController {
     return this.mythos.orderCharacters(user, id, dto);
   }
 
+  // Μόνο «βλέπει»: όποιος παίζει τον ρόλο αλλάζει όνομα και lore χωρίς ρόλο
+  // Προγράμματος — πόσο αλλάζει ο καθένας το κρίνει το service.
   @Patch('characters/:characterId')
-  @RequireDrasi('mythos', 'edit')
+  @RequireDrasi('mythos')
+  @ApiOperation({ summary: 'Αλλαγή ρόλου (όποιος τον παίζει: μόνο όνομα και lore)' })
   updateCharacter(
     @CurrentUser() user: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,

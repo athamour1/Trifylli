@@ -116,6 +116,9 @@
                 </q-list>
               </q-menu>
             </q-btn>
+            <q-btn v-else-if="scopeOf(c) === 'own'" flat round dense icon="edit" size="sm" color="klados" @click="openCharacter(c)">
+              <q-tooltip>Ο ρόλος σου — άλλαξε όνομα και lore</q-tooltip>
+            </q-btn>
           </q-card-section>
           <q-separator inset />
           <q-card-section class="col q-pt-sm">
@@ -139,7 +142,7 @@
     <!-- ── Νέος / επεξεργασία ρόλου ── -->
     <q-dialog v-model="dialog.open" :maximized="$q.screen.lt.sm">
       <q-card style="width: 640px; max-width: 100%">
-        <q-card-section class="text-h6">{{ dialog.id ? 'Ο ρόλος' : 'Νέος ρόλος' }}</q-card-section>
+        <q-card-section class="text-h6">{{ dialog.id ? (canWrite ? 'Ο ρόλος' : 'Ο ρόλος σου') : 'Νέος ρόλος' }}</q-card-section>
         <q-card-section class="q-pt-none q-gutter-md">
           <q-input
             v-model="dialog.name"
@@ -147,6 +150,7 @@
             placeholder="π.χ. Η Μάγισσα του δάσους"
           />
           <q-select
+            v-if="canWrite"
             v-model="dialog.participantId"
             :options="stelexosOptions"
             label="Το στέλεχος που τον παίζει"
@@ -182,12 +186,29 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useQuasar } from 'quasar';
-import type { DrasiCharacterView, DrasiMythosStelexos, DrasiMythosView, KladosType } from '@trifylli/shared';
+import {
+  drasiCan,
+  drasiEditScope,
+  type DrasiAccess,
+  type DrasiCharacterView,
+  type DrasiEditScope,
+  type DrasiMythosStelexos,
+  type DrasiMythosView,
+  type KladosType,
+} from '@trifylli/shared';
 import MarkdownField from '../MarkdownField.vue';
 import { ApiError, del, get, patch, post, put } from '../../lib/api';
+import { useAuthStore } from '../../stores/auth';
 
-const props = defineProps<{ drasiId: string; organiser: KladosType | null; canWrite: boolean }>();
+const props = defineProps<{ drasiId: string; organiser: KladosType | null; access: DrasiAccess; closed: boolean }>();
 const $q = useQuasar();
+const auth = useAuthStore();
+
+// Ο ίδιος κανόνας με το API: με ρόλο Προγράμματος όλα, όποιος παίζει έναν ρόλο
+// μόνο όνομα και lore του δικού του· κλειστή δράση δεν αλλάζει.
+const canWrite = computed(() => !props.closed && drasiCan(props.access, 'mythos', 'edit'));
+const scopeOf = (c: DrasiCharacterView): DrasiEditScope =>
+  props.closed ? 'none' : drasiEditScope(props.access, 'mythos', !!auth.user && c.stelexos?.userId === auth.user.id);
 
 const view = ref<DrasiMythosView | null>(null);
 const loading = ref(false);
@@ -272,7 +293,10 @@ async function saveCharacter(): Promise<void> {
   }
   saving.value = true;
   try {
-    const body = { name: dialog.name.trim(), lore: dialog.lore, participantId: dialog.participantId };
+    // Όποιος παίζει τον ρόλο δεν στέλνει «ποιος τον παίζει» — δεν το αλλάζει.
+    const body = canWrite.value
+      ? { name: dialog.name.trim(), lore: dialog.lore, participantId: dialog.participantId }
+      : { name: dialog.name.trim(), lore: dialog.lore };
     if (dialog.id) await patch(`/draseis/${props.drasiId}/characters/${dialog.id}`, body);
     else await post(`/draseis/${props.drasiId}/characters`, { ...body, participantId: dialog.participantId ?? undefined });
     dialog.open = false;

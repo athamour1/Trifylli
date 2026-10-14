@@ -1,12 +1,19 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { MemberKind } from '@prisma/client';
-import type { DrasiCharacterView, DrasiMythosStelexos, DrasiMythosView } from '@trifylli/shared';
+import {
+  CHARACTER_OWN_FIELDS,
+  drasiEditScope,
+  fieldsOutside,
+  type DrasiCharacterView,
+  type DrasiMythosStelexos,
+  type DrasiMythosView,
+} from '@trifylli/shared';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
 import { DrasiAccessService } from './drasi-access.service';
 import type { CreateCharacterDto, OrderCharactersDto, UpdateCharacterDto, UpdateMythosDto } from './dto/drasi-mythos.dto';
 
-const stelexosSelect = { id: true, user: { select: { firstName: true, lastName: true } } } as const;
+const stelexosSelect = { id: true, user: { select: { id: true, firstName: true, lastName: true } } } as const;
 
 /**
  * Ο μύθος της δράσης: η κεντρική ιδέα και οι ρόλοι των στελεχών μέσα της.
@@ -71,9 +78,19 @@ export class DraseisMythosService {
     return toCharacter(created);
   }
 
+  /**
+   * Ο guard ζητά μόνο να βλέπει τον μύθο: όποιος παίζει τον ρόλο αλλάζει όνομα
+   * και lore (`CHARACTER_OWN_FIELDS`)· ποιος τον παίζει το ορίζει το Πρόγραμμα.
+   */
   async updateCharacter(user: RequestUser, id: string, characterId: string, dto: UpdateCharacterDto): Promise<DrasiCharacterView> {
     await this.access.load(user, id, 'write');
-    await this.findCharacter(id, characterId);
+    const character = await this.findCharacter(id, characterId);
+    const grant = user.drasiGrant?.drasiId === id ? user.drasiGrant.access : null;
+    const scope = drasiEditScope(grant, 'mythos', character.participant?.userId === user.id);
+    if (scope === 'none') throw new ForbiddenException('Ο ρόλος σας στη δράση δεν επιτρέπει αυτή την αλλαγή.');
+    if (scope === 'own' && fieldsOutside(dto, CHARACTER_OWN_FIELDS).length) {
+      throw new ForbiddenException('Στον ρόλο σου αλλάζεις όνομα και lore — ποιος τον παίζει το ορίζει το Πρόγραμμα.');
+    }
     if (dto.participantId) await this.assertStelexos(id, dto.participantId);
     const updated = await this.prisma.drasiCharacter.update({
       where: { id: characterId },
@@ -116,9 +133,13 @@ export class DraseisMythosService {
     return rows.map(toCharacter);
   }
 
-  private async findCharacter(drasiId: string, characterId: string): Promise<void> {
-    const found = await this.prisma.drasiCharacter.findFirst({ where: { id: characterId, drasiId }, select: { id: true } });
+  private async findCharacter(drasiId: string, characterId: string) {
+    const found = await this.prisma.drasiCharacter.findFirst({
+      where: { id: characterId, drasiId },
+      select: { id: true, participant: { select: { userId: true } } },
+    });
     if (!found) throw new NotFoundException('Ο ρόλος δεν βρέθηκε.');
+    return found;
   }
 
   /** Τον ρόλο τον παίζει στέλεχος **αυτής** της δράσης — όχι παιδί, όχι κάποιος που δεν έρχεται. */
@@ -135,10 +156,10 @@ export class DraseisMythosService {
   }
 }
 
-type StelexosRow = { id: string; user: { firstName: string; lastName: string } };
+type StelexosRow = { id: string; user: { id: string; firstName: string; lastName: string } };
 
 function toStelexos(p: StelexosRow): DrasiMythosStelexos {
-  return { participantId: p.id, firstName: p.user.firstName, lastName: p.user.lastName };
+  return { participantId: p.id, userId: p.user.id, firstName: p.user.firstName, lastName: p.user.lastName };
 }
 
 function toCharacter(c: { id: string; name: string; lore: string | null; order: number; participant: StelexosRow | null }): DrasiCharacterView {
