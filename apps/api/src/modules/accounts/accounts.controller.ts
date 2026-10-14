@@ -51,6 +51,15 @@ export class AccountsController {
     return result;
   }
 
+  @Get('externals')
+  @ApiOperation({
+    summary: 'Τα εξωτερικά στελέχη (λογαριασμοί για δράσεις), με τις δράσεις τους',
+    description: 'Η ανάκληση γίνεται με το `DELETE /accounts/:id`, όπως για κάθε λογαριασμό.',
+  })
+  externals(@CurrentUser() user: RequestUser) {
+    return this.accounts.externals(user);
+  }
+
   @Get('kladoi')
   @ApiOperation({ summary: 'Κλάδοι προς ανάθεση, με τον τρέχοντα διαχειριστή τους' })
   kladoi(@CurrentUser() user: RequestUser) {

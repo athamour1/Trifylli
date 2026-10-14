@@ -842,6 +842,22 @@ export interface DrasiExternalView {
   roles: DrasiRoleKind[];
 }
 
+/** Εξωτερικό στέλεχος (λογαριασμός για δράσεις) — η λίστα του υπερδιαχειριστή. */
+export interface ExternalAccountRow {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string | null;
+  phone: string | null;
+  /** Από πού έρχεται (ελεύθερο κείμενο, π.χ. «Τοπικό Καλαμάτας»). */
+  origin: string | null;
+  /** Έχει συνδεθεί τουλάχιστον μία φορά. */
+  activated: boolean;
+  lastLoginAt: string | null;
+  /** Οι δράσεις του· `open: false` ⇒ έκλεισε ή αρχειοθετήθηκε, εκεί δεν μπαίνει πια. */
+  draseis: { id: string; title: string; klados: KladosType | null; open: boolean }[];
+}
+
 export interface DrasiExternalCreated {
   external: DrasiExternalView;
   invited: boolean;

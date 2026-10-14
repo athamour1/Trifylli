@@ -9,6 +9,7 @@ import {
   deriveLeaderProfile,
   type AccountCreated,
   type AccountSummary,
+  type ExternalAccountRow,
   type KladosType,
   type StelexiActivationResult,
   type StelexosAccessRow,
@@ -17,6 +18,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
 import { AuthentikClient } from '../integrations/authentik.client';
 import type { CreateAccountDto, UpdateAccountDto } from './dto/account.dto';
+import { toExternalAccountRow } from './external-accounts';
 
 /**
  * Διαχείριση των λογαριασμών που μπαίνουν στην εφαρμογή.
@@ -325,6 +327,36 @@ export class AccountsService {
   }
 
   /** Οι κλάδοι που μπορούν να ανατεθούν, με τον τρέχοντα διαχειριστή τους. */
+  /**
+   * Τα εξωτερικά στελέχη του Τοπικού (λογαριασμοί για δράσεις), με τις δράσεις
+   * τους. Τα προσθέτει ο αρχηγός κάθε δράσης· από εδώ ο υπερδιαχειριστής τα
+   * βλέπει όλα μαζί και ανακαλεί την πρόσβαση (`revoke`) — μένουν στις δράσεις
+   * τους ως στελέχη χωρίς λογαριασμό.
+   */
+  async externals(user: RequestUser): Promise<ExternalAccountRow[]> {
+    const rows = await this.prisma.user.findMany({
+      where: { topikoId: user.topikoId, accountRole: AccountRole.EXTERNAL },
+      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        email: true,
+        phone: true,
+        guestTopikoName: true,
+        ssoId: true,
+        lastLoginAt: true,
+        participations: {
+          orderBy: { drasi: { dateStart: 'desc' } },
+          select: {
+            drasi: { select: { id: true, title: true, status: true, archivedAt: true, klados: { select: { type: true } } } },
+          },
+        },
+      },
+    });
+    return rows.map(toExternalAccountRow);
+  }
+
   async assignableKladoi(user: RequestUser) {
     const rows = await this.prisma.klados.findMany({
       where: { topikoId: user.topikoId },
