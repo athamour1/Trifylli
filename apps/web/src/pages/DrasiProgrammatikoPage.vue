@@ -26,12 +26,6 @@
             </div>
             <div class="col-12 col-sm-auto row items-center q-gutter-sm">
               <SaveStatus v-if="editable" :status="saveStatus" @retry="saveNow" />
-              <q-btn flat round dense icon="chevron_left" color="klados" :disable="!neighbours.prev" @click="goTo(neighbours.prev)">
-                <q-tooltip>Προηγούμενο στοιχείο</q-tooltip>
-              </q-btn>
-              <q-btn flat round dense icon="chevron_right" color="klados" :disable="!neighbours.next" @click="goTo(neighbours.next)">
-                <q-tooltip>Επόμενο στοιχείο</q-tooltip>
-              </q-btn>
             </div>
           </div>
         </div>
@@ -183,7 +177,7 @@ const hm = (iso: string): string => {
 };
 
 // ── Φόρτωση: η δράση (τίτλος, κλάδος, κατάσταση) και όλο το ωρολόγιο, για να
-//    βρούμε το στοιχείο με τις υπολογισμένες ώρες του και τους γείτονές του ──
+//    βρούμε το στοιχείο με τις υπολογισμένες ώρες του ──
 const { data, loading, error, stale, reload } = useAsyncData(
   async () => {
     const [drasi, schedule] = await Promise.all([get<DrasiHead>(`/draseis/${drasiId}`), get<DrasiScheduleView>(`/draseis/${drasiId}/schedule`)]);
@@ -194,11 +188,6 @@ const { data, loading, error, stale, reload } = useAsyncData(
 const drasi = computed(() => data.value?.drasi ?? null);
 const dayOf = computed(() => data.value?.schedule.days.find((d) => d.items.some((i) => i.id === itemId.value)) ?? null);
 const item = computed<DrasiScheduleItemView | null>(() => dayOf.value?.items.find((i) => i.id === itemId.value) ?? null);
-const neighbours = computed(() => {
-  const items = dayOf.value?.items ?? [];
-  const idx = items.findIndex((i) => i.id === itemId.value);
-  return { prev: items[idx - 1]?.id ?? null, next: items[idx + 1]?.id ?? null };
-});
 
 watch(
   () => (drasi.value ? (drasi.value.klados?.type ?? null) : undefined),
@@ -356,13 +345,6 @@ function addYlikoAfter(index: number): void {
 // ── Πλοήγηση ──
 function goBack(): void {
   void router.push({ name: 'drasi', params: { id: drasiId, section: 'programma' } });
-}
-async function goTo(id: string | null): Promise<void> {
-  if (!id) return;
-  await saveNow();
-  await router.push({ name: 'drasi-programmatiko', params: { id: drasiId, itemId: id } });
-  // Οι ώρες/διάρκεια του γείτονα μπορεί να άλλαξαν από ό,τι μόλις σώσαμε.
-  await reload();
 }
 
 function remove(): void {

@@ -253,10 +253,8 @@
             <template v-else-if="currentResponse">
               <q-card flat bordered>
                 <q-card-section class="row items-center no-wrap q-gutter-sm">
-                  <q-btn flat round dense icon="chevron_left" :disable="respIndex === 0" @click="respIndex--" />
                   <q-input :model-value="respIndex + 1" type="number" dense outlined style="width: 72px" :min="1" :max="view.summary.responses.length" @update:model-value="(v) => (respIndex = Math.min(Math.max(Number(v) - 1, 0), view!.summary!.responses.length - 1))" />
                   <span class="text-grey-7">από {{ view.summary.responses.length }}</span>
-                  <q-btn flat round dense icon="chevron_right" :disable="respIndex >= view.summary.responses.length - 1" @click="respIndex++" />
                   <q-space />
                   <div class="text-right">
                     <div class="text-weight-medium">{{ currentResponse.user }}</div>
