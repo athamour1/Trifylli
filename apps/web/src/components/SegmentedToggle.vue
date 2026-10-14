@@ -37,6 +37,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, useAttrs, type StyleValue } from 'vue';
 import type { QBtnToggleProps } from 'quasar';
+import { thumbBox } from './segmented-thumb';
 
 defineOptions({ inheritAttrs: false });
 
@@ -77,15 +78,19 @@ function measure(): void {
       thumb.value = null;
       return;
     }
-    const a = active.getBoundingClientRect();
-    const r = host.getBoundingClientRect();
-    // Το πλαίσιο μπορεί να κυλά (στενές οθόνες): μετράμε μέσα στο περιεχόμενό του.
-    thumb.value = { x: a.left - r.left + host.scrollLeft, y: a.top - r.top + host.scrollTop, w: a.width, h: a.height };
+    // Σε μέγεθος διάταξης (βλ. `thumbBox`): σωστό και μέσα σε διάλογο που ανοίγει
+    // με scale. Το πλαίσιο μπορεί να κυλά (στενές οθόνες): μετράμε μέσα στο περιεχόμενό του.
+    const box = thumbBox(
+      active.getBoundingClientRect(),
+      host.getBoundingClientRect(),
+      { width: host.offsetWidth, height: host.offsetHeight },
+      { left: host.scrollLeft, top: host.scrollTop },
+    );
+    thumb.value = box;
     // Η ενεργή επιλογή να είναι πάντα ορατή, αν το πλαίσιο κυλά.
     if (host.scrollWidth > host.clientWidth) {
-      const left = a.left - r.left + host.scrollLeft;
-      if (left < host.scrollLeft || left + a.width > host.scrollLeft + host.clientWidth) {
-        host.scrollTo({ left: Math.max(0, left - 24), behavior: ready.value ? 'smooth' : 'auto' });
+      if (box.x < host.scrollLeft || box.x + box.w > host.scrollLeft + host.clientWidth) {
+        host.scrollTo({ left: Math.max(0, box.x - 24), behavior: ready.value ? 'smooth' : 'auto' });
       }
     }
     // Η πρώτη τοποθέτηση γίνεται χωρίς κίνηση· από εκεί και πέρα γλιστρά.
