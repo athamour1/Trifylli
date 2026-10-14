@@ -2,7 +2,6 @@ import type { DrasiRoleKind, KladosType } from '@trifylli/shared';
 
 /** Φιλοξενούμενο Τοπικό όπως το κρατά η φόρμα (wizard & ρυθμίσεις). */
 export interface GuestTopikoForm {
-  topikoCode: string;
   topikoName: string;
   kladoi: KladosType[];
   contactName: string;

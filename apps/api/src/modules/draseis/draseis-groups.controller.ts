@@ -24,7 +24,7 @@ export class DraseisGroupsController {
   @ApiOperation({ summary: 'Νέος φιλοξενούμενος από άλλο Τοπικό — μπαίνει κατευθείαν στη δράση' })
   async createGuest(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: CreateGuestDto) {
     const guest = await this.groups.createGuest(user, id, dto);
-    await this.audit.record(user, 'drasi.guest.create', 'user', guest.id, { drasiId: id, topikoCode: dto.topikoCode });
+    await this.audit.record(user, 'drasi.guest.create', 'user', guest.id, { drasiId: id, topikoName: guest.guestTopikoName });
     return guest;
   }
 

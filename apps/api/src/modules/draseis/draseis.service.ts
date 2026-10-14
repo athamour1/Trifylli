@@ -2,9 +2,9 @@ import { BadRequestException, ConflictException, ForbiddenException, Injectable,
 import { AccountRole, CheckoutStatus, DrasiStatus, DrasiType, MemberKind, Prisma } from '@prisma/client';
 import {
   can,
+  guestTopikoKey,
   KLADOS_LABEL,
   KLADOS_META,
-  type EseoUnitInfo,
   type DrasiRoleKind,
   type KataskinosiStats,
   type MyDrasiView,
@@ -14,7 +14,6 @@ import {
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
 import { accessProfileOf, assertKladosAccess, scopedKladoi } from '../../common/util/klados-scope';
-import { EseoClient } from '../integrations/eseo.client';
 import { DrasiAccessService } from './drasi-access.service';
 import { defaultFeeKind } from './draseis-finance.service';
 import type {
@@ -34,7 +33,6 @@ const roleUserSelect = { id: true, firstName: true, lastName: true, phone: true 
 export class DraseisService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly eseo: EseoClient,
     private readonly drasiAccess: DrasiAccessService,
   ) {}
 
@@ -347,18 +345,17 @@ export class DraseisService {
       .sort((a, b) => KLADOS_META[a].order - KLADOS_META[b].order);
   }
 
-  /** Αντικαθιστά τα φιλοξενούμενα Τοπικά. Ίδιος κωδικός δύο φορές ⇒ κρατιέται ο τελευταίος. */
+  /** Αντικαθιστά τα φιλοξενούμενα Τοπικά. Ίδιο όνομα δύο φορές ⇒ κρατιέται το τελευταίο. */
   async setGuestTopika(user: RequestUser, id: string, dto: SetGuestTopikaDto) {
     await this.assertAccess(user, id);
 
-    const byCode = new Map(dto.items.map((item) => [item.topikoCode, item]));
+    const byName = new Map(dto.items.map((item) => [guestTopikoKey(item.topikoName), item]));
     await this.prisma.$transaction([
       this.prisma.drasiGuestTopiko.deleteMany({ where: { drasiId: id } }),
       this.prisma.drasiGuestTopiko.createMany({
-        data: [...byCode.values()].map((item) => ({
+        data: [...byName.values()].map((item) => ({
           drasiId: id,
-          topikoCode: item.topikoCode,
-          topikoName: item.topikoName.trim(),
+          topikoName: item.topikoName.trim().replace(/\s+/g, ' '),
           kladoi: item.kladoi,
           contactName: item.contactName?.trim() || null,
           contactPhone: item.contactPhone?.trim() || null,
@@ -367,17 +364,6 @@ export class DraseisService {
     ]);
 
     return this.prisma.drasiGuestTopiko.findMany({ where: { drasiId: id }, orderBy: { topikoName: 'asc' } });
-  }
-
-  /**
-   * Ένα Τοπικό από το e-SEO, για να μην πληκτρολογεί κανείς «Ελευσίνα» με τρεις
-   * ορθογραφίες. Το token μας βλέπει μονάδες μόνο με κωδικό (όχι λίστα), οπότε
-   * η ροή είναι: κωδικός → όνομα → επιβεβαίωση.
-   */
-  async eseoTopiko(code: string): Promise<EseoUnitInfo> {
-    const unit = await this.eseo.unit(code);
-    if (!unit) throw new NotFoundException('Δεν βρέθηκε Τοπικό με αυτόν τον κωδικό στο e-SEO.');
-    return { code: unit.code, name: unit.name, parentName: unit.parentName, type: unit.type };
   }
 
   // ───────────────────────── Wizard: αρχηγείο & υπηρεσίες ─────────────────────────

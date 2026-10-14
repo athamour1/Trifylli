@@ -19,13 +19,9 @@ import { DrasiGroupKind, KladosType, MemberKind } from '@trifylli/shared';
 
 /** Μέλος άλλου Τοπικού — γράφεται με το χέρι, γιατί το e-SEO δεν μας δίνει τα μέλη τους. */
 export class CreateGuestDto {
-  @ApiProperty({ description: 'Κωδικός e-SEO του Τοπικού προέλευσης.' })
+  @ApiProperty({ description: 'Το Τοπικό προέλευσης, όπως είναι δηλωμένο στη δράση.' })
   @IsString()
-  @Matches(/^\d{1,10}$/, { message: 'Ο κωδικός Τοπικού είναι αριθμός.' })
-  topikoCode!: string;
-
-  @ApiProperty()
-  @IsString()
+  @Matches(/\S/, { message: 'Λείπει το Τοπικό προέλευσης.' })
   @MaxLength(120)
   topikoName!: string;
 

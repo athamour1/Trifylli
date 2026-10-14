@@ -483,6 +483,21 @@ export function drasiHasSkines(drasi: { type: DrasiType; hasSkines: boolean }): 
   return drasi.type !== 'MONOIMERI' && drasi.hasSkines;
 }
 
+/**
+ * Πότε δύο ονόματα φιλοξενούμενου Τοπικού είναι το ίδιο Τοπικό: χωρίς τόνους,
+ * πεζά/κεφαλαία και περιττά κενά — «ΧΑΛΑΝΔΡΙ » = «Χαλάνδρι». Τα ονόματα
+ * γράφονται με το χέρι, οπότε μέσα σε μια δράση αυτό είναι η ταυτότητά τους.
+ */
+export function guestTopikoKey(name: string): string {
+  return name
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .toLocaleLowerCase('el')
+    .replace(/ς/g, 'σ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 /** Ποιες κατηγορίες προτείνονται ανά είδος κίνησης. */
 export const TREASURY_INCOME_CATEGORIES: readonly TreasuryCategory[] = [
   'SYNDROMI',

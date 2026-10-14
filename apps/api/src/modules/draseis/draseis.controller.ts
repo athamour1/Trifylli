@@ -75,16 +75,6 @@ export class DraseisController {
     return this.groups.guests(user, query.q);
   }
 
-  @Get('eseo-topiko/:code')
-  @RequireCapability('drasi:write')
-  @ApiOperation({
-    summary: 'Τοπικό από το e-SEO με τον κωδικό του',
-    description: 'Για φιλοξενούμενα Τοπικά: ο κωδικός (unitId) δίνει το επίσημο όνομα και τον Τομέα.',
-  })
-  eseoTopiko(@Param('code') code: string) {
-    return this.draseis.eseoTopiko(code);
-  }
-
   @Get(':id')
   @RequireDrasi('episkopisi')
   findOne(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {

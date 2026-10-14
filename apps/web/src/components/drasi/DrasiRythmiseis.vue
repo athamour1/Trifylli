@@ -270,7 +270,7 @@ async function saveWho(): Promise<void> {
   await run('who', async () => {
     await put(`/draseis/${drasiId.value}/kladoi`, { kladoi: kladoi.value });
     await put(`/draseis/${drasiId.value}/guest-topika`, {
-      items: guests.value.map((g) => ({ topikoCode: g.topikoCode, topikoName: g.topikoName, kladoi: g.kladoi, contactName: g.contactName || undefined, contactPhone: g.contactPhone || undefined })),
+      items: guests.value.map((g) => ({ topikoName: g.topikoName, kladoi: g.kladoi, contactName: g.contactName || undefined, contactPhone: g.contactPhone || undefined })),
     });
   });
 }
@@ -378,7 +378,7 @@ function fill(d: DrasiSettingsData): void {
     hasSkines: d.hasSkines,
   });
   kladoi.value = d.kladoi;
-  guests.value = d.guestTopika.map((g) => ({ topikoCode: g.topikoCode, topikoName: g.topikoName, kladoi: g.kladoi, contactName: g.contactName ?? '', contactPhone: g.contactPhone ?? '' }));
+  guests.value = d.guestTopika.map((g) => ({ topikoName: g.topikoName, kladoi: g.kladoi, contactName: g.contactName ?? '', contactPhone: g.contactPhone ?? '' }));
   Object.assign(costs, { costPerPerson: toNum(d.costPerPerson), costReduced: toNum(d.costReduced), costStelexos: toNum(d.costStelexos), transportCost: toNum(d.transportCost) });
 }
 watch(() => props.data, fill, { immediate: true });

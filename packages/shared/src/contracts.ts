@@ -322,23 +322,13 @@ export interface DrasiRoleView {
   user: { id: string; firstName: string; lastName: string; phone: string | null };
 }
 
-/** Φιλοξενούμενο Τοπικό — ο κωδικός είναι το `unitId` του e-SEO. */
+/** Φιλοξενούμενο Τοπικό — μόνο όνομα, γραμμένο με το χέρι. */
 export interface DrasiGuestTopikoView {
   id: string;
-  topikoCode: string;
   topikoName: string;
   kladoi: KladosType[];
   contactName: string | null;
   contactPhone: string | null;
-}
-
-/** Ένα Τοπικό όπως το ξέρει το e-SEO (`GET /unit/{id}`). */
-export interface EseoUnitInfo {
-  code: string;
-  name: string;
-  /** Ο Τομέας στον οποίο ανήκει, αν τον δίνει το e-SEO. */
-  parentName: string | null;
-  type: string | null;
 }
 
 // ───────────────────────── Δράσεις: ταμείο & κόστη (F1, F2, F4) ─────────────────────────
@@ -469,7 +459,6 @@ export interface GuestMemberView {
   kind: MemberKind;
   birthDate: string | null;
   phone: string | null;
-  guestTopikoCode: string;
   guestTopikoName: string;
   guardianName: string | null;
   guardianPhone: string | null;

@@ -84,7 +84,6 @@ export class DraseisDossierService {
         kladoi: full.kladoi,
         guestTopika: full.guestTopika.map((g) => ({
           id: g.id,
-          topikoCode: g.topikoCode,
           topikoName: g.topikoName,
           kladoi: g.kladoi as KladosType[],
           contactName: g.contactName,

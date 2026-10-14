@@ -314,9 +314,10 @@ model User {
   lastLoginAt DateTime?
   status    MemberStatus @default(ENERGO)
   source    DataSource   @default(LOCAL)
-  /// Φιλοξενούμενος σε δράση από ΑΛΛΟ Τοπικό (κωδικός/όνομα e-SEO). Όσο είναι
-  /// συμπληρωμένο, το άτομο μένει εκτός μητρώου, συνδρομών και προόδου —
-  /// το βλέπουν μόνο οι δράσεις (βλ. docs/draseis.md F3).
+  /// Φιλοξενούμενος σε δράση, όχι μέλος του μητρώου μας: `GUEST` = από άλλο
+  /// Τοπικό, `EXT` = εξωτερικό στέλεχος. Όσο είναι συμπληρωμένο, το άτομο μένει
+  /// εκτός μητρώου, συνδρομών και προόδου — το βλέπουν μόνο οι δράσεις (βλ.
+  /// docs/draseis.md F3). Από πού έρχεται: `guestTopikoName`.
   guestTopikoCode String?
   guestTopikoName String?
   /// Ελεύθερα πεδία από e-SEO που δεν έχουν δική τους κολόνα (ΑΜΚΑ, ΑΔΤ, συναινέσεις).
@@ -914,12 +915,12 @@ model DrasiKlados {
   @@map("drasi_klados")
 }
 
-/// Φιλοξενούμενο Τοπικό. Ο `topikoCode` είναι το `unitId` του e-SEO — το όνομα
-/// αντιγράφεται, γιατί δεν έχουμε (ούτε θέλουμε) τις μονάδες άλλων Τοπικών στη βάση.
+/// Φιλοξενούμενο Τοπικό: μόνο όνομα, με το χέρι — για άλλα Τοπικά το e-SEO δεν
+/// δίνει τίποτα παραπάνω. Μέσα στη δράση το όνομα είναι μοναδικό (`guestTopikoKey`
+/// του shared, χωρίς τόνους/πεζά).
 model DrasiGuestTopiko {
   id           String       @id @default(uuid()) @db.Uuid
   drasiId      String       @db.Uuid
-  topikoCode   String
   topikoName   String
   /// Ποιοι κλάδοι τους έρχονται — τιμές, όχι FK: δεν υπάρχουν εγγραφές `Klados` γι' αυτούς.
   kladoi       KladosType[]
@@ -930,7 +931,7 @@ model DrasiGuestTopiko {
   drasi         Drasi                @relation(fields: [drasiId], references: [id], onDelete: Cascade)
   externalYliko DrasiExternalYliko[]
 
-  @@unique([drasiId, topikoCode])
+  @@index([drasiId])
   @@map("drasi_guest_topiko")
 }
 

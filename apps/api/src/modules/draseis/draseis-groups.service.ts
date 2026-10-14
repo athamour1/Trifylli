@@ -25,6 +25,12 @@ const memberUserSelect = {
 } as const;
 
 /**
+ * Σήμα «μέλος άλλου Τοπικού» στο `User.guestTopikoCode` (τα εξωτερικά στελέχη
+ * έχουν `EXT`). Από ποιο Τοπικό έρχεται το λέει το `guestTopikoName`.
+ */
+const GUEST_MARK = 'GUEST';
+
+/**
  * Φιλοξενούμενοι από άλλα Τοπικά (F3) και ομάδες — πεντάδες, φωλιές, ενωμοτίες,
  * σκηνές (F14).
  *
@@ -79,7 +85,7 @@ export class DraseisGroupsService {
         kind,
         birthDate: dto.birthDate,
         phone: dto.phone?.trim() || null,
-        guestTopikoCode: dto.topikoCode,
+        guestTopikoCode: GUEST_MARK,
         guestTopikoName: dto.topikoName.trim(),
         // Ο κηδεμόνας του φιλοξενούμενου: δεν υπάρχει εγγραφή e-SEO για να τον
         // δέσουμε, οπότε ζει στα ελεύθερα πεδία — όπως τα αντίστοιχα του e-SEO.
@@ -342,7 +348,6 @@ function toGuestView(u: {
   kind: MemberKind;
   birthDate: Date | null;
   phone: string | null;
-  guestTopikoCode: string | null;
   guestTopikoName: string | null;
   eseoPayload: Prisma.JsonValue | null;
   _count: { participations: number };
@@ -355,7 +360,6 @@ function toGuestView(u: {
     kind: u.kind,
     birthDate: u.birthDate?.toISOString() ?? null,
     phone: u.phone,
-    guestTopikoCode: u.guestTopikoCode ?? '',
     guestTopikoName: u.guestTopikoName ?? '',
     guardianName: guest.guardianName ?? null,
     guardianPhone: guest.guardianPhone ?? null,

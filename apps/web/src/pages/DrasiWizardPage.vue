@@ -195,7 +195,6 @@ interface DrasiForWizard {
   klados: { type: KladosType } | null;
   kladoi: KladosType[];
   guestTopika: {
-    topikoCode: string;
     topikoName: string;
     kladoi: KladosType[];
     contactName: string | null;
@@ -341,7 +340,6 @@ async function saveStep2(): Promise<boolean> {
   await put(`/draseis/${drasiId.value}/kladoi`, { kladoi: kladoi.value });
   await put(`/draseis/${drasiId.value}/guest-topika`, {
     items: guests.value.map((g) => ({
-      topikoCode: g.topikoCode,
       topikoName: g.topikoName,
       kladoi: g.kladoi,
       contactName: g.contactName || undefined,
@@ -419,7 +417,6 @@ async function resume(): Promise<void> {
     form.organiser = d.klados?.type ?? null;
     kladoi.value = d.kladoi;
     guests.value = d.guestTopika.map((g) => ({
-      topikoCode: g.topikoCode,
       topikoName: g.topikoName,
       kladoi: g.kladoi,
       contactName: g.contactName ?? '',

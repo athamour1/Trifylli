@@ -258,7 +258,7 @@ const guestCandidates = computed(() => {
   const existing = new Set(props.existingIds);
   return guests.value.filter((g) => !existing.has(g.id));
 });
-const topikoOptions = computed(() => props.guestTopika.map((t) => ({ label: t.topikoName, value: t.topikoCode })));
+const topikoOptions = computed(() => props.guestTopika.map((t) => ({ label: t.topikoName, value: t.id })));
 const guestForm = reactive({
   topiko: '' as string,
   firstName: '',
@@ -288,7 +288,8 @@ watch(
 watch(
   () => props.guestTopika,
   (list) => {
-    if (!guestForm.topiko && list[0]) guestForm.topiko = list[0].topikoCode;
+    // Και όταν το επιλεγμένο Τοπικό αφαιρέθηκε από τις ρυθμίσεις.
+    if (!list.some((t) => t.id === guestForm.topiko)) guestForm.topiko = list[0]?.id ?? '';
   },
   { immediate: true },
 );
@@ -298,12 +299,11 @@ async function submitGuests(): Promise<void> {
 }
 
 async function submitNewGuest(): Promise<void> {
-  const topiko = props.guestTopika.find((t) => t.topikoCode === guestForm.topiko);
+  const topiko = props.guestTopika.find((t) => t.id === guestForm.topiko);
   if (!topiko) return;
   saving.value = true;
   try {
     await post(`/draseis/${props.drasiId}/guests`, {
-      topikoCode: topiko.topikoCode,
       topikoName: topiko.topikoName,
       firstName: guestForm.firstName.trim(),
       lastName: guestForm.lastName.trim(),

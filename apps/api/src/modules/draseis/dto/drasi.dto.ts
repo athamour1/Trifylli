@@ -253,13 +253,9 @@ export class SetDrasiKladoiDto {
 }
 
 export class GuestTopikoDto {
-  @ApiProperty({ description: 'Ο κωδικός (unitId) του Τοπικού στο e-SEO.' })
+  @ApiProperty({ description: 'Γραμμένο με το χέρι — το e-SEO δεν δίνει τίποτα παραπάνω για άλλα Τοπικά.' })
   @IsString()
-  @Matches(/^\d{1,10}$/, { message: 'Ο κωδικός Τοπικού είναι αριθμός (unitId του e-SEO).' })
-  topikoCode!: string;
-
-  @ApiProperty()
-  @IsString()
+  @Matches(/\S/, { message: 'Το Τοπικό θέλει όνομα.' })
   @MaxLength(120)
   topikoName!: string;
 
