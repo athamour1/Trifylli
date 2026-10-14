@@ -605,8 +605,10 @@ layout + bucket + key (idempotent) στο πρώτο boot.
 * **MFA**: προαιρετικό και στην παραγωγή (`AUTHENTIK_MFA_MODE=skip`, επιλογή
   του Τοπικού) — ζητείται μόνο από όποιον έχει στήσει authenticator.
   `AUTHENTIK_MFA_MODE=configure` το κάνει υποχρεωτικό στην πρώτη σύνδεση.
-* **Κωδικοί**: ≥ 12 χαρακτήρες, zxcvbn ≥ 3, έλεγχος Have I Been Pwned
-  (k-anonymity — ο κωδικός δεν φεύγει ποτέ). Το Trifylli δεν βλέπει κωδικό.
+* **Κωδικοί**: ≥ 8 χαρακτήρες και έλεγχος Have I Been Pwned (k-anonymity — ο
+  κωδικός δεν φεύγει ποτέ), χωρίς zxcvbn. Με το MFA προαιρετικό, αυτά μαζί με
+  το φρένο brute force είναι όλη η προστασία της σύνδεσης. Το Trifylli δεν
+  βλέπει κωδικό.
 * **Το API μιλά στο Authentik ως service account** με πέντε δικαιώματα (χρήστης:
   δημιουργία/ανάγνωση/αλλαγή/επαναφορά, ανάγνωση email stage) — όχι superuser.
   Το token το φτιάχνει το blueprint από το `AUTHENTIK_API_TOKEN`.
