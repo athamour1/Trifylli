@@ -2,7 +2,8 @@
   <!--
     Το προγραμματικό ενός στοιχείου του ωρολογίου: δική του σελίδα, με το markdown
     (εικόνες, προεπισκόπηση) όπως στις συγκεντρώσεις, και ό,τι άλλο το πλαισιώνει
-    (λεπτά, είδος, χώρος, υπεύθυνοι, υλικό). Σώζει μόνη της — δεν έχει κουμπί.
+    (λεπτά, είδος, χώρος, υπεύθυνοι, υλικό) σε κάρτες στο πλάι. Σώζει μόνη της —
+    δεν έχει κουμπί.
   -->
   <q-page padding>
     <PageState :loading="loading && !item" :error="error" :stale="stale" @retry="reload">
@@ -35,49 +36,45 @@
           </div>
         </div>
 
-        <!-- ── Πλαίσιο ── -->
-        <q-card flat bordered class="q-mb-md">
-          <q-card-section class="row q-col-gutter-sm">
-            <div class="col-6 col-sm-2">
+        <!-- ── Το προγραμματικό, με τα στοιχεία και το υλικό στο πλάι (δεξιά) ── -->
+        <div class="programmatiko-layout">
+          <q-card flat bordered class="programmatiko-layout__details">
+            <q-card-section class="text-subtitle1 text-weight-medium q-py-sm">Στοιχεία</q-card-section>
+            <q-separator />
+            <q-card-section class="q-gutter-sm">
               <q-input v-model.number="form.durationMin" :readonly="!editAll" type="number" label="Λεπτά" outlined dense :min="1" :max="1440" color="klados" />
-            </div>
-            <div class="col-6 col-sm-3">
               <q-select v-model="form.kind" :readonly="!editAll" :options="kindOptions" label="Είδος" outlined dense emit-value map-options color="klados">
                 <template #prepend><q-icon :name="KIND_ICON[form.kind]" :color="KIND_COLOR[form.kind]" /></template>
               </q-select>
-            </div>
-            <div class="col-12 col-sm-7"><q-input v-model="form.location" :readonly="!editable" label="Χώρος" outlined dense color="klados" /></div>
-            <div class="col-12 col-sm-6">
+              <q-input v-model="form.location" :readonly="!editable" label="Χώρος" outlined dense color="klados" />
               <StelexosPicker v-if="editAll" v-model="form.responsible" label="Υπεύθυνοι διεξαγωγής" :options="stelexiOptions" />
               <q-input v-else :model-value="namesOf(form.responsible)" label="Υπεύθυνοι διεξαγωγής" outlined dense readonly />
-            </div>
-            <div class="col-12 col-sm-6">
               <StelexosPicker v-if="editAll" v-model="form.executor" label="Υπεύθυνοι υλοποίησης" :options="stelexiOptions" />
               <q-input v-else :model-value="namesOf(form.executor)" label="Υπεύθυνοι υλοποίησης" outlined dense readonly />
-            </div>
-          </q-card-section>
-        </q-card>
+            </q-card-section>
+            <q-card-actions v-if="editAll" align="right">
+              <q-btn flat no-caps color="negative" icon="delete" label="Διαγραφή στοιχείου" @click="remove" />
+            </q-card-actions>
+          </q-card>
 
-        <!-- ── Το κείμενο ── -->
-        <q-card flat bordered class="q-mb-md">
-          <q-card-section>
-            <MarkdownField
-              v-model="form.description"
-              :klados="drasi.klados?.type ?? null"
-              :readonly="!editable"
-              label="Προγραμματικό"
-              placeholder="Markdown: στόχος, πορεία, οδηγίες, κανόνες, εναλλακτική αν βρέξει… Σύρε ή επικόλλησε εικόνες."
-              empty-text="Δεν έχει γραφτεί προγραμματικό."
-              :min-height="360"
-            />
-          </q-card-section>
-        </q-card>
+          <q-card flat bordered class="programmatiko-layout__text">
+            <q-card-section>
+              <MarkdownField
+                v-model="form.description"
+                :klados="drasi.klados?.type ?? null"
+                :readonly="!editable"
+                label="Προγραμματικό"
+                placeholder="Markdown: στόχος, πορεία, οδηγίες, κανόνες, εναλλακτική αν βρέξει… Σύρε ή επικόλλησε εικόνες."
+                empty-text="Δεν έχει γραφτεί προγραμματικό."
+                :min-height="360"
+              />
+            </q-card-section>
+          </q-card>
 
-        <!-- ── Υλικό ── -->
-        <q-card flat bordered>
-          <q-card-section class="text-subtitle2 q-pb-xs">Υλικό</q-card-section>
-          <q-card-section class="q-pt-none row q-col-gutter-sm">
-            <div class="col-12 col-sm-6">
+          <q-card flat bordered class="programmatiko-layout__yliko">
+            <q-card-section class="text-subtitle1 text-weight-medium q-py-sm">Υλικό</q-card-section>
+            <q-separator />
+            <q-card-section class="q-gutter-sm">
               <q-select
                 v-if="editable && canPickYliko"
                 v-model="form.yliko"
@@ -95,13 +92,10 @@
                 @filter="filterYliko"
               />
               <q-input v-else :model-value="form.yliko.map(ylikoName).join(', ') || '—'" label="Από τις αποθήκες" outlined dense readonly />
-            </div>
-            <div class="col-12 col-sm-6"><q-input v-model="form.ylikoNotes" :readonly="!editable" label="Άλλο υλικό (ελεύθερο κείμενο)" outlined dense color="klados" /></div>
-          </q-card-section>
-          <q-card-actions v-if="editAll" align="right">
-            <q-btn flat color="negative" icon="delete" label="Διαγραφή στοιχείου" @click="remove" />
-          </q-card-actions>
-        </q-card>
+              <q-input v-model="form.ylikoNotes" :readonly="!editable" label="Άλλο υλικό (ελεύθερο κείμενο)" outlined dense color="klados" />
+            </q-card-section>
+          </q-card>
+        </div>
       </template>
     </PageState>
   </q-page>
@@ -398,3 +392,32 @@ function remove(): void {
   });
 }
 </script>
+
+<style scoped lang="scss">
+// Όπως στη συγκέντρωση: το κείμενο στα δύο τρίτα, τα στοιχεία και το υλικό σε στήλη
+// δεξιά. Η στήλη δεν στενεύει κάτω από 280px, για να χωρά ένα όνομα δίπλα στην
+// ετικέτα. Στο κινητό μία στήλη: στοιχεία → κείμενο → υλικό.
+.programmatiko-layout {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: 'details' 'text' 'yliko';
+}
+.programmatiko-layout__details {
+  grid-area: details;
+}
+.programmatiko-layout__text {
+  grid-area: text;
+}
+.programmatiko-layout__yliko {
+  grid-area: yliko;
+}
+@media (min-width: 1024px) {
+  .programmatiko-layout {
+    grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr);
+    grid-template-rows: auto 1fr;
+    grid-template-areas: 'text details' 'text yliko';
+    align-items: start;
+  }
+}
+</style>
