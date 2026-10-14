@@ -678,7 +678,8 @@ body.body--dark {
 
 /* ════════════════════════════════════════════════════════════════════════
    Segmented control (SegmentedToggle.vue πάνω στο q-btn-toggle)
-   Πλαίσιο-χάπι γύρω από τις επιλογές και «χάπι» που γλιστρά στην ενεργή.
+   Απαλή «ράγα» πίσω από τις επιλογές (χωρίς περίγραμμα — έμοιαζε με κορνίζα)
+   και «χάπι» που γλιστρά στην ενεργή.
    ════════════════════════════════════════════════════════════════════════ */
 .tf-seg {
   display: inline-flex;
@@ -690,9 +691,8 @@ body.body--dark {
     display: inline-flex;
     max-width: 100%;
     padding: 3px;
-    border: 1px solid var(--line);
     border-radius: 999px;
-    background: var(--surface);
+    background: var(--tint);
     isolation: isolate;
     /* Όταν οι επιλογές δεν χωρούν (π.χ. 4 στο κινητό): κύλιση, όχι κόψιμο. */
     overflow-x: auto;
@@ -774,7 +774,6 @@ body.body--dark {
   &--flat &__frame {
     padding: 2px;
     background: var(--tint-soft);
-    border-color: transparent;
   }
   &--flat &__thumb {
     background: var(--surface);
