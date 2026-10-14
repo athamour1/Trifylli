@@ -892,6 +892,21 @@ body.body--dark .tf-seg--flat .tf-seg__thumb {
 .q-field__input {
   min-width: 0;
 }
+/* Πεδία με chips (πολλαπλή επιλογή): ίδιο ύψος γεμάτα και άδεια. Το Quasar
+   δίνει στο chip 4px περιθώριο γύρω γύρω — 21px + 8px δεν χωράνε στη γραμμή
+   των 24px και το πεδίο ψήλωνε 5px με την πρώτη επιλογή. Σε στενή στήλη το
+   chip (100% + περιθώρια) ξεχείλιζε και έστελνε ό,τι ακολουθεί σε νέα γραμμή. */
+.q-field__native > .q-chip {
+  margin-top: 1px;
+  margin-bottom: 1px;
+  max-width: calc(100% - 8px);
+}
+/* Το κουτάκι αναζήτησης δίπλα στα chips κρατά 50px μόνο όσο γράφεις· αλλιώς
+   ένα όνομα που γεμίζει τη γραμμή το έστελνε, άδειο, σε δεύτερη. */
+.q-select--with-chips:not(.q-field--focused) .q-field__input {
+  min-width: 0 !important;
+  padding-left: 0;
+}
 
 /* ── Πεδία: «αναπνέουν» στο focus (δαχτυλίδι στο χρώμα του κλάδου) ── */
 .q-field--outlined .q-field__control {
