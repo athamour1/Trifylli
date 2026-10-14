@@ -11,13 +11,17 @@ register(process.env.SERVICE_WORKER_FILE ?? 'sw.js', {
   updated() {
     // Στην κατασκήνωση μια αυτόματη ανανέωση μπορεί να χάσει μισοσυμπληρωμένο
     // παρουσιολόγιο· ο χρήστης αποφασίζει πότε θα φορτώσει τη νέα έκδοση.
+    // Στο χρώμα του κλάδου της σελίδας (`bg-klados`), όχι στο μπλε του `info`·
+    // το `klados-on` κρατά το κείμενο ευανάγνωστο και στο κίτρινο των Πουλιών.
     Notify.create({
-      type: 'info',
+      color: 'klados',
+      textColor: 'klados-on',
+      icon: 'info',
       message: 'Υπάρχει νέα έκδοση.',
       timeout: 0,
       actions: [
-        { label: 'Ανανέωση', color: 'white', handler: () => window.location.reload() },
-        { label: 'Αργότερα', color: 'white' },
+        { label: 'Ανανέωση', color: 'klados-on', handler: () => window.location.reload() },
+        { label: 'Αργότερα', color: 'klados-on' },
       ],
     });
   },
