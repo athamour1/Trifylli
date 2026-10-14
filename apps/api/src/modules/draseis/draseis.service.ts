@@ -2,7 +2,6 @@ import { BadRequestException, ConflictException, ForbiddenException, Injectable,
 import { AccountRole, CheckoutStatus, DrasiStatus, DrasiType, MemberKind, Prisma } from '@prisma/client';
 import {
   can,
-  guestTopikoKey,
   KLADOS_LABEL,
   KLADOS_META,
   type DrasiRoleKind,
@@ -16,6 +15,7 @@ import type { RequestUser } from '../../common/auth/types';
 import { accessProfileOf, assertKladosAccess, scopedKladoi } from '../../common/util/klados-scope';
 import { DrasiAccessService } from './drasi-access.service';
 import { defaultFeeKind } from './draseis-finance.service';
+import { planGuestTopika } from './guest-topika';
 import type {
   AddParticipantsDto,
   CreateDrasiDto,
@@ -345,22 +345,29 @@ export class DraseisService {
       .sort((a, b) => KLADOS_META[a].order - KLADOS_META[b].order);
   }
 
-  /** Αντικαθιστά τα φιλοξενούμενα Τοπικά. Ίδιο όνομα δύο φορές ⇒ κρατιέται το τελευταίο. */
+  /**
+   * Αντικαθιστά τα φιλοξενούμενα Τοπικά. Όσα μένουν κρατούν το id τους (βλ.
+   * `planGuestTopika`), ώστε το υλικό που φέρνουν να μη χάνει τον κάτοχό του.
+   */
   async setGuestTopika(user: RequestUser, id: string, dto: SetGuestTopikaDto) {
     await this.assertAccess(user, id);
 
-    const byName = new Map(dto.items.map((item) => [guestTopikoKey(item.topikoName), item]));
+    const stored = await this.prisma.drasiGuestTopiko.findMany({ where: { drasiId: id }, select: { id: true, topikoName: true } });
+    const plan = planGuestTopika(stored, dto.items);
+    if (plan.duplicates.length) {
+      throw new BadRequestException(`Το ίδιο Τοπικό δύο φορές: ${plan.duplicates.join(', ')}.`);
+    }
+
+    const fields = (item: SetGuestTopikaDto['items'][number]) => ({
+      topikoName: item.topikoName.trim().replace(/\s+/g, ' '),
+      kladoi: item.kladoi,
+      contactName: item.contactName?.trim() || null,
+      contactPhone: item.contactPhone?.trim() || null,
+    });
     await this.prisma.$transaction([
-      this.prisma.drasiGuestTopiko.deleteMany({ where: { drasiId: id } }),
-      this.prisma.drasiGuestTopiko.createMany({
-        data: [...byName.values()].map((item) => ({
-          drasiId: id,
-          topikoName: item.topikoName.trim().replace(/\s+/g, ' '),
-          kladoi: item.kladoi,
-          contactName: item.contactName?.trim() || null,
-          contactPhone: item.contactPhone?.trim() || null,
-        })),
-      }),
+      this.prisma.drasiGuestTopiko.deleteMany({ where: { drasiId: id, id: { in: plan.remove } } }),
+      ...plan.update.map((u) => this.prisma.drasiGuestTopiko.updateMany({ where: { id: u.id, drasiId: id }, data: fields(u.item) })),
+      this.prisma.drasiGuestTopiko.createMany({ data: plan.create.map((item) => ({ drasiId: id, ...fields(item) })) }),
     ]);
 
     return this.prisma.drasiGuestTopiko.findMany({ where: { drasiId: id }, orderBy: { topikoName: 'asc' } });

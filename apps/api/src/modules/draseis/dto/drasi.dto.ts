@@ -253,6 +253,14 @@ export class SetDrasiKladoiDto {
 }
 
 export class GuestTopikoDto {
+  @ApiPropertyOptional({
+    format: 'uuid',
+    description: 'Για όσα είναι ήδη αποθηκευμένα: η μετονομασία κρατά το ίδιο Τοπικό (και το υλικό του).',
+  })
+  @IsOptional()
+  @IsUUID()
+  id?: string;
+
   @ApiProperty({ description: 'Γραμμένο με το χέρι — το e-SEO δεν δίνει τίποτα παραπάνω για άλλα Τοπικά.' })
   @IsString()
   @Matches(/\S/, { message: 'Το Τοπικό θέλει όνομα.' })
