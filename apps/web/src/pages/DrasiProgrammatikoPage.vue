@@ -45,12 +45,12 @@
             </div>
             <div class="col-12 col-sm-7"><q-input v-model="form.location" :readonly="!editable" label="Χώρος" outlined dense color="klados" /></div>
             <div class="col-12 col-sm-6">
-              <StelexosPicker v-if="editable" v-model="form.responsible" label="Υπεύθυνος διεξαγωγής" :options="stelexiOptions" />
-              <q-input v-else :model-value="nameOf(form.responsible[0])" label="Υπεύθυνος διεξαγωγής" outlined dense readonly />
+              <StelexosPicker v-if="editable" v-model="form.responsible" label="Υπεύθυνοι διεξαγωγής" :options="stelexiOptions" />
+              <q-input v-else :model-value="namesOf(form.responsible)" label="Υπεύθυνοι διεξαγωγής" outlined dense readonly />
             </div>
             <div class="col-12 col-sm-6">
-              <StelexosPicker v-if="editable" v-model="form.executor" label="Υπεύθυνος υλοποίησης" :options="stelexiOptions" />
-              <q-input v-else :model-value="nameOf(form.executor[0])" label="Υπεύθυνος υλοποίησης" outlined dense readonly />
+              <StelexosPicker v-if="editable" v-model="form.executor" label="Υπεύθυνοι υλοποίησης" :options="stelexiOptions" />
+              <q-input v-else :model-value="namesOf(form.executor)" label="Υπεύθυνοι υλοποίησης" outlined dense readonly />
             </div>
           </q-card-section>
         </q-card>
@@ -116,7 +116,6 @@ import {
   type DrasiScheduleView,
   type DrasiStatus,
   type KladosType,
-  type MemberSummary,
   type Paginated,
   type YlikoAvailability,
 } from '@trifylli/shared';
@@ -200,19 +199,26 @@ watch(
 const editable = computed(() => !!drasi.value && drasi.value.status !== 'KLEISTI' && auth.can('drasi:write', drasi.value.klados?.type ?? undefined));
 
 // ── Στελέχη & υλικό για τους pickers ──
-const stelexi = ref<MemberSummary[]>([]);
-const stelexiOptions = computed(() => stelexi.value.map((s) => ({ label: `${s.lastName} ${s.firstName}`.trim(), value: s.id, caption: s.leaderTitle ?? '' })));
+/** Μόνο τα στελέχη της δράσης (δικά μας, φιλοξενούμενα, εξωτερικά). */
+const stelexiOptions = computed(() => {
+  const options = (data.value?.schedule.stelexi ?? []).map((s) => ({
+    label: `${s.lastName} ${s.firstName}`.trim(),
+    value: s.id,
+    caption: s.guestTopikoName ?? '',
+  }));
+  // Όσοι ορίστηκαν πριν μετρήσουν μόνο τα στελέχη της δράσης: φαίνονται, για να βγουν.
+  for (const p of [...(item.value?.responsibles ?? []), ...(item.value?.executors ?? [])]) {
+    if (!options.some((o) => o.value === p.id)) {
+      options.push({ label: `${p.lastName} ${p.firstName}`.trim(), value: p.id, caption: 'Δεν είναι στους συμμετέχοντες' });
+    }
+  }
+  return options;
+});
+const namesOf = (ids: string[]): string =>
+  ids.map((id) => stelexiOptions.value.find((o) => o.value === id)?.label ?? '').filter(Boolean).join(', ') || '—';
 const knownNames = new Map<string, string>();
-const nameOf = (id: string | undefined): string => (id ? (stelexiOptions.value.find((o) => o.value === id)?.label ?? knownNames.get(id) ?? '') : '—');
 const ylikoOptions = ref<{ label: string; value: string }[]>([]);
 const ylikoName = (id: string): string => ylikoOptions.value.find((o) => o.value === id)?.label ?? knownNames.get(id) ?? '';
-void (async () => {
-  try {
-    stelexi.value = (await get<Paginated<MemberSummary>>('/meloi', { params: { kind: 'STELEXOS', pageSize: 500 } })).items;
-  } catch {
-    // Χωρίς στελέχη οι pickers μένουν άδειοι.
-  }
-})();
 
 async function filterYliko(needle: string, update: (fn: () => void) => void): Promise<void> {
   try {
@@ -257,14 +263,12 @@ watch(
       durationMin: it.durationMin,
       kind: it.kind,
       location: it.location ?? '',
-      responsible: it.responsible ? [it.responsible.id] : [],
-      executor: it.executor ? [it.executor.id] : [],
+      responsible: it.responsibles.map((p) => p.id),
+      executor: it.executors.map((p) => p.id),
       description: it.description ?? '',
       yliko: it.yliko.map((y) => y.ylikoId),
       ylikoNotes: it.ylikoNotes ?? '',
     });
-    if (it.responsible) knownNames.set(it.responsible.id, `${it.responsible.lastName} ${it.responsible.firstName}`);
-    if (it.executor) knownNames.set(it.executor.id, `${it.executor.lastName} ${it.executor.firstName}`);
     for (const y of it.yliko) {
       knownNames.set(y.ylikoId, y.name);
       if (!ylikoOptions.value.some((o) => o.value === y.ylikoId)) ylikoOptions.value.push({ label: y.name, value: y.ylikoId });
@@ -300,18 +304,19 @@ async function saveNow(): Promise<void> {
   }
   if (!dirty.value || !editable.value) return;
   saveStatus.value = 'saving';
+  const change = {
+    ...(form.title.trim() ? { title: form.title.trim() } : {}),
+    durationMin: clampMin(form.durationMin),
+    kind: form.kind,
+    location: form.location.trim() || null,
+    description: form.description || null,
+    responsibleIds: form.responsible,
+    executorIds: form.executor,
+    ylikoNotes: form.ylikoNotes.trim() || null,
+    yliko: form.yliko.map((ylikoId) => ({ ylikoId, qty: 1 })),
+  };
   try {
-    await patch(`/draseis/${drasiId}/schedule/${itemId.value}`, {
-      ...(form.title.trim() ? { title: form.title.trim() } : {}),
-      durationMin: clampMin(form.durationMin),
-      kind: form.kind,
-      location: form.location.trim() || null,
-      description: form.description || null,
-      responsibleId: form.responsible[0] ?? null,
-      executorId: form.executor[0] ?? null,
-      ylikoNotes: form.ylikoNotes.trim() || null,
-      yliko: form.yliko.map((ylikoId) => ({ ylikoId, qty: 1 })),
-    });
+    await patch(`/draseis/${drasiId}/schedule/${itemId.value}`, change);
     dirty.value = false;
     saveStatus.value = 'saved';
     // Οι ώρες στην κεφαλίδα ξαναβγαίνουν από τον server (άλλαξαν αν άλλαξαν τα λεπτά).

@@ -607,8 +607,10 @@ export interface DrasiScheduleItemView {
   kind: DrasiScheduleKind;
   location: string | null;
   description: string | null;
-  responsible: { id: string; firstName: string; lastName: string } | null;
-  executor: { id: string; firstName: string; lastName: string } | null;
+  /** Υπεύθυνοι διεξαγωγής: το τρέχουν τη στιγμή που γίνεται. */
+  responsibles: { id: string; firstName: string; lastName: string }[];
+  /** Υπεύθυνοι υλοποίησης: το ετοιμάζουν πριν (υλικά, εκτυπώσεις, στήσιμο). */
+  executors: { id: string; firstName: string; lastName: string }[];
   ylikoNotes: string | null;
   yliko: { ylikoId: string; name: string; unit: string | null; qty: number }[];
   /** Έχει γραφτεί προγραμματικό (περιγραφή ή υπεύθυνος ή υλικό). */
@@ -800,6 +802,17 @@ export interface DrasiDossier {
 /** Το ωρολόγιο όπως το βλέπει η καρτέλα: ημέρες με ώρα έναρξης και στοιχεία. */
 export interface DrasiScheduleView {
   days: { date: string; startTime: string; overridden: boolean; items: DrasiScheduleItemView[] }[];
+  /** Τα στελέχη της δράσης (δικά μας, φιλοξενούμενα, εξωτερικά) — οι επιλογές για τους υπεύθυνους. */
+  stelexi: DrasiScheduleStelexos[];
+}
+
+export interface DrasiScheduleStelexos {
+  /** Το id του χρήστη — αυτό γράφεται στους υπεύθυνους. */
+  id: string;
+  firstName: string;
+  lastName: string;
+  /** Από ποιο Τοπικό έρχεται, για φιλοξενούμενους και εξωτερικούς· `null` για τα δικά μας. */
+  guestTopikoName: string | null;
 }
 
 // ───────────────────────── Αρχηγείο κλάδου ─────────────────────────

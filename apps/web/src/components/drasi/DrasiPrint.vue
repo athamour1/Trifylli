@@ -80,8 +80,8 @@
                 <span class="ds-tag">{{ DRASI_SCHEDULE_KIND_LABEL[it.kind] }}</span>
                 <div v-if="it.description" class="markdown-body ds-md" v-html="md(it.description)" />
               </td>
-              <td>{{ it.responsible ? `${it.responsible.lastName} ${it.responsible.firstName}` : '—' }}</td>
-              <td>{{ it.executor ? `${it.executor.lastName} ${it.executor.firstName}` : '—' }}</td>
+              <td>{{ names(it.responsibles) }}</td>
+              <td>{{ names(it.executors) }}</td>
               <td>{{ [...it.yliko.map((y) => `${y.name}${y.qty > 1 ? ` ×${y.qty}` : ''}`), it.ylikoNotes ?? ''].filter(Boolean).join(', ') }}</td>
             </tr>
           </tbody>
@@ -264,6 +264,7 @@ const d = computed(() => props.dossier);
 const accent = computed(() => (d.value.drasi.organiser ? KLADOS_META[d.value.drasi.organiser].color : '#546e7a'));
 
 const md = (source: string): string => renderMarkdown(source, () => null);
+const names = (people: { firstName: string; lastName: string }[]): string => people.map((p) => `${p.lastName} ${p.firstName}`).join(', ') || '—';
 
 const roleGroups = computed(() =>
   [...DRASI_ARXIGEIO_KINDS]

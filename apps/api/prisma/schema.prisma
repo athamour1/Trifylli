@@ -104,6 +104,14 @@ enum SignerRole {
   IDIOS
 }
 
+/// Οι δύο ευθύνες ενός στοιχείου του ωρολογίου.
+enum DrasiScheduleDuty {
+  /// Το τρέχει τη στιγμή που γίνεται.
+  DIEXAGOGI
+  /// Το ετοιμάζει πριν: υλικά, εκτυπώσεις, στήσιμο.
+  YLOPOIISI
+}
+
 /// Είδος στοιχείου στο ωρολόγιο της δράσης — για χρώμα και γρήγορη ανάγνωση.
 enum DrasiScheduleKind {
   DRASTIRIOTITA
@@ -354,8 +362,7 @@ model User {
   drasiPaymentsCollected DrasiPayment[]  @relation("DrasiPaymentCollector")
   drasiLedger     DrasiLedgerEntry[]     @relation("DrasiLedgerUser")
   drasiLedgerAuthored DrasiLedgerEntry[] @relation("DrasiLedgerAuthor")
-  scheduleResponsible DrasiScheduleItem[] @relation("ScheduleResponsible")
-  scheduleExecutor    DrasiScheduleItem[] @relation("ScheduleExecutor")
+  scheduleDuties  DrasiScheduleAssignee[]
   drasiShopping   DrasiShoppingItem[]    @relation("ShoppingAssignee")
   drasiExternalYliko DrasiExternalYliko[] @relation("ExternalYlikoResponsible")
   drasiReviews    DrasiReviewAnswer[]    @relation("DrasiReviewAuthor")
@@ -587,23 +594,36 @@ model DrasiScheduleItem {
   location      String?
   /// Το προγραμματικό: οδηγίες, κανόνες, εναλλακτική — Markdown.
   description   String?
-  /// Ποιος το τρέχει τη στιγμή που γίνεται.
-  responsibleId String?            @db.Uuid
-  /// Ποιος το ετοιμάζει πριν: υλικά, εκτυπώσεις, στήσιμο.
-  executorId    String?            @db.Uuid
   /// Υλικό σε ελεύθερο κείμενο (ό,τι δεν είναι είδος αποθήκης).
   ylikoNotes    String?
   createdAt     DateTime           @default(now())
   updatedAt     DateTime           @updatedAt
 
   drasi       Drasi               @relation(fields: [drasiId], references: [id], onDelete: Cascade)
-  responsible User?               @relation("ScheduleResponsible", fields: [responsibleId], references: [id], onDelete: SetNull)
-  executor    User?               @relation("ScheduleExecutor", fields: [executorId], references: [id], onDelete: SetNull)
+  /// Υπεύθυνοι διεξαγωγής και υλοποίησης — περισσότερα στελέχη σε καθεμία.
+  assignees   DrasiScheduleAssignee[]
   yliko       DrasiScheduleYliko[]
   epitropi    DrasiGroup?
 
   @@index([drasiId, date, order])
   @@map("drasi_schedule_item")
+}
+
+/// Υπεύθυνος ενός στοιχείου του ωρολογίου. Μόνο στελέχη της δράσης (δικά μας,
+/// φιλοξενούμενα, εξωτερικά)· γράφουν το προγραμματικό του στοιχείου τους
+/// (κείμενο, χώρο, υλικό), βλ. `SCHEDULE_ITEM_OWN_FIELDS`. Όποιος βγει από τη
+/// δράση φεύγει και από εδώ.
+model DrasiScheduleAssignee {
+  itemId String            @db.Uuid
+  userId String            @db.Uuid
+  duty   DrasiScheduleDuty
+
+  item DrasiScheduleItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  user User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([itemId, duty, userId])
+  @@index([userId])
+  @@map("drasi_schedule_assignee")
 }
 
 /// Απαιτούμενο υλικό ανά στοιχείο ωρολογίου (πρόθεση, όχι δέσμευση).

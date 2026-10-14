@@ -243,6 +243,9 @@ interface Row {
 }
 const rows = ref<Row[]>([]);
 
+const names = (people: DrasiScheduleItemView['responsibles']): string | null =>
+  people.map((p) => `${p.lastName} ${p.firstName}`).join(', ') || null;
+
 function toRow(it: DrasiScheduleItemView): Row {
   return {
     id: it.id,
@@ -250,8 +253,8 @@ function toRow(it: DrasiScheduleItemView): Row {
     durationMin: it.durationMin,
     kind: it.kind,
     location: it.location,
-    responsible: it.responsible ? `${it.responsible.lastName} ${it.responsible.firstName}` : null,
-    executor: it.executor ? `${it.executor.lastName} ${it.executor.firstName}` : null,
+    responsible: names(it.responsibles),
+    executor: names(it.executors),
     hasProgramma: it.hasProgramma,
   };
 }
