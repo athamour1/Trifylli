@@ -135,9 +135,28 @@
                 ]"
               />
             </div>
-            <div class="col-6"><DateField v-model="guestForm.birthDate" label="Ημ. γέννησης" /></div>
-            <div class="col-6"><q-input v-model="guestForm.guardianName" label="Κηδεμόνας" outlined dense color="klados" /></div>
-            <div class="col-6"><q-input v-model="guestForm.guardianPhone" label="Τηλέφωνο κηδεμόνα" outlined dense color="klados" /></div>
+            <template v-if="guestForm.kind === 'MELOS'">
+              <div class="col-6"><DateField v-model="guestForm.birthDate" label="Ημ. γέννησης" /></div>
+              <div class="col-6"><q-input v-model="guestForm.guardianName" label="Κηδεμόνας" outlined dense color="klados" /></div>
+              <div class="col-6"><q-input v-model="guestForm.guardianPhone" label="Τηλέφωνο κηδεμόνα" outlined dense color="klados" /></div>
+            </template>
+            <!-- Στέλεχος: χωρίς κηδεμόνα· με email γίνεται εξωτερικό στέλεχος (όπως στο Αρχηγείο). -->
+            <template v-else>
+              <div class="col-6"><q-input v-model="guestForm.phone" label="Τηλέφωνο" outlined dense color="klados" maxlength="40" /></div>
+              <div class="col-12">
+                <q-input
+                  v-model="guestForm.email"
+                  type="email"
+                  label="Email"
+                  outlined
+                  dense
+                  color="klados"
+                  :error="emailInvalid"
+                  error-message="Μη έγκυρο email."
+                  hint="Με email παίρνει πρόσκληση και μπαίνει στη δράση με τον ρόλο που θα του δώσεις στο Αρχηγείο. Χωρίς email δεν έχει πρόσβαση."
+                />
+              </div>
+            </template>
           </div>
         </q-card-section>
 
@@ -155,8 +174,8 @@
             v-else
             color="klados"
             text-color="klados-on"
-            label="Δημιουργία & προσθήκη"
-            :disable="!guestForm.topiko || !guestForm.firstName.trim() || !guestForm.lastName.trim()"
+            :label="willInvite ? 'Δημιουργία & πρόσκληση' : 'Δημιουργία & προσθήκη'"
+            :disable="!guestForm.topiko || !guestForm.firstName.trim() || !guestForm.lastName.trim() || emailInvalid"
             :loading="saving"
             @click="submitNewGuest"
           />
@@ -172,6 +191,7 @@ import { useQuasar } from 'quasar';
 import {
   KLADOS_LABEL,
   MEMBER_KIND_LABEL,
+  type DrasiExternalCreated,
   type DrasiGuestTopikoView,
   type GuestMemberView,
   type KladosType,
@@ -180,6 +200,7 @@ import {
 } from '@trifylli/shared';
 import DateField from '../DateField.vue';
 import { ApiError, get, post } from '../../lib/api';
+import { newGuestRequest, type NewGuestForm } from './new-guest';
 
 const props = defineProps<{
   modelValue: boolean;
@@ -259,15 +280,20 @@ const guestCandidates = computed(() => {
   return guests.value.filter((g) => !existing.has(g.id));
 });
 const topikoOptions = computed(() => props.guestTopika.map((t) => ({ label: t.topikoName, value: t.id })));
-const guestForm = reactive({
-  topiko: '' as string,
+const guestForm = reactive<NewGuestForm>({
+  topiko: '',
   firstName: '',
   lastName: '',
-  kind: 'MELOS' as 'MELOS' | 'STELEXOS',
+  kind: 'MELOS',
   birthDate: '',
   guardianName: '',
   guardianPhone: '',
+  email: '',
+  phone: '',
 });
+/** Στέλεχος με email: θα πάρει πρόσκληση και πρόσβαση στη δράση. */
+const willInvite = computed(() => guestForm.kind === 'STELEXOS' && !!guestForm.email.trim());
+const emailInvalid = computed(() => willInvite.value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestForm.email.trim()));
 
 async function loadGuests(): Promise<void> {
   guestLoading.value = true;
@@ -300,21 +326,23 @@ async function submitGuests(): Promise<void> {
 
 async function submitNewGuest(): Promise<void> {
   const topiko = props.guestTopika.find((t) => t.id === guestForm.topiko);
-  if (!topiko) return;
+  if (!topiko || emailInvalid.value) return;
+  const request = newGuestRequest(props.drasiId, guestForm, topiko.topikoName);
   saving.value = true;
   try {
-    await post(`/draseis/${props.drasiId}/guests`, {
-      topikoName: topiko.topikoName,
-      firstName: guestForm.firstName.trim(),
-      lastName: guestForm.lastName.trim(),
-      kind: guestForm.kind,
-      birthDate: guestForm.birthDate ? new Date(`${guestForm.birthDate}T12:00:00`).toISOString() : undefined,
-      guardianName: guestForm.guardianName.trim() || undefined,
-      guardianPhone: guestForm.guardianPhone.trim() || undefined,
-    });
-    Object.assign(guestForm, { firstName: '', lastName: '', birthDate: '', guardianName: '', guardianPhone: '' });
+    if (request.external) {
+      const r = await post<DrasiExternalCreated>(request.url, request.body);
+      $q.notify(
+        r.invited
+          ? { type: 'positive', icon: 'forward_to_inbox', message: `Στάλθηκε πρόσκληση στο ${r.external.email}. Δώσε του ρόλο από το Αρχηγείο.` }
+          : { type: 'warning', message: `Προστέθηκε, αλλά η πρόσκληση δεν έφυγε: ${r.inviteError}` },
+      );
+    } else {
+      await post(request.url, request.body);
+      $q.notify({ type: 'positive', message: 'Ο φιλοξενούμενος προστέθηκε.' });
+    }
+    Object.assign(guestForm, { firstName: '', lastName: '', birthDate: '', guardianName: '', guardianPhone: '', email: '', phone: '' });
     emit('added', 1);
-    $q.notify({ type: 'positive', message: 'Ο φιλοξενούμενος προστέθηκε.' });
   } catch (err) {
     notifyError(err, 'Αποτυχία δημιουργίας.');
   } finally {
