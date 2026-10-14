@@ -790,9 +790,6 @@ function notifyError(err: unknown, fallback: string): void {
 .answer-ghost--long {
   max-width: 85%;
 }
-.scale-toggle {
-  border: 1px solid var(--line);
-}
 .scale-dot {
   display: inline-block;
   width: 28px;

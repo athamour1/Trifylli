@@ -67,7 +67,6 @@
         no-caps
         dense
         unelevated
-        class="bordered-toggle"
       />
       <!-- Στο κινητό: δύο μικρά στρογγυλά + / −, δίπλα στο φίλτρο. -->
       <div v-if="canManage" class="row no-wrap q-gutter-sm">
@@ -394,11 +393,6 @@ function closeReceipt(): void {
 </script>
 
 <style scoped>
-.bordered-toggle {
-  border: 1px solid var(--line);
-  border-radius: 8px;
-}
-
 /* Σταθερό κενό ανάμεσα στις δύο στήλες — χωρίς το αρνητικό περιθώριο του
    `q-col-gutter` που έκανε τις γραμμές να μη στοιχίζονται με τα μονά πεδία. */
 .form-row {

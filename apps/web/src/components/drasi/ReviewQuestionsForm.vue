@@ -62,7 +62,6 @@
                 toggle-color="klados"
                 toggle-text-color="klados-on"
                 clearable
-                class="scale-toggle"
                 :disable="!canAnswer"
               />
             </div>
@@ -190,9 +189,6 @@ function submit(): void {
 }
 .question-card--error {
   border-color: var(--q-negative);
-}
-.scale-toggle {
-  border: 1px solid var(--line);
 }
 .dist-label {
   width: 140px;

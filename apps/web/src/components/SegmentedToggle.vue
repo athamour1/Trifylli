@@ -8,7 +8,8 @@
     αντί να αλλάζει απότομα.
 
     Όλα τα props/events περνούν αυτούσια στο q-btn-toggle (`v-model`, `options`,
-    `dense`, `spread`…), οπότε στα call sites αλλάζει μόνο το όνομα του tag.
+    `dense`, `spread`…), οπότε στα call sites αλλάζει μόνο το όνομα του tag. Μόνο
+    τα `class`/`style` (π.χ. `q-mb-md`) μένουν στο root.
     Το χάπι μετριέται από το κουμπί με `aria-pressed="true"` — αυτό που η Quasar
     σημαδεύει ως ενεργό — άρα δεν χρειάζεται να ξέρουμε την τιμή.
   -->
@@ -17,12 +18,13 @@
        ζει στο εσωτερικό `__frame`. -->
   <div
     class="tf-seg"
-    :class="{ 'tf-seg--ready': ready, 'tf-seg--flat': isFlat, 'tf-seg--spread': isSpread }"
+    :class="[attrs.class, { 'tf-seg--ready': ready, 'tf-seg--flat': isFlat, 'tf-seg--spread': isSpread }]"
+    :style="attrs.style as StyleValue"
   >
     <div ref="root" class="tf-seg__frame">
       <span class="tf-seg__thumb" :style="thumbStyle" aria-hidden="true" />
       <q-btn-toggle
-        v-bind="$attrs"
+        v-bind="toggleAttrs()"
         :model-value="modelValue"
         :options="options"
         no-caps
@@ -33,7 +35,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, useAttrs } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, useAttrs, type StyleValue } from 'vue';
 import type { QBtnToggleProps } from 'quasar';
 
 defineOptions({ inheritAttrs: false });
@@ -46,6 +48,15 @@ const attrs = useAttrs();
 const root = ref<HTMLElement | null>(null);
 const ready = ref(false);
 const thumb = ref<{ x: number; y: number; w: number; h: number } | null>(null);
+
+/**
+ * Τα attrs του q-btn-toggle: όλα εκτός από `class`/`style`, που πάνε στο root.
+ * Αλλιώς ένα περιθώριο του call site έμπαινε μέσα στη ράγα και την ψήλωνε.
+ */
+function toggleAttrs(): Record<string, unknown> {
+  const { class: _class, style: _style, ...rest } = attrs;
+  return rest;
+}
 
 const isFlat = computed(() => 'flat' in attrs && attrs.flat !== false);
 const isSpread = computed(() => 'spread' in attrs && attrs.spread !== false);
