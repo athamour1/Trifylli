@@ -26,7 +26,7 @@
       </template>
       <q-space />
       <span v-if="current.items.length" class="text-caption text-grey-7">
-        {{ rows.length }} στοιχεία · {{ formatDuration(totalMin) }} · λήξη {{ times[times.length - 1]?.end }}
+        {{ rows.length }} {{ rows.length === 1 ? 'στοιχείο' : 'στοιχεία' }} · {{ formatDuration(totalMin) }} · λήξη {{ times[times.length - 1]?.end }}
       </span>
     </div>
 
