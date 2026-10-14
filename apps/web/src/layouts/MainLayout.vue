@@ -2,7 +2,7 @@
   <q-layout view="hHh Lpr lFf">
     <q-header elevated class="bg-klados text-klados-bar" :class="{ 'is-scrolled': scrolled }">
       <q-toolbar>
-        <q-btn flat dense round icon="menu" aria-label="Μενού" @click="drawer = !drawer" />
+        <q-btn v-if="!auth.isExternal" flat dense round icon="menu" aria-label="Μενού" @click="drawer = !drawer" />
 
         <q-toolbar-title class="text-weight-medium">
           <span v-if="activeKlados" class="text-weight-regular">
@@ -61,8 +61,10 @@
 
     <!-- Σε μεγάλες οθόνες το συρτάρι «αιωρείται» (βλ. app.scss, «Πλωτά πάνελ»):
          τα 12px επιπλέον πλάτος είναι το κενό αριστερά του, ώστε η Quasar να
-         υπολογίζει σωστά το περιθώριο της σελίδας και την απόκρυψη. -->
-    <q-drawer ref="drawerRef" v-model="drawer" show-if-above bordered :width="$q.screen.lt.md ? 272 : 284">
+         υπολογίζει σωστά το περιθώριο της σελίδας και την απόκρυψη.
+         Ο εξωτερικός (λογαριασμός για μία δράση) δεν έχει μενού εφαρμογής: η
+         Αρχική του είναι οι δράσεις του, και μέσα στη δράση γυρίζει από τις ενότητες. -->
+    <q-drawer v-if="!auth.isExternal" ref="drawerRef" v-model="drawer" show-if-above bordered :width="$q.screen.lt.md ? 272 : 284">
       <!-- Ο περιέκτης του μενού είναι το σημείο αναφοράς του «χαπιού» που γλιστρά
            στο ενεργό στοιχείο (useSlidingThumb). Μετριέται αυτός και όχι το
            συρτάρι, ώστε να πιάνει και το άνοιγμα/κλείσιμο ενοτήτων κλάδου. -->

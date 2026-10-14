@@ -13,6 +13,14 @@
           <!-- Το highlight της ενεργής ενότητας: ένα χάπι που γλιστρά στη νέα θέση. -->
           <span class="drasi-nav__thumb" :style="navThumb" aria-hidden="true" />
           <q-list padding>
+            <!-- Ο εξωτερικός δεν έχει μενού εφαρμογής: από εδώ γυρίζει στις δράσεις του. -->
+            <template v-if="auth.isExternal">
+              <q-item clickable dense :to="{ name: 'dashboard' }" class="text-klados">
+                <q-item-section avatar><q-icon name="arrow_back" size="20px" /></q-item-section>
+                <q-item-section>Οι δράσεις μου</q-item-section>
+              </q-item>
+              <q-separator spaced />
+            </template>
             <q-item-label header class="q-pb-xs">Ενότητες</q-item-label>
             <q-item
               v-for="s in sections"
@@ -71,6 +79,9 @@
           </q-btn>
           <q-dialog v-model="sectionSheet" position="bottom">
             <q-card class="section-sheet">
+              <q-card-section v-if="auth.isExternal" class="q-pb-none">
+                <q-btn flat no-caps color="klados" icon="arrow_back" label="Οι δράσεις μου" :to="{ name: 'dashboard' }" @click="sectionSheet = false" />
+              </q-card-section>
               <q-card-section class="text-subtitle2 q-pb-sm">Ενότητες</q-card-section>
               <q-card-section class="q-pt-none section-sheet__grid">
                 <button
