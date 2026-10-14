@@ -14,10 +14,13 @@
           </q-btn>
           <div class="col row items-start justify-between q-col-gutter-sm">
             <div class="col-12 col-sm">
-              <q-input v-model="form.title" :readonly="!editable" borderless dense class="page-title" placeholder="Τι γίνεται" />
+              <q-input v-model="form.title" :readonly="!editAll" borderless dense class="page-title" placeholder="Τι γίνεται" />
               <div class="text-caption text-grey-7">
                 {{ drasi.title }} · {{ formatDateLong(item.date) }} · {{ hm(item.startsAt) }}–{{ hm(item.endsAt) }}
                 · {{ formatDuration(item.durationMin) }}
+              </div>
+              <div v-if="scope === 'own'" class="text-caption text-klados q-mt-xs">
+                <q-icon name="assignment_ind" size="16px" class="q-mr-xs" />Είσαι υπεύθυνος: γράφεις το προγραμματικό, τον χώρο και το υλικό.
               </div>
             </div>
             <div class="col-12 col-sm-auto row items-center q-gutter-sm">
@@ -36,20 +39,20 @@
         <q-card flat bordered class="q-mb-md">
           <q-card-section class="row q-col-gutter-sm">
             <div class="col-6 col-sm-2">
-              <q-input v-model.number="form.durationMin" :readonly="!editable" type="number" label="Λεπτά" outlined dense :min="1" :max="1440" color="klados" />
+              <q-input v-model.number="form.durationMin" :readonly="!editAll" type="number" label="Λεπτά" outlined dense :min="1" :max="1440" color="klados" />
             </div>
             <div class="col-6 col-sm-3">
-              <q-select v-model="form.kind" :readonly="!editable" :options="kindOptions" label="Είδος" outlined dense emit-value map-options color="klados">
+              <q-select v-model="form.kind" :readonly="!editAll" :options="kindOptions" label="Είδος" outlined dense emit-value map-options color="klados">
                 <template #prepend><q-icon :name="KIND_ICON[form.kind]" :color="KIND_COLOR[form.kind]" /></template>
               </q-select>
             </div>
             <div class="col-12 col-sm-7"><q-input v-model="form.location" :readonly="!editable" label="Χώρος" outlined dense color="klados" /></div>
             <div class="col-12 col-sm-6">
-              <StelexosPicker v-if="editable" v-model="form.responsible" label="Υπεύθυνοι διεξαγωγής" :options="stelexiOptions" />
+              <StelexosPicker v-if="editAll" v-model="form.responsible" label="Υπεύθυνοι διεξαγωγής" :options="stelexiOptions" />
               <q-input v-else :model-value="namesOf(form.responsible)" label="Υπεύθυνοι διεξαγωγής" outlined dense readonly />
             </div>
             <div class="col-12 col-sm-6">
-              <StelexosPicker v-if="editable" v-model="form.executor" label="Υπεύθυνοι υλοποίησης" :options="stelexiOptions" />
+              <StelexosPicker v-if="editAll" v-model="form.executor" label="Υπεύθυνοι υλοποίησης" :options="stelexiOptions" />
               <q-input v-else :model-value="namesOf(form.executor)" label="Υπεύθυνοι υλοποίησης" outlined dense readonly />
             </div>
           </q-card-section>
@@ -76,7 +79,7 @@
           <q-card-section class="q-pt-none row q-col-gutter-sm">
             <div class="col-12 col-sm-6">
               <q-select
-                v-if="editable"
+                v-if="editable && canPickYliko"
                 v-model="form.yliko"
                 :options="ylikoOptions"
                 label="Από τις αποθήκες"
@@ -95,7 +98,7 @@
             </div>
             <div class="col-12 col-sm-6"><q-input v-model="form.ylikoNotes" :readonly="!editable" label="Άλλο υλικό (ελεύθερο κείμενο)" outlined dense color="klados" /></div>
           </q-card-section>
-          <q-card-actions v-if="editable" align="right">
+          <q-card-actions v-if="editAll" align="right">
             <q-btn flat color="negative" icon="delete" label="Διαγραφή στοιχείου" @click="remove" />
           </q-card-actions>
         </q-card>
@@ -112,6 +115,10 @@ import {
   DRASI_SCHEDULE_KIND_LABEL,
   DrasiScheduleKind,
   KLADOS_LABEL,
+  SCHEDULE_ITEM_OWN_FIELDS,
+  drasiEditScope,
+  type DrasiAccess,
+  type DrasiEditScope,
   type DrasiScheduleItemView,
   type DrasiScheduleView,
   type DrasiStatus,
@@ -138,6 +145,7 @@ interface DrasiHead {
   title: string;
   status: DrasiStatus;
   klados: { type: KladosType } | null;
+  access: DrasiAccess;
 }
 
 const route = useRoute();
@@ -196,7 +204,22 @@ watch(
   { immediate: true },
 );
 
-const editable = computed(() => !!drasi.value && drasi.value.status !== 'KLEISTI' && auth.can('drasi:write', drasi.value.klados?.type ?? undefined));
+// ── Ποιος αλλάζει τι (ο ίδιος κανόνας με το API) ──
+/** Υπεύθυνος (διεξαγωγής ή υλοποίησης) αυτού του στοιχείου. */
+const mine = computed(() => {
+  const me = auth.user?.id;
+  return !!me && !!item.value && [...item.value.responsibles, ...item.value.executors].some((p) => p.id === me);
+});
+/** Όλα (ρόλος Προγράμματος/Αρχηγός), μόνο το προγραμματικό (υπεύθυνος) ή τίποτα· κλειστή δράση δεν αλλάζει. */
+const scope = computed<DrasiEditScope>(() =>
+  !drasi.value || drasi.value.status === 'KLEISTI' ? 'none' : drasiEditScope(drasi.value.access, 'programma', mine.value),
+);
+/** Κείμενο, χώρος, υλικό. */
+const editable = computed(() => scope.value !== 'none');
+/** Τίτλος, λεπτά, είδος, υπεύθυνοι, διαγραφή — η γραμμή του ωρολογίου. */
+const editAll = computed(() => scope.value === 'all');
+/** Τις αποθήκες τις ψάχνει όποιος τις βλέπει — όχι ένα στέλεχος άλλου Τοπικού. */
+const canPickYliko = computed(() => auth.can('yliko:read', drasi.value?.klados?.type ?? undefined));
 
 // ── Στελέχη & υλικό για τους pickers ──
 /** Μόνο τα στελέχη της δράσης (δικά μας, φιλοξενούμενα, εξωτερικά). */
@@ -304,7 +327,7 @@ async function saveNow(): Promise<void> {
   }
   if (!dirty.value || !editable.value) return;
   saveStatus.value = 'saving';
-  const change = {
+  const change: Record<string, unknown> = {
     ...(form.title.trim() ? { title: form.title.trim() } : {}),
     durationMin: clampMin(form.durationMin),
     kind: form.kind,
@@ -313,10 +336,13 @@ async function saveNow(): Promise<void> {
     responsibleIds: form.responsible,
     executorIds: form.executor,
     ylikoNotes: form.ylikoNotes.trim() || null,
-    yliko: form.yliko.map((ylikoId) => ({ ylikoId, qty: 1 })),
+    ...(canPickYliko.value ? { yliko: form.yliko.map((ylikoId) => ({ ylikoId, qty: 1 })) } : {}),
   };
+  // Ο υπεύθυνος στέλνει μόνο ό,τι του επιτρέπεται — τα υπόλοιπα τα απορρίπτει το API.
+  const allowed: readonly string[] = SCHEDULE_ITEM_OWN_FIELDS;
+  const body = scope.value === 'all' ? change : Object.fromEntries(Object.entries(change).filter(([key]) => allowed.includes(key)));
   try {
-    await patch(`/draseis/${drasiId}/schedule/${itemId.value}`, change);
+    await patch(`/draseis/${drasiId}/schedule/${itemId.value}`, body);
     dirty.value = false;
     saveStatus.value = 'saved';
     // Οι ώρες στην κεφαλίδα ξαναβγαίνουν από τον server (άλλαξαν αν άλλαξαν τα λεπτά).

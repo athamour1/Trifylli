@@ -58,9 +58,11 @@ export class DraseisPlanController {
     return this.plan.addScheduleItem(user, id, dto);
   }
 
+  // Μόνο «βλέπει»: οι υπεύθυνοι του στοιχείου γράφουν το προγραμματικό του χωρίς
+  // ρόλο Προγράμματος — πόσο αλλάζει ο καθένας το κρίνει το service.
   @Patch('schedule/:itemId')
-  @RequireDrasi('programma', 'edit')
-  @ApiOperation({ summary: 'Αλλαγή πλαισίου ή/και προγραμματικού ενός στοιχείου' })
+  @RequireDrasi('programma')
+  @ApiOperation({ summary: 'Αλλαγή πλαισίου ή/και προγραμματικού ενός στοιχείου (οι υπεύθυνοί του: μόνο το προγραμματικό)' })
   updateScheduleItem(
     @CurrentUser() user: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,

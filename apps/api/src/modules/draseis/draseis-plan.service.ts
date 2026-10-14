@@ -1,7 +1,10 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { CheckoutStatus, MemberKind, Prisma, SymvoulioType, YlikoCategory } from '@prisma/client';
 import {
   DRASI_EXPENSE_CATEGORIES,
+  SCHEDULE_ITEM_OWN_FIELDS,
+  drasiEditScope,
+  fieldsOutside,
   type DrasiExternalYlikoView,
   type DrasiLoadingList,
   type DrasiScheduleItemView,
@@ -132,6 +135,11 @@ export class DraseisPlanService {
     return this.itemWithTimes(user, id, row.id);
   }
 
+  /**
+   * Ο guard ζητά μόνο να βλέπει το πρόγραμμα: εδώ κρίνεται πόσο αλλάζει. Με
+   * ρόλο Προγράμματος (ή Αρχηγό) τα πάντα· ως υπεύθυνος του στοιχείου μόνο το
+   * προγραμματικό του (`SCHEDULE_ITEM_OWN_FIELDS`).
+   */
   async updateScheduleItem(user: RequestUser, id: string, itemId: string, dto: UpdateScheduleItemDto): Promise<DrasiScheduleItemView> {
     await this.access.load(user, id, 'write');
     const item = await this.prisma.drasiScheduleItem.findFirst({
@@ -139,6 +147,12 @@ export class DraseisPlanService {
       include: { assignees: { select: { userId: true, duty: true } } },
     });
     if (!item) throw new NotFoundException('Το στοιχείο του ωρολογίου δεν βρέθηκε.');
+    const grant = user.drasiGrant?.drasiId === id ? user.drasiGrant.access : null;
+    const scope = drasiEditScope(grant, 'programma', item.assignees.some((a) => a.userId === user.id));
+    if (scope === 'none') throw new ForbiddenException('Ο ρόλος σας στη δράση δεν επιτρέπει αυτή την αλλαγή.');
+    if (scope === 'own' && fieldsOutside(dto, SCHEDULE_ITEM_OWN_FIELDS).length) {
+      throw new ForbiddenException('Ως υπεύθυνος αλλάζεις το προγραμματικό, τον χώρο και το υλικό — τα υπόλοιπα τα ορίζει το Πρόγραμμα.');
+    }
     await this.assertYliko(user, dto);
     const assignees = planAssignees(item.assignees, { DIEXAGOGI: dto.responsibleIds, YLOPOIISI: dto.executorIds });
     await this.assertDrasiStelexi(id, assignees.create);
