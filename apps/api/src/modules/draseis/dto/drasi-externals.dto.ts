@@ -31,3 +31,10 @@ export class CreateDrasiExternalDto {
   @MaxLength(120)
   origin?: string;
 }
+
+/** Φιλοξενούμενο στέλεχος που μπήκε χωρίς email: το email για τον λογαριασμό του. */
+export class GrantDrasiExternalAccessDto {
+  @ApiProperty()
+  @IsEmail()
+  email!: string;
+}

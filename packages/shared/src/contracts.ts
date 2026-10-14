@@ -834,6 +834,11 @@ export interface DrasiExternalView {
   origin: string | null;
   /** `true` όταν έχει συνδεθεί τουλάχιστον μία φορά. */
   active: boolean;
+  /**
+   * `false` ⇒ φιλοξενούμενο στέλεχος που μπήκε από τους συμμετέχοντες χωρίς email:
+   * είναι στη δράση, αλλά χωρίς λογαριασμό («Δώσε πρόσβαση»).
+   */
+  account: boolean;
   roles: DrasiRoleKind[];
 }
 

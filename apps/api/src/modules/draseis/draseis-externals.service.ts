@@ -1,11 +1,12 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { AccountRole, DrasiFeeKind, MemberKind } from '@prisma/client';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { AccountRole, DrasiFeeKind, MemberKind, Prisma } from '@prisma/client';
 import type { DrasiExternalCreated, DrasiExternalView, DrasiRoleKind } from '@trifylli/shared';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
 import { AuthentikClient } from '../integrations/authentik.client';
 import { DrasiAccessService } from './drasi-access.service';
 import type { CreateDrasiExternalDto } from './dto/drasi-externals.dto';
+import { accessEmailProblem } from './external-access';
 
 /**
  * Μαρκάρει τους εξωτερικούς ως «φιλοξενούμενους»: έτσι μένουν εκτός μητρώου,
@@ -31,10 +32,20 @@ export class DraseisExternalsService {
     private readonly authentik: AuthentikClient,
   ) {}
 
+  /**
+   * Τα εξωτερικά στελέχη, και όσα στελέχη άλλων Τοπικών μπήκαν από τους
+   * συμμετέχοντες χωρίς email — αυτά χωρίς λογαριασμό ακόμη (`account: false`).
+   */
   async list(user: RequestUser, id: string): Promise<DrasiExternalView[]> {
     await this.access.load(user, id, 'read');
     const rows = await this.prisma.drasiParticipant.findMany({
-      where: { drasiId: id, user: { accountRole: AccountRole.EXTERNAL } },
+      where: {
+        drasiId: id,
+        OR: [
+          { user: { accountRole: AccountRole.EXTERNAL } },
+          { kind: MemberKind.STELEXOS, user: { accountRole: null, guestTopikoCode: { not: null } } },
+        ],
+      },
       select: {
         user: {
           select: {
@@ -43,6 +54,7 @@ export class DraseisExternalsService {
             lastName: true,
             email: true,
             phone: true,
+            accountRole: true,
             guestTopikoName: true,
             ssoId: true,
             drasiRoles: { where: { drasiId: id }, select: { kind: true } },
@@ -52,6 +64,55 @@ export class DraseisExternalsService {
       orderBy: [{ user: { lastName: 'asc' } }, { user: { firstName: 'asc' } }],
     });
     return rows.map((r) => toView(r.user));
+  }
+
+  /**
+   * Φιλοξενούμενο στέλεχος (μπήκε χωρίς email) → εξωτερικό στέλεχος με
+   * λογαριασμό και πρόσκληση. Το ίδιο άτομο: συμμετοχή, ρόλοι και πληρωμές του
+   * μένουν όπως είναι — όχι δεύτερη εγγραφή.
+   */
+  async grantAccess(user: RequestUser, id: string, userId: string, rawEmail: string): Promise<DrasiExternalCreated> {
+    await this.access.load(user, id, 'write');
+    const guest = await this.prisma.user.findFirst({
+      where: {
+        id: userId,
+        topikoId: user.topikoId,
+        accountRole: null,
+        guestTopikoCode: { not: null },
+        participations: { some: { drasiId: id, kind: MemberKind.STELEXOS } },
+      },
+    });
+    if (!guest) throw new NotFoundException('Δεν βρέθηκε στέλεχος χωρίς πρόσβαση σε αυτή τη δράση.');
+
+    const email = rawEmail.trim().toLowerCase();
+    const owner = await this.prisma.user.findFirst({ where: { topikoId: user.topikoId, email }, select: { id: true, accountRole: true } });
+    const problem = accessEmailProblem(owner, guest.id);
+    if (problem === 'registry') {
+      throw new BadRequestException(
+        'Το email ανήκει ήδη σε άτομο του μητρώου — βάλε το άτομο στο αρχηγείο ή στους συμμετέχοντες, όχι ως εξωτερικό.',
+      );
+    }
+    if (problem === 'external') {
+      throw new ConflictException(
+        'Υπάρχει ήδη εξωτερικό στέλεχος με αυτό το email — πρόσθεσέ το από το «Νέο εξωτερικό στέλεχος» και βγάλε τον φιλοξενούμενο από τους συμμετέχοντες.',
+      );
+    }
+
+    const person = await this.prisma.user.update({
+      where: { id: guest.id },
+      // Ο «κηδεμόνας» της παλιάς φόρμας δεν αφορά στέλεχος.
+      data: { email, accountRole: AccountRole.EXTERNAL, kind: MemberKind.STELEXOS, guestTopikoCode: EXTERNAL_MARK, eseoPayload: Prisma.DbNull },
+    });
+
+    const external = (await this.list(user, id)).find((e) => e.userId === person.id)!;
+    try {
+      await this.sendInvite(person);
+      return { external, invited: true, inviteError: null };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`Το στέλεχος ${person.id} πήρε λογαριασμό αλλά η πρόσκληση απέτυχε: ${message}`);
+      return { external, invited: false, inviteError: message };
+    }
   }
 
   async create(user: RequestUser, id: string, dto: CreateDrasiExternalDto): Promise<DrasiExternalCreated> {
@@ -144,6 +205,7 @@ function toView(u: {
   lastName: string;
   email: string | null;
   phone: string | null;
+  accountRole: AccountRole | null;
   guestTopikoName: string | null;
   ssoId: string | null;
   drasiRoles: { kind: string }[];
@@ -156,6 +218,7 @@ function toView(u: {
     phone: u.phone,
     origin: u.guestTopikoName,
     active: !!u.ssoId,
+    account: u.accountRole === AccountRole.EXTERNAL,
     roles: u.drasiRoles.map((r) => r.kind as DrasiRoleKind),
   };
 }

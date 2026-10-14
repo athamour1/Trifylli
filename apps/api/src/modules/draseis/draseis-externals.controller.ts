@@ -7,7 +7,7 @@ import { CurrentUser, RequireDrasi } from '../../common/auth/decorators';
 import type { RequestUser } from '../../common/auth/types';
 import { DrasiPermGuard } from './drasi-perm.guard';
 import { DraseisExternalsService } from './draseis-externals.service';
-import { CreateDrasiExternalDto } from './dto/drasi-externals.dto';
+import { CreateDrasiExternalDto, GrantDrasiExternalAccessDto } from './dto/drasi-externals.dto';
 
 /** Εξωτερικά στελέχη μιας δράσης — τα διαχειρίζεται όποιος αλλάζει το αρχηγείο. */
 @ApiTags('Δράσεις — εξωτερικά στελέχη')
@@ -33,6 +33,21 @@ export class DraseisExternalsController {
   async create(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: CreateDrasiExternalDto) {
     const result = await this.externals.create(user, id, dto);
     await this.audit.record(user, 'drasi.external.add', 'user', result.external.userId, { drasiId: id, invited: result.invited });
+    return result;
+  }
+
+  @Post(':userId/access')
+  @RequireDrasi('arxigeio', 'edit')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Φιλοξενούμενο στέλεχος χωρίς email → λογαριασμός για τη δράση + email ορισμού κωδικού' })
+  async grantAccess(
+    @CurrentUser() user: RequestUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Body() dto: GrantDrasiExternalAccessDto,
+  ) {
+    const result = await this.externals.grantAccess(user, id, userId, dto.email);
+    await this.audit.record(user, 'drasi.external.access', 'user', userId, { drasiId: id, invited: result.invited });
     return result;
   }
 
