@@ -13,6 +13,7 @@ import {
   type KladosType,
   type StoredFileRef,
 } from '@trifylli/shared';
+import { JobMonitor } from '../../common/jobs/job-monitor';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { StorageService } from '../../common/storage/storage.service';
 import type { RequestUser } from '../../common/auth/types';
@@ -51,6 +52,7 @@ export class FilesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
+    private readonly jobs: JobMonitor,
   ) {}
 
   /**
@@ -61,6 +63,10 @@ export class FilesService {
    */
   @Cron('0 4 * * *')
   async sweepOrphanMarkdownImages(): Promise<number> {
+    return this.jobs.track('image-sweep', () => this.sweepOrphans(), (n) => `${n} εικόνες`);
+  }
+
+  private async sweepOrphans(): Promise<number> {
     if (!this.storage.enabled) return 0;
 
     const liveRefs = await this.collectLiveMarkdownRefs();

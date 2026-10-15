@@ -6,6 +6,7 @@ import { AuthModule } from './common/auth/auth.module';
 import { JwtAuthGuard } from './common/auth/jwt-auth.guard';
 import { AppConfigModule } from './common/config/config.module';
 import { AuditModule } from './common/audit/audit.module';
+import { JobsModule } from './common/jobs/jobs.module';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { StorageModule } from './common/storage/storage.module';
 import { HealthController } from './health.controller';
@@ -35,6 +36,7 @@ import { YlikoModule } from './modules/yliko/yliko.module';
     StorageModule,
     AuthModule,
     ScheduleModule.forRoot(),
+    JobsModule,
     // Η PWA συγχρονίζει ουρές μαζικά μετά από offline· το όριο είναι γενναιόδωρο
     // ώστε ένα κανονικό flush να μη χτυπά 429, αλλά κόβει runaway loops.
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 300 }]),

@@ -27,6 +27,7 @@ import {
 import { AuditService } from '../../common/audit/audit.service';
 import { AppConfigToken } from '../../common/config/config.module';
 import type { AppConfig } from '../../common/config/configuration';
+import { JobMonitor } from '../../common/jobs/job-monitor';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { StorageService } from '../../common/storage/storage.service';
 import type { RequestUser } from '../../common/auth/types';
@@ -59,6 +60,7 @@ export class DraseisFormsService {
     private readonly audit: AuditService,
     private readonly eseo: EseoClient,
     @Inject(AppConfigToken) private readonly config: AppConfig,
+    private readonly jobs: JobMonitor,
   ) {}
 
   // ───────────────────────── Για τα στελέχη ─────────────────────────
@@ -439,6 +441,10 @@ export class DraseisFormsService {
   /** Κάθε μέρα 03:30: τα ιατρικά των δράσεων που έληξαν πριν από `HEALTH_DATA_RETENTION_DAYS` σβήνονται. */
   @Cron('30 3 * * *')
   async purgeHealthData(): Promise<number> {
+    return this.jobs.track('health-purge', () => this.purgeDueHealthData(), (n) => `${n} έντυπα`);
+  }
+
+  private async purgeDueHealthData(): Promise<number> {
     const due = await this.prisma.drasiForm.findMany({
       where: { type: DrasiFormType.YGEIA, purgeAfter: { lt: new Date() }, purgedAt: null },
       include: { signatureFile: true },

@@ -25,6 +25,15 @@ const schema = z.object({
    */
   SENTRY_DSN: blankToUndefined(z.string().url()),
   SENTRY_ENVIRONMENT: blankToUndefined(z.string()),
+  /**
+   * Heartbeats των crons (Healthchecks ή Uptime Kuma push) — ένα URL ανά εργασία,
+   * κενό = κανένα ping. Βλ. docs/monitoring.md και `common/jobs`.
+   */
+  HEARTBEAT_ESEO_SYNC_URL: blankToUndefined(z.string().url()),
+  HEARTBEAT_HEALTH_PURGE_URL: blankToUndefined(z.string().url()),
+  HEARTBEAT_IMAGE_SWEEP_URL: blankToUndefined(z.string().url()),
+  HEARTBEAT_PHARMACY_RETURNS_URL: blankToUndefined(z.string().url()),
+  HEARTBEAT_PHARMACY_ACCESS_URL: blankToUndefined(z.string().url()),
   PORT: z.coerce.number().int().positive().default(3000),
   API_PREFIX: z.string().default('api'),
   CORS_ORIGINS: z.string().default('http://localhost:9000'),

@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { DataSource, MemberKind, MemberStatus, Prisma, SyndromiStatus } from '@prisma/client';
 import { deriveLeaderProfile } from '@trifylli/shared';
+import { JobMonitor } from '../../common/jobs/job-monitor';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AppConfigToken } from '../../common/config/config.module';
 import type { AppConfig } from '../../common/config/configuration';
@@ -41,6 +42,7 @@ export class EseoSyncService {
     private readonly prisma: PrismaService,
     private readonly eseo: EseoClient,
     @Inject(AppConfigToken) private readonly config: AppConfig,
+    private readonly jobs: JobMonitor,
   ) {}
 
   /**
@@ -57,6 +59,9 @@ export class EseoSyncService {
       select: { id: true, eseoCode: true, name: true },
     });
 
+    // Heartbeat: ok μόνο αν πέρασαν όλα τα Τοπικά· η αποτυχία του ενός φαίνεται
+    // στο fail (και στο error tracking) χωρίς να σταματά τα υπόλοιπα.
+    const run = this.jobs.start('eseo-sync');
     for (const topiko of topika) {
       try {
         const summary = await this.syncTopiko(topiko.id);
@@ -67,8 +72,10 @@ export class EseoSyncService {
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         this.logger.error(`Αποτυχία συγχρονισμού ${topiko.name}: ${message}`);
+        run.fail(error, topiko.name);
       }
     }
+    await run.finish(`${topika.length} Τοπικά`);
   }
 
   /**

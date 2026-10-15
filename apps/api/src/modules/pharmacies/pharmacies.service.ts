@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { AccountRole, KLADOS_LABEL, type KladosType } from '@trifylli/shared';
+import { JobMonitor } from '../../common/jobs/job-monitor';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
 import { assertScopeAccess } from '../../common/util/klados-scope';
@@ -22,6 +23,7 @@ export class PharmaciesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ouchtracker: OuchtrackerClient,
+    private readonly jobs: JobMonitor,
   ) {}
 
   /** Τα φαρμακεία που βλέπει μια εμβέλεια: τα δικά της + όσα της έχουν δανειστεί. */
@@ -256,8 +258,7 @@ export class PharmaciesService {
       where: { returnedAt: null, dueAt: { not: null, lt: new Date() } },
       include: { kit: { select: { id: true, ouchtrackerKitId: true } } },
     });
-    if (due.length === 0) return;
-
+    const run = this.jobs.start('pharmacy-returns');
     for (const loan of due) {
       try {
         await this.ouchtracker.assignKit(loan.kit.ouchtrackerKitId, loan.previousAssigneeIds);
@@ -266,8 +267,10 @@ export class PharmaciesService {
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         this.logger.error(`Αποτυχία αυτόματης επιστροφής δανεισμού ${loan.id}: ${message}`);
+        run.fail(error, `δανεισμός ${loan.id}`);
       }
     }
+    await run.finish(`${due.length} ληγμένοι δανεισμοί`);
   }
 
   /**
@@ -293,6 +296,7 @@ export class PharmaciesService {
       },
     });
 
+    const run = this.jobs.start('pharmacy-access');
     for (const kit of kits) {
       try {
         const loan = kit.loans[0];
@@ -311,8 +315,10 @@ export class PharmaciesService {
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         this.logger.warn(`Αποτυχία συγχρονισμού προσβάσεων φαρμακείου ${kit.id}: ${message}`);
+        run.fail(error, `φαρμακείο ${kit.id}`);
       }
     }
+    await run.finish(`${kits.length} φαρμακεία`);
   }
 
   // ─────────────────────────── helpers ───────────────────────────

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { FilePurpose } from '@trifylli/shared';
+import { JobMonitor } from '../../common/jobs/job-monitor';
 import { FilesService } from './files.service';
 
 /**
@@ -65,7 +66,7 @@ function setup(content: Partial<Record<'drasi' | 'drasiScheduleItem' | 'drasiMea
     drasiCharacter: table(content.drasiCharacter ?? []),
   };
   const storage = { enabled: true, delete: async () => undefined };
-  return { service: new FilesService(prisma as never, storage as never), storedFile };
+  return { service: new FilesService(prisma as never, storage as never, new JobMonitor({})), storedFile };
 }
 
 describe('FilesService — εικόνες Markdown των δράσεων', () => {
