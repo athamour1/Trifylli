@@ -66,13 +66,16 @@ rate limiting, καθάρισμα ιατρικών. Λείπουν αυτά, μ�
 
 **Σιγά-σιγά:**
 
-12. [ ] Όρια μνήμης στα containers. **S**
+12. [ ] Όρια μνήμης στα containers — του API μετά τη μέτρηση της Φ1 της
+    συνεργασίας (τα ανοιχτά έγγραφα ζουν στη μνήμη του). **S**
 13. [ ] Healthcheck σε garage/ouchtracker· το web να περιμένει το api «healthy». **S**
 14. [ ] Staging: δεύτερη στοίβα για release και migrations πριν από το prod. **M**
 15. [ ] CI (GitHub Actions): typecheck + tests, images από tag, scan ευπαθειών,
     Renovate. **M**
 16. [ ] Οδηγίες reverse proxy (από την [ενότητα 1](#1-εγκατάσταση-με-μία-εντολή)):
-    HSTS, όριο σώματος, timeouts, admin UI του Authentik, WebSocket. **S**
+    HSTS, όριο σώματος, timeouts, admin UI του Authentik, WebSocket (στο Zoraxy:
+    «Skip WebSocket Origin Check» στον κανόνα του `api.` — αλλιώς 403 στη
+    συνεργασία). **S**
 17. [ ] Authentik: MFA υποχρεωτικό για υπερδιαχειριστή και `akadmin` (για τους
     άλλους μένει προαιρετικό)· σβήσιμο του `AUTHENTIK_BOOTSTRAP_PASSWORD` μετά το
     πρώτο boot. **S**
