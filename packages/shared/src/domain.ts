@@ -746,6 +746,13 @@ export const DRASI_FORM_FIELDS: Record<DrasiFormType, DrasiFormField[]> = {
 
 /** Πόσες μέρες μετά τη λήξη της δράσης σβήνονται οι απαντήσεις υγείας. */
 export const HEALTH_DATA_RETENTION_DAYS = 30;
+/**
+ * Πόσες μέρες ζει το πολύ ένα αντίγραφο ασφαλείας (ημερήσιο, εβδομαδιαίο, πριν
+ * από migration, offsite) — άρα και τα ιατρικά μέσα του. Το λέει η φόρμα υγείας
+ * στους γονείς: αλλάζει ΜΑΖΙ με τα BACKUP_KEEP_* / PREDEPLOY_KEEP_DAYS του
+ * docker-compose.prod.yml.
+ */
+export const BACKUP_RETENTION_DAYS = 30;
 /** Πόσες μέρες ζει ένας σύνδεσμος εντύπου αν δεν συμπληρωθεί. */
 export const FORM_LINK_TTL_DAYS = 30;
 

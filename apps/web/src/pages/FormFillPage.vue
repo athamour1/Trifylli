@@ -127,7 +127,8 @@
 
         <q-card-section class="text-caption text-grey-6 q-pt-none">
           Ο σύνδεσμος ισχύει έως {{ formatDate(form.expiresAt) }} και παύει με την υποβολή. Τα στοιχεία υγείας διαγράφονται
-          {{ HEALTH_DATA_RETENTION_DAYS }} ημέρες μετά τη δράση.
+          {{ HEALTH_DATA_RETENTION_DAYS }} ημέρες μετά τη δράση, και από τα αντίγραφα ασφαλείας μέσα σε
+          {{ BACKUP_RETENTION_DAYS }} ακόμη ημέρες.
         </q-card-section>
       </template>
     </q-card>
@@ -138,6 +139,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import {
+  BACKUP_RETENTION_DAYS,
   HEALTH_DATA_RETENTION_DAYS,
   SIGNER_ROLE_LABEL,
   SignerRole,

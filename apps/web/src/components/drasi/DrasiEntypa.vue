@@ -25,7 +25,8 @@
       <template #avatar><q-icon name="shield" color="grey-7" /></template>
       Κάθε σύνδεσμος ανοίγει <b>ένα</b> έντυπο <b>ενός</b> παιδιού, δεν δείχνει τίποτα άλλο, λήγει με την υποβολή
       ή σε {{ FORM_LINK_TTL_DAYS }} ημέρες, και κάθε άνοιγμα καταγράφεται. Τα στοιχεία υγείας σβήνονται
-      {{ HEALTH_DATA_RETENTION_DAYS }} ημέρες μετά τη δράση.
+      {{ HEALTH_DATA_RETENTION_DAYS }} ημέρες μετά τη δράση, και από τα αντίγραφα ασφαλείας μέσα σε
+      {{ BACKUP_RETENTION_DAYS }} ακόμη.
     </q-banner>
 
     <q-inner-loading :showing="loading" />
@@ -133,6 +134,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { useQuasar, copyToClipboard } from 'quasar';
 import {
+  BACKUP_RETENTION_DAYS,
   DRASI_FORM_STATUS_LABEL,
   DRASI_FORM_TYPE_LABEL,
   FORM_LINK_TTL_DAYS,
