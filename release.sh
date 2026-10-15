@@ -86,6 +86,15 @@ fi
 
 echo ""
 
+# ─── Checks ────────────────────────────────────────────────────────────────────
+# Ένα image που δεν περνά typecheck και tests δεν πρέπει να φτάσει στο GHCR:
+# το prod το τραβά με ένα `pull`.
+info "Typecheck & tests..."
+pnpm --filter @trifylli/shared build >/dev/null || error "Shared build failed — no release."
+pnpm typecheck || error "Typecheck failed — no release."
+pnpm test || error "Tests failed — no release."
+ok "Typecheck & tests passed"
+
 # ─── Bump version & commit ─────────────────────────────────────────────────────
 info "Bumping version to ${VERSION}..."
 for pkg in package.json apps/api/package.json apps/web/package.json; do
