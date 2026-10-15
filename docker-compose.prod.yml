@@ -379,9 +379,12 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       POSTGRES_EXTRA_OPTS: '-Z6 --blobs'
       SCHEDULE: ${BACKUP_SCHEDULE:-@daily}
+      # Κανένα αντίγραφο πάνω από 30 ημέρες (τα εβδομαδιαία σβήνονται στις 4×7+1):
+      # η φόρμα υγείας λέει στους γονείς ότι τα ιατρικά φεύγουν και από τα
+      # αντίγραφα μέσα σε 30 ημέρες (BACKUP_RETENTION_DAYS στο shared).
       BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
-      BACKUP_KEEP_WEEKS: ${BACKUP_KEEP_WEEKS:-8}
-      BACKUP_KEEP_MONTHS: ${BACKUP_KEEP_MONTHS:-6}
+      BACKUP_KEEP_WEEKS: ${BACKUP_KEEP_WEEKS:-4}
+      BACKUP_KEEP_MONTHS: ${BACKUP_KEEP_MONTHS:-0}
       HEALTHCHECK_PORT: 8080
     volumes:
       - postgres-backups:/backups
