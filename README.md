@@ -577,16 +577,27 @@ Garage, κρυπτογραφημένα (restic), εκτός server — μόλι�
 βάση, νέος server:** [`docs/restore.md`](docs/restore.md).
 
 **Ένα domain, υποτομείς.** Η στοίβα δεν περιλαμβάνει TLS/reverse proxy — τον
-βάζει ο διαχειριστής μπροστά (Caddy/Traefik/nginx). Οι υπηρεσίες δένονται στο
-`BIND_ADDR` (default `127.0.0.1`), ώστε να τις φτάνει μόνο ο τοπικός proxy και
-ποτέ απευθείας το internet· Postgres/Redis/Garage δεν εκτίθενται καθόλου.
+βάζει ο διαχειριστής μπροστά. Δύο τρόποι, και κανένας δεν ανοίγει θύρες στο LAN:
 
-| Υποτομέας | Υπηρεσία | Θύρα (env) |
-| :--- | :--- | :--- |
-| `app.example.gr` | Trifylli PWA | `WEB_PORT` (8080) |
-| `api.example.gr` | Trifylli API | `API_PORT` (3000) |
-| `sso.example.gr` | Authentik (SSO) | `AUTHENTIK_PORT` (9010) |
-| `ouch.example.gr` | OuchTracker — κάνει μόνο του proxy `/api` | `OUCHTRACKER_WEB_PORT` (8081) |
+* **Proxy στον host** (Caddy/nginx): οι υπηρεσίες δένονται στο `BIND_ADDR`
+  (default `127.0.0.1`).
+* **Proxy σε Docker** (Zoraxy, Nginx Proxy Manager, Traefik): μία φορά
+  `docker network connect trifylli-public <container του proxy>`, και στόχοι τα
+  ονόματα του πίνακα. Το δίκτυο `trifylli-public` έχει **μόνο** τις τέσσερις
+  δημόσιες υπηρεσίες — ο proxy δεν βλέπει ποτέ Postgres/Redis/Garage. **Όχι**
+  `BIND_ADDR` στην IP του LAN: κάθε συσκευή του δικτύου θα έφτανε API και SSO
+  χωρίς TLS.
+
+Το Authentik εμπιστεύεται το `X-Forwarded-For` (brute force ανά IP) **μόνο** από
+τα δύο δίκτυα της στοίβας (`STACK_SUBNET`, `PUBLIC_SUBNET`) — όχι από όλο το LAN,
+όπου μια συσκευή θα πλαστογραφούσε την IP της.
+
+| Υποτομέας | Υπηρεσία | Στο `trifylli-public` | Θύρα στο `BIND_ADDR` |
+| :--- | :--- | :--- | :--- |
+| `app.example.gr` | Trifylli PWA | `trifylli-web:80` | `WEB_PORT` (8080) |
+| `api.example.gr` | Trifylli API | `trifylli-api:3000` | `API_PORT` (3000) |
+| `sso.example.gr` | Authentik (SSO) | `trifylli-sso:9000` | `AUTHENTIK_PORT` (9010) |
+| `ouch.example.gr` | OuchTracker — κάνει μόνο του proxy `/api` | `trifylli-ouch:80` | `OUCHTRACKER_WEB_PORT` (8081) |
 
 ```mermaid
 flowchart LR
