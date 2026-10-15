@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import type { AccountRole, Capability, KladosGrants, KladosType } from '@trifylli/shared';
 import { can as canDo, KLADOS_LABEL } from '@trifylli/shared';
 import { get } from '../lib/api';
+import { setReportingUser } from '../lib/reporting-user';
 import { useOfflineStore } from './offline';
 
 interface MeResponse {
@@ -69,6 +70,7 @@ export const useAuthStore = defineStore('auth', {
         const offline = useOfflineStore();
         const { data } = await offline.cachedGet('me', () => get<MeResponse>('/me'));
         this.profile = data;
+        setReportingUser(data.user.id);
       } catch (error) {
         this.error = error instanceof Error ? error.message : String(error);
       } finally {

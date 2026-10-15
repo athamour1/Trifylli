@@ -1,5 +1,9 @@
 import { defineConfig } from '#q-app/wrappers';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+
+/** Η έκδοση της PWA (τη γράφει το `release.sh`) — το «release» στο error tracking. */
+const APP_VERSION = (JSON.parse(readFileSync(new URL('package.json', import.meta.url), 'utf8')) as { version?: string }).version ?? 'dev';
 
 /**
  * Το `quasar.config.ts` τρέχει σε Node **πριν** το dotenv του Vite, οπότε το
@@ -14,7 +18,7 @@ try {
 }
 
 export default defineConfig((ctx) => ({
-  boot: ['theme', 'fonts', 'api', 'auth', 'components'],
+  boot: ['error-reporting', 'theme', 'fonts', 'api', 'auth', 'components'],
 
   css: ['app.scss'],
 
@@ -40,6 +44,9 @@ export default defineConfig((ctx) => ({
       DEV_EMAIL: process.env.VITE_DEV_EMAIL ?? '',
       // URL του frontend του OuchTracker — στόχος των deep-links των φαρμακείων.
       OUCHTRACKER_URL: process.env.VITE_OUCHTRACKER_URL ?? '',
+      // Error tracking (GlitchTip) για `quasar dev`· στο image έρχεται από το config.js.
+      SENTRY_DSN: process.env.VITE_SENTRY_DSN ?? '',
+      APP_VERSION,
     },
 
     alias: {

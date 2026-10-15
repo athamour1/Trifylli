@@ -31,6 +31,8 @@ export class ApiError extends Error {
     message: string,
     public readonly status: number,
     public readonly payload?: unknown,
+    /** Το `X-Request-Id` της απάντησης — δένει το σφάλμα με τη γραμμή του στα logs του API. */
+    public readonly requestId?: string,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -111,7 +113,8 @@ http.interceptors.response.use(
               ? raw.message
               : error.response.statusText;
 
-      throw new ApiError(message, error.response.status, error.response.data);
+      const requestId = error.response.headers?.['x-request-id'];
+      throw new ApiError(message, error.response.status, error.response.data, typeof requestId === 'string' ? requestId : undefined);
     }
     throw error;
   },

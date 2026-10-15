@@ -138,6 +138,9 @@ importers:
       '@quasar/extras':
         specifier: ^1.18.0
         version: 1.18.0
+      '@sentry/vue':
+        specifier: ^11.7.0
+        version: 11.7.0(pinia@3.0.4(typescript@5.9.3)(vue@3.5.43(typescript@5.9.3)))(vue@3.5.43(typescript@5.9.3))
       '@trifylli/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -2291,6 +2294,14 @@ packages:
   '@scarf/scarf@1.4.0':
     resolution: {integrity: sha512-xxeapPiUXdZAE3che6f3xogoJPeZgig6omHEy1rIY5WVsB3H2BHNnZH+gHG6x91SCWyQCzWGsuL2Hh3ClO5/qQ==}
 
+  '@sentry/browser-utils@11.7.0':
+    resolution: {integrity: sha512-7vYT5EHhMoluDoaXH1bZegt0KRXt/fSAufqezpmT2wOqkiqveEjJIOTcNR5+cYtPmy7Wy3PulbfMT2mBJbLdKg==}
+    engines: {node: '>=20.19.0 <22.0.0 || >=22.12.0 <23.0.0 || >=23.2.0'}
+
+  '@sentry/browser@11.7.0':
+    resolution: {integrity: sha512-0GEmO+E+jeeDYgNd4Al9h3vNycEZo0mDJDfyEn/Mz/DEFYiRdYgnoysSp8vr1z/mFklUBbwDuHwcTu22tqyOxQ==}
+    engines: {node: '>=20.19.0 <22.0.0 || >=22.12.0 <23.0.0 || >=23.2.0'}
+
   '@sentry/bundler-plugins@11.7.0':
     resolution: {integrity: sha512-ofcsdaMBOx43Qw/oJ08hq7RUsamaLS2wgDaAogPpUqqZv59GyDG6zSrIEN2eIJDyuRICxkqRvgji+7vuww9iTA==}
     engines: {node: '>=20.19.0 <22.0.0 || >=22.12.0 <23.0.0 || >=23.2.0'}
@@ -2314,6 +2325,10 @@ packages:
     resolution: {integrity: sha512-jhnI/RHpZoe32ouzbdcR2K42bzVuSfCl8SlOe0VcDxrU/KtNi99hFzjrRBDnft9ozpa4I7xjoN+s+8xihVKtww==}
     engines: {node: '>=20.19.0 <22.0.0 || >=22.12.0 <23.0.0 || >=23.2.0'}
 
+  '@sentry/feedback@11.7.0':
+    resolution: {integrity: sha512-DHnYyAZAh5ytm8gwrCaYq71/7cojGJrjH9w24yMsIcEY+6B01JT0AS2KyseMWh6jeeuPKFWD7FgPnS92Z8Nepw==}
+    engines: {node: '>=20.19.0 <22.0.0 || >=22.12.0 <23.0.0 || >=23.2.0'}
+
   '@sentry/node@11.7.0':
     resolution: {integrity: sha512-QDqFfZSfEHt07HI8oJcOTTio9yjkKv6UXLEwl+T2NxSU0Tc+b5uEDIsT8/kMgBSuEZxij9Sl6Gnz5sSjkOTdmA==}
     engines: {node: '>=20.19.0 <22.0.0 || >=22.12.0 <23.0.0 || >=23.2.0'}
@@ -2324,6 +2339,14 @@ packages:
     peerDependencies:
       '@opentelemetry/api': ^1.9.0
 
+  '@sentry/replay-canvas@11.7.0':
+    resolution: {integrity: sha512-GmnN9BonpXhBZKFlwYjNKyABzoTh10jj7TpKQ//YGa+mLkbQvbOJ9jwXdkuE3Ntnx0pyGOU1YzQGl6FXntEjdg==}
+    engines: {node: '>=20.19.0 <22.0.0 || >=22.12.0 <23.0.0 || >=23.2.0'}
+
+  '@sentry/replay@11.7.0':
+    resolution: {integrity: sha512-fEA5tm9erymkdHy4L8DQvQKQWNmebfTdXWZUX2XOlztlAQLFkEaUHCgPhjlp/gooQfPLetZqacNPNo2bkTGWjw==}
+    engines: {node: '>=20.19.0 <22.0.0 || >=22.12.0 <23.0.0 || >=23.2.0'}
+
   '@sentry/server-runtime-injection@11.7.0':
     resolution: {integrity: sha512-xTWSsxqpaaG1yrFv9Eobc235ICI3jKKGqbKLm3PoTcvJy/ND1K6SaJwDl5ysH3ZsXTuVYY0agWz96Y1ZqbPz8g==}
     engines: {node: '>=20.19.0 <22.0.0 || >=22.12.0 <23.0.0 || >=23.2.0'}
@@ -2331,6 +2354,19 @@ packages:
   '@sentry/server-utils@11.7.0':
     resolution: {integrity: sha512-KGR275YE96HWAqSl2fjEjBU4pdKi24FHa66d9H3db1cyF4850HJ/7RhYoR9VDV8Nv2s+rOnAT4kunW0IwibzBg==}
     engines: {node: '>=20.19.0 <22.0.0 || >=22.12.0 <23.0.0 || >=23.2.0'}
+
+  '@sentry/vue@11.7.0':
+    resolution: {integrity: sha512-u/I9px3o14shLhPzPZW83h3ll2PVRFCJji7EuXn5913B+v6gRd9dzuqtW1bKm9qbqYaNXgWwvqv8+rwM3WHCAA==}
+    engines: {node: '>=20.19.0 <22.0.0 || >=22.12.0 <23.0.0 || >=23.2.0'}
+    peerDependencies:
+      '@tanstack/vue-router': ^1.64.0
+      pinia: 2.x || 3.x || 4.x
+      vue: 2.x || 3.x
+    peerDependenciesMeta:
+      '@tanstack/vue-router':
+        optional: true
+      pinia:
+        optional: true
 
   '@smithy/core@3.35.1':
     resolution: {integrity: sha512-i4YPS4B6ts7bjn7UwLnGjiZdprOvHvgGobFZsYK3GIY3E5hIqtj0rReU69BcTpGp+fvtraSNXeG1l+jtJvF55w==}
@@ -5783,6 +5819,9 @@ packages:
   wcwidth@1.0.1:
     resolution: {integrity: sha512-XHPEwS0q6TaxcvG85+8EYkbiCux2XtWG2mkc47Ng2A77BQu9+DqIOJldST4HgPkuea7dvKSj5VgX3P1d4rW8Tg==}
 
+  web-vitals@6.2.3:
+    resolution: {integrity: sha512-Dmy+vdO1UPMqXiAtZSNayhl4f794Bxfd94W4HIj2HlYtczEQfEOon969memlcpcHrTuOKLa5baFjX7WbgmOq+A==}
+
   webpack-merge@6.0.1:
     resolution: {integrity: sha512-hXXvrjtx2PLYx4qruKl+kyRSLc52V+cCvMxRjmKwoA+CBbbF5GfIBtR6kCvl0fYGqTUPKB+1ktVmTHqMOzgCBg==}
     engines: {node: '>=18.0.0'}
@@ -8020,6 +8059,21 @@ snapshots:
 
   '@scarf/scarf@1.4.0': {}
 
+  '@sentry/browser-utils@11.7.0':
+    dependencies:
+      '@sentry/conventions': 0.27.0
+      '@sentry/core': 11.7.0
+      web-vitals: 6.2.3
+
+  '@sentry/browser@11.7.0':
+    dependencies:
+      '@sentry/browser-utils': 11.7.0
+      '@sentry/conventions': 0.27.0
+      '@sentry/core': 11.7.0
+      '@sentry/feedback': 11.7.0
+      '@sentry/replay': 11.7.0
+      '@sentry/replay-canvas': 11.7.0
+
   '@sentry/bundler-plugins@11.7.0(@babel/core@7.29.7)(rollup@4.64.0)(webpack@5.106.2(lightningcss@1.33.0))':
     dependencies:
       '@sentry/core': 11.7.0
@@ -8039,6 +8093,10 @@ snapshots:
   '@sentry/core@11.7.0':
     dependencies:
       '@sentry/conventions': 0.27.0
+
+  '@sentry/feedback@11.7.0':
+    dependencies:
+      '@sentry/core': 11.7.0
 
   '@sentry/node@11.7.0(@babel/core@7.29.7)(rollup@4.64.0)(webpack@5.106.2(lightningcss@1.33.0))':
     dependencies:
@@ -8060,6 +8118,16 @@ snapshots:
       '@sentry/conventions': 0.27.0
       '@sentry/core': 11.7.0
 
+  '@sentry/replay-canvas@11.7.0':
+    dependencies:
+      '@sentry/core': 11.7.0
+      '@sentry/replay': 11.7.0
+
+  '@sentry/replay@11.7.0':
+    dependencies:
+      '@sentry/browser-utils': 11.7.0
+      '@sentry/core': 11.7.0
+
   '@sentry/server-runtime-injection@11.7.0':
     dependencies:
       '@sentry/core': 11.7.0
@@ -8070,6 +8138,15 @@ snapshots:
       '@opentelemetry/api': 1.9.1
       '@sentry/conventions': 0.27.0
       '@sentry/core': 11.7.0
+
+  '@sentry/vue@11.7.0(pinia@3.0.4(typescript@5.9.3)(vue@3.5.43(typescript@5.9.3)))(vue@3.5.43(typescript@5.9.3))':
+    dependencies:
+      '@sentry/browser': 11.7.0
+      '@sentry/conventions': 0.27.0
+      '@sentry/core': 11.7.0
+      vue: 3.5.43(typescript@5.9.3)
+    optionalDependencies:
+      pinia: 3.0.4(typescript@5.9.3)(vue@3.5.43(typescript@5.9.3))
 
   '@smithy/core@3.35.1':
     dependencies:
@@ -11807,6 +11884,8 @@ snapshots:
   wcwidth@1.0.1:
     dependencies:
       defaults: 1.0.4
+
+  web-vitals@6.2.3: {}
 
   webpack-merge@6.0.1:
     dependencies:

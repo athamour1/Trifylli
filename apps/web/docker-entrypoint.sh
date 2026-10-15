@@ -11,6 +11,8 @@ OIDC_AUTHORITY="${OIDC_AUTHORITY:-}"
 OIDC_CLIENT_ID="${OIDC_CLIENT_ID:-}"
 OIDC_LOGOUT_FLOW="${OIDC_LOGOUT_FLOW:-trifylli-invalidation}"
 OUCHTRACKER_URL="${OUCHTRACKER_URL:-}"
+# Error tracking (GlitchTip): το DSN του project της PWA· κενό = ανενεργό.
+SENTRY_DSN="${SENTRY_DSN:-}"
 
 # ── 1. config.js ──
 # Οι τιμές μπαίνουν μέσα σε JS string: ό,τι θα έσπαγε το literal (\ ' < newline)
@@ -27,6 +29,7 @@ window.__APP_CONFIG__ = {
   oidcClientId: '$(js_escape "$OIDC_CLIENT_ID")',
   oidcLogoutFlow: '$(js_escape "$OIDC_LOGOUT_FLOW")',
   ouchtrackerUrl: '$(js_escape "$OUCHTRACKER_URL")',
+  sentryDsn: '$(js_escape "$SENTRY_DSN")',
 };
 EOF
 
@@ -38,6 +41,8 @@ origin_of() {
 }
 API_ORIGIN="$(origin_of "$API_URL")"
 SSO_ORIGIN="$(origin_of "$OIDC_AUTHORITY")"
+# Το DSN έχει μέσα το κλειδί (https://<κλειδί>@errors.…/1)· στο CSP μόνο το origin.
+ERRORS_ORIGIN="$(printf '%s' "$SENTRY_DSN" | sed -nE 's#^(https?://)([^@/]*@)?([^/]+).*#\1\3#p')"
 
 # Τι επιτρέπεται και γιατί:
 #   script-src 'self'            — κανένα inline script (το SLO είναι εξωτερικό /slo.js)
@@ -45,16 +50,17 @@ SSO_ORIGIN="$(origin_of "$OIDC_AUTHORITY")"
 #   img-src data: blob:          — avatars (data:) και εικόνες markdown που
 #                                  κατεβαίνουν με auth και γίνονται blob URL
 #   connect-src API + SSO        — fetch στο API και στο token endpoint
+#               (+ error tracking) — και τα σφάλματα προς το GlitchTip, αν υπάρχει DSN
 #   frame-src 'self' + SSO       — το κρυφό iframe σιωπηλής ανανέωσης: ξεκινά
 #                                  στο Authentik και γυρίζει στο /auth/silent
 #   form-action 'self' + SSO     — η ροή σύνδεσης υποβάλλει στο Authentik
 #   object-src 'none'            — κανένα plugin, ποτέ
-CSP_BASE="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'${API_ORIGIN:+ $API_ORIGIN}${SSO_ORIGIN:+ $SSO_ORIGIN}; frame-src 'self'${SSO_ORIGIN:+ $SSO_ORIGIN}; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'${SSO_ORIGIN:+ $SSO_ORIGIN};"
+CSP_BASE="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'${API_ORIGIN:+ $API_ORIGIN}${SSO_ORIGIN:+ $SSO_ORIGIN}${ERRORS_ORIGIN:+ $ERRORS_ORIGIN}; frame-src 'self'${SSO_ORIGIN:+ $SSO_ORIGIN}; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'${SSO_ORIGIN:+ $SSO_ORIGIN};"
 FRAME_ANCESTORS_SLO="${SSO_ORIGIN:-'none'}"
 export CSP_BASE FRAME_ANCESTORS_SLO
 
 envsubst '${CSP_BASE} ${FRAME_ANCESTORS_SLO}' \
   < /opt/trifylli/nginx.conf.template > /etc/nginx/conf.d/default.conf
 
-echo "[entrypoint] config.js written — api=${API_URL} oidc=${OIDC_CLIENT_ID:-(off)} ouch=${OUCHTRACKER_URL:-(off)}"
+echo "[entrypoint] config.js written — api=${API_URL} oidc=${OIDC_CLIENT_ID:-(off)} ouch=${OUCHTRACKER_URL:-(off)} errors=${ERRORS_ORIGIN:-(off)}"
 echo "[entrypoint] CSP — connect/frame: ${API_ORIGIN:-self} ${SSO_ORIGIN:-(no sso)}"
