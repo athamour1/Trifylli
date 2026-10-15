@@ -31,13 +31,16 @@
 
 name: trifylli-prod
 
-# Περιστροφή logs — χωρίς αυτό ένα json-file μεγαλώνει ανεξέλεγκτα.
+# Περιστροφή logs. `local`: συμπιεσμένα αρχεία, ~10× περισσότερο ιστορικό στον
+# ίδιο χώρο από το json-file (`docker logs` και το Portainer δουλεύουν ίδια).
+# Έως 10 × 20 MB ανά container: εβδομάδες, όχι ώρες — αρκετό για να βρεις ένα
+# περιστατικό μέρες μετά, χωρίς να κρατάμε για πάντα ids λογαριασμών.
 x-logging: &logging
   logging:
-    driver: json-file
+    driver: local
     options:
-      max-size: '10m'
-      max-file: '3'
+      max-size: '20m'
+      max-file: '10'
 
 # Σκλήρυνση για τα δικά μας containers (Node): καμία ικανότητα kernel, καμία
 # απόκτηση προνομίων από setuid binaries. Αν ποτέ εκτελεστεί κώδικας μέσα στο
