@@ -1,9 +1,10 @@
 # Παραγωγική στοίβα Trifylli.
 #
 # ΔΕΝ περιλαμβάνει TLS/reverse proxy — αυτά τα βάζει ο διαχειριστής ΜΠΡΟΣΤΑ από
-# τη στοίβα (nginx/Traefik/Caddy στον host). Οι υπηρεσίες δένονται στο
-# `BIND_ADDR` (default 127.0.0.1), ώστε να τις φτάνει μόνο ο τοπικός proxy και
-# ποτέ απευθείας το internet. Postgres/Redis δεν εκτίθενται καθόλου.
+# τη στοίβα. Proxy στον host (nginx/Caddy): οι υπηρεσίες δένονται στο `BIND_ADDR`
+# (default 127.0.0.1). Proxy σε Docker (Zoraxy, NPM, Traefik): σύνδεσέ τον στο
+# δίκτυο `trifylli-public` (βλ. `networks:` στο τέλος) — όχι `BIND_ADDR` στην IP
+# του LAN. Postgres/Redis/Garage δεν εκτίθενται καθόλου.
 #
 # Χρήση — χρειάζεται ΜΟΝΟ αυτό το αρχείο, κανένα clone του repo:
 #   # 1. .env.prod με τυχαία μυστικά· μετά συμπλήρωσε domains, SMTP, Τοπικό.
@@ -133,10 +134,11 @@ services:
       # authenticator (επιλογή του Τοπικού). `configure` = υποχρεωτικό στήσιμο
       # TOTP στην πρώτη σύνδεση.
       TRIFYLLI_MFA_NOT_CONFIGURED: ${AUTHENTIK_MFA_MODE:-skip}
-      # Αν ο reverse proxy ΔΕΝ είναι σε ιδιωτική IP (default: 10/8, 172.16/12,
-      # 192.168/16, 127/8), δήλωσέ τον εδώ — αλλιώς το Authentik βλέπει την IP
-      # του proxy και το φρένο brute force κλειδώνει όλους μαζί.
-      AUTHENTIK_LISTEN__TRUSTED_PROXY_CIDRS: ${AUTHENTIK_TRUSTED_PROXY_CIDRS:-127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
+      # Ποιοι επιτρέπεται να δηλώνουν την IP του πελάτη (X-Forwarded-For): ΜΟΝΟ
+      # τα δίκτυα της στοίβας — εκεί έρχεται ο proxy, είτε από το `trifylli-public`
+      # είτε από τις θύρες του 127.0.0.1. Όχι ολόκληρο το LAN: μια συσκευή του
+      # δικτύου θα πλαστογραφούσε IP και θα παρέκαμπτε το φρένο brute force.
+      AUTHENTIK_LISTEN__TRUSTED_PROXY_CIDRS: ${AUTHENTIK_TRUSTED_PROXY_CIDRS:-127.0.0.0/8,${STACK_SUBNET:-10.97.50.0/24},${PUBLIC_SUBNET:-10.97.51.0/24}}
       # ── Email (ανάκτηση κωδικού, ειδοποιήσεις) ──
       # Πραγματικός πάροχος SMTP. Υποχρεωτικός: χωρίς αυτόν η «ανάκτηση κωδικού»
       # αποτυγχάνει τη στιγμή που κάποιος τη χρειάζεται, και κανείς δεν το
@@ -163,6 +165,10 @@ services:
       - authentik-templates:/templates:ro
     ports:
       - '${BIND_ADDR:-127.0.0.1}:${AUTHENTIK_PORT:-9010}:9000'
+    networks:
+      default:
+      public:
+        aliases: [trifylli-sso]
     depends_on:
       config:
         condition: service_completed_successfully
@@ -326,6 +332,10 @@ services:
       SYNC_ENABLED: ${SYNC_ENABLED:-true}
     ports:
       - '${BIND_ADDR:-127.0.0.1}:${API_PORT:-3000}:3000'
+    networks:
+      default:
+      public:
+        aliases: [trifylli-api]
     depends_on:
       postgres:
         condition: service_healthy
@@ -361,6 +371,10 @@ services:
       OUCHTRACKER_URL: ${VITE_OUCHTRACKER_URL:-}
     ports:
       - '${BIND_ADDR:-127.0.0.1}:${WEB_PORT:-8080}:80'
+    networks:
+      default:
+      public:
+        aliases: [trifylli-web]
     depends_on:
       - api
 
@@ -480,8 +494,32 @@ services:
       OIDC_CLIENT_ID: ${OUCHTRACKER_OIDC_CLIENT_ID:-ouchtracker}
     ports:
       - '${BIND_ADDR:-127.0.0.1}:${OUCHTRACKER_WEB_PORT:-8081}:80'
+    networks:
+      default:
+      public:
+        aliases: [trifylli-ouch]
     depends_on:
       - ouchtracker-backend
+
+# Δύο δίκτυα με σταθερά subnets (τα ζητά το TRUSTED_PROXY_CIDRS του Authentik):
+#   default  — όλη η στοίβα, και οι βάσεις.
+#   public   — ΜΟΝΟ web/api/sso/ouch. Εδώ συνδέεται ένας reverse proxy που τρέχει
+#              σε Docker (Zoraxy, Nginx Proxy Manager, Traefik), μία φορά:
+#                docker network connect trifylli-public <container του proxy>
+#              και στοχεύει trifylli-web:80, trifylli-api:3000, trifylli-sso:9000,
+#              trifylli-ouch:80 — χωρίς καμία θύρα στο LAN και χωρίς να βλέπει
+#              ποτέ Postgres/Redis/Garage.
+# Αν τα subnets συγκρούονται με άλλα δίκτυα του host, άλλαξε STACK_SUBNET/PUBLIC_SUBNET.
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: ${STACK_SUBNET:-10.97.50.0/24}
+  public:
+    name: trifylli-public
+    ipam:
+      config:
+        - subnet: ${PUBLIC_SUBNET:-10.97.51.0/24}
 
 volumes:
   # Γράφονται από τον `config` σε κάθε `up` — μην τα πειράζεις με το χέρι.
