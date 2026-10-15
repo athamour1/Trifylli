@@ -1,0 +1,12 @@
+#!/bin/sh
+# Hook του service `backup` (το τρέχει το `run-parts` του postgres-backup-local):
+# heartbeat για τα ημερήσια dumps — ok μετά το backup, fail στο σφάλμα. Το
+# `heartbeat.sh` δίπλα του έχει τελεία στο όνομα, οπότε το run-parts δεν το τρέχει.
+# Πάντα exit 0: ένα hook που αποτυγχάνει σταματά το ίδιο το backup.
+. /hooks/heartbeat.sh
+
+case "${1:-}" in
+  post-backup) heartbeat "${HEARTBEAT_URL:-}" ok "ημερήσια dumps: ok" ;;
+  error) heartbeat "${HEARTBEAT_URL:-}" fail "ημερήσια dumps: απέτυχαν — βλ. logs του backup" ;;
+esac
+exit 0

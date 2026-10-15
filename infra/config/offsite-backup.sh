@@ -18,6 +18,7 @@
 # συνεπής όσο τρέχει. Διατήρηση: το πολύ 30 ημέρες (ιατρικά δεδομένα — βλ.
 # BACKUP_RETENTION_DAYS στο shared).
 set -u
+. /usr/local/lib/heartbeat.sh
 
 STATE=${OFFSITE_STATE_DIR:-/state}
 MIRROR=${OFFSITE_MIRROR_DIR:-/mirror/garage}
@@ -102,14 +103,24 @@ restore() {
   restic_ restore latest --host trifylli --target "$target"
 }
 
+# Μία προσπάθεια + heartbeat (HEARTBEAT_URL): ok, ή fail με την αιτία στα logs.
+run_and_report() {
+  if run_once; then
+    heartbeat "${HEARTBEAT_URL:-}" ok "αντίγραφο εκτός server: ok"
+  else
+    heartbeat "${HEARTBEAT_URL:-}" fail "αντίγραφο εκτός server: απέτυχε — βλ. logs του backup-offsite"
+    return 1
+  fi
+}
+
 case "${1:-loop}" in
-  once) run_once ;;
+  once) run_and_report ;;
   health) health ;;
   restore) shift; restore "$@" ;;
   loop)
     sleep "${OFFSITE_FIRST_DELAY:-600}"
     while true; do
-      run_once || log "η προσπάθεια απέτυχε — ξανά στον επόμενο κύκλο."
+      run_and_report || log "η προσπάθεια απέτυχε — ξανά στον επόμενο κύκλο."
       sleep "${OFFSITE_INTERVAL:-86400}"
     done
     ;;

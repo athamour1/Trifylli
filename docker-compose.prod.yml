@@ -65,6 +65,7 @@ services:
       - authentik-templates:/sync/authentik-templates
       - postgres-init:/sync/postgres-init
       - garage-config:/sync/garage
+      - backup-hooks:/sync/backup-hooks
 
   postgres:
     image: postgres:16-alpine
@@ -335,6 +336,12 @@ services:
       SYNC_ENABLED: ${SYNC_ENABLED:-true}
       # Error tracking (GlitchTip, profile `errors`): το DSN του project «API».
       SENTRY_DSN: ${API_SENTRY_DSN:-}
+      # Heartbeats των crons — ένα URL ανά εργασία (βλ. docs/monitoring.md).
+      HEARTBEAT_ESEO_SYNC_URL: ${HEARTBEAT_ESEO_SYNC_URL:-}
+      HEARTBEAT_HEALTH_PURGE_URL: ${HEARTBEAT_HEALTH_PURGE_URL:-}
+      HEARTBEAT_IMAGE_SWEEP_URL: ${HEARTBEAT_IMAGE_SWEEP_URL:-}
+      HEARTBEAT_PHARMACY_RETURNS_URL: ${HEARTBEAT_PHARMACY_RETURNS_URL:-}
+      HEARTBEAT_PHARMACY_ACCESS_URL: ${HEARTBEAT_PHARMACY_ACCESS_URL:-}
     ports:
       - '${BIND_ADDR:-127.0.0.1}:${API_PORT:-3000}:3000'
     networks:
@@ -409,9 +416,16 @@ services:
       BACKUP_KEEP_WEEKS: ${BACKUP_KEEP_WEEKS:-4}
       BACKUP_KEEP_MONTHS: ${BACKUP_KEEP_MONTHS:-0}
       HEALTHCHECK_PORT: 8080
+      # Heartbeat (Healthchecks / Uptime Kuma): ok μετά από κάθε dump, fail στο σφάλμα.
+      HEARTBEAT_URL: ${HEARTBEAT_BACKUP_URL:-}
     volumes:
       - postgres-backups:/backups
+      # Το δικό μας hook (50-heartbeat) αντί για το webhook του image, που καλεί
+      # το ίδιο URL και στην αποτυχία — ένα heartbeat θα την περνούσε για επιτυχία.
+      - backup-hooks:/hooks:ro
     depends_on:
+      config:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
 
@@ -433,6 +447,8 @@ services:
       AWS_ACCESS_KEY_ID: ${RESTIC_AWS_ACCESS_KEY_ID:-}
       AWS_SECRET_ACCESS_KEY: ${RESTIC_AWS_SECRET_ACCESS_KEY:-}
       RESTIC_SSH_KEY_B64: ${RESTIC_SSH_KEY_B64:-}
+      # Heartbeat μετά από κάθε προσπάθεια: ok, ή fail (και όταν δεν έχει οριστεί προορισμός).
+      HEARTBEAT_URL: ${HEARTBEAT_OFFSITE_URL:-}
       # Η πηγή των αρχείων: το Garage της στοίβας, μέσω S3.
       RCLONE_S3_PROVIDER: Other
       RCLONE_S3_ENDPOINT: http://garage:3900
@@ -457,6 +473,23 @@ services:
     depends_on:
       garage-init:
         condition: service_completed_successfully
+
+  # ─────────────────── Watchdog ───────────────────
+  # Κάθε 5': δίσκος (≥ DISK_ALERT_PERCENT) και υγεία postgres/redis/garage/api/web/
+  # authentik → heartbeat. Το heartbeat είναι και ο «νεκρός διακόπτης»: αν πέσει ο
+  # server ή το internet, σταματούν τα pings και η εξωτερική υπηρεσία ειδοποιεί.
+  # Δοκιμή: docker compose … exec watchdog watchdog once
+  watchdog:
+    image: ghcr.io/athamour1/trifylli/config:${TAG:?TAG is required (π.χ. v1.0.3)}
+    restart: always
+    <<: [*logging, *hardened]
+    command: ['watchdog']
+    environment:
+      HEARTBEAT_URL: ${HEARTBEAT_WATCHDOG_URL:-}
+      DISK_ALERT_PERCENT: ${DISK_ALERT_PERCENT:-85}
+      WATCHDOG_INTERVAL: ${WATCHDOG_INTERVAL:-300}
+    volumes:
+      - watchdog-state:/state
 
   # ─────────────────── Error tracking (GlitchTip) — profile `errors` ───────────────────
   # Προαιρετικό: COMPOSE_PROFILES=errors. Δέχεται τα σφάλματα του API και της PWA
@@ -588,6 +621,7 @@ volumes:
   authentik-templates:
   postgres-init:
   garage-config:
+  backup-hooks:
   # Δεδομένα.
   postgres-backups:
   postgres-predeploy:
@@ -595,6 +629,7 @@ volumes:
   garage-mirror:
   offsite-state:
   glitchtip-uploads:
+  watchdog-state:
   postgres-data:
   redis-data:
   authentik-media:

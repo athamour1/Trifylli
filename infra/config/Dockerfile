@@ -9,6 +9,7 @@
 #   offsite-backup    κρυπτογραφημένα αντίγραφα εκτός server (restic)
 #   restore-db        επαναφορά μιας βάσης από dump (βλ. docs/restore.md)
 #   ensure-db         φτιάχνει μια βάση αν λείπει (π.χ. του GlitchTip)
+#   watchdog          δίσκος + υγεία υπηρεσιών → heartbeat κάθε 5' (docs/monitoring.md)
 #
 # Χτίζεται με context τη ρίζα του repo (χρειάζεται και το `.env.prod.example`):
 #   docker build -f infra/config/Dockerfile -t ghcr.io/athamour1/trifylli/config .
@@ -37,8 +38,15 @@ COPY infra/config/predeploy-backup.sh /usr/local/bin/predeploy-backup
 COPY infra/config/offsite-backup.sh /usr/local/bin/offsite-backup
 COPY infra/config/restore-db.sh /usr/local/bin/restore-db
 COPY infra/config/ensure-db.sh /usr/local/bin/ensure-db
+COPY infra/config/watchdog.sh /usr/local/bin/watchdog
+# Το heartbeat: βιβλιοθήκη για offsite-backup/watchdog, και hook για το `backup`
+# (μαζί με το 50-heartbeat, στο volume backup-hooks).
+COPY infra/config/heartbeat.sh /usr/local/lib/heartbeat.sh
+COPY infra/config/heartbeat.sh /config/backup-hooks/heartbeat.sh
+COPY infra/backup-hooks/50-heartbeat /config/backup-hooks/50-heartbeat
 
-RUN chmod +x /usr/local/bin/config-sync /usr/local/bin/garage-init /usr/local/bin/gen-env /usr/local/bin/predeploy-backup /usr/local/bin/offsite-backup /usr/local/bin/restore-db /usr/local/bin/ensure-db \
+RUN chmod +x /usr/local/bin/config-sync /usr/local/bin/garage-init /usr/local/bin/gen-env /usr/local/bin/predeploy-backup /usr/local/bin/offsite-backup /usr/local/bin/restore-db /usr/local/bin/ensure-db /usr/local/bin/watchdog \
+ && chmod +x /config/backup-hooks/50-heartbeat \
  && chmod +x /config/postgres-init/*.sh
 
 # Η έκδοση της στοίβας: το gen-env τη γράφει ως TAG στο .env.prod, ώστε μια νέα
