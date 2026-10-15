@@ -392,6 +392,49 @@ services:
       postgres:
         condition: service_healthy
 
+  # ─────────────────── Αντίγραφα εκτός server (restic) ───────────────────
+  # Μία φορά τη μέρα: τα dumps (`backup` + `predeploy-backup`) και τα αρχεία του
+  # Garage (μέσω S3) → κρυπτογραφημένο αποθετήριο restic ΕΚΤΟΣ server, με
+  # διατήρηση το πολύ 30 ημέρες. Χωρίς RESTIC_REPOSITORY η στοίβα σηκώνεται
+  # κανονικά, αλλά αυτό μένει «unhealthy» και το γράφει στα logs κάθε μέρα.
+  # Χειροκίνητα: docker compose … exec backup-offsite offsite-backup once
+  backup-offsite:
+    image: ghcr.io/athamour1/trifylli/config:${TAG:?TAG is required (π.χ. v1.0.3)}
+    restart: always
+    <<: [*logging, *hardened]
+    command: ['offsite-backup']
+    environment:
+      RESTIC_REPOSITORY: ${RESTIC_REPOSITORY:-}
+      RESTIC_PASSWORD: ${RESTIC_PASSWORD:-}
+      # Διαπιστευτήρια του προορισμού — ό,τι χρειάζεται ο τύπος του αποθετηρίου.
+      AWS_ACCESS_KEY_ID: ${RESTIC_AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${RESTIC_AWS_SECRET_ACCESS_KEY:-}
+      RESTIC_SSH_KEY_B64: ${RESTIC_SSH_KEY_B64:-}
+      # Η πηγή των αρχείων: το Garage της στοίβας, μέσω S3.
+      RCLONE_S3_PROVIDER: Other
+      RCLONE_S3_ENDPOINT: http://garage:3900
+      RCLONE_S3_REGION: ${S3_REGION:-garage}
+      RCLONE_S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?S3_ACCESS_KEY_ID is required}
+      RCLONE_S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?S3_SECRET_ACCESS_KEY is required}
+      RCLONE_S3_FORCE_PATH_STYLE: 'true'
+      S3_BUCKET: ${S3_BUCKET:-trifylli}
+    volumes:
+      - postgres-backups:/backups/pg:ro
+      - postgres-predeploy:/backups/predeploy:ro
+      - garage-mirror:/mirror
+      - offsite-state:/state
+    # «unhealthy» = κανένα επιτυχημένο αντίγραφο τις τελευταίες 30 ώρες (ή κανένας
+    # προορισμός). Οι πρώτες 3 ώρες δεν μετράνε: η πρώτη προσπάθεια είναι στα 10'.
+    healthcheck:
+      test: ['CMD', 'offsite-backup', 'health']
+      interval: 10m
+      timeout: 10s
+      retries: 1
+      start_period: 3h
+    depends_on:
+      garage-init:
+        condition: service_completed_successfully
+
   # ─────────────────── OuchTracker (φαρμακεία) ───────────────────
   # Μοιράζεται Postgres (δική του βάση), Authentik (SSO) και το ίδιο domain
   # (υποτομέας) με το Trifylli. Το backend κάνει μόνο του migrate+seed στην
@@ -448,6 +491,9 @@ volumes:
   # Δεδομένα.
   postgres-backups:
   postgres-predeploy:
+  # Καθρέφτης του Garage για το restic, και η κατάστασή του (cache, «τελευταία επιτυχία»).
+  garage-mirror:
+  offsite-state:
   postgres-data:
   redis-data:
   authentik-media:
