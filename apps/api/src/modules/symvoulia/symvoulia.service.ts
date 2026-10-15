@@ -11,6 +11,7 @@ import {
   SYMVOULIO_TYPE_LABEL,
   TOPIKO_SYMVOULIA,
   can,
+  collabDocument,
   type KladosType,
   type SymvoulioType,
 } from '@trifylli/shared';
@@ -18,6 +19,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
 import { accessProfileOf, assertKladosAccess, scopedKladoi } from '../../common/util/klados-scope';
 import { MemberKind, MemberStatus } from '@prisma/client';
+import { CollabService } from '../collab/collab.service';
 import { FilesService } from '../files/files.service';
 import type { CreateSymvoulioDto, UpdateSymvoulioDto } from './dto/symvoulio.dto';
 
@@ -26,6 +28,7 @@ export class SymvouliaService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly files: FilesService,
+    private readonly collab: CollabService,
   ) {}
 
   async list(user: RequestUser, type?: SymvoulioType, klados?: KladosType, drasiId?: string) {
@@ -122,6 +125,12 @@ export class SymvouliaService {
    * πειράζω», ώστε μια αποθήκευση που αφορά μόνο το κείμενο να μην τη σβήνει.
    */
   async update(user: RequestUser, id: string, dto: UpdateSymvoulioDto) {
+    // Ατζέντα και πρακτικά γράφονται πια μαζί, ως κοινό έγγραφο (`symvoulio:<id>`).
+    // Ένα tab από πριν την αλλαγή θα έστελνε όλο το κείμενο και θα έσβηνε ό,τι
+    // γράφουν οι άλλοι — του λέμε να ανανεώσει.
+    if (dto.agenda !== undefined || dto.minutes !== undefined) {
+      throw new ConflictException('Η εφαρμογή ενημερώθηκε — ανανέωσε τη σελίδα για να συνεχίσεις.');
+    }
     await this.assertEditable(user, id);
     const { participantIds, ...fields } = dto;
 
@@ -180,11 +189,21 @@ export class SymvouliaService {
 
   /** Κλείδωμα πρακτικών μετά την έγκριση — από εκεί και πέρα μόνο ανάγνωση. */
   async finalize(user: RequestUser, id: string) {
-    const symvoulio = await this.assertEditable(user, id);
-    if (!symvoulio.minutes?.trim()) {
-      throw new BadRequestException('Δεν μπορεί να οριστικοποιηθεί συμβούλιο χωρίς πρακτικά.');
+    await this.assertEditable(user, id);
+    // Όσοι γράφουν τα πρακτικά σταματούν να γράφουν και ό,τι εκκρεμεί σώζεται:
+    // ο έλεγχος και το κλείδωμα βλέπουν το τελικό κείμενο. Μετά ξανασυνδέονται
+    // με τα νέα δικαιώματα — μόνο ανάγνωση, ή γραφή αν το κλείδωμα απέτυχε.
+    const document = collabDocument.symvoulio(id);
+    await this.collab.freeze(document);
+    try {
+      const { minutes } = await this.prisma.symvoulio.findUniqueOrThrow({ where: { id }, select: { minutes: true } });
+      if (!minutes?.trim()) {
+        throw new BadRequestException('Δεν μπορεί να οριστικοποιηθεί συμβούλιο χωρίς πρακτικά.');
+      }
+      return await this.prisma.symvoulio.update({ where: { id }, data: { finalizedAt: new Date() } });
+    } finally {
+      this.collab.revoke(document);
     }
-    return this.prisma.symvoulio.update({ where: { id }, data: { finalizedAt: new Date() } });
   }
 
   /**
@@ -195,6 +214,9 @@ export class SymvouliaService {
    */
   async archive(user: RequestUser, id: string) {
     await this.assertAccess(user, id);
+    // Πρώτα σώζεται ό,τι γράφεται αυτή τη στιγμή, ώστε ο καθαρισμός εικόνων να
+    // δει το τελικό κείμενο· μετά κλείνουν οι συνδέσεις και σβήνει το έγγραφο.
+    await this.collab.remove(collabDocument.symvoulio(id));
     const symvoulio = await this.prisma.symvoulio.findUniqueOrThrow({
       where: { id },
       select: { agenda: true, minutes: true },
