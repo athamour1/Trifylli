@@ -1,0 +1,44 @@
+import { HocuspocusProviderWebsocket } from '@hocuspocus/provider';
+import { COLLAB_PATH, COLLAB_PROTOCOL } from '@trifylli/shared';
+import { API_URL, DEV_ACCOUNT_EMAIL, currentAccessToken } from './api';
+import { onCollabPurge } from './collab-storage';
+
+/**
+ * Η σύνδεση της συνεργασίας σε πραγματικό χρόνο (βλ. docs/synergasia.md).
+ *
+ * Ένα WebSocket ανά tab για όλα τα κοινά έγγραφα, στο ίδιο host με το API
+ * (`…/api/collab`). Τα έγγραφα τα ανοίγει το `useCollabDoc`.
+ */
+
+/** Το WebSocket ζει όπου και το API: ίδιο host, κάτω από το πρόθεμά του. Σχετικό `API_URL` = ίδιο origin. */
+export function collabUrl(apiUrl: string = API_URL, base: string = window.location.href): string {
+  const api = new URL(apiUrl, base);
+  const protocol = api.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${protocol}//${api.host}${api.pathname.replace(/\/+$/, '')}/${COLLAB_PATH}`;
+}
+
+let socket: HocuspocusProviderWebsocket | null = null;
+
+/** Η κοινή σύνδεση του tab· ξανασυνδέεται μόνη της, χωρίς όριο προσπαθειών (στο βουνό το σήμα πάει κι έρχεται). */
+export function collabSocket(): HocuspocusProviderWebsocket {
+  if (!socket) {
+    socket = new HocuspocusProviderWebsocket({
+      url: collabUrl(),
+      maxAttempts: 0,
+      delay: 1000,
+      factor: 2,
+      maxDelay: 30_000,
+      jitter: true,
+    });
+    onCollabPurge(() => {
+      socket?.destroy();
+      socket = null;
+    });
+  }
+  return socket;
+}
+
+/** Το «token» ενός εγγράφου: ποιος είσαι, ποια γενιά έχει η συσκευή, ποιο πρωτόκολλο μιλάς. */
+export function collabToken(generation: string): string {
+  return JSON.stringify({ t: currentAccessToken() || DEV_ACCOUNT_EMAIL || 'dev', g: generation, p: COLLAB_PROTOCOL });
+}

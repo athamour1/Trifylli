@@ -66,6 +66,26 @@ export function setUnauthorizedHandler(handler: UnauthorizedHandler | null): voi
   onUnauthorized = handler;
 }
 
+/** Το τρέχον access token — για συνδέσεις εκτός axios (το WebSocket της συνεργασίας). */
+export function currentAccessToken(): string | null {
+  return accessToken;
+}
+
+/**
+ * Ο server απέρριψε το token εκτός axios: ίδια ανάκαμψη με το 401 — μία σιωπηλή
+ * ανανέωση τη φορά — και το νέο token, ή `null` αν η συνεδρία τελείωσε.
+ */
+export async function refreshAccessToken(): Promise<string | null> {
+  if (!onUnauthorized) return null;
+  recovering ??= onUnauthorized().finally(() => {
+    recovering = null;
+  });
+  return recovering;
+}
+
+/** Στο dev χωρίς Authentik: ο λογαριασμός με τον οποίο «συνδεόμαστε» (`x-dev-email`). */
+export const DEV_ACCOUNT_EMAIL = DEV_EMAIL;
+
 type RetriableConfig = AxiosRequestConfig & { _retriedAfter401?: boolean };
 
 http.interceptors.request.use((config) => {
