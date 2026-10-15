@@ -224,6 +224,28 @@ services:
     depends_on:
       - garage
 
+  # ─────────────── Αντίγραφο πριν από τα migrations (one-shot) ───────────────
+  # Dump όλων των βάσεων σε κάθε `up`, ΠΡΙΝ από το `migrate`: ένα migration που
+  # σβήνει στήλες δεν αναιρείται, ένα dump ναι. Δικό του volume (γράφει ως root
+  # χωρίς capabilities — δεν μπορεί να γράψει στον φάκελο του `backup`).
+  # Επαναφορά: pg_restore --clean --if-exists -d <βάση> <αρχείο>.dump
+  predeploy-backup:
+    image: ghcr.io/athamour1/trifylli/config:${TAG:-latest}
+    restart: 'no'
+    <<: [*logging, *hardened]
+    command: ['predeploy-backup']
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER:-trifylli}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      DATABASES: ${POSTGRES_DB:-trifylli},${AUTHENTIK_DB:-authentik},${OUCHTRACKER_DB:-ouchtracker}
+      PREDEPLOY_KEEP_DAYS: ${PREDEPLOY_KEEP_DAYS:-30}
+    volumes:
+      - postgres-predeploy:/backups/predeploy
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   # ─────────────────── Migrations (one-shot) ───────────────────
   # Τρέχει `prisma migrate deploy` και τερματίζει. Το API ΔΕΝ ξεκινά πριν
   # ολοκληρωθεί, ώστε κάθε deploy να φέρνει τη βάση στο σωστό σχήμα πρώτα.
@@ -243,6 +265,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      predeploy-backup:
+        condition: service_completed_successfully
 
   # ─────────────────────────── API ────────────────────────────
   api:
@@ -416,6 +440,7 @@ volumes:
   garage-config:
   # Δεδομένα.
   postgres-backups:
+  postgres-predeploy:
   postgres-data:
   redis-data:
   authentik-media:

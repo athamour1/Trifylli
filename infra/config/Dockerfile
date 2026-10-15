@@ -5,6 +5,7 @@
 #   config-sync   (default) γράφει τα αρχεία στα named volumes της στοίβας
 #   garage-init   idempotent bootstrap του Garage (layout, bucket, key)
 #   gen-env       τυπώνει έτοιμο .env.prod με τυχαία μυστικά
+#   predeploy-backup  dump όλων των βάσεων πριν από τα migrations
 #
 # Χτίζεται με context τη ρίζα του repo (χρειάζεται και το `.env.prod.example`):
 #   docker build -f infra/config/Dockerfile -t ghcr.io/athamour1/trifylli/config .
@@ -12,6 +13,8 @@
 FROM dxflrs/garage:v1.1.0 AS garage
 
 FROM alpine:3.20
+# pg_dump/psql ίδιας major έκδοσης με τον server (postgres:16).
+RUN apk add --no-cache postgresql16-client
 # Το στατικό binary του Garage — το garage-init δεν κατεβάζει πια τίποτα στο deploy.
 COPY --from=garage /garage /usr/local/bin/garage
 
@@ -26,8 +29,9 @@ COPY infra/garage/bootstrap.sh /usr/local/bin/garage-init
 COPY .env.prod.example /config/env.example
 COPY infra/config/config-sync.sh /usr/local/bin/config-sync
 COPY infra/config/gen-env.sh /usr/local/bin/gen-env
+COPY infra/config/predeploy-backup.sh /usr/local/bin/predeploy-backup
 
-RUN chmod +x /usr/local/bin/config-sync /usr/local/bin/garage-init /usr/local/bin/gen-env \
+RUN chmod +x /usr/local/bin/config-sync /usr/local/bin/garage-init /usr/local/bin/gen-env /usr/local/bin/predeploy-backup \
  && chmod +x /config/postgres-init/*.sh
 
 ENTRYPOINT []
