@@ -180,10 +180,10 @@ describe('CollabService', () => {
     const sofia = connect('sofia');
     await until(() => maria.provider.isSynced && sofia.provider.isSynced);
 
-    maria.provider.setAwarenessField('user', { id: 'u-maria', name: 'Αρχηγός', color: '#000' });
+    maria.provider.setAwarenessField('user', { id: 'u-maria', name: 'Αρχηγός', fullName: 'Αρχηγός', color: '#000' });
     const sofiaSees = () =>
       [...(sofia.provider.awareness?.getStates().values() ?? [])].map((s) => (s.user as { name?: string } | undefined)?.name);
-    await until(() => sofiaSees().includes('Μαρία Δοκιμή'));
+    await until(() => sofiaSees().includes('Μαρία Δ.'));
 
     expect(sofiaSees()).not.toContain('Αρχηγός');
   });

@@ -25,6 +25,7 @@ import {
   COLLAB_PROTOCOL,
   CollabRejection,
   collabColor,
+  collabShortName,
   type CollabPresenceUser,
 } from '@trifylli/shared';
 import { WebSocketServer, type RawData, type WebSocket } from 'ws';
@@ -179,7 +180,12 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
     const { user } = identity;
     return {
       userId: user.id,
-      user: { id: user.id, name: `${user.firstName} ${user.lastName}`.trim(), color: collabColor(user.id) },
+      user: {
+        id: user.id,
+        name: collabShortName(user.firstName, user.lastName),
+        fullName: `${user.firstName} ${user.lastName}`.trim(),
+        color: collabColor(user.id),
+      },
       expiresAt: identity.expiresAt,
     };
   }

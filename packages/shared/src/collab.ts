@@ -43,8 +43,16 @@ export const COLLAB_GENERATION_KEY = 'generation';
 /** Ποιος είναι συνδεδεμένος, όπως τον δείχνει η παρουσία· το ορίζει ο server. */
 export interface CollabPresenceUser {
   id: string;
+  /** Σύντομο («Μαρία Π.») — πάνω από τον κέρσορα, όπου δεν χωρά ολόκληρο. */
   name: string;
+  fullName: string;
   color: string;
+}
+
+/** «Μαρία Παπαδοπούλου» → «Μαρία Π.» */
+export function collabShortName(firstName: string, lastName: string): string {
+  const initial = lastName.trim().charAt(0);
+  return [firstName.trim(), initial ? `${initial}.` : ''].filter(Boolean).join(' ');
 }
 
 /** Τα ονόματα των εγγράφων — ίδια στον server και στον client. */
