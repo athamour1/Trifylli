@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
+import type { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { sniffMime } from './sniff';
 import {
@@ -110,7 +111,32 @@ export class FilesService {
       add(sv.minutes);
     }
 
+    for (const text of await this.drasiMarkdownTexts({ archivedAt: null }, 'trifylli:')) add(text);
+
     return refs;
+  }
+
+  /**
+   * Τα κείμενα Markdown των δράσεων που περιέχουν το `needle`: περιγραφή, μύθος,
+   * lore ρόλων, προγραμματικά, συνταγές. Κάθε νέο πεδίο Markdown δράσης μπαίνει
+   * εδώ — αλλιώς η νυχτερινή σάρωση θεωρεί τις εικόνες του ορφανές και τις σβήνει.
+   */
+  private async drasiMarkdownTexts(drasi: Prisma.DrasiWhereInput, needle: string): Promise<(string | null)[]> {
+    const [draseis, characters, items, meals] = await Promise.all([
+      this.prisma.drasi.findMany({
+        where: { ...drasi, OR: [{ description: { contains: needle } }, { mythosText: { contains: needle } }] },
+        select: { description: true, mythosText: true },
+      }),
+      this.prisma.drasiCharacter.findMany({ where: { lore: { contains: needle }, drasi }, select: { lore: true } }),
+      this.prisma.drasiScheduleItem.findMany({ where: { description: { contains: needle }, drasi }, select: { description: true } }),
+      this.prisma.drasiMeal.findMany({ where: { recipe: { contains: needle }, item: { drasi } }, select: { recipe: true } }),
+    ]);
+    return [
+      ...draseis.flatMap((d) => [d.description, d.mythosText]),
+      ...characters.map((c) => c.lore),
+      ...items.map((i) => i.description),
+      ...meals.map((m) => m.recipe),
+    ];
   }
 
   async upload(
@@ -249,7 +275,9 @@ export class FilesService {
         OR: [{ agenda: { contains: needle } }, { minutes: { contains: needle } }],
       },
     });
-    return inSymvoulia > 0;
+    if (inSymvoulia > 0) return true;
+
+    return (await this.drasiMarkdownTexts({ topikoId, archivedAt: null }, needle)).length > 0;
   }
 
   private async resolveKladosId(user: RequestUser, kladosType?: KladosType): Promise<string | null> {
