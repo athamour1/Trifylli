@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
+import { scrubUrlPath } from '@trifylli/shared';
 
 /**
  * Ό,τι ξέρουμε για το αίτημα που εξυπηρετείται τώρα. Ζει σε AsyncLocalStorage,
@@ -20,19 +21,10 @@ export function resolveRequestId(header: string | string[] | undefined): string 
   return value && SAFE_REQUEST_ID.test(value) ? value : randomUUID();
 }
 
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-/** Αδιαφανές, μακρύ τμήμα διαδρομής — τα tokens των δημόσιων συνδέσμων (έντυπα, αξιολόγηση). */
-const OPAQUE_SEGMENT = /^[A-Za-z0-9_-]{24,}$/;
-
 /**
  * Η διαδρομή όπως γράφεται στα logs: χωρίς query string και με τα tokens ως
- * `:token`. Ένα token σε log είναι ένας σύνδεσμος προς το έντυπο υγείας ενός
- * παιδιού για όποιον διαβάζει τα logs. Τα UUID μένουν — δείχνουν ποια δράση.
+ * `:token` — ίδιος κανόνας με το error tracking (`scrubUrlPath` στο shared).
  */
 export function loggablePath(originalUrl: string): string {
-  const path = originalUrl.split('?')[0] ?? '';
-  return path
-    .split('/')
-    .map((segment) => (OPAQUE_SEGMENT.test(segment) && !UUID.test(segment) ? ':token' : segment))
-    .join('/');
+  return scrubUrlPath(originalUrl);
 }
