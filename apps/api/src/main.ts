@@ -7,8 +7,10 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { AppConfigToken } from './common/config/config.module';
-import { corsOrigins, type AppConfig } from './common/config/configuration';
+import { corsOrigins, logFormat, type AppConfig } from './common/config/configuration';
 import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter';
+import { AppLogger } from './common/logging/app-logger';
+import { requestLogging } from './common/logging/request-logging.middleware';
 
 /**
  * Ρητή φόρτωση `.env` πριν από οτιδήποτε άλλο.
@@ -31,6 +33,9 @@ async function bootstrap(): Promise<void> {
   // υπέγραψε ο αποστολέας, όχι σε δική μας επανασειριοποίηση του JSON.
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true, rawBody: true });
   const config = app.get<AppConfig>(AppConfigToken);
+  // JSON στην παραγωγή (με requestId σε κάθε γραμμή μέσα σε αίτημα). Τα logs της
+  // εκκίνησης ήταν buffered (`bufferLogs`) και βγαίνουν κι αυτά σε αυτή τη μορφή.
+  app.useLogger(new AppLogger({ json: logFormat(config) === 'json' }));
   const logger = new Logger('Bootstrap');
 
   // Τα έντυπα των δράσεων στέλνουν την υπογραφή ως εικόνα (data URL) — το
@@ -40,10 +45,12 @@ async function bootstrap(): Promise<void> {
   app.set('trust proxy', config.TRUST_PROXY_HOPS);
   app.disable('x-powered-by');
   app.use(helmet());
+  app.use(requestLogging(config.API_PREFIX));
   // Χωρίς `credentials`: η αυθεντικοποίηση είναι Bearer, όχι cookies — δεν
   // υπάρχει λόγος ο browser να στέλνει credentials cross-origin.
   // `exposedHeaders`: το όνομα αρχείου των εξαγωγών (Excel) διαβάζεται από τον browser.
-  app.enableCors({ origin: corsOrigins(config), exposedHeaders: ['Content-Disposition'] });
+  // `X-Request-Id`: η PWA το κρατά για το error tracking και για αναφορές προβλημάτων.
+  app.enableCors({ origin: corsOrigins(config), exposedHeaders: ['Content-Disposition', 'X-Request-Id'] });
 
   // Το API σερβίρει δυναμικά δεδομένα — όχι HTTP caching. Χωρίς αυτό, ο browser
   // κρατά παλιές απαντήσεις (ETag → 304) και οι λίστες «κολλάνε» μετά από

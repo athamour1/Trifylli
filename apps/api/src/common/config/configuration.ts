@@ -13,6 +13,12 @@ const blankToUndefined = <T extends z.ZodTypeAny>(schema: T) =>
  */
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+  /**
+   * Μορφή των logs: `json` (μία γραμμή ανά μήνυμα, με `requestId` — για την
+   * παραγωγή και όποιο εργαλείο τα διαβάζει) ή `text` (για ανθρώπους). Χωρίς
+   * τιμή: json στην παραγωγή, text αλλού — βλ. `logFormat()`.
+   */
+  LOG_FORMAT: blankToUndefined(z.enum(['json', 'text'])),
   PORT: z.coerce.number().int().positive().default(3000),
   API_PREFIX: z.string().default('api'),
   CORS_ORIGINS: z.string().default('http://localhost:9000'),
@@ -140,6 +146,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     throw new Error('DEV_AUTH_BYPASS=true απαγορεύεται σε production.');
   }
   return config;
+}
+
+export function logFormat(config: AppConfig): 'json' | 'text' {
+  return config.LOG_FORMAT ?? (config.NODE_ENV === 'production' ? 'json' : 'text');
 }
 
 export function corsOrigins(config: AppConfig): string[] {
