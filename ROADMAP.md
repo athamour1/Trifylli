@@ -57,12 +57,12 @@ rate limiting, καθάρισμα ιατρικών. Λείπουν αυτά, μ�
    παράκαμψη brute force). Κοινό δίκτυο με το proxy, θύρες μόνο στο localhost,
    trusted CIDRs μόνο το δίκτυο της στοίβας. **S**
 
-**Μετά — παρακολούθηση** (το 80/20 της [ενότητας 5](#5-observability)):
+**Μετά — παρακολούθηση** (το 80/20 της [ενότητας 5](#5-observability)) — έγιναν 2026-10-15, οδηγίες στο [`docs/monitoring.md`](docs/monitoring.md):
 
-8. [ ] Uptime check απ' έξω (app, `/api/health`, SSO) + heartbeat από τα backups. **S**
-9. [ ] Error tracking (GlitchTip) για API και PWA. **S–M**
-10. [ ] Request id + δομημένα logs· διατήρηση logs πέρα από τα 30 MB ανά container. **S**
-11. [ ] Ειδοποιήσεις για δίσκο, για αποτυχίες του e-SEO sync και των crons. **S**
+8. [x] Uptime check απ' έξω (app, `/api/health`, SSO) + heartbeat από τα backups. **S**
+9. [x] Error tracking (GlitchTip) για API και PWA. **S–M**
+10. [x] Request id + δομημένα logs· διατήρηση logs πέρα από τα 30 MB ανά container. **S**
+11. [x] Ειδοποιήσεις για δίσκο, για αποτυχίες του e-SEO sync και των crons. **S**
 
 **Σιγά-σιγά:**
 

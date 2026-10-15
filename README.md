@@ -576,6 +576,12 @@ Garage, κρυπτογραφημένα (restic), εκτός server — μόλι�
 από 30 ημέρες (το λέει η φόρμα υγείας στους γονείς). **Επαναφορά — rollback, μία
 βάση, νέος server:** [`docs/restore.md`](docs/restore.md).
 
+**Παρακολούθηση.** Heartbeats (Healthchecks ή Uptime Kuma) από τα backups, τα
+crons του API και έναν `watchdog` που κάθε 5' ελέγχει δίσκο και υπηρεσίες — και
+είναι ο «νεκρός διακόπτης» αν πέσει ο server. Error tracking με GlitchTip
+(profile `errors`), με καθαρισμένα events. Logs σε JSON με `requestId`. Οδηγίες
+και ποια checks να φτιάξεις: [`docs/monitoring.md`](docs/monitoring.md).
+
 **Ένα domain, υποτομείς.** Η στοίβα δεν περιλαμβάνει TLS/reverse proxy — τον
 βάζει ο διαχειριστής μπροστά. Δύο τρόποι, και κανένας δεν ανοίγει θύρες στο LAN:
 
@@ -756,6 +762,8 @@ layout + bucket + key (idempotent) στο πρώτο boot.
 3. **Προορισμός για τα αντίγραφα εκτός server** (`RESTIC_REPOSITORY` — B2,
    Hetzner Storage Box, NAS· παραδείγματα στο `.env.prod.example`), και **το
    `.env.prod` σε password manager**: χωρίς αυτό τα αντίγραφα δεν ανοίγουν.
+   **Και τα checks της παρακολούθησης** (heartbeats + έλεγχοι απ' έξω) — ποια και
+   με ποιες περιόδους: [`docs/monitoring.md`](docs/monitoring.md).
 4. **Περιστροφή μυστικών**: `AUTHENTIK_API_TOKEN` (νέα τιμή + restart — το
    blueprint ξαναγράφει το token), `ESEO_REFRESH_TOKEN` όταν ο Keycloak τον
    περιστρέψει (το log προειδοποιεί), κωδικός OuchTracker.
