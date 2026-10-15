@@ -24,7 +24,8 @@
           </div>
 
           <div class="col-12 col-sm-auto row items-center q-gutter-sm">
-            <SaveStatus v-if="editable" :status="saveStatus" @retry="saveNow" />
+            <CollabPresence :peers="peers" />
+            <SaveStatus v-if="editable" :status="combinedSave" @retry="saveNow" />
             <q-btn
               v-if="viewOnly && !data.finalized && auth.can('symvoulio:klados:write')"
               outline
@@ -47,6 +48,14 @@
           </div>
         </div>
 
+        <q-banner v-if="collabStatus === 'update-required'" dense class="bg-orange-1 text-orange-10 q-mb-md">
+          <template #avatar><q-icon name="system_update" /></template>
+          Βγήκε νέα έκδοση της εφαρμογής — ανανέωσε τη σελίδα για να γράψεις στα κείμενα.
+          <template #action>
+            <q-btn flat no-caps color="orange-10" label="Ανανέωση" @click="reloadPage" />
+          </template>
+        </q-banner>
+
         <q-banner v-if="data.finalized" dense class="bg-grey-3 text-grey-9 q-mb-md">
           <template #avatar><q-icon name="lock" /></template>
           Τα πρακτικά έχουν οριστικοποιηθεί και δεν τροποποιούνται.
@@ -62,14 +71,24 @@
               </q-card-section>
               <q-separator />
               <q-card-section class="q-py-sm">
-                <MarkdownField
-                  v-model="header.agenda"
+                <CollabMarkdownField
+                  v-if="collabReady"
+                  :doc="collabDoc"
+                  field="agenda"
+                  :awareness="awareness"
                   :klados="data.klados?.type ?? null"
-                  :readonly="!editable"
+                  :readonly="!textsEditable"
                   label="Τι θα συζητηθεί"
                   placeholder="- Απολογισμός περιόδου&#10;- Πρόγραμμα δράσεων"
                   empty-text="Δεν έχει γραφτεί ατζέντα."
                   :min-height="120"
+                />
+                <MarkdownField
+                  v-else
+                  :model-value="data.agenda ?? ''"
+                  readonly
+                  :klados="data.klados?.type ?? null"
+                  empty-text="Δεν έχει γραφτεί ατζέντα."
                 />
               </q-card-section>
             </q-card>
@@ -82,15 +101,29 @@
               </q-card-section>
               <q-separator />
               <q-card-section class="q-py-sm">
-                <MarkdownField
-                  v-model="header.minutes"
+                <CollabMarkdownField
+                  v-if="collabReady"
+                  :doc="collabDoc"
+                  field="minutes"
+                  :awareness="awareness"
                   :klados="data.klados?.type ?? null"
-                  :readonly="!editable"
+                  :readonly="!textsEditable"
                   label="Τι ειπώθηκε και τι αποφασίστηκε"
                   placeholder="## Θέμα&#10;&#10;Συζήτηση…&#10;&#10;**Απόφαση:** …"
                   empty-text="Δεν έχουν γραφτεί πρακτικά."
                   :min-height="220"
                 />
+                <MarkdownField
+                  v-else
+                  :model-value="data.minutes ?? ''"
+                  readonly
+                  :klados="data.klados?.type ?? null"
+                  empty-text="Δεν έχουν γραφτεί πρακτικά."
+                />
+                <div v-if="!collabReady && collabStatus === 'offline'" class="text-caption text-grey-6 q-mt-sm">
+                  Χωρίς σύνδεση: τα κείμενα φαίνονται μόνο για ανάγνωση σε αυτή τη συσκευή — η επεξεργασία
+                  ανοίγει μόλις συνδεθείς.
+                </div>
               </q-card-section>
             </q-card>
           </div>
@@ -182,22 +215,34 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, onBeforeUnmount, reactive, ref, watch } from 'vue';
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 import { useQuasar } from 'quasar';
-import { KLADOS_LABEL, type KladosType, type SymvoulioType } from '@trifylli/shared';
+import {
+  KLADOS_LABEL,
+  collabColor,
+  collabDocument,
+  collabShortName,
+  type KladosType,
+  type SymvoulioType,
+} from '@trifylli/shared';
+import CollabPresence from '../components/CollabPresence.vue';
 import DateField from '../components/DateField.vue';
 import MarkdownField from '../components/MarkdownField.vue';
 import PageState from '../components/PageState.vue';
 import SaveStatus from '../components/SaveStatus.vue';
 import { useAsyncData } from '../composables/useAsyncData';
+import { useCollabDoc } from '../composables/useCollabDoc';
 import { ApiError, OfflineError, get, patch, post } from '../lib/api';
 import { useKladosThemeStore } from '../stores/klados-theme';
-import type { SaveState } from '../lib/save-state';
+import { worstSaveState, type SaveState } from '../lib/save-state';
 import { useAuthStore } from '../stores/auth';
 import { useOfflineStore } from '../stores/offline';
 
 const kladosTheme = useKladosThemeStore();
+
+// CodeMirror φορτώνεται μόνο όταν ανοίξει σελίδα με κείμενα για γράψιμο.
+const CollabMarkdownField = defineAsyncComponent(() => import('../components/CollabMarkdownField.vue'));
 
 /**
  * Ένα συμβούλιο: τι θα πούμε, τι είπαμε, ποιοι ήταν εκεί.
@@ -270,6 +315,38 @@ const editable = computed(
   () => auth.can('symvoulio:klados:write') && !data.value?.finalized && !viewOnly.value,
 );
 
+// ───────────────────────── Ατζέντα & πρακτικά: κοινό έγγραφο ─────────────────────────
+
+/**
+ * Τα δύο κείμενα τα γράφουν πολλοί μαζί (βλ. docs/synergasia.md): ζωντανά, με
+ * κέρσορες, και χωρίς δίκτυο από το αντίγραφο της συσκευής. Τα στοιχεία στο
+ * πλάι (ημερομηνία, συμμετέχοντες) σώζονται όπως πριν.
+ */
+const {
+  doc: collabDoc,
+  awareness,
+  ready: collabReady,
+  readOnly: collabReadOnly,
+  status: collabStatus,
+  peers,
+  saveState: collabSaveState,
+  whenSaved,
+} = useCollabDoc(collabDocument.symvoulio(id), () => {
+  const user = auth.profile?.user;
+  return user
+    ? { id: user.id, name: collabShortName(user.firstName, user.lastName), fullName: auth.displayName, color: collabColor(user.id) }
+    : null;
+});
+
+/** Τα κείμενα γράφονται όταν γράφεται η σελίδα **και** ο server το επιτρέπει. */
+const textsEditable = computed(() => editable.value && !collabReadOnly.value && collabStatus.value !== 'update-required');
+
+const combinedSave = computed(() => worstSaveState(saveStatus.value, collabSaveState.value));
+
+function reloadPage(): void {
+  window.location.reload();
+}
+
 function startEditing(): void {
   const query = { ...route.query };
   delete query.view;
@@ -283,8 +360,6 @@ const header = reactive({
   date: '',
   location: '',
   chairId: null as string | null,
-  agenda: '',
-  minutes: '',
 });
 
 const participantIds = ref<string[]>([]);
@@ -307,8 +382,6 @@ watch(
     header.date = isoDay(new Date(value.date));
     header.location = value.location ?? '';
     header.chairId = value.chair?.id ?? null;
-    header.agenda = value.agenda ?? '';
-    header.minutes = value.minutes ?? '';
     participantIds.value = value.participants.map((entry) => entry.userId);
 
     void Promise.resolve().then(() => {
@@ -385,8 +458,6 @@ async function saveNow(): Promise<void> {
       date: dayToIso(header.date),
       location: header.location.trim() || null,
       chairId: header.chairId ?? null,
-      agenda: header.agenda,
-      minutes: header.minutes,
       participantIds: participantIds.value,
     });
     dirty.value = false;
@@ -444,6 +515,10 @@ async function finalize(): Promise<void> {
   // Ό,τι δεν έχει προλάβει να φύγει, φεύγει πρώτα: το κλείδωμα απορρίπτει
   // κάθε επόμενη αποθήκευση, οπότε μια εκκρεμής αλλαγή θα χανόταν.
   await saveNow();
+  if (!(await whenSaved())) {
+    $q.notify({ type: 'warning', message: 'Τα κείμενα δεν έχουν φτάσει ακόμη στον server — δοκίμασε ξανά σε λίγο.' });
+    return;
+  }
   try {
     await post(`/symvoulia/${id}/finalize`);
     await reload();
