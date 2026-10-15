@@ -27,7 +27,7 @@
             <CollabPresence :peers="peers" />
             <SaveStatus v-if="editable" :status="combinedSave" @retry="saveNow" />
             <q-btn
-              v-if="viewOnly && !data.finalized && auth.can('symvoulio:klados:write')"
+              v-if="viewOnly && !data.finalized && canWrite"
               outline
               color="klados"
               icon="edit"
@@ -220,6 +220,7 @@ import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 import { useQuasar } from 'quasar';
 import {
   KLADOS_LABEL,
+  TOPIKO_SYMVOULIA,
   collabColor,
   collabDocument,
   collabShortName,
@@ -310,10 +311,20 @@ watch(
  */
 const viewOnly = computed(() => route.query.view === '1');
 
+/**
+ * Ίδιος κανόνας με το API: συμβούλιο Τοπικού γράφει μόνο όποιος έχει το δικαίωμα
+ * Τοπικού, συμβούλιο κλάδου όποιος έχει το δικαίωμα σε **εκείνον** τον κλάδο.
+ */
+const canWrite = computed(() => {
+  const value = data.value;
+  if (!value) return false;
+  return (TOPIKO_SYMVOULIA as readonly string[]).includes(value.type)
+    ? auth.can('symvoulio:topiko:write')
+    : auth.can('symvoulio:klados:write', value.klados?.type);
+});
+
 /** Οριστικοποιημένα πρακτικά δεν αλλάζουν — ούτε κατά λάθος. */
-const editable = computed(
-  () => auth.can('symvoulio:klados:write') && !data.value?.finalized && !viewOnly.value,
-);
+const editable = computed(() => canWrite.value && !data.value?.finalized && !viewOnly.value);
 
 // ───────────────────────── Ατζέντα & πρακτικά: κοινό έγγραφο ─────────────────────────
 
