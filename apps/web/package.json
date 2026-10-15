@@ -11,7 +11,11 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.14",
     "@fontsource/inter": "^5.3.0",
+    "@hocuspocus/provider": "^4.7.1",
     "@quasar/extras": "^1.18.0",
     "@sentry/vue": "^11.7.0",
     "@trifylli/shared": "workspace:*",
@@ -31,7 +35,11 @@
     "workbox-expiration": "^7.4.1",
     "workbox-precaching": "^7.4.1",
     "workbox-routing": "^7.4.1",
-    "workbox-strategies": "^7.4.1"
+    "workbox-strategies": "^7.4.1",
+    "y-codemirror.next": "^0.3.6",
+    "y-indexeddb": "^9.0.12",
+    "y-protocols": "^1.0.7",
+    "yjs": "^13.6.33"
   },
   "devDependencies": {
     "@quasar/app-vite": "^2.6.2",
