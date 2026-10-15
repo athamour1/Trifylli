@@ -333,6 +333,8 @@ services:
       ESEO_REFRESH_TOKEN: ${ESEO_REFRESH_TOKEN:-}
       ESEO_WEBHOOK_SECRET: ${ESEO_WEBHOOK_SECRET:-}
       SYNC_ENABLED: ${SYNC_ENABLED:-true}
+      # Error tracking (GlitchTip, profile `errors`): το DSN του project «API».
+      SENTRY_DSN: ${API_SENTRY_DSN:-}
     ports:
       - '${BIND_ADDR:-127.0.0.1}:${API_PORT:-3000}:3000'
     networks:
@@ -372,6 +374,8 @@ services:
       OIDC_LOGOUT_FLOW: ${VITE_OIDC_LOGOUT_FLOW:-trifylli-invalidation}
       # URL του OuchTracker — στόχος των deep-links των φαρμακείων.
       OUCHTRACKER_URL: ${VITE_OUCHTRACKER_URL:-}
+      # Error tracking (GlitchTip): το DSN του project «PWA» — μπαίνει και στο CSP.
+      SENTRY_DSN: ${WEB_SENTRY_DSN:-}
     ports:
       - '${BIND_ADDR:-127.0.0.1}:${WEB_PORT:-8080}:80'
     networks:
@@ -453,6 +457,59 @@ services:
     depends_on:
       garage-init:
         condition: service_completed_successfully
+
+  # ─────────────────── Error tracking (GlitchTip) — profile `errors` ───────────────────
+  # Προαιρετικό: COMPOSE_PROFILES=errors. Δέχεται τα σφάλματα του API και της PWA
+  # (Sentry SDK — βλ. API_SENTRY_DSN / WEB_SENTRY_DSN). Δική του βάση στην ίδια
+  # Postgres, δικό του index στη Redis· στο `trifylli-public` ως `trifylli-errors`,
+  # γιατί η PWA στέλνει από τον browser. Η εγγραφή είναι κλειστή — πρώτος χρήστης:
+  #   docker compose … exec glitchtip ./manage.py createsuperuser
+  glitchtip-db:
+    image: ghcr.io/athamour1/trifylli/config:${TAG:?TAG is required (π.χ. v1.0.3)}
+    profiles: [errors]
+    restart: 'no'
+    <<: [*logging, *hardened]
+    command: ['ensure-db', '${GLITCHTIP_DB:-glitchtip}']
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER:-trifylli}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  glitchtip:
+    image: glitchtip/glitchtip:${GLITCHTIP_VERSION:-6.2.6}
+    profiles: [errors]
+    restart: always
+    <<: [*logging, *hardened]
+    environment:
+      # Web + worker στο ίδιο container· κάνει μόνο του τα migrations.
+      SERVER_ROLE: all_in_one
+      SECRET_KEY: ${GLITCHTIP_SECRET_KEY:-}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-trifylli}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${GLITCHTIP_DB:-glitchtip}
+      VALKEY_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379/1
+      # Το δημόσιο URL (π.χ. https://errors.trifylli.gr) — από εκεί βγαίνουν τα DSN.
+      GLITCHTIP_DOMAIN: ${GLITCHTIP_DOMAIN:-}
+      DEFAULT_FROM_EMAIL: ${SMTP_FROM:?SMTP_FROM is required}
+      # Για ειδοποιήσεις σφαλμάτων με email, π.χ. smtp+tls://χρήστης:κωδικός@smtp.example.gr:587
+      EMAIL_URL: ${GLITCHTIP_EMAIL_URL:-consolemail://}
+      ENABLE_USER_REGISTRATION: 'false'
+      # Όπως τα backups: τίποτα πάνω από 30 ημέρες.
+      GLITCHTIP_RETENTION_DAYS: ${GLITCHTIP_RETENTION_DAYS:-30}
+    volumes:
+      - glitchtip-uploads:/code/uploads
+    ports:
+      - '${BIND_ADDR:-127.0.0.1}:${GLITCHTIP_PORT:-8082}:8000'
+    networks:
+      default:
+      public:
+        aliases: [trifylli-errors]
+    depends_on:
+      glitchtip-db:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
 
   # ─────────────────── OuchTracker (φαρμακεία) ───────────────────
   # Μοιράζεται Postgres (δική του βάση), Authentik (SSO) και το ίδιο domain
@@ -537,6 +594,7 @@ volumes:
   # Καθρέφτης του Garage για το restic, και η κατάστασή του (cache, «τελευταία επιτυχία»).
   garage-mirror:
   offsite-state:
+  glitchtip-uploads:
   postgres-data:
   redis-data:
   authentik-media:
