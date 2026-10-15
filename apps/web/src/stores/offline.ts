@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { del as idbDel, get as idbGet, keys as idbKeys, set as idbSet } from 'idb-keyval';
+import { purgeCollab } from '../lib/collab-storage';
 import { Notify } from 'quasar';
 import type { OutboxItem } from '@trifylli/shared';
 import { ApiError, OfflineError, http } from '../lib/api';
@@ -250,6 +251,8 @@ export const useOfflineStore = defineStore('offline', {
       } catch {
         // Ό,τι δεν σβήστηκε θα λήξει μόνο του (ExpirationPlugin).
       }
+      // Και τα αντίγραφα των κοινών εγγράφων (πρακτικά, προγραμματικά…).
+      await purgeCollab();
     },
   },
 });
