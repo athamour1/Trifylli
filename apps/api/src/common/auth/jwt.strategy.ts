@@ -3,7 +3,7 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy, type StrategyOptionsWithoutRequest } from 'passport-jwt';
 import { passportJwtSecret } from 'jwks-rsa';
 import type { AppConfig } from '../config/configuration';
-import { UserDirectoryService } from './user-directory.service';
+import { UserDirectoryService, type TokenIdentity } from './user-directory.service';
 import type { RequestUser } from './types';
 
 /**
@@ -36,25 +36,30 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
   }
 
   async validate(payload: Record<string, unknown>): Promise<RequestUser> {
-    const ssoId = asString(payload.sub);
-    const email = asString(payload.email);
-
-    if (!ssoId) throw new UnauthorizedException('Το token δεν περιέχει sub.');
-    // Χωρίς email δεν μπορούμε να δέσουμε την ταυτότητα με λογαριασμό της
-    // εφαρμογής· ζητάμε ρητά το scope `email` από το Authentik.
-    if (!email) throw new UnauthorizedException('Το token δεν περιέχει email.');
-
-    return this.directory.resolveFromToken({
-      ssoId,
-      email,
-      // Το claim που βάζει το Authentik από το attribute `trifylli_account_id`
-      // (το γράφει το API στην πρόσκληση — βλ. AuthentikClient). Είναι ο
-      // **σταθερός** δεσμός χρήστη ↔ λογαριασμού, ανεξάρτητος από το email.
-      accountId: asString(payload.trifylli_account_id),
-      firstName: asString(payload.given_name) ?? asString(payload.name),
-      lastName: asString(payload.family_name),
-    });
+    return this.directory.resolveFromToken(tokenIdentity(payload));
   }
+}
+
+/** Ποιος είναι ο κάτοχος ενός επικυρωμένου token — κοινό με τη σύνδεση της συνεργασίας. */
+export function tokenIdentity(payload: Record<string, unknown>): TokenIdentity {
+  const ssoId = asString(payload.sub);
+  const email = asString(payload.email);
+
+  if (!ssoId) throw new UnauthorizedException('Το token δεν περιέχει sub.');
+  // Χωρίς email δεν μπορούμε να δέσουμε την ταυτότητα με λογαριασμό της
+  // εφαρμογής· ζητάμε ρητά το scope `email` από το Authentik.
+  if (!email) throw new UnauthorizedException('Το token δεν περιέχει email.');
+
+  return {
+    ssoId,
+    email,
+    // Το claim που βάζει το Authentik από το attribute `trifylli_account_id`
+    // (το γράφει το API στην πρόσκληση — βλ. AuthentikClient). Είναι ο
+    // **σταθερός** δεσμός χρήστη ↔ λογαριασμού, ανεξάρτητος από το email.
+    accountId: asString(payload.trifylli_account_id),
+    firstName: asString(payload.given_name) ?? asString(payload.name),
+    lastName: asString(payload.family_name),
+  };
 }
 
 function asString(value: unknown): string | undefined {
