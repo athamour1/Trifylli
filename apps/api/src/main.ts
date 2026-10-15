@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
@@ -7,8 +8,9 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { AppConfigToken } from './common/config/config.module';
-import { corsOrigins, logFormat, type AppConfig } from './common/config/configuration';
-import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter';
+import { corsOrigins, loadConfig, logFormat, type AppConfig } from './common/config/configuration';
+import { AppExceptionFilter } from './common/errors/app-exception.filter';
+import { initErrorReporting } from './common/errors/error-reporting';
 import { AppLogger } from './common/logging/app-logger';
 import { requestLogging } from './common/logging/request-logging.middleware';
 
@@ -27,8 +29,25 @@ function loadDotEnv(): void {
   }
 }
 
+/** Η έκδοση του API (το `release.sh` τη γράφει στο package.json) — το «release» στο error tracking. */
+function appVersion(): string {
+  try {
+    const pkg = JSON.parse(readFileSync(resolve(__dirname, '..', 'package.json'), 'utf8')) as { version?: string };
+    return pkg.version ?? 'dev';
+  } catch {
+    return 'dev';
+  }
+}
+
 async function bootstrap(): Promise<void> {
   loadDotEnv();
+  // Πριν από οτιδήποτε άλλο, ώστε να πιάνει και σφάλματα της εκκίνησης.
+  const early = loadConfig();
+  initErrorReporting({
+    dsn: early.SENTRY_DSN,
+    environment: early.SENTRY_ENVIRONMENT ?? early.NODE_ENV,
+    release: `trifylli-api@${appVersion()}`,
+  });
   // `rawBody`: το webhook του e-SEO επαληθεύει HMAC πάνω στα **ακριβή bytes** που
   // υπέγραψε ο αποστολέας, όχι σε δική μας επανασειριοποίηση του JSON.
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true, rawBody: true });
@@ -72,7 +91,7 @@ async function bootstrap(): Promise<void> {
       transformOptions: { enableImplicitConversion: false },
     }),
   );
-  app.useGlobalFilters(new PrismaExceptionFilter());
+  app.useGlobalFilters(new AppExceptionFilter(app.getHttpAdapter()));
   app.enableShutdownHooks();
 
   const swaggerEnabled = config.SWAGGER_ENABLED ?? config.NODE_ENV !== 'production';

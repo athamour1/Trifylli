@@ -19,6 +19,12 @@ const schema = z.object({
    * τιμή: json στην παραγωγή, text αλλού — βλ. `logFormat()`.
    */
   LOG_FORMAT: blankToUndefined(z.enum(['json', 'text'])),
+  /**
+   * Error tracking: το DSN ενός project στο GlitchTip (ή σε οποιοδήποτε
+   * Sentry-συμβατό). Χωρίς αυτό δεν φεύγει τίποτα — βλ. `common/errors`.
+   */
+  SENTRY_DSN: blankToUndefined(z.string().url()),
+  SENTRY_ENVIRONMENT: blankToUndefined(z.string()),
   PORT: z.coerce.number().int().positive().default(3000),
   API_PREFIX: z.string().default('api'),
   CORS_ORIGINS: z.string().default('http://localhost:9000'),

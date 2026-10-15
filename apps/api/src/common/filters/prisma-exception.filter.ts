@@ -10,6 +10,11 @@ import type { Response } from 'express';
 export class PrismaExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(PrismaExceptionFilter.name);
 
+  /** Οι κωδικοί που γίνονται 4xx παρακάτω — λάθος του αιτήματος, όχι δικό μας. */
+  static isClientError(code: string): boolean {
+    return code === 'P2002' || code === 'P2025' || code === 'P2003';
+  }
+
   catch(exception: Prisma.PrismaClientKnownRequestError, host: ArgumentsHost): void {
     const response = host.switchToHttp().getResponse<Response>();
 
