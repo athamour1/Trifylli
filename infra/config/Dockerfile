@@ -34,5 +34,10 @@ COPY infra/config/predeploy-backup.sh /usr/local/bin/predeploy-backup
 RUN chmod +x /usr/local/bin/config-sync /usr/local/bin/garage-init /usr/local/bin/gen-env /usr/local/bin/predeploy-backup \
  && chmod +x /config/postgres-init/*.sh
 
+# Η έκδοση της στοίβας: το gen-env τη γράφει ως TAG στο .env.prod, ώστε μια νέα
+# εγκατάσταση να μένει στην έκδοση που κατέβασε — όχι στο `latest`.
+ARG VERSION=dev
+RUN echo "$VERSION" > /config/VERSION
+
 ENTRYPOINT []
 CMD ["config-sync"]

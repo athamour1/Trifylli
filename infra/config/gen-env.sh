@@ -27,6 +27,12 @@ while IFS= read -r line || [ -n "$line" ]; do
     *'# openssl rand -base64 '*)
       key=${line%%=*}; n=$(echo "$line" | sed 's/.*openssl rand -base64 \([0-9]*\).*/\1/')
       echo "$key=$(rand_b64 "$n")" ;;
+    TAG=*)
+      version=$(cat /config/VERSION 2>/dev/null || true)
+      case "$version" in
+        ''|dev) echo "$line" ;;
+        *) echo "TAG=$version" ;;
+      esac ;;
     OUCHTRACKER_PASSWORD=*|OUCHTRACKER_SEED_ADMIN_PASSWORD=*)
       # Ίδιος και στα δύο: το API του Trifylli μπαίνει με τον λογαριασμό που φτιάχνει το seed.
       echo "${line%%=*}=$OUCH_PASSWORD" ;;

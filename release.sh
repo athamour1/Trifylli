@@ -137,7 +137,8 @@ ok "web image pushed"
 
 # ─── Build & push config ───────────────────────────────────────────────────────
 info "Building config image..."
-docker build -f infra/config/Dockerfile -t "${CONFIG_IMAGE}:${TAG}" -t "${CONFIG_IMAGE}:latest" .
+# Η έκδοση μπαίνει στο image: το `gen-env` τη γράφει ως TAG στο .env.prod.
+docker build -f infra/config/Dockerfile --build-arg VERSION="${TAG}" -t "${CONFIG_IMAGE}:${TAG}" -t "${CONFIG_IMAGE}:latest" .
 ok "config image built"
 
 info "Pushing config image..."

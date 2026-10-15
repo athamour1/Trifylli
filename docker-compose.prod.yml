@@ -12,6 +12,10 @@
 #   docker compose -f docker-compose.prod.yml --env-file .env.prod pull
 #   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
 #
+# Αναβάθμιση: άλλαξε το TAG στο .env.prod (π.χ. v1.0.3) και ξανά `pull` + `up -d`.
+# Πριν από τα migrations ο `predeploy-backup` κρατά dump όλων των βάσεων.
+# Rollback: το προηγούμενο TAG + επαναφορά από εκείνο το dump.
+#
 # Τα αρχεία ρυθμίσεων (blueprints/πρότυπα Authentik, init της Postgres, garage.toml)
 # ζουν μέσα στο image `config`: σε κάθε `up` ο one-shot `config` τα ξαναγράφει
 # σε named volumes πριν ξεκινήσει οτιδήποτε τα διαβάζει. Στο πρώτο `up` το
@@ -48,7 +52,7 @@ services:
   # Σβήνει και ξαναγράφει τα config volumes από το image — ό,τι αφαιρέθηκε από
   # το image φεύγει και από τη στοίβα. Όλοι όσοι τα διαβάζουν περιμένουν αυτόν.
   config:
-    image: ghcr.io/athamour1/trifylli/config:${TAG:-latest}
+    image: ghcr.io/athamour1/trifylli/config:${TAG:?TAG is required (π.χ. v1.0.3)}
     restart: 'no'
     <<: *logging
     volumes:
@@ -209,7 +213,7 @@ services:
   garage-init:
     # Το dxflrs/garage δεν έχει shell· το image `config` έχει το ίδιο binary
     # πάνω σε alpine και το (idempotent) bootstrap.
-    image: ghcr.io/athamour1/trifylli/config:${TAG:-latest}
+    image: ghcr.io/athamour1/trifylli/config:${TAG:?TAG is required (π.χ. v1.0.3)}
     # Λίγες επαναλήψεις, όχι άπειρες: με λάθος ρύθμιση το `up` πρέπει να
     # αποτύχει με μήνυμα, όχι να περιμένει για πάντα (το api εξαρτάται από εδώ).
     restart: on-failure:3
@@ -230,7 +234,7 @@ services:
   # χωρίς capabilities — δεν μπορεί να γράψει στον φάκελο του `backup`).
   # Επαναφορά: pg_restore --clean --if-exists -d <βάση> <αρχείο>.dump
   predeploy-backup:
-    image: ghcr.io/athamour1/trifylli/config:${TAG:-latest}
+    image: ghcr.io/athamour1/trifylli/config:${TAG:?TAG is required (π.χ. v1.0.3)}
     restart: 'no'
     <<: [*logging, *hardened]
     command: ['predeploy-backup']
@@ -251,7 +255,7 @@ services:
   # ολοκληρωθεί, ώστε κάθε deploy να φέρνει τη βάση στο σωστό σχήμα πρώτα.
   # Μετά, σε άδεια βάση, φτιάχνει το Τοπικό, τους κλάδους και την τρέχουσα χρονιά.
   migrate:
-    image: ghcr.io/athamour1/trifylli/api:${TAG:-latest}
+    image: ghcr.io/athamour1/trifylli/api:${TAG:?TAG is required (π.χ. v1.0.3)}
     restart: 'no'
     <<: [*logging, *hardened]
     working_dir: /repo/apps/api
@@ -270,7 +274,7 @@ services:
 
   # ─────────────────────────── API ────────────────────────────
   api:
-    image: ghcr.io/athamour1/trifylli/api:${TAG:-latest}
+    image: ghcr.io/athamour1/trifylli/api:${TAG:?TAG is required (π.χ. v1.0.3)}
     restart: always
     <<: [*logging, *hardened]
     # Τρέχει ως `node` (>1024 port), δεν γράφει στον δίσκο: read-only root,
@@ -330,7 +334,7 @@ services:
 
   # ─────────────────────────── Web (PWA) ──────────────────────
   web:
-    image: ghcr.io/athamour1/trifylli/web:${TAG:-latest}
+    image: ghcr.io/athamour1/trifylli/web:${TAG:?TAG is required (π.χ. v1.0.3)}
     restart: always
     <<: *logging
     security_opt:
