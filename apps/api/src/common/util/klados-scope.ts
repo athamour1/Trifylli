@@ -67,6 +67,15 @@ export function assertKladosAccess(user: RequestUser, klados: KladosType | null 
   }
 }
 
+/**
+ * Ο ίδιος κανόνας με `CapabilityGuard` + `assertKladosAccess`, χωρίς exceptions —
+ * για ελέγχους εκτός HTTP αιτήματος (π.χ. η σύνδεση της συνεργασίας). Πόρος
+ * κλάδου: η ικανότητα σε εκείνον τον κλάδο. Πόρος Τοπικού: η ικανότητα κάπου.
+ */
+export function hasCapabilityFor(user: RequestUser, capability: Capability, klados: KladosType | null | undefined): boolean {
+  return klados ? can(profileOf(user), capability, klados) : can(profileOf(user), capability);
+}
+
 /** Οι κλάδοι που επιτρέπεται να δει ο χρήστης — `null` σημαίνει «όλοι». */
 export function scopedKladoi(user: RequestUser): KladosType[] | null {
   if (isSuperAdmin(profileOf(user))) return null;
