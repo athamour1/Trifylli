@@ -561,6 +561,14 @@ backend κάνει migrate + seed μόνο του στην εκκίνηση. Τ�
 τον ίδιο Postgres σε δική του βάση (`OUCHTRACKER_DB`, φτιάχνεται στο πρώτο boot
 από το [`infra/postgres/init`](infra/postgres/init)).
 
+**Αντίγραφα ασφαλείας — τρία επίπεδα.** (1) Το `backup` κρατά καθημερινό dump
+όλων των βάσεων. (2) Ο `predeploy-backup` κρατά dump **πριν από κάθε migration**,
+για rollback. (3) Το `backup-offsite` στέλνει τα παραπάνω **και** τα αρχεία του
+Garage, κρυπτογραφημένα (restic), εκτός server — μόλις οριστεί
+`RESTIC_REPOSITORY`· χωρίς αυτό μένει «unhealthy». Κανένα αντίγραφο δεν ζει πάνω
+από 30 ημέρες (το λέει η φόρμα υγείας στους γονείς). **Επαναφορά — rollback, μία
+βάση, νέος server:** [`docs/restore.md`](docs/restore.md).
+
 **Ένα domain, υποτομείς.** Η στοίβα δεν περιλαμβάνει TLS/reverse proxy — τον
 βάζει ο διαχειριστής μπροστά (Caddy/Traefik/nginx). Οι υπηρεσίες δένονται στο
 `BIND_ADDR` (default `127.0.0.1`), ώστε να τις φτάνει μόνο ο τοπικός proxy και
@@ -719,8 +727,10 @@ layout + bucket + key (idempotent) στο πρώτο boot.
 * `no-new-privileges`, `cap_drop: ALL` στα δικά μας containers· το API με
   read-only root και `/tmp` σε μνήμη· το nginx με τις τέσσερις ικανότητες που
   χρειάζεται για να δέσει την :80 και να γίνει `nginx`.
-* **Backup**: υπηρεσία `backup` — καθημερινό `pg_dump` όλων των βάσεων με
-  περιστροφή στο volume `postgres-backups`.
+* **Backup**: καθημερινό `pg_dump` όλων των βάσεων (`backup`), dump πριν από
+  κάθε migration (`predeploy-backup`) και κρυπτογραφημένο αντίγραφο εκτός server
+  μαζί με τα αρχεία του Garage (`backup-offsite`, restic) — όλα ≤ 30 ημέρες.
+  Επαναφορά: [`docs/restore.md`](docs/restore.md).
 * Στο development όλες οι θύρες δένονται στο `127.0.0.1` (`DEV_BIND_ADDR`).
 
 ### Τι μένει σε σένα (δεν μπαίνει σε container)
@@ -730,8 +740,9 @@ layout + bucket + key (idempotent) στο πρώτο boot.
 2. **Allowlist για το admin UI του Authentik** (`sso.<domain>/if/admin/`). Π.χ.
    Caddy: `@admin path /if/admin/* ... remote_ip 1.2.3.4` → `respond 403`. Ο
    `akadmin` με MFA, πάντα.
-3. **Το volume `postgres-backups` να φεύγει από τον server** (rclone/restic).
-   Backup στον ίδιο δίσκο σώζει από λάθος `DELETE`, όχι από χαμένο δίσκο.
+3. **Προορισμός για τα αντίγραφα εκτός server** (`RESTIC_REPOSITORY` — B2,
+   Hetzner Storage Box, NAS· παραδείγματα στο `.env.prod.example`), και **το
+   `.env.prod` σε password manager**: χωρίς αυτό τα αντίγραφα δεν ανοίγουν.
 4. **Περιστροφή μυστικών**: `AUTHENTIK_API_TOKEN` (νέα τιμή + restart — το
    blueprint ξαναγράφει το token), `ESEO_REFRESH_TOKEN` όταν ο Keycloak τον
    περιστρέψει (το log προειδοποιεί), κωδικός OuchTracker.
