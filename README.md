@@ -550,9 +550,16 @@ frontend) και τις κοινές υποδομές (Postgres, Redis, Authenti
 το [`docker-compose.prod.yml`](docker-compose.prod.yml):
 
 ```bash
-cp .env.prod.example .env.prod      # συμπλήρωσέ το με πραγματικά μυστικά
-docker compose -f docker-compose.prod.yml --env-file .env.prod up -d --build
+# 1. .env.prod με τυχαία μυστικά και την έκδοση (TAG)· μετά συμπλήρωσε domains, SMTP, Τοπικό.
+docker run --rm -e DOMAIN=example.gr ghcr.io/athamour1/trifylli/config gen-env > .env.prod
+# 2. Σήκωμα — τα images έρχονται έτοιμα από το GHCR (τα χτίζει το ./release.sh).
+docker compose -f docker-compose.prod.yml --env-file .env.prod pull
+docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
 ```
+
+Το `TAG` είναι υποχρεωτικό (π.χ. `v1.0.3`) — όχι `latest`, ώστε ένα `pull` να μη
+φέρνει ό,τι βγήκε τελευταίο. **Αναβάθμιση:** άλλαξε το `TAG` και ξανά `pull` +
+`up -d`. Το `./release.sh` δεν βγάζει έκδοση αν δεν περνούν typecheck και tests.
 
 Όλα τα μυστικά είναι υποχρεωτικά (`${VAR:?}`): αν λείπει κάποιο, το compose
 σταματά αντί να σηκώσει στοίβα με αδύναμα defaults. Το `migrate` service τρέχει
@@ -623,15 +630,10 @@ flowchart LR
 
 **Authentik για το πραγματικό domain.** Τα blueprints
 ([`trifylli-oidc.yaml`](infra/authentik/trifylli-oidc.yaml),
-[`ouchtracker-oidc.yaml`](infra/authentik/ouchtracker-oidc.yaml)) έχουν localhost
-redirect URIs για development. Για production όρισε στον πάροχο και την εφαρμογή:
-
-* τα **redirect URIs** στους πραγματικούς υποτομείς (`…/auth/callback`,
-  `…/auth/silent`, `…/`),
-* το **`meta_launch_url`** της εφαρμογής στο δημόσιο URL — αλλιώς το Authentik
-  πέφτει στο *πρώτο* redirect URI (ακριβώς αυτό σε στέλνει σε λάθος θύρα),
-* τα contexts **`TRIFYLLI_APP_URL` / `OUCHTRACKER_APP_URL`** (επιστροφή μετά την
-  αποσύνδεση).
+[`ouchtracker-oidc.yaml`](infra/authentik/ouchtracker-oidc.yaml)) διαβάζουν τα
+δημόσια URLs από το περιβάλλον (`TRIFYLLI_APP_URL` / `OUCHTRACKER_APP_URL`, με
+τελικό «/»): από εκεί βγαίνουν τα redirect URIs, το launch URL και το Single
+Logout — καμία χειροκίνητη αλλαγή στα `.yaml`. Χωρίς αυτά πέφτουν σε localhost.
 
 Τα `OIDC_ISSUER` (backend) και `VITE_OIDC_AUTHORITY` (PWA) πρέπει να ταιριάζουν
 **ακριβώς** με το δημόσιο URL του Authentik — είναι το `iss` του token. Το
