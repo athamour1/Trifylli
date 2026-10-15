@@ -1557,6 +1557,24 @@ model AuditLog {
   @@map("audit_log")
 }
 
+/// Κοινό έγγραφο της συνεργασίας σε πραγματικό χρόνο (Yjs) — βλ. docs/synergasia.md.
+/// Εδώ ζει ό,τι γράφεται μαζί· σε κάθε αποθήκευση η απλή τιμή γράφεται και στα
+/// πεδία της οντότητας (π.χ. `Symvoulio.minutes`), ώστε εκτύπωση, εξαγωγές και
+/// `GET` να διαβάζουν ό,τι διάβαζαν.
+model CollabDocument {
+  /// π.χ. `symvoulio:<uuid>` — βλ. `modules/collab/collab-documents.ts`.
+  name       String   @id
+  /// Η κατάσταση Yjs ολόκληρου του εγγράφου.
+  state      Bytes
+  /// Νέα κάθε φορά που ο server γεμίζει το έγγραφο από τη βάση. Ένα αντίγραφο
+  /// συσκευής από άλλη γενιά δεν ενώνεται: θα διπλασίαζε το κείμενο.
+  generation String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("collab_document")
+}
+
 /// Αποθηκευμένο αρχείο σε object storage (S3/Garage). Το περιεχόμενο ζει στο
 /// bucket· εδώ μένουν μόνο μεταδεδομένα και εμβέλεια (κλάδος ή Τοπικό).
 model StoredFile {
