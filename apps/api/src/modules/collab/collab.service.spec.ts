@@ -81,7 +81,11 @@ describe('CollabService', () => {
       },
     },
   };
-  const auth = { verify: async (token: string) => (USERS[token] ? { user: USERS[token], expiresAt: null } : null) };
+  /** Πότε λήγει το token σε κάθε έλεγχο (με τη σειρά)· κενό = δεν λήγει. */
+  const expiries: number[] = [];
+  const auth = {
+    verify: async (token: string) => (USERS[token] ? { user: USERS[token], expiresAt: expiries.shift() ?? null } : null),
+  };
 
   function connect(token: string, options: { g?: string; p?: number; origin?: string } = {}) {
     const document = new Doc();
@@ -106,6 +110,7 @@ describe('CollabService', () => {
   beforeEach(async () => {
     entity.text = 'Αρχικό κείμενο';
     rows.clear();
+    expiries.length = 0;
     for (const key of Object.keys(access)) delete access[key];
     Object.assign(access, { 'u-maria': 'write', 'u-sofia': 'write', 'u-eleni': 'read' });
 
@@ -213,6 +218,29 @@ describe('CollabService', () => {
       ws.on('open', () => resolve(101));
     });
     expect(status).toBe(403);
+  });
+
+  it('λίγο πριν λήξει το token ζητά το καινούργιο και η σύνδεση συνεχίζει', async () => {
+    // Λήγει σε 30,3″ → ο server ρωτά σε 0,3″· το νέο token ισχύει μία ώρα.
+    expiries.push(Date.now() + 30_300, Date.now() + 3_600_000);
+    const maria = connect('maria');
+    const closed: string[] = [];
+    maria.provider.on('close', ({ event }: { event: { reason: string } }) => closed.push(event.reason));
+    await until(() => maria.provider.isSynced && expiries.length === 0);
+
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(closed).toEqual([]);
+  });
+
+  it('αν δεν έρθει νεότερο token, η σύνδεση κλείνει στη λήξη', async () => {
+    // Ρωτά σε 0,3″· ο client στέλνει πάλι ένα token που λήγει σε 0,2″.
+    expiries.push(Date.now() + 30_300, Date.now() + 500);
+    const maria = connect('maria');
+    const closed: string[] = [];
+    maria.provider.on('close', ({ event }: { event: { reason: string } }) => closed.push(event.reason));
+    await until(() => closed.length > 0);
+
+    expect(closed).toEqual(['token-expired']);
   });
 
   it('«πάγωμα»: κανείς δεν γράφει ώσπου να ανακληθεί, και ό,τι εκκρεμούσε σώζεται', async () => {

@@ -48,6 +48,8 @@ export interface CollabContext {
 
 /** Το μήνυμα ενός WebSocket δεν περνά τα 2 MB (Markdown, όχι αρχεία — οι εικόνες είναι αναφορές). */
 const MAX_MESSAGE_BYTES = 2 * 1024 * 1024;
+/** Πόσο πριν τη λήξη του token ο server ζητά το καινούργιο (ο client το ανανεώνει ένα λεπτό πριν). */
+const TOKEN_REFRESH_LEAD_MS = 30_000;
 
 /** Απόρριψη σύνδεσης με λόγο που καταλαβαίνει ο client (βλ. `CollabRejection`). */
 function reject(reason: CollabRejection): { reason: CollabRejection } {
@@ -75,6 +77,8 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
   private readonly removed = new Set<string>();
   /** Έγγραφα όπου κανείς δεν γράφει ώσπου να κληθεί `revoke` (π.χ. κατά την οριστικοποίηση). */
   private readonly frozen = new Set<string>();
+  /** Ο επόμενος έλεγχος token κάθε σύνδεσης. */
+  private readonly tokenTimers = new WeakMap<Connection<CollabContext>, ReturnType<typeof setTimeout>>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -94,6 +98,7 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
         for (const state of states.values()) state.user = context.user;
       },
       connected: async ({ connection, context, documentName }) => this.opened(connection, context, documentName),
+      onTokenSync: ({ token, connection, context }) => this.tokenSynced(token, connection, context.userId),
       onDisconnect: async ({ context, documentName }) => {
         this.logger.log({ event: 'collab-close', document: documentName, userId: context.userId, requestId: context.requestId });
       },
@@ -179,7 +184,6 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
     };
   }
 
-  /** Η σύνδεση ζει όσο και το token: όταν λήξει κλείνει, και ο client ξανασυνδέεται με φρέσκο. */
   private opened(connection: Connection<CollabContext>, context: CollabContext, documentName: string): void {
     this.logger.log({
       event: 'collab-open',
@@ -188,10 +192,41 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
       readOnly: connection.readOnly,
       requestId: context.requestId,
     });
-    if (!context.expiresAt) return;
-    const timer = setTimeout(() => connection.close({ code: 4401, reason: 'token-expired' }), Math.max(0, context.expiresAt - Date.now()));
+    this.watchToken(connection, context.expiresAt ?? null);
+    connection.onClose(() => clearTimeout(this.tokenTimers.get(connection)));
+  }
+
+  /**
+   * Η σύνδεση ζει όσο και το token. Λίγο πριν λήξει ο server ζητά το τρέχον token
+   * του client (που το έχει ήδη ανανεώσει σιωπηλά) και συνεχίζει με αυτό· αν
+   * μέχρι τη λήξη δεν έρθει έγκυρο, η σύνδεση κλείνει.
+   */
+  private watchToken(connection: Connection<CollabContext>, expiresAt: number | null): void {
+    clearTimeout(this.tokenTimers.get(connection));
+    if (!expiresAt) return;
+    const closeAtExpiry = (): void => {
+      const timer = setTimeout(() => connection.close({ code: 4401, reason: 'token-expired' }), Math.max(0, expiresAt - Date.now()));
+      timer.unref();
+      this.tokenTimers.set(connection, timer);
+    };
+    const askIn = expiresAt - TOKEN_REFRESH_LEAD_MS - Date.now();
+    // Ήδη μέσα στο τελευταίο μισό λεπτό (ήρθε το ίδιο, παλιό token): δεν ξαναρωτά —
+    // κλείνει στη λήξη, και ο client ξαναμπαίνει με όποιο token έχει τότε.
+    if (askIn <= 0) return closeAtExpiry();
+    const timer = setTimeout(() => {
+      connection.requestToken();
+      closeAtExpiry();
+    }, askIn);
     timer.unref();
-    connection.onClose(() => clearTimeout(timer));
+    this.tokenTimers.set(connection, timer);
+  }
+
+  /** Το νέο token του client: ίδιος λογαριασμός, νέα λήξη. */
+  private async tokenSynced(token: string, connection: Connection<CollabContext>, userId: string | undefined): Promise<void> {
+    const parsed = parseCollabToken(token);
+    const identity = parsed ? await this.auth.verify(parsed.t) : null;
+    if (!identity || identity.user.id !== userId) throw reject(CollabRejection.UNAUTHENTICATED);
+    this.watchToken(connection, identity.expiresAt);
   }
 
   // ───────────────────────── Φόρτωση & αποθήκευση ─────────────────────────
