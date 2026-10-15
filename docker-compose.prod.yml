@@ -232,7 +232,8 @@ services:
   # Dump όλων των βάσεων σε κάθε `up`, ΠΡΙΝ από το `migrate`: ένα migration που
   # σβήνει στήλες δεν αναιρείται, ένα dump ναι. Δικό του volume (γράφει ως root
   # χωρίς capabilities — δεν μπορεί να γράψει στον φάκελο του `backup`).
-  # Επαναφορά: pg_restore --clean --if-exists -d <βάση> <αρχείο>.dump
+  # Είναι και το εργαλείο επαναφοράς (`restore-db`): έχει τη σύνδεση στη βάση και
+  # βλέπει, μόνο για ανάγνωση, και τα ημερήσια dumps — βλ. docs/restore.md.
   predeploy-backup:
     image: ghcr.io/athamour1/trifylli/config:${TAG:?TAG is required (π.χ. v1.0.3)}
     restart: 'no'
@@ -246,6 +247,7 @@ services:
       PREDEPLOY_KEEP_DAYS: ${PREDEPLOY_KEEP_DAYS:-30}
     volumes:
       - postgres-predeploy:/backups/predeploy
+      - postgres-backups:/backups/pg:ro
     depends_on:
       postgres:
         condition: service_healthy

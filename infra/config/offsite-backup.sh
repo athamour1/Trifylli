@@ -7,6 +7,7 @@
 #                           μετά κάθε OFFSITE_INTERVAL δευτερόλεπτα
 #   offsite-backup once     μία φορά (χειροκίνητα ή για δοκιμή)
 #   offsite-backup health   0 αν υπάρχει πρόσφατο επιτυχημένο αντίγραφο (healthcheck)
+#   offsite-backup restore <φάκελος>   το τελευταίο αντίγραφο σε φάκελο (docs/restore.md)
 #
 # Προορισμός: RESTIC_REPOSITORY (s3:…, b2:…, sftp:…, rest:…) + RESTIC_PASSWORD.
 # Χωρίς προορισμό ΔΕΝ σταματά τη στοίβα· γράφει προειδοποίηση και το healthcheck
@@ -94,9 +95,17 @@ health() {
   [ $((now - last)) -lt $((MAX_AGE * 3600)) ]
 }
 
+restore() {
+  target=${1:?χρήση: offsite-backup restore <φάκελος>}
+  configured || return 1
+  setup_ssh
+  restic_ restore latest --host trifylli --target "$target"
+}
+
 case "${1:-loop}" in
   once) run_once ;;
   health) health ;;
+  restore) shift; restore "$@" ;;
   loop)
     sleep "${OFFSITE_FIRST_DELAY:-600}"
     while true; do
@@ -104,5 +113,5 @@ case "${1:-loop}" in
       sleep "${OFFSITE_INTERVAL:-86400}"
     done
     ;;
-  *) echo "χρήση: offsite-backup [once|health]" >&2; exit 2 ;;
+  *) echo "χρήση: offsite-backup [once|health|restore <φάκελος>]" >&2; exit 2 ;;
 esac

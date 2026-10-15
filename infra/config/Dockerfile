@@ -7,6 +7,7 @@
 #   gen-env       τυπώνει έτοιμο .env.prod με τυχαία μυστικά
 #   predeploy-backup  dump όλων των βάσεων πριν από τα migrations
 #   offsite-backup    κρυπτογραφημένα αντίγραφα εκτός server (restic)
+#   restore-db        επαναφορά μιας βάσης από dump (βλ. docs/restore.md)
 #
 # Χτίζεται με context τη ρίζα του repo (χρειάζεται και το `.env.prod.example`):
 #   docker build -f infra/config/Dockerfile -t ghcr.io/athamour1/trifylli/config .
@@ -33,8 +34,9 @@ COPY infra/config/config-sync.sh /usr/local/bin/config-sync
 COPY infra/config/gen-env.sh /usr/local/bin/gen-env
 COPY infra/config/predeploy-backup.sh /usr/local/bin/predeploy-backup
 COPY infra/config/offsite-backup.sh /usr/local/bin/offsite-backup
+COPY infra/config/restore-db.sh /usr/local/bin/restore-db
 
-RUN chmod +x /usr/local/bin/config-sync /usr/local/bin/garage-init /usr/local/bin/gen-env /usr/local/bin/predeploy-backup /usr/local/bin/offsite-backup \
+RUN chmod +x /usr/local/bin/config-sync /usr/local/bin/garage-init /usr/local/bin/gen-env /usr/local/bin/predeploy-backup /usr/local/bin/offsite-backup /usr/local/bin/restore-db \
  && chmod +x /config/postgres-init/*.sh
 
 # Η έκδοση της στοίβας: το gen-env τη γράφει ως TAG στο .env.prod, ώστε μια νέα
