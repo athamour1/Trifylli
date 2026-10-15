@@ -41,6 +41,9 @@ origin_of() {
 }
 API_ORIGIN="$(origin_of "$API_URL")"
 SSO_ORIGIN="$(origin_of "$OIDC_AUTHORITY")"
+# Το WebSocket της συνεργασίας (`…/api/collab`) ζει στο host του API. Ένα https://
+# origin δεν καλύπτει το wss:// σε όλους τους browsers — μπαίνει ρητά.
+COLLAB_ORIGIN="$(printf '%s' "$API_ORIGIN" | sed -E 's#^http#ws#')"
 # Το DSN έχει μέσα το κλειδί (https://<κλειδί>@errors.…/1)· στο CSP μόνο το origin.
 ERRORS_ORIGIN="$(printf '%s' "$SENTRY_DSN" | sed -nE 's#^(https?://)([^@/]*@)?([^/]+).*#\1\3#p')"
 
@@ -50,12 +53,13 @@ ERRORS_ORIGIN="$(printf '%s' "$SENTRY_DSN" | sed -nE 's#^(https?://)([^@/]*@)?([
 #   img-src data: blob:          — avatars (data:) και εικόνες markdown που
 #                                  κατεβαίνουν με auth και γίνονται blob URL
 #   connect-src API + SSO        — fetch στο API και στο token endpoint
+#               (+ ws/wss του API) — η συνεργασία σε πραγματικό χρόνο
 #               (+ error tracking) — και τα σφάλματα προς το GlitchTip, αν υπάρχει DSN
 #   frame-src 'self' + SSO       — το κρυφό iframe σιωπηλής ανανέωσης: ξεκινά
 #                                  στο Authentik και γυρίζει στο /auth/silent
 #   form-action 'self' + SSO     — η ροή σύνδεσης υποβάλλει στο Authentik
 #   object-src 'none'            — κανένα plugin, ποτέ
-CSP_BASE="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'${API_ORIGIN:+ $API_ORIGIN}${SSO_ORIGIN:+ $SSO_ORIGIN}${ERRORS_ORIGIN:+ $ERRORS_ORIGIN}; frame-src 'self'${SSO_ORIGIN:+ $SSO_ORIGIN}; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'${SSO_ORIGIN:+ $SSO_ORIGIN};"
+CSP_BASE="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'${API_ORIGIN:+ $API_ORIGIN}${COLLAB_ORIGIN:+ $COLLAB_ORIGIN}${SSO_ORIGIN:+ $SSO_ORIGIN}${ERRORS_ORIGIN:+ $ERRORS_ORIGIN}; frame-src 'self'${SSO_ORIGIN:+ $SSO_ORIGIN}; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'${SSO_ORIGIN:+ $SSO_ORIGIN};"
 FRAME_ANCESTORS_SLO="${SSO_ORIGIN:-'none'}"
 export CSP_BASE FRAME_ANCESTORS_SLO
 
@@ -63,4 +67,4 @@ envsubst '${CSP_BASE} ${FRAME_ANCESTORS_SLO}' \
   < /opt/trifylli/nginx.conf.template > /etc/nginx/conf.d/default.conf
 
 echo "[entrypoint] config.js written — api=${API_URL} oidc=${OIDC_CLIENT_ID:-(off)} ouch=${OUCHTRACKER_URL:-(off)} errors=${ERRORS_ORIGIN:-(off)}"
-echo "[entrypoint] CSP — connect/frame: ${API_ORIGIN:-self} ${SSO_ORIGIN:-(no sso)}"
+echo "[entrypoint] CSP — connect/frame: ${API_ORIGIN:-self} ${COLLAB_ORIGIN:-} ${SSO_ORIGIN:-(no sso)}"
