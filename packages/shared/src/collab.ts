@@ -367,3 +367,45 @@ export interface DocReadersView {
   audience: CollabPerson[];
   readers: { person: CollabPerson; readAt: string; current: boolean }[];
 }
+
+// ───────────────────────── Εγκρίσεις ─────────────────────────
+
+/** Πρόχειρο → Για έλεγχο → Εγκρίθηκε (και «Επιστροφή» πίσω στο πρόχειρο). */
+export const APPROVAL_STATUS_LABEL = {
+  PROXEIRO: 'Πρόχειρο',
+  ELEGXOS: 'Για έλεγχο',
+  EGKRITHIKE: 'Εγκρίθηκε',
+} as const;
+export type ApprovalStatus = keyof typeof APPROVAL_STATUS_LABEL;
+
+/** Η έγκριση ενός εγγράφου, και τι μπορεί να κάνει ο χρήστης σε αυτή. */
+export interface ApprovalView {
+  document: string;
+  status: ApprovalStatus;
+  requestedBy: CollabPerson | null;
+  requestedAt: string | null;
+  /** Όποιος ενέκρινε ή επέστρεψε. */
+  decidedBy: CollabPerson | null;
+  decidedAt: string | null;
+  returnNote: string | null;
+  /** Άλλαξε μετά την έγκριση — μένει «Εγκρίθηκε». */
+  changedAfter: boolean;
+  /** Ζητά έλεγχο όποιος γράφει το έγγραφο. */
+  canRequest: boolean;
+  /** Εγκρίνει ή επιστρέφει ο Αρχηγός της δράσης και οι διαχειριστές του κλάδου. */
+  canDecide: boolean;
+}
+
+/** Μια γραμμή της σύνοψης («8 εγκρίθηκαν · 3 για έλεγχο»). */
+export interface ApprovalSummaryRow {
+  document: string;
+  status: ApprovalStatus;
+  changedAfter: boolean;
+}
+
+/** Η εγκεκριμένη μορφή δίπλα στην τωρινή. */
+export interface ApprovalCompareView {
+  approvedAt: string | null;
+  approved: CollabVersionPart[];
+  current: CollabVersionPart[];
+}

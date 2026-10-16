@@ -7,6 +7,16 @@ import { readFields, seedTexts } from './collab-yjs';
 /** Τι επιτρέπεται σε μια σύνδεση: γράφει ή μόνο βλέπει. Καμία πρόσβαση = `null`. */
 export type CollabAccess = 'write' | 'read';
 
+/** Η έγκριση ενός είδους εγγράφου (προγραμματικά, γεύματα — βλ. `ApprovalsService`). */
+export interface CollabApproval {
+  /** Το κείμενο όπου γράφεται το σχόλιο της «Επιστροφής». */
+  field: string;
+  /** Όσοι ειδοποιούνται όταν κάτι πάει «Για έλεγχο». */
+  approvers(ids: readonly string[]): Promise<string[]>;
+  /** Εγκρίνει (ή επιστρέφει) αυτός ο χρήστης; */
+  canDecide(user: RequestUser, ids: readonly string[]): Promise<boolean>;
+}
+
 /** Ένα έγγραφο όπως φαίνεται έξω από αυτό — στις ειδοποιήσεις των σχολίων. */
 export interface CollabDocumentAbout {
   /**
@@ -72,6 +82,8 @@ export interface CollabDocumentType {
   present?(content: Record<string, unknown>): CollabVersionPart[];
   /** Το έγγραφο γίνεται όπως η έκδοση, με τις μικρότερες αλλαγές (βλ. `setText`, `setRows`). */
   restore?(doc: Doc, content: Record<string, unknown>): void;
+  /** Εγκρίνεται (Πρόχειρο → Για έλεγχο → Εγκρίθηκε); θέλει και `about` και `snapshot`. */
+  approval?: CollabApproval;
 }
 
 /**

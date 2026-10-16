@@ -162,7 +162,8 @@ export class CommentsService implements OnModuleInit {
     return (await target.type.people?.(target.ids)) ?? [];
   }
 
-  async create(user: RequestUser, input: NewComment, origin: string | null): Promise<CommentView> {
+  /** `notify: false` όταν την ειδοποίηση τη στέλνει όποιος καλεί (π.χ. η «Επιστροφή» μιας έγκρισης). */
+  async create(user: RequestUser, input: NewComment, origin: string | null, options: { notify?: boolean } = {}): Promise<CommentView> {
     const target = await this.target(user, input.document);
     const body = cleanBody(input.body);
 
@@ -202,7 +203,9 @@ export class CommentsService implements OnModuleInit {
       this.collab.apiChanged({ room: target.about.activity.room, topic: target.about.activity.topic, verb: 'add', by: user.id, origin });
     }
     const thread = parentId ?? row.id;
-    void this.announce(user, target.about, thread, mentionIds, parentId ? await this.inThread(thread) : target.about.watchers, !!parentId);
+    if (options.notify !== false) {
+      void this.announce(user, target.about, thread, mentionIds, parentId ? await this.inThread(thread) : target.about.watchers, !!parentId);
+    }
     return toView(row, await this.peopleById(mentionIds));
   }
 

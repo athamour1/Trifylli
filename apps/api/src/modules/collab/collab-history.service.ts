@@ -73,7 +73,7 @@ export class CollabHistoryService implements OnModuleInit, BeforeApplicationShut
   onModuleInit(): void {
     this.collab.onDocumentWritten((name, writers) => this.written(name, writers));
     this.collab.onDocumentIdle((name) => void this.flush(name));
-    this.collab.onMilestone((name, label) => this.milestone(name, label));
+    this.collab.onMilestone(async (name, label) => void (await this.milestone(name, label)));
     this.collab.onRemoved(async (name, prefix) => {
       for (const key of [...this.pending.keys()]) if (prefix ? key.startsWith(name) : key === name) this.cancel(key);
       const where = { document: prefix ? { startsWith: name } : name };
@@ -126,12 +126,18 @@ export class CollabHistoryService implements OnModuleInit, BeforeApplicationShut
     }
   }
 
-  /** Ορόσημο: έκδοση τώρα, με ετικέτα — μαζί με όσους εκκρεμούσαν. */
-  async milestone(name: string, label: string): Promise<void> {
-    if (!this.type(name)) return;
+  /** Ορόσημο: έκδοση τώρα, με ετικέτα — μαζί με όσους εκκρεμούσαν. Επιστρέφει την έκδοση. */
+  async milestone(name: string, label: string): Promise<string | null> {
+    if (!this.type(name)) return null;
     const writers = [...(this.pending.get(name) ?? [])];
     this.cancel(name);
-    await this.take(name, writers, label);
+    return this.take(name, writers, label);
+  }
+
+  /** Η τωρινή απλή μορφή ενός εγγράφου (`null` αν δεν έχει ιστορικό ή δεν υπάρχει). */
+  async current(name: string): Promise<Record<string, unknown> | null> {
+    const target = this.type(name);
+    return target ? this.contentOf(name, target.type) : null;
   }
 
   /** Η τωρινή απλή μορφή — από τη μνήμη αν είναι ανοιχτό, αλλιώς από τη βάση. */

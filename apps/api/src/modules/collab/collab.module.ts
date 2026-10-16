@@ -17,6 +17,6 @@ import { LiveChangesInterceptor } from './live-changes';
 @Module({
   controllers: [CollabHistoryController],
   providers: [CollabAuthService, CollabService, CollabHistoryService, { provide: APP_INTERCEPTOR, useClass: LiveChangesInterceptor }],
-  exports: [CollabService],
+  exports: [CollabService, CollabHistoryService],
 })
 export class CollabModule {}

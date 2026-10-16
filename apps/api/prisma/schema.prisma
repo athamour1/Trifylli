@@ -363,6 +363,8 @@ model User {
   notificationSettings    NotificationSetting[]
   comments                Comment[]                  @relation("CommentAuthor")
   docReads                DocRead[]
+  approvalsRequested      DocApproval[]              @relation("ApprovalRequester")
+  approvalsDecided        DocApproval[]              @relation("ApprovalDecider")
   commentsResolved        Comment[]                  @relation("CommentResolver")
   ypiresiesResponsible    DrasiYpiresiaResponsible[]
   drasiFeesCollected      DrasiParticipant[]         @relation("DrasiFeeCollector")
@@ -1721,10 +1723,43 @@ model CollabVersion {
   label     String?
   createdAt DateTime @default(now())
 
-  reads DocRead[]
+  reads     DocRead[]
+  approvals DocApproval[]
 
   @@index([document, createdAt])
   @@map("collab_version")
+}
+
+enum ApprovalStatus {
+  PROXEIRO
+  ELEGXOS
+  EGKRITHIKE
+}
+
+/// Έγκριση ενός κοινού εγγράφου (συνεργασία, Φ11) — προγραμματικά και γεύματα:
+/// Πρόχειρο → Για έλεγχο → Εγκρίθηκε, ή «Επιστροφή» με σχόλιο. Χωρίς γραμμή =
+/// πρόχειρο. Σβήνεται μαζί με το έγγραφο.
+model DocApproval {
+  document          String         @id
+  status            ApprovalStatus @default(PROXEIRO)
+  requestedById     String?        @db.Uuid
+  requestedAt       DateTime?
+  /// Όποιος ενέκρινε ή επέστρεψε.
+  decidedById       String?        @db.Uuid
+  decidedAt         DateTime?
+  /// Η έκδοση που εγκρίθηκε (ορόσημο «Εγκρίθηκε» στο ιστορικό).
+  approvedVersionId String?        @db.Uuid
+  /// Το σχόλιο της επιστροφής.
+  returnNote        String?
+  /// Άλλαξε μετά την έγκριση — μένει «Εγκρίθηκε» (ερώτημα 12).
+  changedAfter      Boolean        @default(false)
+  updatedAt         DateTime       @updatedAt
+
+  requestedBy     User?          @relation("ApprovalRequester", fields: [requestedById], references: [id], onDelete: SetNull)
+  decidedBy       User?          @relation("ApprovalDecider", fields: [decidedById], references: [id], onDelete: SetNull)
+  approvedVersion CollabVersion? @relation(fields: [approvedVersionId], references: [id], onDelete: SetNull)
+
+  @@map("doc_approval")
 }
 
 /// «Το διάβασαν»: ποιος άνοιξε ποια έκδοση ενός εγγράφου (μία γραμμή ανά άτομο).
