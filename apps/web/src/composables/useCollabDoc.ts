@@ -80,6 +80,8 @@ export function useCollabDoc(name: string, me: () => CollabPresenceUser | null, 
   const unsynced = ref(0);
   const offline = useOfflineStore();
   const peers = ref<CollabPresenceUser[]>([]);
+  /** Οι άλλοι, με το πού βρίσκονται (`focus` — π.χ. η γραμμή που επεξεργάζονται). */
+  const peerFocus = ref<{ user: CollabPresenceUser; focus: string | null }[]>([]);
 
   const dbName = COLLAB_DB_PREFIX + name;
   let provider: HocuspocusProvider | null = null;
@@ -158,6 +160,10 @@ export function useCollabDoc(name: string, me: () => CollabPresenceUser | null, 
       },
       onAwarenessChange: ({ states }) => {
         peers.value = otherPeers(states, doc.value.clientID, me()?.id);
+        const mine = me()?.id;
+        peerFocus.value = states
+          .filter((state) => state.clientId !== doc.value.clientID && (state.user as CollabPresenceUser | undefined)?.id && (state.user as CollabPresenceUser).id !== mine)
+          .map((state) => ({ user: state.user as CollabPresenceUser, focus: typeof state.focus === 'string' ? state.focus : null }));
       },
     });
     provider.attach();
@@ -281,6 +287,11 @@ export function useCollabDoc(name: string, me: () => CollabPresenceUser | null, 
     }
   });
 
+  /** Πού είμαι (π.χ. ποια γραμμή επεξεργάζομαι) — το βλέπουν οι άλλοι δίπλα στη γραμμή. */
+  function setFocus(focus: string | null): void {
+    awareness.value.setLocalStateField('focus', focus);
+  }
+
   function emitChange(change: CollabChange): void {
     for (const handler of changeHandlers) handler(change);
   }
@@ -318,7 +329,7 @@ export function useCollabDoc(name: string, me: () => CollabPresenceUser | null, 
     doc.value.destroy();
   });
 
-  return { doc, awareness, status, readOnly, writable, ready, unsynced, peers, saveState, whenSaved, onChange };
+  return { doc, awareness, status, readOnly, writable, ready, unsynced, peers, peerFocus, setFocus, saveState, whenSaved, onChange };
 }
 
 /** Ο συνδεδεμένος χρήστης όπως τον δείχνει η παρουσία — ίδια μορφή με αυτή που ορίζει ο server. */

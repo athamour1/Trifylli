@@ -1,15 +1,41 @@
-import type { CollabChange } from '@trifylli/shared';
-import { inject, onBeforeUnmount, provide, type InjectionKey } from 'vue';
+import type { CollabChange, CollabPresenceUser } from '@trifylli/shared';
+import { inject, onBeforeUnmount, provide, type InjectionKey, type Ref } from 'vue';
 import { concernsMe } from '../lib/live-changes';
 
 /** «Άκου τα άλλαξε-αυτό» — επιστρέφει το «σταμάτα» (βλ. `useCollabDoc().onChange`). */
 export type SubscribeChanges = (handler: (change: CollabChange) => void) => () => void;
 
-const LIVE_CHANGES: InjectionKey<SubscribeChanges> = Symbol('live-changes');
+/** Το δωμάτιο όπως το βλέπουν οι καρτέλες: μηνύματα, και ποιος είναι πού. */
+export interface LiveRoom {
+  subscribe: SubscribeChanges;
+  setFocus: (focus: string | null) => void;
+  peerFocus: Ref<{ user: CollabPresenceUser; focus: string | null }[]>;
+}
+
+const LIVE_ROOM: InjectionKey<LiveRoom> = Symbol('live-room');
 
 /** Η σελίδα που ανοίγει το δωμάτιο (π.χ. η δράση) το δίνει στις καρτέλες της. */
-export function provideLiveChanges(subscribe: SubscribeChanges): void {
-  provide(LIVE_CHANGES, subscribe);
+export function provideLiveChanges(room: LiveRoom): void {
+  provide(LIVE_ROOM, room);
+}
+
+/**
+ * Ποιος επεξεργάζεται ποια γραμμή (`area` = η λίστα, π.χ. «schedule»): η σελίδα
+ * λέει πού είσαι (`focusRow`) και δείχνει δίπλα σε κάθε γραμμή όποιον άλλον
+ * είναι εκεί (`editorsOf`). Χωρίς δωμάτιο δεν δείχνει τίποτα.
+ */
+export function useRowPresence(area: string) {
+  const room = inject(LIVE_ROOM, null);
+  function editorsOf(id: string): CollabPresenceUser[] {
+    const byId = new Map<string, CollabPresenceUser>();
+    for (const peer of room?.peerFocus.value ?? []) if (peer.focus === `${area}:${id}`) byId.set(peer.user.id, peer.user);
+    return [...byId.values()];
+  }
+  function focusRow(id: string | null): void {
+    room?.setFocus(id ? `${area}:${id}` : null);
+  }
+  onBeforeUnmount(() => focusRow(null));
+  return { editorsOf, focusRow };
 }
 
 /**
@@ -23,7 +49,7 @@ export function useLiveReload(
   reload: () => unknown,
   options: { busy?: () => boolean; subscribe?: SubscribeChanges | null } = {},
 ): void {
-  const subscribe = options.subscribe ?? inject(LIVE_CHANGES, null);
+  const subscribe = options.subscribe ?? inject(LIVE_ROOM, null)?.subscribe ?? null;
   if (!subscribe) return;
   let timer: ReturnType<typeof setTimeout> | null = null;
   const later = (delay: number): void => {

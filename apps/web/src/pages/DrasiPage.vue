@@ -536,7 +536,7 @@ const { data, loading, error, stale, reload } = useAsyncData(
 // ── Το δωμάτιο της δράσης: ποιος είναι εδώ, και «άλλαξε αυτό» για κάθε ενότητα ──
 const room = useCollabDoc(collabDocument.drasiRoom(id), useCollabMe(), { persist: false });
 const roomPeers = room.peers;
-provideLiveChanges(room.onChange);
+provideLiveChanges({ subscribe: room.onChange, setFocus: room.setFocus, peerFocus: room.peerFocus });
 // Η ίδια η δράση: κεφαλίδα, επισκόπηση, αρχηγείο, ρυθμίσεις.
 useLiveReload(['drasi', 'roles', 'kladoi', 'guest-topika', 'closed', 'settings', 'slots', 'rotate', 'participants', 'guests', 'ypiresies'], reload, {
   subscribe: room.onChange,
