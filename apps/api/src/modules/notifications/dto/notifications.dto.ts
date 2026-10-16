@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsBoolean, IsString, IsUrl, MaxLength, ValidateNested } from 'class-validator';
+import { IsBoolean, IsNumber, IsOptional, IsString, IsUrl, MaxLength, ValidateNested } from 'class-validator';
 
 /** Ένα είδος ειδοποίησης ανοιχτό ή κλειστό. */
 export class NotificationSettingDto {
@@ -32,6 +32,11 @@ export class PushSubscriptionDto {
   @ValidateNested()
   @Type(() => PushKeysDto)
   keys!: PushKeysDto;
+
+  /** Το στέλνει ο browser (συνήθως `null`)· δεν χρησιμοποιείται. */
+  @IsOptional()
+  @IsNumber()
+  expirationTime?: number | null;
 }
 
 /** Ποια συσκευή δεν θέλει πια push. */
