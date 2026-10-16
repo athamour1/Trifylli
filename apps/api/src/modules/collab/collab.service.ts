@@ -310,6 +310,19 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
   }
 
   /**
+   * Πριν από μια ανάγνωση της βάσης (`GET`, ντοσιέ, εκτύπωση): ό,τι γράφτηκε στα
+   * ανοιχτά έγγραφα με αυτό το πρόθεμα και περιμένει την αποθήκευσή του (έως 10″)
+   * σώζεται τώρα, ώστε η απάντηση να έχει το τελευταίο κείμενο. Τα υπόλοιπα δεν
+   * αγγίζονται — χωρίς εκκρεμότητα δεν κοστίζει τίποτα.
+   */
+  async flushPending(prefix: string): Promise<void> {
+    const pending = [...this.hocuspocus.documents.keys()].filter(
+      (name) => name.startsWith(prefix) && this.hocuspocus.debouncer.isDebounced(`onStoreDocument-${name}`),
+    );
+    await Promise.all(pending.map((name) => this.hocuspocus.debouncer.executeNow(`onStoreDocument-${name}`)));
+  }
+
+  /**
    * Κανείς δεν γράφει πια σε αυτό το έγγραφο ώσπου να κληθεί `revoke`, και ό,τι
    * εκκρεμεί σώζεται: ένας έλεγχος που ακολουθεί (π.χ. «υπάρχουν πρακτικά;»)
    * βλέπει το τελικό κείμενο, και τίποτα δεν γράφεται ανάμεσα.

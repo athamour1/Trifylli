@@ -167,6 +167,18 @@ describe('CollabService', () => {
     expect(rows.get(NAME)?.generation).toBeTruthy();
   });
 
+  it('πριν από μια ανάγνωση της βάσης σώζει ό,τι περιμένει την αποθήκευσή του', async () => {
+    const maria = connect('maria');
+    await until(() => maria.provider.isSynced);
+    maria.document.getText('text').insert(0, 'Μόλις γράφτηκε. ');
+    await until(() => service.hocuspocus.documents.get(NAME)?.getText('text').toString().startsWith('Μόλις') ?? false);
+    expect(entity.text).toBe('Αρχικό κείμενο');
+
+    await service.flushPending('note:');
+
+    expect(entity.text).toBe('Μόλις γράφτηκε. Αρχικό κείμενο');
+  });
+
   it('όποιος μόνο βλέπει, δεν γράφει — το επιβάλλει ο server', async () => {
     const maria = connect('maria');
     const eleni = connect('eleni');
