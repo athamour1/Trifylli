@@ -87,3 +87,40 @@ registerRoute(
     ] as WorkboxPlugin[],
   }),
 );
+
+// ── Ειδοποιήσεις (Web Push) ──
+// Το μήνυμα λέει μόνο τι και πού (ποτέ ονόματα παιδιών ή υγεία)· το πάτημα
+// ανοίγει το σημείο — σε ανοιχτό παράθυρο της εφαρμογής αν υπάρχει.
+self.addEventListener('push', (event) => {
+  let data: { title?: string | undefined; body?: string | undefined; link?: string | undefined } = {};
+  try {
+    data = (event.data?.json() as typeof data | undefined) ?? {};
+  } catch {
+    data = { title: event.data?.text() };
+  }
+  event.waitUntil(
+    self.registration.showNotification(data.title || 'Trifylli', {
+      ...(data.body ? { body: data.body } : {}),
+      icon: '/icons/icon-192.png',
+      data: { link: data.link || '/' },
+    }),
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const link = (event.notification.data as { link?: string } | null)?.link || '/';
+  const url = new URL(link, self.location.origin).href;
+  event.waitUntil(
+    (async () => {
+      const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      const open = windows.find((client) => new URL(client.url).origin === self.location.origin) as WindowClient | undefined;
+      if (open) {
+        await open.focus();
+        await open.navigate(url).catch(() => undefined);
+        return;
+      }
+      await self.clients.openWindow(url);
+    })(),
+  );
+});
