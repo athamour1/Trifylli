@@ -91,14 +91,17 @@ export const collabDocument = {
   syggentrwsh: (id: string) => `syggentrwsh:${id}`,
 } as const;
 
-/** Τα πεδία κάθε εγγράφου (ένα `Y.Text` ανά πεδίο). */
+/**
+ * Τα πεδία της οντότητας που ζουν πια στο κοινό έγγραφο — ο `PATCH` τους απαντά
+ * 409 «ανανέωσε». Στα απλά είδη είναι και τα κείμενά του (ένα `Y.Text` ανά πεδίο).
+ */
 export const COLLAB_FIELDS = {
   symvoulio: ['agenda', 'minutes'],
   drasiSettings: ['description'],
   drasiMythos: ['text'],
   drasiCharacter: ['lore'],
-  drasiItem: ['description'],
-  drasiMeal: ['recipe'],
+  drasiItem: ['description', 'location', 'yliko'],
+  drasiMeal: ['recipe', 'menu', 'ingredients'],
 } as const;
 
 /**

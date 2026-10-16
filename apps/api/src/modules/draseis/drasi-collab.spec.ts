@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { drasiAccess, type DrasiRoleKind } from '@trifylli/shared';
 import type { RequestUser } from '../../common/auth/types';
 import type { CollabDocumentType } from '../collab/collab-documents';
+import { Doc } from 'yjs';
 import { DrasiCollab } from './drasi-collab';
+import { seedItem, seedMeal } from './drasi-docs';
 
 const DRASI = '3f2b8c1e-9a4d-4f6b-8e2a-1c5d7e9f0a3b';
 const ITEM = '9a0b1c2d-3e4f-4a5b-8c6d-7e8f9a0b1c2d';
@@ -84,5 +86,60 @@ describe('κοινά κείμενα της δράσης — ποιος γράφ�
       'read',
     );
     expect(await setup({ who: { full: true }, item: { kind: 'DRASTIRIOTITA', snack: null, assignees: [] } })('drasi:meal', [DRASI, ITEM])).toBeNull();
+  });
+});
+
+describe('στοιχείο και γεύμα — τι γράφεται στη βάση', () => {
+  /** Μια βάση που κρατά ό,τι της γράφουν — μόνο όσα αγγίζει η προβολή. */
+  function recorder() {
+    const calls: [string, unknown][] = [];
+    const table = (name: string) => ({
+      updateMany: async (args: unknown) => (calls.push([`${name}.updateMany`, args]), { count: 1 }),
+      deleteMany: async (args: unknown) => (calls.push([`${name}.deleteMany`, args]), { count: 0 }),
+      createMany: async (args: unknown) => (calls.push([`${name}.createMany`, args]), { count: 0 }),
+      upsert: async (args: unknown) => (calls.push([`${name}.upsert`, args]), {}),
+      count: async () => 1,
+    });
+    const tx = {
+      drasiScheduleItem: table('item'),
+      drasiScheduleYlikoItem: table('yliko'),
+      drasiMeal: table('meal'),
+      drasiMealIngredient: table('ingredient'),
+    };
+    const types = new Map<string, CollabDocumentType>();
+    const prisma = { $transaction: async (fn: (t: typeof tx) => Promise<void>) => fn(tx) };
+    const collab = { registry: { register: (type: CollabDocumentType) => types.set(type.kind, type) } };
+    new DrasiCollab(prisma as never, {} as never, collab as never).onModuleInit();
+    return { calls, type: (kind: string) => types.get(kind)! };
+  }
+
+  const Y1 = '00000000-0000-4000-8000-000000000001';
+
+  it('στοιχείο: προγραμματικό και χώρος στη γραμμή του, το υλικό με τα id του εγγράφου', async () => {
+    const { calls, type } = recorder();
+    const doc = new Doc();
+    seedItem(doc, { description: ' Πορεία ', location: ' Ξέφωτο ', yliko: [{ id: Y1, order: 0, label: ' Σχοινί ', qty: 2, packed: false }] });
+
+    await type('drasi:item').project(doc, [DRASI, ITEM]);
+
+    expect(calls).toEqual([
+      ['item.updateMany', { where: { id: ITEM, drasiId: DRASI }, data: { description: 'Πορεία', location: 'Ξέφωτο' } }],
+      ['yliko.deleteMany', { where: { itemId: ITEM } }],
+      ['yliko.createMany', { data: [{ id: Y1, order: 0, label: 'Σχοινί', qty: 2, packed: false, itemId: ITEM }] }],
+    ]);
+  });
+
+  it('γεύμα: συνταγή και μενού στο γεύμα, το ποσολόγιο με τα id του εγγράφου', async () => {
+    const { calls, type } = recorder();
+    const doc = new Doc();
+    seedMeal(doc, { recipe: 'Βράζουμε', menu: 'Μακαρόνια', ingredients: [{ id: Y1, order: 0, label: 'Μακαρόνια', qty: '4 kg', bought: true }] });
+
+    await type('drasi:meal').project(doc, [DRASI, ITEM]);
+
+    expect(calls).toEqual([
+      ['meal.upsert', { where: { itemId: ITEM }, create: { itemId: ITEM, recipe: 'Βράζουμε', menu: 'Μακαρόνια' }, update: { recipe: 'Βράζουμε', menu: 'Μακαρόνια' } }],
+      ['ingredient.deleteMany', { where: { itemId: ITEM } }],
+      ['ingredient.createMany', { data: [{ id: Y1, order: 0, label: 'Μακαρόνια', qty: '4 kg', bought: true, itemId: ITEM }] }],
+    ]);
   });
 });
