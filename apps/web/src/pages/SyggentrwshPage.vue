@@ -475,6 +475,7 @@ import TimeField from '../components/TimeField.vue';
 import SyggentrwshPrint from '../components/SyggentrwshPrint.vue';
 import { useAsyncData } from '../composables/useAsyncData';
 import { useCollabDoc, useCollabMe } from '../composables/useCollabDoc';
+import { useLiveReload } from '../composables/useLiveChanges';
 import { useKladosThemeStore } from '../stores/klados-theme';
 import { ApiError, OfflineError, get, patch } from '../lib/api';
 import { formatDate, formatDateLong, formatDuration } from '../lib/format';
@@ -668,6 +669,7 @@ const {
   status: collabStatus,
   peers,
   saveState: collabSaveState,
+  onChange,
 } = useCollabDoc(docName, useCollabMe());
 
 /** Το πρόγραμμα όπως είναι τώρα στο έγγραφο — ξαναδιαβάζεται σε κάθε αλλαγή (δική μας ή άλλων). */
@@ -693,6 +695,10 @@ onBeforeUnmount(() => stopWatchingDoc?.());
 /** Πριν ανοίξει το έγγραφο (ή χωρίς δίκτυο, σε συσκευή που δεν το έχει): ό,τι έφερε το `GET`, μόνο για ανάγνωση. */
 const restPlan = computed<PlanSnapshot | null>(() => (data.value ? planFromDetail(data.value) : null));
 const planSource = computed<PlanSnapshot | null>(() => (collabReady.value ? docPlan.value : restPlan.value));
+
+// Ζωντανά: την κεφαλίδα τη γράφουν και άλλοι — χωρίς να πατηθεί ό,τι γράφει ο
+// χρήστης και δεν έχει σωθεί (το πρόγραμμα είναι ήδη κοινό έγγραφο).
+useLiveReload(['header'], reload, { subscribe: onChange, busy: () => dirty.value });
 
 /** Το πρόγραμμα γράφεται όταν γράφεται η σελίδα **και** ο server το επιτρέπει. */
 const planEditable = computed(() => editable.value && collabReady.value && collabWritable.value);
@@ -762,6 +768,13 @@ let timer: ReturnType<typeof setTimeout> | null = null;
  */
 let hydrating = false;
 
+/**
+ * Ό,τι ξέρουμε ότι έχει ο server για την κεφαλίδα: η αποθήκευση στέλνει μόνο ό,τι
+ * διαφέρει, ώστε δύο που γράφουν μαζί (π.χ. ο ένας την ώρα, ο άλλος τον τόπο) να
+ * μη σβήνουν ο ένας τον άλλον.
+ */
+const baseline = { title: '', date: '', startTime: '', location: '', goal: '' };
+
 function hydrate(value: Detail): void {
   hydrating = true;
 
@@ -770,6 +783,7 @@ function hydrate(value: Detail): void {
   header.startTime = value.startTime ? clockOf(new Date(value.startTime)) : '';
   header.location = value.location ?? '';
   header.goal = value.goal ?? '';
+  Object.assign(baseline, header);
 
   // Μετά το τέλος του τρέχοντος tick: οι αλλαγές ειδοποιούν τον watcher
   // ασύγχρονα, οπότε ένα σύγχρονο `hydrating = false` θα άνοιγε πολύ νωρίς και
@@ -1085,14 +1099,19 @@ async function saveNow(): Promise<void> {
   if (!dirty.value || !editable.value) return;
 
   saveStatus.value = 'saving';
+  const sent = { ...header };
+  // Η ώρα έναρξης κρέμεται από την ημέρα: όταν αλλάζει η ημέρα, ξαναστέλνεται κι αυτή.
+  const timeChanged = sent.startTime !== baseline.startTime || (sent.date !== baseline.date && !!sent.startTime);
+  const body = {
+    ...(sent.title.trim() !== baseline.title.trim() ? { title: sent.title.trim() || null } : {}),
+    ...(sent.date !== baseline.date ? { date: dayToIso(sent.date) } : {}),
+    ...(timeChanged ? { startTime: sent.startTime ? combineDateTime(sent.date, sent.startTime) : null } : {}),
+    ...(sent.location.trim() !== baseline.location.trim() ? { location: sent.location.trim() || null } : {}),
+    ...(sent.goal.trim() !== baseline.goal.trim() ? { goal: sent.goal.trim() || null } : {}),
+  };
   try {
-    await patch(`/syggentrwseis/${id}`, {
-      title: header.title.trim() || null,
-      date: dayToIso(header.date),
-      startTime: header.startTime ? combineDateTime(header.date, header.startTime) : null,
-      location: header.location.trim() || null,
-      goal: header.goal.trim() || null,
-    });
+    if (Object.keys(body).length) await patch(`/syggentrwseis/${id}`, body);
+    Object.assign(baseline, sent);
 
     dirty.value = false;
     saveStatus.value = 'saved';
