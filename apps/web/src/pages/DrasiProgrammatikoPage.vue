@@ -25,7 +25,8 @@
               </div>
             </div>
             <div class="col-12 col-sm-auto row items-center q-gutter-sm">
-              <SaveStatus v-if="editable" :status="saveStatus" @retry="saveNow" />
+              <CollabPresence :peers="peers" />
+              <SaveStatus v-if="editable" :status="worstSaveState(saveStatus, textState)" @retry="saveNow" />
             </div>
           </div>
         </div>
@@ -51,14 +52,20 @@
 
           <q-card flat bordered class="tf-split__main">
             <q-card-section>
-              <MarkdownField
-                v-model="form.description"
+              <!-- Το γράφουν μαζί το Πρόγραμμα και οι υπεύθυνοι — ζωντανά, με κέρσορες. -->
+              <CollabTextField
+                :key="textName"
+                :name="textName"
+                field="description"
+                :fallback="item.description"
                 :klados="drasi.klados?.type ?? null"
                 :readonly="!editable"
                 label="Προγραμματικό"
                 placeholder="Markdown: στόχος, πορεία, οδηγίες, κανόνες, εναλλακτική αν βρέξει… Σύρε ή επικόλλησε εικόνες."
                 empty-text="Δεν έχει γραφτεί προγραμματικό."
                 :min-height="360"
+                @state="textState = $event"
+                @peers="peers = $event"
               />
             </q-card-section>
           </q-card>
@@ -113,7 +120,9 @@ import {
   DRASI_SCHEDULE_KIND_LABEL,
   DrasiScheduleKind,
   SCHEDULE_ITEM_OWN_FIELDS,
+  collabDocument,
   drasiEditScope,
+  type CollabPresenceUser,
   type DrasiAccess,
   type DrasiEditScope,
   type DrasiScheduleItemView,
@@ -121,7 +130,8 @@ import {
   type DrasiStatus,
   type KladosType,
 } from '@trifylli/shared';
-import MarkdownField from '../components/MarkdownField.vue';
+import CollabPresence from '../components/CollabPresence.vue';
+import CollabTextField from '../components/CollabTextField.vue';
 import PageState from '../components/PageState.vue';
 import SaveStatus from '../components/SaveStatus.vue';
 import StelexosPicker from '../components/StelexosPicker.vue';
@@ -130,7 +140,7 @@ import { useAsyncData } from '../composables/useAsyncData';
 import { ApiError, OfflineError, del, get, patch } from '../lib/api';
 import { formatDateLong, formatDuration } from '../lib/format';
 import { useKladosThemeStore } from '../stores/klados-theme';
-import type { SaveState } from '../lib/save-state';
+import { worstSaveState, type SaveState } from '../lib/save-state';
 import { useAuthStore } from '../stores/auth';
 import { useOfflineStore } from '../stores/offline';
 
@@ -229,6 +239,11 @@ const stelexiOptions = computed(() => {
 const namesOf = (ids: string[]): string =>
   ids.map((id) => stelexiOptions.value.find((o) => o.value === id)?.label ?? '').filter(Boolean).join(', ') || '—';
 
+// ── Το προγραμματικό: κοινό έγγραφο, σώζει μόνο του ──
+const textName = computed(() => collabDocument.drasiItem(drasiId, itemId.value));
+const textState = ref<SaveState>('clean');
+const peers = ref<CollabPresenceUser[]>([]);
+
 // ── Τοπική κατάσταση ──
 const AUTOSAVE_DELAY_MS = 1200;
 const saveStatus = ref<SaveState>('clean');
@@ -240,7 +255,6 @@ const form = reactive({
   kind: 'DRASTIRIOTITA' as DrasiScheduleKind,
   location: '',
   responsible: [] as string[],
-  description: '',
   yliko: [] as YlikoRow[],
 });
 let hydrating = false;
@@ -259,7 +273,6 @@ watch(
       kind: it.kind,
       location: it.location ?? '',
       responsible: it.responsibles.map((p) => p.id),
-      description: it.description ?? '',
     });
     // Μετά την αποθήκευση η λίστα είναι ήδη αυτή του server: δεν ξαναγράφεται,
     // ώστε να μένουν το focus και η άδεια γραμμή που μόλις προστέθηκε.
@@ -303,7 +316,6 @@ async function saveNow(): Promise<void> {
     durationMin: clampMin(form.durationMin),
     kind: form.kind,
     location: form.location.trim() || null,
-    description: form.description || null,
     responsibleIds: form.responsible,
     yliko: ylikoPayload(form.yliko),
   };
