@@ -1,4 +1,4 @@
-import { COLLAB_GENERATION_KEY, COLLAB_META, type CollabTokenPayload } from '@trifylli/shared';
+import { COLLAB_GENERATION_KEY, COLLAB_META, COLLAB_SCHEMA_KEY, type CollabTokenPayload } from '@trifylli/shared';
 import type { Doc } from 'yjs';
 
 /**
@@ -21,6 +21,17 @@ export function seedTexts(doc: Doc, values: Record<string, string>): void {
  */
 export function stampGeneration(doc: Doc, generation: string): void {
   doc.transact(() => doc.getMap(COLLAB_META).set(COLLAB_GENERATION_KEY, generation));
+}
+
+/** Η δομή με την οποία γέμισε ή αναβαθμίστηκε το έγγραφο (βλ. `COLLAB_SCHEMA_KEY`). */
+export function stampSchema(doc: Doc, schema: number): void {
+  doc.transact(() => doc.getMap(COLLAB_META).set(COLLAB_SCHEMA_KEY, schema));
+}
+
+/** Η δομή ενός εγγράφου — 1 για όσα σώθηκαν πριν υπάρξει η σφραγίδα. */
+export function documentSchema(doc: Doc): number {
+  const schema = doc.getMap(COLLAB_META).get(COLLAB_SCHEMA_KEY);
+  return typeof schema === 'number' && Number.isInteger(schema) && schema > 0 ? schema : 1;
 }
 
 /** Ίδιο με `seedTexts` + `stampGeneration` — για δοκιμές και απλά έγγραφα. */

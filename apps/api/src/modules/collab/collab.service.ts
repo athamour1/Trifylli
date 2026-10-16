@@ -29,7 +29,7 @@ import {
   type CollabPresenceUser,
 } from '@trifylli/shared';
 import { WebSocketServer, type RawData, type WebSocket } from 'ws';
-import { applyUpdate, encodeStateAsUpdate } from 'yjs';
+import { applyUpdate, encodeStateAsUpdate, type Doc } from 'yjs';
 import { AppConfigToken } from '../../common/config/config.module';
 import { corsOrigins, type AppConfig } from '../../common/config/configuration';
 import { reportError } from '../../common/errors/error-reporting';
@@ -37,8 +37,8 @@ import { resolveRequestId } from '../../common/logging/request-context';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
 import { CollabAuthService } from './collab-auth.service';
-import { CollabDocumentRegistry, type CollabAccess } from './collab-documents';
-import { parseCollabToken, stampGeneration } from './collab-yjs';
+import { CollabDocumentRegistry, type CollabAccess, type CollabDocumentType } from './collab-documents';
+import { documentSchema, parseCollabToken, stampGeneration, stampSchema } from './collab-yjs';
 
 /** Ό,τι ξέρει ο server για μια σύνδεση, μετά τον έλεγχο. */
 export interface CollabContext {
@@ -265,6 +265,7 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
     const row = await this.prisma.collabDocument.findUnique({ where: { name: documentName } });
     if (row) {
       applyUpdate(document, new Uint8Array(row.state));
+      await this.upgrade(document, documentName, target.type, target.ids);
       return;
     }
 
@@ -273,9 +274,24 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
     if (!(await target.type.seed(document, target.ids))) throw reject(CollabRejection.FORBIDDEN);
     const generation = randomUUID();
     stampGeneration(document, generation);
+    stampSchema(document, target.type.schema ?? 1);
     await this.prisma.collabDocument.create({
       data: { name: documentName, state: Buffer.from(encodeStateAsUpdate(document)), generation },
     });
+  }
+
+  /**
+   * Σωσμένο έγγραφο παλιότερης δομής: τα πεδία που ήρθαν μετά γεμίζουν από τη
+   * βάση — πριν το δει κανείς — και σώζεται αμέσως, ώστε να γίνει μία φορά.
+   */
+  private async upgrade(document: Doc, name: string, type: CollabDocumentType, ids: readonly string[]): Promise<void> {
+    const wanted = type.schema ?? 1;
+    const current = documentSchema(document);
+    if (current >= wanted || !type.upgrade) return;
+    if (!(await type.upgrade(document, ids, current))) throw reject(CollabRejection.FORBIDDEN);
+    stampSchema(document, wanted);
+    await this.prisma.collabDocument.update({ where: { name }, data: { state: Buffer.from(encodeStateAsUpdate(document)) } });
+    this.logger.log({ event: 'collab-upgrade', document: name, from: current, to: wanted });
   }
 
   async storeDocument({ document, documentName, lastContext }: Pick<onStoreDocumentPayload<CollabContext>, 'document' | 'documentName' | 'lastContext'>): Promise<void> {

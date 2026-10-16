@@ -40,6 +40,19 @@ export type CollabRejection = (typeof CollabRejection)[keyof typeof CollabReject
 export const COLLAB_META = 'meta';
 export const COLLAB_GENERATION_KEY = 'generation';
 
+/**
+ * Η έκδοση της **δομής** ενός εγγράφου, στο `meta` — 1 όταν λείπει. Όταν ένα
+ * είδος αποκτά νέα πεδία (π.χ. το γεύμα: μενού και ποσολόγιο δίπλα στη συνταγή),
+ * ο server τα γεμίζει από τη βάση την πρώτη φορά που ανοίγει ένα παλιότερο
+ * σωσμένο έγγραφο, και ανεβάζει τον αριθμό. Ο client γράφει τα νέα πεδία μόνο
+ * αφού τα δει από τον server: αλλιώς ένα αντίγραφο συσκευής χωρίς αυτά θα
+ * έγραφε από κενό, πάνω σε ό,τι γέμισε ο server.
+ */
+export const COLLAB_SCHEMA_KEY = 'schema';
+
+/** Τα μικρά πεδία ενός εγγράφου (χώρος, μενού): απλές τιμές σε ένα `Y.Map` — κερδίζει ο τελευταίος. */
+export const COLLAB_SCALARS = 'fields';
+
 /** Ποιος είναι συνδεδεμένος, όπως τον δείχνει η παρουσία· το ορίζει ο server. */
 export interface CollabPresenceUser {
   id: string;

@@ -2,11 +2,12 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { HocuspocusProvider, HocuspocusProviderWebsocket } from '@hocuspocus/provider';
-import { COLLAB_PROTOCOL, CollabRejection } from '@trifylli/shared';
+import { COLLAB_META, COLLAB_PROTOCOL, COLLAB_SCHEMA_KEY, CollabRejection } from '@trifylli/shared';
 import WebSocket from 'ws';
-import { Doc } from 'yjs';
+import { Doc, applyUpdate, encodeStateAsUpdate } from 'yjs';
 import type { RequestUser } from '../../common/auth/types';
 import { textDocument, type CollabAccess, type CollabDocumentType } from './collab-documents';
+import { seedTexts, stampGeneration } from './collab-yjs';
 import { CollabService } from './collab.service';
 
 /**
@@ -66,6 +67,31 @@ describe('CollabService', () => {
     },
   });
 
+  /**
+   * Ένα είδος που απέκτησε νέο πεδίο (δομή 2): το `extra` γεμίζει από τη βάση —
+   * στο πρώτο γέμισμα, ή στην πρώτη φόρτωση ενός εγγράφου σωσμένου με τη δομή 1.
+   */
+  const CARD = `card:${ID}`;
+  const card = { text: 'Κάρτα', extra: 'Από τη βάση' };
+  const upgrades: number[] = [];
+  const cardType: CollabDocumentType = {
+    kind: 'card',
+    arity: 1,
+    schema: 2,
+    access: async (u) => access[u.id] ?? null,
+    seed: async (doc) => {
+      seedTexts(doc, { text: card.text });
+      doc.getMap('fields').set('extra', card.extra);
+      return true;
+    },
+    upgrade: async (doc, _ids, from) => {
+      upgrades.push(from);
+      doc.getMap('fields').set('extra', card.extra);
+      return true;
+    },
+    project: async () => undefined,
+  };
+
   const prisma = {
     collabDocument: {
       findUnique: async ({ where }: { where: { name: string } }) => rows.get(where.name) ?? null,
@@ -76,6 +102,10 @@ describe('CollabService', () => {
       upsert: async ({ where, create, update }: { where: { name: string }; create: { name: string; state: Buffer; generation: string }; update: { state: Buffer } }) => {
         const row = rows.get(where.name);
         rows.set(where.name, row ? { ...row, ...update } : create);
+      },
+      update: async ({ where, data }: { where: { name: string }; data: { state: Buffer } }) => {
+        const row = rows.get(where.name);
+        if (row) rows.set(where.name, { ...row, ...data });
       },
       deleteMany: async ({ where }: { where: { name: string } }) => {
         rows.delete(where.name);
@@ -93,7 +123,7 @@ describe('CollabService', () => {
           : 'invalid',
   };
 
-  function connect(token: string, options: { g?: string; p?: number; origin?: string } = {}) {
+  function connect(token: string, options: { g?: string; p?: number; origin?: string; name?: string } = {}) {
     const document = new Doc();
     const failures: string[] = [];
     const socket = new HocuspocusProviderWebsocket({
@@ -103,7 +133,7 @@ describe('CollabService', () => {
     });
     const provider = new HocuspocusProvider({
       websocketProvider: socket,
-      name: NAME,
+      name: options.name ?? NAME,
       document,
       token: JSON.stringify({ t: token, g: options.g ?? '', p: options.p ?? COLLAB_PROTOCOL }),
       onAuthenticationFailed: ({ reason }) => failures.push(reason),
@@ -128,6 +158,8 @@ describe('CollabService', () => {
       { API_PREFIX: 'api', CORS_ORIGINS: APP_ORIGIN } as never,
     );
     service.registry.register(noteType);
+    service.registry.register(cardType);
+    upgrades.length = 0;
     service.onApplicationBootstrap();
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
     port = (server.address() as AddressInfo).port;
@@ -274,5 +306,35 @@ describe('CollabService', () => {
     maria.document.getText('text').insert(0, 'Μετά. ');
     await new Promise((resolve) => setTimeout(resolve, 200));
     expect(service.hocuspocus.documents.get(NAME)?.getText('text').toString()).toBe('Πριν. Αρχικό κείμενο');
+  });
+
+  it('νέο έγγραφο: γεμίζει με όλα τα πεδία και σφραγίζεται με τη δομή του είδους', async () => {
+    const maria = connect('maria', { name: CARD });
+    await until(() => maria.provider.isSynced);
+
+    expect(maria.document.getMap('fields').get('extra')).toBe('Από τη βάση');
+    expect(maria.document.getMap(COLLAB_META).get(COLLAB_SCHEMA_KEY)).toBe(2);
+    expect(upgrades).toEqual([]);
+  });
+
+  it('παλιό σωσμένο έγγραφο: τα νέα πεδία γεμίζουν από τη βάση μία φορά, και σώζεται αμέσως', async () => {
+    // Σώθηκε πριν το είδος αποκτήσει το `extra` — χωρίς σφραγίδα δομής (= 1).
+    const old = new Doc();
+    seedTexts(old, { text: 'Γραμμένο από πριν' });
+    stampGeneration(old, 'gen-old');
+    rows.set(CARD, { name: CARD, state: Buffer.from(encodeStateAsUpdate(old)), generation: 'gen-old' });
+
+    const maria = connect('maria', { name: CARD, g: 'gen-old' });
+    const sofia = connect('sofia', { name: CARD });
+    await until(() => maria.provider.isSynced && sofia.provider.isSynced);
+
+    expect(maria.document.getText('text').toString()).toBe('Γραμμένο από πριν');
+    expect(maria.document.getMap('fields').get('extra')).toBe('Από τη βάση');
+    expect(upgrades).toEqual([1]);
+
+    const stored = new Doc();
+    applyUpdate(stored, new Uint8Array(rows.get(CARD)!.state));
+    expect(stored.getMap(COLLAB_META).get(COLLAB_SCHEMA_KEY)).toBe(2);
+    expect(stored.getMap('fields').get('extra')).toBe('Από τη βάση');
   });
 });

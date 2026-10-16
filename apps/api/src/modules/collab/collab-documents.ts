@@ -22,8 +22,18 @@ export interface CollabDocumentType {
   readonly arity: 1 | 2;
   /** Ίδιος κανόνας με το `GET` (βλέπει) και το `PATCH` (γράφει) της οντότητας. */
   access(user: RequestUser, ids: readonly string[]): Promise<CollabAccess | null>;
+  /**
+   * Η έκδοση της δομής (βλ. `COLLAB_SCHEMA_KEY`) — 1 όταν λείπει. Ανεβαίνει όταν
+   * το είδος αποκτά πεδία· τότε χρειάζεται και `upgrade`.
+   */
+  readonly schema?: number;
   /** Πρώτο γέμισμα του (άδειου) εγγράφου από τη βάση. `false` αν η οντότητα δεν υπάρχει. */
   seed(doc: Doc, ids: readonly string[]): Promise<boolean>;
+  /**
+   * Σωσμένο έγγραφο παλιότερης δομής (`from`): γεμίζει από τη βάση **μόνο** τα
+   * πεδία που ήρθαν μετά. `false` αν η οντότητα δεν υπάρχει.
+   */
+  upgrade?(doc: Doc, ids: readonly string[], from: number): Promise<boolean>;
   /** Γράφει την κατάσταση του εγγράφου στην οντότητα (εκτύπωση, εξαγωγές, `GET`). */
   project(doc: Doc, ids: readonly string[]): Promise<void>;
 }
