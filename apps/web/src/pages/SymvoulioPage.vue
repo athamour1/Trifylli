@@ -229,6 +229,7 @@ import PageState from '../components/PageState.vue';
 import SaveStatus from '../components/SaveStatus.vue';
 import { useAsyncData } from '../composables/useAsyncData';
 import { useCollabDoc, useCollabMe } from '../composables/useCollabDoc';
+import { useLiveReload } from '../composables/useLiveChanges';
 import { ApiError, OfflineError, get, patch, post } from '../lib/api';
 import { useKladosThemeStore } from '../stores/klados-theme';
 import { worstSaveState, type SaveState } from '../lib/save-state';
@@ -337,10 +338,15 @@ const {
   peers,
   saveState: collabSaveState,
   whenSaved,
+  onChange,
 } = useCollabDoc(collabDocument.symvoulio(id), useCollabMe());
 
 /** Τα κείμενα γράφονται όταν γράφεται η σελίδα **και** ο server το επιτρέπει. */
 const textsEditable = computed(() => editable.value && collabWritable.value);
+
+// Ζωντανά: κεφαλίδα, συμμετέχοντες και οριστικοποίηση από άλλους — χωρίς να
+// πατηθεί ό,τι γράφει ο χρήστης και δεν έχει σωθεί.
+useLiveReload(['header', 'finalize'], reload, { subscribe: onChange, busy: () => dirty.value });
 
 const combinedSave = computed(() => worstSaveState(saveStatus.value, collabSaveState.value));
 
@@ -369,6 +375,13 @@ let timer: ReturnType<typeof setTimeout> | null = null;
 /** Κρατά κλειστό τον watcher της αποθήκευσης όσο γεμίζει η φόρμα. */
 let hydrating = false;
 
+/**
+ * Ό,τι ξέρουμε ότι έχει ο server. Η αποθήκευση στέλνει μόνο ό,τι διαφέρει — και
+ * τους συμμετέχοντες ως «πρόσθεσε / αφαίρεσε» — ώστε δύο που γράφουν μαζί την
+ * κεφαλίδα να μη σβήνουν ο ένας τον άλλον.
+ */
+const baseline = { title: '', date: '', location: '', chairId: null as string | null, participants: [] as string[] };
+
 watch(
   data,
   (value) => {
@@ -380,6 +393,7 @@ watch(
     header.location = value.location ?? '';
     header.chairId = value.chair?.id ?? null;
     participantIds.value = value.participants.map((entry) => entry.userId);
+    Object.assign(baseline, { ...header, participants: [...participantIds.value] });
 
     void Promise.resolve().then(() => {
       hydrating = false;
@@ -449,14 +463,22 @@ async function saveNow(): Promise<void> {
   if (!dirty.value || !editable.value) return;
 
   saveStatus.value = 'saving';
+  const sent = { ...header, participants: [...participantIds.value] };
+  const before = new Set(baseline.participants);
+  const after = new Set(sent.participants);
+  const added = sent.participants.filter((userId) => !before.has(userId));
+  const removed = baseline.participants.filter((userId) => !after.has(userId));
+  const body = {
+    ...(sent.title.trim() !== baseline.title.trim() ? { title: sent.title.trim() || null } : {}),
+    ...(sent.date !== baseline.date ? { date: dayToIso(sent.date) } : {}),
+    ...(sent.location.trim() !== baseline.location.trim() ? { location: sent.location.trim() || null } : {}),
+    ...(sent.chairId !== baseline.chairId ? { chairId: sent.chairId ?? null } : {}),
+    ...(added.length ? { addParticipantIds: added } : {}),
+    ...(removed.length ? { removeParticipantIds: removed } : {}),
+  };
   try {
-    await patch(`/symvoulia/${id}`, {
-      title: header.title.trim() || null,
-      date: dayToIso(header.date),
-      location: header.location.trim() || null,
-      chairId: header.chairId ?? null,
-      participantIds: participantIds.value,
-    });
+    if (Object.keys(body).length) await patch(`/symvoulia/${id}`, body);
+    Object.assign(baseline, sent);
     dirty.value = false;
     saveStatus.value = 'saved';
   } catch (err) {
