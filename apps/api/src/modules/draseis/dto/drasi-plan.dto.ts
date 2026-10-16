@@ -140,6 +140,14 @@ export class ReorderScheduleDto {
   ids!: string[];
 }
 
+/** Μετακίνηση ενός στοιχείου μέσα στην ημέρα του: μετά από άλλο, ή πρώτο. */
+export class MoveScheduleItemDto {
+  @ApiPropertyOptional({ format: 'uuid', nullable: true, description: 'Το στοιχείο μετά από το οποίο μπαίνει· `null` = πρώτο της ημέρας.' })
+  @IsOptional()
+  @IsUUID()
+  afterId?: string | null;
+}
+
 /** Ώρα έναρξης μιας ημέρας — η πρώτη ημέρα ακολουθεί πάντα το `dateStart` της δράσης. */
 export class DayStartDto {
   @ApiProperty({ description: 'YYYY-MM-DD' })

@@ -23,6 +23,7 @@ import { refuseCollabFields } from '../collab/collab-fields';
 import { CollabService } from '../collab/collab.service';
 import { DrasiAccessService } from './drasi-access.service';
 import { planResponsibles } from './schedule-assignees';
+import { moveAfter } from './schedule-order';
 import { ylikoRows } from './schedule-yliko';
 import type {
   CopyDayDto,
@@ -212,6 +213,30 @@ export class DraseisPlanService {
     ]);
     await this.prisma.drasiScheduleItem.delete({ where: { id: itemId } });
     return { deleted: true };
+  }
+
+  /**
+   * Ένα στοιχείο μετά από άλλο (ή πρώτο) μέσα στην ημέρα του. Η νέα σειρά
+   * βγαίνει από τη σειρά του server τώρα — όχι από τη λίστα της σελίδας — ώστε ό,τι
+   * πρόσθεσε ή μετακίνησε κάποιος άλλος στο μεταξύ να μένει.
+   */
+  async moveScheduleItem(user: RequestUser, id: string, itemId: string, afterId: string | null) {
+    await this.access.load(user, id, 'write');
+    const item = await this.prisma.drasiScheduleItem.findFirst({ where: { id: itemId, drasiId: id }, select: { date: true } });
+    if (!item) throw new NotFoundException('Το στοιχείο του ωρολογίου δεν βρέθηκε.');
+    const day = await this.prisma.drasiScheduleItem.findMany({
+      where: { drasiId: id, date: item.date },
+      orderBy: [{ order: 'asc' }, { createdAt: 'asc' }],
+      select: { id: true },
+    });
+    const ids = moveAfter(
+      day.map((d) => d.id),
+      itemId,
+      afterId,
+    );
+    if (!ids) throw new BadRequestException('Το «μετά από» δεν είναι στην ίδια ημέρα.');
+    await this.prisma.$transaction(ids.map((rowId, order) => this.prisma.drasiScheduleItem.update({ where: { id: rowId }, data: { order } })));
+    return { moved: true };
   }
 
   /** Νέα σειρά για τα στοιχεία μιας ημέρας — από αυτήν ξαναβγαίνουν οι ώρες. */

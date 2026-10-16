@@ -12,6 +12,7 @@ import {
   CreateScheduleItemDto,
   DayStartDto,
   ExternalYlikoDto,
+  MoveScheduleItemDto,
   ReorderScheduleDto,
   PurchaseShoppingItemDto,
   ShoppingItemDto,
@@ -43,6 +44,18 @@ export class DraseisPlanController {
   @ApiOperation({ summary: 'Νέα σειρά στοιχείων μιας ημέρας' })
   reorder(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: ReorderScheduleDto) {
     return this.plan.reorder(user, id, dto);
+  }
+
+  @Post('schedule/:itemId/move')
+  @RequireDrasi('programma', 'edit')
+  @ApiOperation({ summary: 'Μετακίνηση στοιχείου μέσα στην ημέρα του (μετά από άλλο)' })
+  move(
+    @CurrentUser() user: RequestUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('itemId', ParseUUIDPipe) itemId: string,
+    @Body() dto: MoveScheduleItemDto,
+  ) {
+    return this.plan.moveScheduleItem(user, id, itemId, dto.afterId ?? null);
   }
 
   @Patch('schedule/day-start')
