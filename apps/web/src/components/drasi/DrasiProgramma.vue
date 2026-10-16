@@ -69,6 +69,8 @@
         @dragleave="overId === row.id && (overId = null)"
         @drop.prevent="onDrop(row.id)"
         @dragend="onDragEnd"
+        @focusin="focusRow(row.id)"
+        @focusout="onRowBlur($event)"
       >
         <q-separator v-if="idx > 0" />
         <div class="schedule-item">
@@ -97,7 +99,12 @@
               </q-list>
             </q-menu>
           </q-btn>
-          <q-input v-model="row.title" :readonly="!canWrite" borderless dense class="si-title" placeholder="Τι γίνεται" />
+          <q-input v-model="row.title" :readonly="!canWrite" borderless dense class="si-title" placeholder="Τι γίνεται">
+            <!-- Ποιος άλλος γράφει αυτή τη στιγμή σε αυτή τη γραμμή. -->
+            <template v-if="editorsOf(row.id).length" #append>
+              <CollabPresence :peers="editorsOf(row.id)" compact />
+            </template>
+          </q-input>
           <div class="si-caption text-caption text-grey-6 ellipsis">
             {{ scheduleCaption({ kindLabel: DRASI_SCHEDULE_KIND_LABEL[row.kind], location: row.location, responsibles: row.responsibles }, $q.screen.xs) }}
           </div>
@@ -196,13 +203,14 @@ import {
   type DrasiScheduleView,
   type KladosType,
 } from '@trifylli/shared';
+import CollabPresence from '../CollabPresence.vue';
 import SaveStatus from '../SaveStatus.vue';
 import TimeField from '../TimeField.vue';
 import { ApiError, OfflineError, get, patch, post } from '../../lib/api';
 import { formatDate, formatDuration } from '../../lib/format';
 import { scheduleCaption } from './types';
 import type { SaveState } from '../../lib/save-state';
-import { useLiveReload } from '../../composables/useLiveChanges';
+import { useLiveReload, useRowPresence } from '../../composables/useLiveChanges';
 
 const props = defineProps<{
   drasiId: string;
@@ -419,6 +427,15 @@ async function saveNow(): Promise<void> {
 onBeforeUnmount(() => {
   if (pending.size) void saveNow();
 });
+
+// Ποιος γράφει σε ποια γραμμή: η δική μας θέση πάει στους άλλους, οι δικές τους
+// φαίνονται δίπλα στον τίτλο.
+const { editorsOf, focusRow } = useRowPresence('schedule');
+function onRowBlur(event: FocusEvent): void {
+  const next = event.relatedTarget as Node | null;
+  if (next && (event.currentTarget as HTMLElement).contains(next)) return;
+  focusRow(null);
+}
 
 // Ζωντανά: ό,τι αλλάζουν οι άλλοι στο ωρολόγιο εμφανίζεται εδώ — με τις δικές
 // μας αλλαγές που δεν έχουν σταλεί ακόμη στη θέση τους.
