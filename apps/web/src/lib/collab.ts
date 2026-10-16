@@ -34,6 +34,13 @@ export function collabSocket(): HocuspocusProviderWebsocket {
       socket?.destroy();
       socket = null;
     });
+    // Ο browser «παγώνει» μια σελίδα που αφήνεις (back/forward cache) αντί να την
+    // κλείσει — μαζί με το socket της: ο server θα σε έδειχνε «εδώ» για λεπτά. Όταν
+    // φεύγει η σελίδα, κλείνει η σύνδεση· αν γυρίσεις με «πίσω», ξανανοίγει.
+    window.addEventListener('pagehide', () => socket?.disconnect());
+    window.addEventListener('pageshow', (event) => {
+      if (event.persisted) void socket?.connect();
+    });
   }
   return socket;
 }
