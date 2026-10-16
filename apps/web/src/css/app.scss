@@ -1293,3 +1293,17 @@ body.body--dark .tf-seg--flat .tf-seg__thumb {
     margin-left: auto;
   }
 }
+
+// ── Σχόλια: το απόσπασμα της φράσης (στο νήμα και στο κουτί του νέου σχολίου) ──
+.comment-quote {
+  padding: 4px 10px;
+  margin-bottom: 6px;
+  border: 0;
+  border-radius: 8px;
+  background: color-mix(in srgb, #f9a825 14%, transparent);
+  font-size: 13px;
+  font-style: italic;
+  line-height: 1.4;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
