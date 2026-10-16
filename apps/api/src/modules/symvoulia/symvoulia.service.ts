@@ -22,6 +22,7 @@ import { accessProfileOf, assertKladosAccess, scopedKladoi } from '../../common/
 import { MemberKind, MemberStatus } from '@prisma/client';
 import { refuseCollabFields } from '../collab/collab-fields';
 import { CollabService } from '../collab/collab.service';
+import { SymvouliaPollsService } from './symvoulia-polls.service';
 import { FilesService } from '../files/files.service';
 import type { CreateSymvoulioDto, UpdateSymvoulioDto } from './dto/symvoulio.dto';
 
@@ -31,6 +32,7 @@ export class SymvouliaService {
     private readonly prisma: PrismaService,
     private readonly files: FilesService,
     private readonly collab: CollabService,
+    private readonly polls: SymvouliaPollsService,
   ) {}
 
   async list(user: RequestUser, type?: SymvoulioType, klados?: KladosType, drasiId?: string) {
@@ -205,6 +207,8 @@ export class SymvouliaService {
     // ο έλεγχος και το κλείδωμα βλέπουν το τελικό κείμενο. Μετά ξανασυνδέονται
     // με τα νέα δικαιώματα — μόνο ανάγνωση, ή γραφή αν το κλείδωμα απέτυχε.
     const document = collabDocument.symvoulio(id);
+    // Όσες ψηφοφορίες είναι ανοιχτές κλείνουν: το αποτέλεσμά τους μπαίνει στα πρακτικά πριν κλειδώσουν.
+    await this.polls.closeAllOpen(user, id);
     await this.collab.freeze(document);
     try {
       const { minutes } = await this.prisma.symvoulio.findUniqueOrThrow({ where: { id }, select: { minutes: true } });

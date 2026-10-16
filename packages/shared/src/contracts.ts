@@ -1065,3 +1065,30 @@ export interface DrasiHeadcountView {
   groups: DrasiHeadcountGroupView[];
   totals: { members: number; present: number; absent: number; checkedGroups: number; groups: number };
 }
+
+// ───────────────────────── Συμβούλια: ψηφοφορίες ─────────────────────────
+
+/** Οι επιλογές του «Ναι/Όχι/Αποχή». */
+export const POLL_YES_NO = ['Ναι', 'Όχι', 'Αποχή'] as const;
+
+export const POLL_LIMITS = { question: 300, option: 120, options: 10 } as const;
+
+/** Μια ψηφοφορία του συμβουλίου, με τα αποτελέσματα ζωντανά. */
+export interface SymvoulioPollView {
+  id: string;
+  question: string;
+  options: string[];
+  /** Μυστική: φαίνεται ποιος ψήφισε, όχι τι. */
+  secret: boolean;
+  by: { id: string; firstName: string; lastName: string } | null;
+  at: string;
+  closedAt: string | null;
+  /** Πόσοι διάλεξαν κάθε επιλογή (με τη σειρά των `options`). */
+  counts: number[];
+  /** Οι συμμετέχοντες του συμβουλίου: αν ψήφισαν — και, στις επώνυμες, τι. */
+  voters: { id: string; firstName: string; lastName: string; voted: boolean; choice: number | null }[];
+  /** Η δική μου ψήφος (στις μυστικές μόνο αν ψήφισα). */
+  mine: { voted: boolean; choice: number | null };
+  canVote: boolean;
+  canManage: boolean;
+}

@@ -39,7 +39,7 @@ function setup() {
     symvoulio: { findFirst: async () => ({ id: ID, type: 'KLADOS', finalizedAt: null, klados: { type: 'ODIGOI' } }) },
     $transaction: async (fn: (t: typeof tx) => Promise<unknown>) => fn(tx),
   };
-  const service = new SymvouliaService(prisma as never, {} as never, {} as never);
+  const service = new SymvouliaService(prisma as never, {} as never, {} as never, {} as never);
   return { service, participants, updates, who: () => participants.map((p) => p.userId).sort() };
 }
 

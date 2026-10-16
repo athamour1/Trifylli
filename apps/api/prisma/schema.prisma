@@ -371,6 +371,8 @@ model User {
   announcementsSeen       DrasiAnnouncementSeen[]
   headcountsStarted       DrasiHeadcount[]           @relation("HeadcountAuthor")
   headcountChecks         DrasiHeadcountCheck[]      @relation("HeadcountChecker")
+  pollsCreated            SymvoulioPoll[]            @relation("PollAuthor")
+  pollVotes               SymvoulioPollVote[]
   approvalsRequested      DocApproval[]              @relation("ApprovalRequester")
   approvalsDecided        DocApproval[]              @relation("ApprovalDecider")
   commentsResolved        Comment[]                  @relation("CommentResolver")
@@ -1473,6 +1475,7 @@ model Symvoulio {
   chair        User?                  @relation("SymvoulioChair", fields: [chairId], references: [id], onDelete: SetNull)
   drasi        Drasi?                 @relation(fields: [drasiId], references: [id], onDelete: SetNull)
   participants SymvoulioParticipant[]
+  polls        SymvoulioPoll[]
 
   @@index([topikoId, date])
   @@index([kladosId, date])
@@ -1490,6 +1493,58 @@ model SymvoulioParticipant {
 
   @@id([symvoulioId, userId])
   @@map("symvoulio_participant")
+}
+
+/// Ψηφοφορία στο συμβούλιο (συνεργασία, Φ14): Ναι/Όχι/Αποχή ή επιλογές. Ψηφίζουν
+/// οι συμμετέχοντες· την ανοίγει και την κλείνει όποιος γράφει το συμβούλιο.
+/// Μένει ανοιχτή όσο θέλεις· στο κλείσιμο το αποτέλεσμα μπαίνει στα πρακτικά.
+model SymvoulioPoll {
+  id          String    @id @default(uuid()) @db.Uuid
+  symvoulioId String    @db.Uuid
+  question    String
+  /// Οι επιλογές, με τη σειρά τους (για Ναι/Όχι/Αποχή αυτές οι τρεις).
+  options     String[]
+  /// Μυστική: φαίνεται ποιος ψήφισε, όχι τι — η ψήφος δεν αλλάζει.
+  secret      Boolean   @default(false)
+  createdById String?   @db.Uuid
+  createdAt   DateTime  @default(now())
+  closedAt    DateTime?
+
+  symvoulio Symvoulio             @relation(fields: [symvoulioId], references: [id], onDelete: Cascade)
+  createdBy User?                 @relation("PollAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  votes     SymvoulioPollVote[]
+  ballots   SymvoulioPollBallot[]
+
+  @@index([symvoulioId, createdAt])
+  @@map("symvoulio_poll")
+}
+
+/// Ποιος ψήφισε (μία φορά ο καθένας). Στις επώνυμες κρατά και την επιλογή·
+/// στις μυστικές η επιλογή είναι μόνο στο `SymvoulioPollBallot`, χωρίς όνομα.
+model SymvoulioPollVote {
+  pollId  String   @db.Uuid
+  userId  String   @db.Uuid
+  /// Η θέση στο `options` — `null` στις μυστικές.
+  choice  Int?
+  votedAt DateTime @default(now())
+
+  poll SymvoulioPoll @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  user User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([pollId, userId])
+  @@map("symvoulio_poll_vote")
+}
+
+/// Ψήφος μυστικής ψηφοφορίας: μόνο η επιλογή, χωρίς ποιος.
+model SymvoulioPollBallot {
+  id     String @id @default(uuid()) @db.Uuid
+  pollId String @db.Uuid
+  choice Int
+
+  poll SymvoulioPoll @relation(fields: [pollId], references: [id], onDelete: Cascade)
+
+  @@index([pollId])
+  @@map("symvoulio_poll_ballot")
 }
 
 // ──────────────────────── Υλικό & δεσμεύσεις ────────────────────────

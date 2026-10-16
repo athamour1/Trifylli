@@ -8,6 +8,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -17,7 +18,9 @@ import { accessProfileOf } from '../../common/util/klados-scope';
 import { CapabilityGuard } from '../../common/auth/capability.guard';
 import { CurrentUser, RequireCapability } from '../../common/auth/decorators';
 import type { RequestUser } from '../../common/auth/types';
+import { OpenPollDto, PollVoteDto } from './dto/symvoulio-poll.dto';
 import { CreateSymvoulioDto, UpdateSymvoulioDto } from './dto/symvoulio.dto';
+import { SymvouliaPollsService } from './symvoulia-polls.service';
 import { SymvouliaService } from './symvoulia.service';
 
 /**
@@ -33,7 +36,10 @@ import { SymvouliaService } from './symvoulia.service';
 @UseGuards(CapabilityGuard)
 @Controller('symvoulia')
 export class SymvouliaController {
-  constructor(private readonly symvoulia: SymvouliaService) {}
+  constructor(
+    private readonly symvoulia: SymvouliaService,
+    private readonly polls: SymvouliaPollsService,
+  ) {}
 
   @Get()
   @RequireCapability('calendar:read')
@@ -100,6 +106,51 @@ export class SymvouliaController {
   @ApiOperation({ summary: 'Οριστικοποίηση πρακτικών (κλείδωμα)' })
   finalize(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.symvoulia.finalize(user, id);
+  }
+
+  // ── Ψηφοφορίες ──
+
+  @Get(':id/polls')
+  @RequireCapability('calendar:read')
+  @ApiOperation({ summary: 'Οι ψηφοφορίες του συμβουλίου, με τα αποτελέσματα' })
+  listPolls(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.polls.list(user, id);
+  }
+
+  @Post(':id/polls')
+  @RequireCapability('calendar:read')
+  @ApiOperation({ summary: 'Νέα ψηφοφορία — όποιος γράφει το συμβούλιο' })
+  openPoll(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: OpenPollDto) {
+    return this.polls.open(user, id, dto);
+  }
+
+  @Put(':id/polls/:pollId/vote')
+  @RequireCapability('calendar:read')
+  @ApiOperation({ summary: 'Η ψήφος ενός συμμετέχοντα' })
+  async vote(
+    @CurrentUser() user: RequestUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('pollId', ParseUUIDPipe) pollId: string,
+    @Body() dto: PollVoteDto,
+  ) {
+    await this.polls.vote(user, id, pollId, dto.choice);
+    return { ok: true };
+  }
+
+  @Post(':id/polls/:pollId/close')
+  @RequireCapability('calendar:read')
+  @ApiOperation({ summary: 'Κλείσιμο — το αποτέλεσμα μπαίνει στα πρακτικά' })
+  async closePoll(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Param('pollId', ParseUUIDPipe) pollId: string) {
+    await this.polls.close(user, id, pollId);
+    return { ok: true };
+  }
+
+  @Delete(':id/polls/:pollId')
+  @RequireCapability('calendar:read')
+  @ApiOperation({ summary: 'Διαγραφή ψηφοφορίας' })
+  async removePoll(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Param('pollId', ParseUUIDPipe) pollId: string) {
+    await this.polls.remove(user, id, pollId);
+    return { ok: true };
   }
 }
 
