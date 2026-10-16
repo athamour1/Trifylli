@@ -488,6 +488,7 @@ import { ApiError, OfflineError, get, patch } from '../lib/api';
 import { formatDate, formatDateLong, formatDuration } from '../lib/format';
 import type { PrintFact, PrintSheet } from '../lib/print-sheet';
 import { printElement } from '../lib/print';
+import { keepFocus } from '../lib/keep-focus';
 import { worstSaveState, type SaveState } from '../lib/save-state';
 import {
   DEFAULT_BLOCK_MINUTES,
@@ -684,9 +685,11 @@ watch(
   collabDoc,
   (doc) => {
     stopWatchingDoc?.();
-    const refresh = (): void => {
+    // Η ενημέρωση μπορεί να μετακινήσει το κομμάτι που γράφει ο χρήστης (το
+    // μετακίνησε κάποιος άλλος): η εστίαση μένει εκεί που ήταν.
+    const refresh = (): void => keepFocus(() => {
       docPlan.value = readPlan(doc);
-    };
+    });
     doc.on('update', refresh);
     stopWatchingDoc = () => doc.off('update', refresh);
     refresh();
