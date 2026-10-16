@@ -24,6 +24,8 @@
           {{ offline.online ? `${offline.pending} σε αναμονή` : 'Χωρίς σύνδεση' }}
         </q-chip>
 
+        <NotificationBell v-if="auth.user?.id" :key="auth.user.id" :user-id="auth.user.id" />
+
         <q-btn flat dense round icon="account_circle">
           <q-menu>
             <q-list style="min-width: 240px">
@@ -188,6 +190,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { KLADOS_LABEL_SHORT, type KladosType } from '@trifylli/shared';
 import { useQuasar, type QDrawer } from 'quasar';
+import NotificationBell from '../components/NotificationBell.vue';
 import { kladosVars } from '../lib/klados-theme';
 import { useKladosThemeStore } from '../stores/klados-theme';
 import { useAuthStore } from '../stores/auth';
