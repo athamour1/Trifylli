@@ -1,18 +1,29 @@
 import { Injectable, type OnModuleInit } from '@nestjs/common';
-import { DrasiRoleKind, DrasiStatus, MemberKind } from '@prisma/client';
+import { AccountRole, DrasiRoleKind, DrasiStatus, MemberKind } from '@prisma/client';
 import {
   COLLAB_FIELDS,
   ITEM_DOC,
+  LeaderRank,
   MEAL_DOC,
+  can,
   collabDocument,
+  deriveLeaderProfile,
   drasiCan,
   drasiEditScope,
   type CommentPerson,
   type DrasiPerm,
+  type KladosType,
 } from '@trifylli/shared';
 import type { RequestUser } from '../../common/auth/types';
 import { PrismaService } from '../../common/prisma/prisma.service';
-import { textDocument, type CollabAccess, type CollabDocumentAbout, type CollabDocumentType } from '../collab/collab-documents';
+import { accessProfileOf } from '../../common/util/klados-scope';
+import {
+  textDocument,
+  type CollabAccess,
+  type CollabApproval,
+  type CollabDocumentAbout,
+  type CollabDocumentType,
+} from '../collab/collab-documents';
 import { projectedText } from '../collab/collab-fields';
 import { CollabService } from '../collab/collab.service';
 import { DrasiAccessService } from './drasi-access.service';
@@ -114,6 +125,64 @@ export class DrasiCollab implements OnModuleInit {
     const byId = new Map<string, CommentPerson>();
     for (const row of [...participants, ...roles]) byId.set(row.user.id, row.user);
     return [...byId.values()].sort((a, b) => a.firstName.localeCompare(b.firstName, 'el') || a.lastName.localeCompare(b.lastName, 'el'));
+  }
+
+  // ───────────────────────── Για την έγκριση ─────────────────────────
+
+  /**
+   * Προγραμματικά και γεύματα εγκρίνουν ο Αρχηγός της δράσης και οι διαχειριστές
+   * του κλάδου που τη διοργανώνει (ερώτημα 11) — ίδιος κανόνας με το κλείσιμο της
+   * δράσης. Το σχόλιο της «Επιστροφής» μπαίνει στο κείμενο (`field`).
+   */
+  private approval(field: string): CollabApproval {
+    return {
+      field,
+      approvers: ([drasiId]) => this.approvers(drasiId!),
+      canDecide: async (user, [drasiId]) => {
+        const drasi = await this.prisma.drasi.findFirst({
+          where: { id: drasiId, topikoId: user.topikoId },
+          select: { klados: { select: { type: true } }, roles: { where: { kind: DrasiRoleKind.ARXIGOS, userId: user.id }, select: { id: true } } },
+        });
+        if (!drasi) return false;
+        return drasi.roles.length > 0 || can(accessProfileOf(user), 'drasi:write', drasi.klados?.type as KladosType | undefined);
+      },
+    };
+  }
+
+  /**
+   * Όσοι εγκρίνουν, για την ειδοποίηση «Για έλεγχο»: ο Αρχηγός της δράσης, οι
+   * διαχειριστές του κλάδου (λογαριασμοί διαχειριστή και στελέχη με πτυχίο
+   * Αρχηγού στον κλάδο) — ή, σε δράση Τοπικού, οι υπερδιαχειριστές.
+   */
+  private async approvers(drasiId: string): Promise<string[]> {
+    const drasi = await this.prisma.drasi.findUnique({
+      where: { id: drasiId },
+      select: { topikoId: true, kladosId: true, klados: { select: { type: true } } },
+    });
+    if (!drasi) return [];
+    const ids = new Set(await this.holders(drasiId, [DrasiRoleKind.ARXIGOS]));
+    if (!drasi.kladosId) {
+      const admins = await this.prisma.user.findMany({ where: { topikoId: drasi.topikoId, accountRole: AccountRole.SUPER_ADMIN }, select: { id: true } });
+      for (const admin of admins) ids.add(admin.id);
+      return [...ids];
+    }
+    const [admins, leaders] = await Promise.all([
+      this.prisma.user.findMany({ where: { topikoId: drasi.topikoId, accountRole: AccountRole.KLADOS_ADMIN, adminKladosId: drasi.kladosId }, select: { id: true } }),
+      this.prisma.user.findMany({
+        where: {
+          topikoId: drasi.topikoId,
+          accountRole: AccountRole.STELEXOS,
+          memberships: { some: { kladosId: drasi.kladosId, leftAt: null, kind: MemberKind.STELEXOS } },
+        },
+        select: { id: true, licenses: { where: { status: 'ACTIVE' }, select: { title: true, status: true } } },
+      }),
+    ]);
+    for (const admin of admins) ids.add(admin.id);
+    for (const leader of leaders) {
+      const profile = deriveLeaderProfile(leader.licenses);
+      if (profile.kladosRoles.some((role) => role.kladosType === drasi.klados?.type && role.rank === LeaderRank.ARCHIGOS)) ids.add(leader.id);
+    }
+    return [...ids];
   }
 
   private types(): CollabDocumentType[] {
@@ -277,6 +346,7 @@ export class DrasiCollab implements OnModuleInit {
       snapshot: (doc) => ({ ...readItem(doc) }),
       present: presentItem,
       restore: restoreItem,
+      approval: this.approval(ITEM_DOC.description),
       // Τα σχόλια του προγραμματικού τα μαθαίνουν οι υπεύθυνοι του στοιχείου.
       about: async ([drasiId, itemId]) => {
         const item = await prisma.drasiScheduleItem.findFirst({ where: { id: itemId, drasiId }, select: { title: true } });
@@ -353,6 +423,7 @@ export class DrasiCollab implements OnModuleInit {
       snapshot: (doc) => ({ ...readMeal(doc) }),
       present: presentMeal,
       restore: restoreMeal,
+      approval: this.approval(MEAL_DOC.recipe),
       // Τα σχόλια του γεύματος: οι υπεύθυνοί του, η μαγείρισσα και η τροφοδοσία.
       about: async ([drasiId, itemId]) => {
         const item = await prisma.drasiScheduleItem.findFirst({ where: { id: itemId, drasiId }, select: { title: true } });
