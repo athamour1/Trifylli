@@ -10,6 +10,7 @@ import { collabShortName, type DrasiActivityEvent } from '@trifylli/shared';
 const TOPICS: Record<string, { the: string; in: string; section: string }> = {
   schedule: { the: 'το ωρολόγιο', in: 'στο ωρολόγιο', section: 'programma' },
   approvals: { the: 'τις εγκρίσεις', in: 'στις εγκρίσεις', section: 'programma' },
+  announcements: { the: 'τις ανακοινώσεις', in: 'στις ανακοινώσεις', section: 'episkopisi' },
   'doc:item': { the: 'ένα προγραμματικό', in: 'σε προγραμματικό', section: 'programma' },
   'comment:item': { the: 'ένα σχόλιο σε προγραμματικό', in: 'σχόλιο σε προγραμματικό', section: 'programma' },
   diatrofologio: { the: 'το διατροφολόγιο', in: 'στο διατροφολόγιο', section: 'diatrofologio' },

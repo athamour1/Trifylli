@@ -114,6 +114,8 @@
                 Προσχέδιο: το στήσιμο δεν ολοκληρώθηκε. Δεν εμφανίζεται στο ημερολόγιο μέχρι να ολοκληρωθεί.
               </q-banner>
 
+              <DrasiAnnouncements :drasi-id="id" :can-post="canEdit('rythmiseis')" />
+
               <!-- Αριθμοί με μια ματιά -->
               <div class="row q-col-gutter-sm q-mb-md">
                 <div v-for="n in numbers" :key="n.label" class="col-6 col-sm-3">
@@ -415,6 +417,7 @@ import {
 } from '@trifylli/shared';
 import CollabPresence from '../components/CollabPresence.vue';
 import PageState from '../components/PageState.vue';
+import DrasiAnnouncements from '../components/drasi/DrasiAnnouncements.vue';
 import DrasiApprovals from '../components/drasi/DrasiApprovals.vue';
 import DrasiAxiologisi from '../components/drasi/DrasiAxiologisi.vue';
 import DrasiArxigeio from '../components/drasi/DrasiArxigeio.vue';
@@ -602,7 +605,7 @@ useLiveReload(['drasi', 'roles', 'kladoi', 'guest-topika', 'closed', 'settings',
 // Ό,τι αλλάζουν οι άλλοι όσο είσαι εδώ: σημαδάκι στην ενότητα (αν δεν είσαι σε αυτήν) και νέα ροή.
 let feedTimer: ReturnType<typeof setTimeout> | null = null;
 room.onChange((change) => {
-  if (change.origin === CLIENT_ID || change.by === auth.user?.id) return;
+  if (change.origin === CLIENT_ID || change.by === auth.user?.id || change.quiet) return;
   const changed = sectionOfTopic(change.topic);
   if (changed && changed !== section.value) unseen.value = new Set([...unseen.value, changed]);
   if (feedTimer) clearTimeout(feedTimer);
