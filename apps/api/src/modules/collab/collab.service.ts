@@ -35,8 +35,9 @@ import { corsOrigins, type AppConfig } from '../../common/config/configuration';
 import { reportError } from '../../common/errors/error-reporting';
 import { resolveRequestId } from '../../common/logging/request-context';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import type { RequestUser } from '../../common/auth/types';
 import { CollabAuthService } from './collab-auth.service';
-import { CollabDocumentRegistry } from './collab-documents';
+import { CollabDocumentRegistry, type CollabAccess } from './collab-documents';
 import { parseCollabToken, readFields, seedDocument } from './collab-yjs';
 
 /** Ό,τι ξέρει ο server για μια σύνδεση, μετά τον έλεγχο. */
@@ -302,6 +303,22 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
   }
 
   // ───────────────────────── Για τα υπόλοιπα modules ─────────────────────────
+
+  /**
+   * Τι επιτρέπεται σε αυτόν τον χρήστη σε αυτό το έγγραφο — ο ίδιος κανόνας με τη
+   * σύνδεση. Για ό,τι κρέμεται από ένα έγγραφο έξω από αυτό (π.χ. οι εικόνες του).
+   */
+  async documentAccess(user: RequestUser, name: string): Promise<CollabAccess | null> {
+    const target = this.registry.resolve(name);
+    if (!target || this.isRemoved(name)) return null;
+    return target.type.access(user, target.ids);
+  }
+
+  /** Υπάρχει (σωσμένο) το κοινό έγγραφο; */
+  async documentExists(name: string): Promise<boolean> {
+    if (this.hocuspocus.documents.has(name)) return true;
+    return (await this.prisma.collabDocument.count({ where: { name } })) > 0;
+  }
 
   /** Σώζει τώρα ό,τι εκκρεμεί — πριν από οριστικοποίηση, εκτύπωση, αρχειοθέτηση. */
   async flush(name: string): Promise<void> {

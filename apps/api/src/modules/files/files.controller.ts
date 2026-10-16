@@ -33,8 +33,10 @@ export class FilesController {
     private readonly audit: AuditService,
   ) {}
 
+  // Χωρίς ικανότητα στον guard: την κρίνει το service — γράφει στο κοινό έγγραφο
+  // (και ένα εξωτερικό στέλεχος στο προγραμματικό του), ή έχει το δικαίωμα του
+  // σκοπού (`PURPOSE_CAPS`) στον κλάδο του αρχείου.
   @Post()
-  @RequireCapability('calendar:read')
   // Τα uploads είναι τα ακριβότερα αιτήματα (μνήμη + S3): δικό τους όριο.
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @ApiConsumes('multipart/form-data')
@@ -48,8 +50,8 @@ export class FilesController {
     return this.files.upload(user, dto, file);
   }
 
+  // Ομοίως: βλέπει όποιος βλέπει το έγγραφο της εικόνας, ή έχει το δικαίωμα του σκοπού.
   @Get(':id')
-  @RequireCapability('calendar:read')
   @ApiOperation({ summary: 'Κατέβασμα/προβολή αρχείου (stream μέσω backend)' })
   async download(
     @CurrentUser() user: RequestUser,

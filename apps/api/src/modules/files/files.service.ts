@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import type { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
@@ -18,6 +18,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { StorageService } from '../../common/storage/storage.service';
 import type { RequestUser } from '../../common/auth/types';
 import { assertScopeAccess } from '../../common/util/klados-scope';
+import { CollabService } from '../collab/collab.service';
 import type { UploadFileDto } from './dto/files.dto';
 
 /** Ποιο δικαίωμα απαιτείται για ανάγνωση/εγγραφή ανά σκοπό αρχείου. */
@@ -53,6 +54,7 @@ export class FilesService {
     private readonly prisma: PrismaService,
     private readonly storage: StorageService,
     private readonly jobs: JobMonitor,
+    private readonly collab: CollabService,
   ) {}
 
   /**
@@ -73,12 +75,15 @@ export class FilesService {
     const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const files = await this.prisma.storedFile.findMany({
       where: { purpose: FilePurpose.MARKDOWN, createdAt: { lt: cutoff } },
-      select: { id: true, objectKey: true },
+      select: { id: true, objectKey: true, collabDocument: true },
     });
 
     let removed = 0;
     for (const file of files) {
       if (liveRefs.has(file.id)) continue;
+      // Δεμένη με κοινό έγγραφο που ζει: μένει — μπορεί να τη δείχνει μια παλιότερη
+      // έκδοσή του ή κάποιος που την ξαναβάζει με undo. Φεύγει μαζί με το έγγραφο.
+      if (file.collabDocument && (await this.collab.documentExists(file.collabDocument))) continue;
       await this.deleteById(file.id, file.objectKey);
       removed += 1;
     }
@@ -168,7 +173,16 @@ export class FilesService {
       );
     }
 
-    assertScopeAccess(user, caps.write, dto.kladosType);
+    if (dto.collabDocument) {
+      // Εικόνα κοινού εγγράφου: την ανεβάζει όποιος γράφει στο έγγραφο — και ένα
+      // εξωτερικό στέλεχος ή ένα στέλεχος άλλου κλάδου που γράφει το προγραμματικό του.
+      if (dto.purpose !== FilePurpose.MARKDOWN) throw new BadRequestException('Μόνο εικόνες κειμένου δένονται με έγγραφο.');
+      if ((await this.collab.documentAccess(user, dto.collabDocument)) !== 'write') {
+        throw new ForbiddenException('Δεν γράφεις σε αυτό το κείμενο.');
+      }
+    } else {
+      assertScopeAccess(user, caps.write, dto.kladosType);
+    }
     const kladosId = await this.resolveKladosId(user, dto.kladosType);
 
     const objectKey = `${dto.purpose.toLowerCase()}/${user.topikoId}/${randomUUID()}-${safeName(file.originalname)}`;
@@ -184,6 +198,7 @@ export class FilesService {
         contentType: actualMime,
         size: file.size,
         createdById: user.id,
+        collabDocument: dto.collabDocument ?? null,
       },
     });
     return toRef(stored);
@@ -196,8 +211,15 @@ export class FilesService {
       include: { klados: { select: { type: true } } },
     });
     if (!file) throw new NotFoundException('Το αρχείο δεν βρέθηκε.');
-    const caps = PURPOSE_CAPS[file.purpose];
-    assertScopeAccess(user, caps?.read ?? 'treasury:read', file.klados?.type as KladosType | undefined);
+    if (file.collabDocument) {
+      // Τη βλέπει όποιος βλέπει το έγγραφο όπου ανέβηκε.
+      if (!(await this.collab.documentAccess(user, file.collabDocument))) {
+        throw new ForbiddenException('Δεν έχετε πρόσβαση σε αυτό το αρχείο.');
+      }
+    } else {
+      const caps = PURPOSE_CAPS[file.purpose];
+      assertScopeAccess(user, caps?.read ?? 'treasury:read', file.klados?.type as KladosType | undefined);
+    }
 
     const { stream } = await this.storage.getStream(file.objectKey);
     return { stream, filename: file.filename, contentType: file.contentType, size: file.size };
