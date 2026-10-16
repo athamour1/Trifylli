@@ -32,6 +32,7 @@
         </div>
 
         <CollabBanner :status="status" :ready="ready" :editable="editable" target="στο γεύμα" />
+        <ApprovalBar :document="docName" />
 
         <!-- ── Η συνταγή, με το μενού και το ποσολόγιο στο πλάι (δεξιά) ── -->
         <div class="tf-split">
@@ -169,6 +170,7 @@ import {
 import CollabBanner from '../components/CollabBanner.vue';
 import CollabPresence from '../components/CollabPresence.vue';
 import DocumentHistory from '../components/collab/DocumentHistory.vue';
+import ApprovalBar from '../components/collab/ApprovalBar.vue';
 import MarkdownField from '../components/MarkdownField.vue';
 import PageState from '../components/PageState.vue';
 import SaveStatus from '../components/SaveStatus.vue';
