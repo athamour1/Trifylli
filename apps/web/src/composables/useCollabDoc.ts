@@ -5,6 +5,7 @@ import {
   CollabRejection,
   collabColor,
   collabShortName,
+  type CollabChange,
   type CollabPresenceUser,
 } from '@trifylli/shared';
 import { Notify, copyToClipboard } from 'quasar';
@@ -17,6 +18,7 @@ import { useAuthStore } from '../stores/auth';
 import { useOfflineStore } from '../stores/offline';
 import { collabSocket, collabToken } from '../lib/collab';
 import { COLLAB_DB_PREFIX, rememberCollabDb } from '../lib/collab-storage';
+import { parseChange } from '../lib/live-changes';
 import type { SaveState } from '../lib/save-state';
 
 /**
@@ -67,7 +69,9 @@ function texts(doc: Doc): Record<string, string> {
  * συσκευή δεν είναι `ready` χωρίς δίκτυο — η σελίδα δείχνει τότε το κείμενο από
  * το cache, μόνο για ανάγνωση.
  */
-export function useCollabDoc(name: string, me: () => CollabPresenceUser | null) {
+export function useCollabDoc(name: string, me: () => CollabPresenceUser | null, options: { persist?: boolean } = {}) {
+  /** Δωμάτιο (χωρίς περιεχόμενο): χωρίς αντίγραφο στη συσκευή. */
+  const persist = options.persist ?? true;
   const doc = shallowRef(new Doc());
   const awareness = shallowRef(new Awareness(doc.value));
   const status = ref<CollabStatus>('loading');
@@ -83,6 +87,11 @@ export function useCollabDoc(name: string, me: () => CollabPresenceUser | null) 
   let destroyed = false;
   let reopenTimer: ReturnType<typeof setTimeout> | null = null;
   let lastTokenRefresh = 0;
+  /** Όσοι θέλουν τα «άλλαξε αυτό» του server (βλ. `onChange`). */
+  const changeHandlers = new Set<(change: CollabChange) => void>();
+  /** Η σύνδεση έπεσε μετά από συγχρονισμό: στον επόμενο, μπορεί να χάθηκαν μηνύματα. */
+  let missed = false;
+  let everSynced = false;
 
   const generation = (): string =>
     (doc.value.getMap(COLLAB_META).get(COLLAB_GENERATION_KEY) as string | undefined) ?? '';
@@ -93,9 +102,11 @@ export function useCollabDoc(name: string, me: () => CollabPresenceUser | null) 
   }
 
   async function open(): Promise<void> {
-    persistence = new IndexeddbPersistence(dbName, doc.value);
-    rememberCollabDb(dbName);
-    await persistence.whenSynced.catch(() => undefined);
+    if (persist) {
+      persistence = new IndexeddbPersistence(dbName, doc.value);
+      rememberCollabDb(dbName);
+      await persistence.whenSynced.catch(() => undefined);
+    }
     if (destroyed) return;
     // Αντίγραφο με γενιά = έχει συγχρονιστεί κάποτε· γράφεται και χωρίς δίκτυο.
     if (generation()) ready.value = true;
@@ -118,6 +129,13 @@ export function useCollabDoc(name: string, me: () => CollabPresenceUser | null) 
       onSynced: () => {
         ready.value = true;
         status.value = 'synced';
+        if (missed) emitChange({ topic: '*', by: null, origin: null });
+        missed = false;
+        everSynced = true;
+      },
+      onStateless: ({ payload }) => {
+        const change = parseChange(payload);
+        if (change) emitChange(change);
       },
       onAuthenticationFailed: ({ reason }) => void rejected(reason),
       onUnsyncedChanges: ({ number }) => {
@@ -125,7 +143,10 @@ export function useCollabDoc(name: string, me: () => CollabPresenceUser | null) 
       },
       onStatus: ({ status: socketStatus }) => {
         if (status.value === 'update-required' || status.value === 'forbidden') return;
-        if (socketStatus === WebSocketStatus.Disconnected) status.value = 'offline';
+        if (socketStatus === WebSocketStatus.Disconnected) {
+          status.value = 'offline';
+          missed ||= everSynced;
+        }
         else if (socketStatus === WebSocketStatus.Connected && status.value === 'offline') status.value = 'connecting';
       },
       // Ο server έκλεισε **αυτό** το έγγραφο ενώ η σύνδεση ζει (ανάκληση
@@ -258,6 +279,20 @@ export function useCollabDoc(name: string, me: () => CollabPresenceUser | null) 
     }
   });
 
+  function emitChange(change: CollabChange): void {
+    for (const handler of changeHandlers) handler(change);
+  }
+
+  /**
+   * Τα «άλλαξε αυτό» του server για ό,τι δεν είναι μέσα στο έγγραφο (κεφαλίδα,
+   * λίστες — βλ. `CollabChange`), και «*» όταν η σύνδεση ξανανοίγει μετά από
+   * διακοπή. Επιστρέφει το «σταμάτα».
+   */
+  function onChange(handler: (change: CollabChange) => void): () => void {
+    changeHandlers.add(handler);
+    return () => changeHandlers.delete(handler);
+  }
+
   /** Περιμένει να φτάσουν στον server όσα γράφτηκαν (π.χ. πριν από οριστικοποίηση). */
   function whenSaved(timeoutMs = 5000): Promise<boolean> {
     return new Promise((resolve) => {
@@ -275,12 +310,13 @@ export function useCollabDoc(name: string, me: () => CollabPresenceUser | null) 
 
   onBeforeUnmount(() => {
     destroyed = true;
+    changeHandlers.clear();
     disconnect();
     void persistence?.destroy();
     doc.value.destroy();
   });
 
-  return { doc, awareness, status, readOnly, writable, ready, unsynced, peers, saveState, whenSaved };
+  return { doc, awareness, status, readOnly, writable, ready, unsynced, peers, saveState, whenSaved, onChange };
 }
 
 /** Ο συνδεδεμένος χρήστης όπως τον δείχνει η παρουσία — ίδια μορφή με αυτή που ορίζει ο server. */
