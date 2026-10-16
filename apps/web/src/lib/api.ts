@@ -11,8 +11,10 @@ import axios, { type AxiosInstance, type AxiosRequestConfig } from 'axios';
  *    αντί σε μήνυμα λάθους.
  */
 
+import { COLLAB_CLIENT_HEADER } from '@trifylli/shared';
 export { API_URL } from './runtime-config';
 import { API_URL } from './runtime-config';
+import { CLIENT_ID } from './client-id';
 const DEV_EMAIL = process.env.DEV_EMAIL ?? '';
 
 /** Σφάλμα που σημαίνει «δεν υπάρχει δίκτυο», όχι «ο server είπε όχι». */
@@ -42,7 +44,8 @@ export class ApiError extends Error {
 export const http: AxiosInstance = axios.create({
   baseURL: API_URL,
   timeout: 20_000,
-  headers: DEV_EMAIL ? { 'x-dev-email': DEV_EMAIL } : {},
+  // Η καρτέλα που κάνει μια αλλαγή — το «άλλαξε αυτό» που ακολουθεί δεν της ξαναφορτώνει τίποτα.
+  headers: { [COLLAB_CLIENT_HEADER]: CLIENT_ID, ...(DEV_EMAIL ? { 'x-dev-email': DEV_EMAIL } : {}) },
 });
 
 let accessToken: string | null = null;
