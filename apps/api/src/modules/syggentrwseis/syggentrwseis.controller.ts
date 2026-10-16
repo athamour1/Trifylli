@@ -71,18 +71,12 @@ export class SyggentrwseisController {
   @Put(':id/plan')
   @RequireCapability('syggentrwsh:write')
   @ApiOperation({
-    summary: 'Αποθήκευση σχεδιασμού',
-    description:
-      'Αντικαθιστά κομμάτια, σημειώσεις ανά μέρος και λίστα υλικού· η σειρά προκύπτει ' +
-      'από τη θέση στον πίνακα. Ένα αίτημα, ώστε η οθόνη σχεδιασμού να αποθηκεύει μόνη ' +
-      'της χωρίς να μπορεί να μείνει μισοσωσμένη.',
+    summary: 'Αποθήκευση σχεδιασμού — καταργήθηκε',
+    description: 'Ο σχεδιασμός γράφεται πια μαζί, ως κοινό έγγραφο `syggentrwsh:<id>` (WebSocket `/api/collab`). Απαντά 409.',
   })
-  replacePlan(
-    @CurrentUser() user: RequestUser,
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: ReplacePlanDto,
-  ) {
-    return this.syggentrwseis.replacePlan(user, id, dto);
+  replacePlan(@Param('id', ParseUUIDPipe) _id: string, @Body() _dto: ReplacePlanDto) {
+    // Παλιός client: ο σχεδιασμός γράφεται πια μέσω της συνεργασίας.
+    return this.syggentrwseis.replacePlan();
   }
 
   @Get(':id/stelexi')
