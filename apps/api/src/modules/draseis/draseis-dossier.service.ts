@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { type DrasiDossier, type KladosType } from '@trifylli/shared';
+import { collabDocument, type DrasiDossier, type KladosType } from '@trifylli/shared';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
+import { CollabService } from '../collab/collab.service';
 import { DrasiAccessService } from './drasi-access.service';
 import { DraseisFinanceService } from './draseis-finance.service';
 import { DraseisFormsService } from './draseis-forms.service';
@@ -30,10 +31,15 @@ export class DraseisDossierService {
     private readonly ypiresies: DraseisYpiresiesService,
     private readonly plan: DraseisPlanService,
     private readonly review: DraseisReviewService,
+    private readonly collab: CollabService,
   ) {}
 
   async build(user: RequestUser, id: string, options: { health: boolean; treasury: boolean }): Promise<DrasiDossier> {
     const drasi = await this.access.load(user, id, 'read');
+    // Τα πρακτικά των συμβουλίων γράφονται μαζί: ό,τι εκκρεμεί πάει πρώτα στη
+    // βάση (τα έγγραφα της ίδιας της δράσης τα σώζουν οι αναγνώσεις τους).
+    const councils = await this.prisma.symvoulio.findMany({ where: { drasiId: id, archivedAt: null }, select: { id: true } });
+    await Promise.all(councils.map((council) => this.collab.flushPending(collabDocument.symvoulio(council.id))));
     const [full, schedule, participants, groups, loading, matrix, symvoulia, reviewView, topiko, mythos, ypiresies] = await Promise.all([
       this.draseis.findOne(user, id),
       this.plan.scheduleView(user, id),
