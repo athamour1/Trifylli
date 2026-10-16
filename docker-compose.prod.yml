@@ -294,8 +294,13 @@ services:
     read_only: true
     tmpfs:
       - /tmp
+    # Όριο μνήμης: η συνεργασία κρατά τα ανοιχτά κοινά έγγραφα στη μνήμη του API.
+    # Μετρήθηκε (docs/synergasia.md, Φ6): ~115 MiB σε ηρεμία, ~135 MiB με 30 που
+    # γράφουν μαζί. Το V8 μαζεύει σκουπίδια πριν φτάσει το όριο του container.
+    mem_limit: ${API_MEM_LIMIT:-768m}
     environment:
       NODE_ENV: production
+      NODE_OPTIONS: --max-old-space-size=512
       PORT: 3000
       DATABASE_URL: postgresql://${POSTGRES_USER:-trifylli}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-trifylli}?schema=public
       # Το origin του browser (του reverse proxy), π.χ. https://app.trifylli.gr

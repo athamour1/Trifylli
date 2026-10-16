@@ -66,8 +66,9 @@ rate limiting, καθάρισμα ιατρικών. Λείπουν αυτά, μ�
 
 **Σιγά-σιγά:**
 
-12. [ ] Όρια μνήμης στα containers — του API μετά τη μέτρηση της Φ1 της
-    συνεργασίας (τα ανοιχτά έγγραφα ζουν στη μνήμη του). **S**
+12. [ ] Όρια μνήμης στα containers. Του API **έγινε** (2026-10-16): `768m` +
+    `--max-old-space-size=512`, μετά τη μέτρηση της συνεργασίας (~115 MiB σε
+    ηρεμία, ~135 MiB με 30 που γράφουν μαζί). Μένουν τα υπόλοιπα. **S**
 13. [ ] Healthcheck σε garage/ouchtracker· το web να περιμένει το api «healthy». **S**
 14. [ ] Staging: δεύτερη στοίβα για release και migrations πριν από το prod. **M**
 15. [ ] CI (GitHub Actions): typecheck + tests, images από tag, scan ευπαθειών,
