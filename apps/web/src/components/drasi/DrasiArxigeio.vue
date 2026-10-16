@@ -102,7 +102,21 @@
       <q-card flat bordered class="q-mb-md">
         <q-card-section class="text-subtitle2 q-pb-xs">Αρχηγείο</q-card-section>
         <q-card-section class="q-pt-none">
-          <DrasiRolesEditor section="arxigeio" v-model="roles" v-model:enabled="enabledServices" :stelexi-options="stelexiOptions" :organiser="organiser" />
+          <DrasiRolesEditor
+            section="arxigeio"
+            v-model="roles"
+            v-model:enabled="enabledServices"
+            :stelexi-options="roleOptions.options"
+            :outsiders="roleOptions.outsiders"
+            :organiser="organiser"
+          />
+          <div class="text-caption q-mt-sm" :class="drasiStelexi.length ? 'text-grey-7' : 'text-warning'">
+            {{
+              drasiStelexi.length
+                ? 'Ρόλο παίρνουν τα στελέχη που συμμετέχουν στη δράση — όποιος λείπει, μπαίνει από τους «Συμμετέχοντες».'
+                : 'Κανένα στέλεχος στους συμμετέχοντες ακόμα — πρόσθεσέ τα από τους «Συμμετέχοντες».'
+            }}
+          </div>
         </q-card-section>
         <q-card-actions align="right">
           <q-btn color="klados" text-color="klados-on" unelevated no-caps label="Αποθήκευση" :loading="saving" @click="save" />
@@ -173,13 +187,15 @@ import {
   type Paginated,
 } from '@trifylli/shared';
 import DrasiRolesEditor from './DrasiRolesEditor.vue';
-import { emptyRoles, externalStelexosOption, looksLikeEmail, type RolesMap } from './types';
+import { drasiRoleOptions, emptyRoles, externalStelexosOption, looksLikeEmail, type RolesMap } from './types';
 import { ApiError, del, get, post } from '../../lib/api';
 import { useLiveReload } from '../../composables/useLiveChanges';
 
 const props = defineProps<{
   drasiId: string;
   roles: DrasiRoleView[];
+  /** Τα στελέχη που συμμετέχουν στη δράση — μόνο αυτά παίρνουν ρόλο. */
+  drasiStelexi: { id: string; firstName: string; lastName: string }[];
   organiser: KladosType | null;
   canEdit: boolean;
 }>();
@@ -236,11 +252,21 @@ watch(
 );
 
 const stelexi = ref<MemberSummary[]>([]);
-/** Στελέχη του μητρώου + τα εξωτερικά της δράσης — όλοι μπορούν να πάρουν ρόλο. */
-const stelexiOptions = computed(() => [
-  ...stelexi.value.map((s) => ({ label: `${s.lastName} ${s.firstName}`.trim(), value: s.id, caption: s.leaderTitle ?? '' })),
-  ...externals.value.map(externalStelexosOption),
-]);
+/**
+ * Ρόλο παίρνουν μόνο τα στελέχη της δράσης· κάτω από το όνομα ο τίτλος τους στο
+ * μητρώο, ή από πού έρχονται (φιλοξενούμενα, εξωτερικά).
+ */
+const roleOptions = computed(() => {
+  const captions = new Map<string, string>([
+    ...stelexi.value.map((s): [string, string] => [s.id, s.leaderTitle ?? '']),
+    ...externals.value.map((e): [string, string] => [e.userId, externalStelexosOption(e).caption]),
+  ]);
+  return drasiRoleOptions(
+    props.drasiStelexi,
+    props.roles.map((r) => r.user),
+    (id) => captions.get(id) ?? '',
+  );
+});
 // Ζωντανά: ό,τι αλλάζουν οι άλλοι εμφανίζεται χωρίς ανανέωση της σελίδας.
 useLiveReload(['externals'], loadExternals);
 onMounted(async () => {

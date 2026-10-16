@@ -11,7 +11,7 @@
 
     <div v-if="section === 'arxigeio'" class="row q-col-gutter-md">
       <div v-for="kind in DRASI_ARXIGEIO_KINDS" :key="kind" class="col-12 col-md-6">
-        <StelexosPicker :model-value="modelValue[kind]" :label="DRASI_ROLE_LABEL[kind]" :options="stelexiOptions" @update:model-value="(v: string[]) => set(kind, v)" />
+        <StelexosPicker :model-value="modelValue[kind]" :label="DRASI_ROLE_LABEL[kind]" :options="optionsFor(kind)" @update:model-value="(v: string[]) => set(kind, v)" />
       </div>
     </div>
 
@@ -53,9 +53,16 @@ const props = defineProps<{
   /** Ποιες υπηρεσίες ισχύουν (μόνο για section «ypiresies»). */
   enabled: DrasiRoleKind[];
   stelexiOptions: StelexosOption[];
+  /** Όσοι έχουν ήδη ρόλο χωρίς να είναι στις επιλογές: φαίνονται μόνο στον ρόλο τους, για να βγουν. */
+  outsiders?: StelexosOption[];
   organiser: KladosType | null;
 }>();
 const emit = defineEmits<{ 'update:modelValue': [RolesMap]; 'update:enabled': [DrasiRoleKind[]] }>();
+
+function optionsFor(kind: DrasiRoleKind): StelexosOption[] {
+  const held = (props.outsiders ?? []).filter((o) => props.modelValue[kind].includes(o.value));
+  return held.length ? [...props.stelexiOptions, ...held] : props.stelexiOptions;
+}
 
 function set(kind: DrasiRoleKind, ids: string[]): void {
   emit('update:modelValue', { ...props.modelValue, [kind]: ids });

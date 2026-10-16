@@ -76,6 +76,41 @@ export function externalStelexosOption(e: DrasiExternalView): { label: string; v
   return { label: `${e.lastName} ${e.firstName}`.trim(), value: e.userId, caption: e.origin ? `${kind} · ${e.origin}` : kind };
 }
 
+interface NamedPerson {
+  id: string;
+  firstName: string;
+  lastName: string;
+}
+
+interface RoleOption {
+  label: string;
+  value: string;
+  caption: string;
+}
+
+/**
+ * Οι επιλογές για το αρχηγείο μιας δράσης: μόνο τα στελέχη που συμμετέχουν
+ * (δικά μας, φιλοξενούμενα, εξωτερικά). Όσοι έχουν ήδη ρόλο χωρίς να συμμετέχουν
+ * (από πριν ισχύσει ο κανόνας, ή βγήκαν από τους συμμετέχοντες) έρχονται χωριστά:
+ * φαίνονται μόνο στον ρόλο τους, για να βγουν.
+ */
+export function drasiRoleOptions(
+  stelexi: readonly NamedPerson[],
+  holders: readonly NamedPerson[],
+  captionOf: (id: string) => string = () => '',
+): { options: RoleOption[]; outsiders: RoleOption[] } {
+  const label = (p: NamedPerson) => `${p.lastName} ${p.firstName}`.trim();
+  const inDrasi = new Set(stelexi.map((s) => s.id));
+  const options = [...stelexi]
+    .sort((a, b) => a.lastName.localeCompare(b.lastName, 'el') || a.firstName.localeCompare(b.firstName, 'el'))
+    .map((s) => ({ label: label(s), value: s.id, caption: captionOf(s.id) }));
+  const outsiders = new Map<string, RoleOption>();
+  for (const h of holders) {
+    if (!inDrasi.has(h.id)) outsiders.set(h.id, { label: label(h), value: h.id, caption: 'Δεν είναι στους συμμετέχοντες' });
+  }
+  return { options, outsiders: [...outsiders.values()] };
+}
+
 /** Πρόχειρος έλεγχος πριν το API (που απαντά με αγγλικό μήνυμα του class-validator). */
 export function looksLikeEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());

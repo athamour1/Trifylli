@@ -371,6 +371,7 @@
               <DrasiArxigeio
                 :drasi-id="id"
                 :roles="data.roles"
+                :drasi-stelexi="drasiStelexi"
                 :organiser="data.klados?.type ?? null"
                 :can-edit="canEdit('arxigeio')"
                 @changed="reload"
@@ -658,6 +659,8 @@ function groupRoles(kinds: readonly DrasiRoleKind[]): RoleGroup[] {
 }
 
 const arxigeio = computed(() => groupRoles(DRASI_ARXIGEIO_KINDS));
+/** Τα στελέχη που συμμετέχουν — μόνο αυτά παίρνουν ρόλο στο αρχηγείο. */
+const drasiStelexi = computed(() => (data.value?.participants ?? []).filter((p) => p.kind === 'STELEXOS').map((p) => p.user));
 
 const stats = ref<KataskinosiStats | null>(null);
 const statsLoading = ref(false);
