@@ -331,7 +331,8 @@ watch(
     const mine = new Map(rows.value.map((r) => [r.id, r]));
     rows.value = (day?.items ?? []).map((item) => {
       const server = toRow(item);
-      bases.set(server.id, server);
+      // Αντίγραφο: η γραμμή της οθόνης αλλάζει επί τόπου, η βάση όχι.
+      bases.set(server.id, { ...server });
       const local = mine.get(server.id);
       const change = pending.get(server.id);
       if (!local || !(change || sending.has(server.id))) return server;
