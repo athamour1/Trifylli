@@ -1041,3 +1041,27 @@ export interface DrasiAnnouncementView {
   /** Είναι για μένα και δεν την έχω δει ακόμα. */
   unseen: boolean;
 }
+
+// ───────────────────────── Δράσεις: καταμέτρηση ─────────────────────────
+
+export interface DrasiHeadcountGroupView {
+  id: string;
+  name: string;
+  /** Τα μέλη της ομάδας (`DrasiParticipant.id`) — όσοι μετρώνται. */
+  members: { id: string; firstName: string; lastName: string }[];
+  /** Η τελευταία μέτρηση της ομάδας — `null` αν δεν μετρήθηκε ακόμα. */
+  check: { absentIds: string[]; by: { id: string; firstName: string; lastName: string } | null; at: string } | null;
+}
+
+/** «Αναχώρηση από Μέγαρα — 32/34, λείπουν: …», ζωντανά. */
+export interface DrasiHeadcountView {
+  id: string;
+  title: string;
+  groupKind: DrasiGroupKind;
+  by: { id: string; firstName: string; lastName: string } | null;
+  at: string;
+  completedAt: string | null;
+  closedAt: string | null;
+  groups: DrasiHeadcountGroupView[];
+  totals: { members: number; present: number; absent: number; checkedGroups: number; groups: number };
+}

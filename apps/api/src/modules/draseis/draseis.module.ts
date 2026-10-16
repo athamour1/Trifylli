@@ -13,6 +13,8 @@ import { DraseisDossierService } from './draseis-dossier.service';
 import { DrasiRemindersService } from './drasi-reminders.service';
 import { DraseisAnnouncementsService } from './draseis-announcements.service';
 import { DraseisAnnouncementsController } from './draseis-announcements.controller';
+import { DraseisHeadcountService } from './draseis-headcount.service';
+import { DraseisHeadcountController } from './draseis-headcount.controller';
 import { DraseisExportService } from './draseis-export.service';
 import { DraseisExternalsController } from './draseis-externals.controller';
 import { DraseisYpiresiesController } from './draseis-ypiresies.controller';
@@ -40,6 +42,7 @@ import { DraseisService } from './draseis.service';
   controllers: [
     DraseisController,
     DraseisAnnouncementsController,
+    DraseisHeadcountController,
     DraseisFinanceController,
     DraseisGroupsController,
     DraseisFormsController,
@@ -72,6 +75,7 @@ import { DraseisService } from './draseis.service';
     DraseisDossierService,
     DrasiRemindersService,
     DraseisAnnouncementsService,
+    DraseisHeadcountService,
   ],
   exports: [DraseisService],
 })

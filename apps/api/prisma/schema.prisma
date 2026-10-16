@@ -369,6 +369,8 @@ model User {
   externalLoaded          DrasiExternalYliko[]       @relation("ExternalLoadedBy")
   announcements           DrasiAnnouncement[]        @relation("DrasiAnnouncementAuthor")
   announcementsSeen       DrasiAnnouncementSeen[]
+  headcountsStarted       DrasiHeadcount[]           @relation("HeadcountAuthor")
+  headcountChecks         DrasiHeadcountCheck[]      @relation("HeadcountChecker")
   approvalsRequested      DocApproval[]              @relation("ApprovalRequester")
   approvalsDecided        DocApproval[]              @relation("ApprovalDecider")
   commentsResolved        Comment[]                  @relation("CommentResolver")
@@ -591,6 +593,7 @@ model Drasi {
   visits          DrasiVisit[]
   delays          DrasiDelay[]
   announcements   DrasiAnnouncement[]
+  headcounts      DrasiHeadcount[]
 
   @@index([topikoId, dateStart])
   @@index([kladosId, dateStart])
@@ -724,6 +727,49 @@ model DrasiAnnouncementSeen {
 
   @@id([announcementId, userId])
   @@map("drasi_announcement_seen")
+}
+
+/// Καταμέτρηση (συνεργασία, Φ13): «Αναχώρηση από Μέγαρα» — ανά ενωμοτία ή ανά
+/// σκηνή. Κάθε στέλεχος επιβεβαιώνει μια ομάδα· ο Αρχηγός βλέπει ζωντανά «32/34».
+model DrasiHeadcount {
+  id          String         @id @default(uuid()) @db.Uuid
+  drasiId     String         @db.Uuid
+  title       String
+  /// Ανά τι μετράμε (ενωμοτία, σκηνή…).
+  groupKind   DrasiGroupKind
+  createdById String?        @db.Uuid
+  createdAt   DateTime       @default(now())
+  /// Όταν μετρήθηκαν όλες οι ομάδες (για να ειδοποιηθεί μία φορά).
+  completedAt DateTime?
+  closedAt    DateTime?
+
+  drasi     Drasi                 @relation(fields: [drasiId], references: [id], onDelete: Cascade)
+  createdBy User?                 @relation("HeadcountAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  checks    DrasiHeadcountCheck[]
+
+  @@index([drasiId, createdAt])
+  @@map("drasi_headcount")
+}
+
+/// Μια ομάδα μετρήθηκε: ποιοι λείπουν (κενό = όλοι εδώ), ποιος, πότε. Χωρίς
+/// σήμα φτάνει αργότερα — κρατιέται η νεότερη μέτρηση (ώρα της συσκευής).
+model DrasiHeadcountCheck {
+  headcountId String   @db.Uuid
+  groupId     String   @db.Uuid
+  /// Όσοι λείπουν (`DrasiParticipant.id`).
+  absentIds   String[] @db.Uuid
+  /// Πόσοι ήταν στην ομάδα τη στιγμή της μέτρησης.
+  total       Int
+  checkedById String?  @db.Uuid
+  checkedAt   DateTime
+  receivedAt  DateTime @default(now())
+
+  headcount DrasiHeadcount @relation(fields: [headcountId], references: [id], onDelete: Cascade)
+  group     DrasiGroup     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  checkedBy User?          @relation("HeadcountChecker", fields: [checkedById], references: [id], onDelete: SetNull)
+
+  @@id([headcountId, groupId])
+  @@map("drasi_headcount_check")
 }
 
 /// Υπενθυμίσεις «σε 10΄ αρχίζει» που στάλθηκαν — μία ανά στοιχείο και ώρα
@@ -1015,12 +1061,13 @@ model DrasiGroup {
   order               Int            @default(0)
   createdAt           DateTime       @default(now())
 
-  drasi         Drasi               @relation(fields: [drasiId], references: [id], onDelete: Cascade)
-  klados        Klados?             @relation(fields: [kladosId], references: [id], onDelete: SetNull)
-  leader        DrasiParticipant?   @relation("DrasiGroupLeader", fields: [leaderParticipantId], references: [id], onDelete: SetNull)
-  scheduleItem  DrasiScheduleItem?  @relation(fields: [scheduleItemId], references: [id], onDelete: SetNull)
+  drasi         Drasi                 @relation(fields: [drasiId], references: [id], onDelete: Cascade)
+  klados        Klados?               @relation(fields: [kladosId], references: [id], onDelete: SetNull)
+  leader        DrasiParticipant?     @relation("DrasiGroupLeader", fields: [leaderParticipantId], references: [id], onDelete: SetNull)
+  scheduleItem  DrasiScheduleItem?    @relation(fields: [scheduleItemId], references: [id], onDelete: SetNull)
   members       DrasiGroupMember[]
   ypiresiaSlots DrasiYpiresiaSlot[]
+  headcounts    DrasiHeadcountCheck[]
 
   @@unique([drasiId, kind, name])
   @@map("drasi_group")
