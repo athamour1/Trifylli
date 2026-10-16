@@ -605,6 +605,19 @@ crons του API και έναν `watchdog` που κάθε 5' ελέγχει δ
 | `sso.example.gr` | Authentik (SSO) | `trifylli-sso:9000` | `AUTHENTIK_PORT` (9010) |
 | `ouch.example.gr` | OuchTracker — κάνει μόνο του proxy `/api` | `trifylli-ouch:80` | `OUCHTRACKER_WEB_PORT` (8081) |
 
+**WebSocket (συνεργασία σε πραγματικό χρόνο).** Το API δέχεται WebSocket στο
+`/api/collab` (κοινά κείμενα, κέρσορες, παρουσία). Ο proxy του `api.` πρέπει να
+περνά το upgrade — οποιοσδήποτε proxy:
+
+* **nginx:** `proxy_http_version 1.1`, `proxy_set_header Upgrade $http_upgrade`,
+  `proxy_set_header Connection "upgrade"` και μεγάλο `proxy_read_timeout` (π.χ. `1h`).
+* **Apache:** `mod_proxy_wstunnel`, ή `upgrade=websocket` στο `ProxyPass` (2.4.47+).
+* **Caddy, Traefik:** μόνα τους, χωρίς ρύθμιση.
+
+Ποια σελίδα επιτρέπεται να ανοίξει σύνδεση το ελέγχει το API (τα `CORS_ORIGINS`).
+Αν ο proxy κάνει δικό του έλεγχο «ίδιας προέλευσης» στα WebSocket (π.χ. το Zoraxy),
+κλείσ' τον για το `api.`: η εφαρμογή (`app.`) ανοίγει socket σε άλλο υποτομέα.
+
 ```mermaid
 flowchart LR
     net(("Internet"))
