@@ -107,6 +107,8 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
   private readonly writtenListeners = new Set<(name: string, writers: ReadonlySet<string>) => void>();
   /** Όσοι θέλουν να ξέρουν τις αλλαγές μέσω API (βλ. `apiChanged`). */
   private readonly apiListeners = new Set<(change: ApiChange) => void>();
+  /** Όσοι κρατούν κάτι για τα έγγραφα έξω από αυτά (σχόλια, εκδόσεις): σβήνουν μαζί τους. */
+  private readonly removedListeners = new Set<(name: string, prefix: boolean) => Promise<void>>();
   /** Τα όρια (βλ. `COLLAB_LIMITS`) — αλλάζουν μόνο στις δοκιμές. */
   limits: { messages: { burst: number; perSecond: number }; documentsPerSocket: number; documentBytes: number } = { ...COLLAB_LIMITS };
 
@@ -493,6 +495,11 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
     this.apiListeners.add(listener);
   }
 
+  /** Ακούει τα έγγραφα που σβήνονται (`name` ή, με `prefix`, όλα όσα αρχίζουν έτσι). */
+  onRemoved(listener: (name: string, prefix: boolean) => Promise<void>): void {
+    this.removedListeners.add(listener);
+  }
+
   /** Ακούει ποιοι έγραψαν σε ένα έγγραφο, μετά από κάθε αποθήκευσή του. */
   onDocumentWritten(listener: (name: string, writers: ReadonlySet<string>) => void): void {
     this.writtenListeners.add(listener);
@@ -533,6 +540,7 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
     this.removed.add(name);
     this.revoke(name);
     await this.prisma.collabDocument.deleteMany({ where: { name } });
+    await Promise.all([...this.removedListeners].map((listener) => listener(name, false)));
   }
 
   /** Το ίδιο για όλα τα έγγραφα με αυτό το πρόθεμα — π.χ. μια δράση που σβήνεται. */
@@ -542,6 +550,7 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
     this.removed.add(prefix);
     for (const name of loaded) this.revoke(name);
     await this.prisma.collabDocument.deleteMany({ where: { name: { startsWith: prefix } } });
+    await Promise.all([...this.removedListeners].map((listener) => listener(prefix, true)));
   }
 
   private isRemoved(name: string): boolean {

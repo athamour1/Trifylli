@@ -1,9 +1,25 @@
+import type { CommentPerson } from '@trifylli/shared';
 import type { Doc } from 'yjs';
 import type { RequestUser } from '../../common/auth/types';
 import { readFields, seedTexts } from './collab-yjs';
 
 /** Τι επιτρέπεται σε μια σύνδεση: γράφει ή μόνο βλέπει. Καμία πρόσβαση = `null`. */
 export type CollabAccess = 'write' | 'read';
+
+/** Ένα έγγραφο όπως φαίνεται έξω από αυτό — στις ειδοποιήσεις των σχολίων. */
+export interface CollabDocumentAbout {
+  /**
+   * Πού, με την πρόθεσή του — «στο «Πεζοπορία» — δράση «Κατασκήνωση»» — ώστε να
+   * δένει με το «Νέο σχόλιο …». Τι και μέσα σε τι, ποτέ ονόματα παιδιών.
+   */
+  title: string;
+  /** Διαδρομή της εφαρμογής (π.χ. `/draseis/<id>/programma/<itemId>`). */
+  link: string;
+  /** Όσοι μαθαίνουν κάθε νέο σχόλιο — π.χ. οι υπεύθυνοι του στοιχείου. */
+  watchers: string[];
+  /** Πού γράφεται ένα νέο σχόλιο στη ροή δραστηριότητας (π.χ. το δωμάτιο της δράσης). */
+  activity?: { room: string; topic: string };
+}
 
 /**
  * Ένα είδος κοινού εγγράφου — π.χ. «ατζέντα και πρακτικά συμβουλίου».
@@ -42,6 +58,10 @@ export interface CollabDocumentType {
   upgrade?(doc: Doc, ids: readonly string[], from: number): Promise<boolean>;
   /** Γράφει την κατάσταση του εγγράφου στην οντότητα (εκτύπωση, εξαγωγές, `GET`). */
   project(doc: Doc, ids: readonly string[]): Promise<void>;
+  /** Για τα σχόλια: τίτλος, σύνδεσμος και ποιοι μαθαίνουν. `null` αν η οντότητα δεν υπάρχει. */
+  about?(ids: readonly string[]): Promise<CollabDocumentAbout | null>;
+  /** Τα στελέχη που αναφέρονται με «@» στα σχόλια — ποτέ παιδιά. */
+  people?(ids: readonly string[]): Promise<CommentPerson[]>;
 }
 
 /**
@@ -57,11 +77,15 @@ export function textDocument(spec: {
   load(ids: readonly string[]): Promise<Record<string, string> | null>;
   /** Γράφει τις τιμές στην οντότητα. */
   save(ids: readonly string[], values: Record<string, string>): Promise<void>;
+  about?(ids: readonly string[]): Promise<CollabDocumentAbout | null>;
+  people?(ids: readonly string[]): Promise<CommentPerson[]>;
 }): CollabDocumentType {
   return {
     kind: spec.kind,
     arity: spec.arity,
     access: (user, ids) => spec.access(user, ids),
+    ...(spec.about ? { about: spec.about } : {}),
+    ...(spec.people ? { people: spec.people } : {}),
     seed: async (doc, ids) => {
       const values = await spec.load(ids);
       if (!values) return false;

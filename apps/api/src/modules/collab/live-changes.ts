@@ -47,6 +47,11 @@ export function liveRoom(
   return { name: room.name(id), topic };
 }
 
+/** Η καρτέλα που κάνει το αίτημα (`COLLAB_CLIENT_HEADER`) — `null` αν λείπει ή δεν μοιάζει με id. */
+export function clientOrigin(header: unknown): string | null {
+  return typeof header === 'string' && CLIENT_ID.test(header) ? header : null;
+}
+
 /** Τι έγινε, από τη μέθοδο: νέο, αλλαγή ή αφαίρεση — η μετακίνηση είναι αλλαγή. */
 export function verbOf(method: string, path: string): 'add' | 'change' | 'remove' {
   if (method === 'DELETE') return 'remove';
@@ -73,8 +78,7 @@ export class LiveChangesInterceptor implements NestInterceptor {
     if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next.handle();
     const room = liveRoom((req.route as { path?: string } | undefined)?.path, req.params, this.config.API_PREFIX);
     if (!room) return next.handle();
-    const header = req.headers[COLLAB_CLIENT_HEADER.toLowerCase()];
-    const origin = typeof header === 'string' && CLIENT_ID.test(header) ? header : null;
+    const origin = clientOrigin(req.headers[COLLAB_CLIENT_HEADER.toLowerCase()]);
     return next.handle().pipe(
       tap(() => this.collab.apiChanged({ room: room.name, topic: room.topic, verb: verbOf(req.method, req.path), by: req.user?.id ?? null, origin })),
     );

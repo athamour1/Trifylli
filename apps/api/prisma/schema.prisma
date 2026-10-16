@@ -361,6 +361,8 @@ model User {
   notifications           Notification[]
   pushSubscriptions       PushSubscription[]
   notificationSettings    NotificationSetting[]
+  comments                Comment[]                  @relation("CommentAuthor")
+  commentsResolved        Comment[]                  @relation("CommentResolver")
   ypiresiesResponsible    DrasiYpiresiaResponsible[]
   drasiFeesCollected      DrasiParticipant[]         @relation("DrasiFeeCollector")
   drasiPaymentsCollected  DrasiPayment[]             @relation("DrasiPaymentCollector")
@@ -1631,6 +1633,41 @@ model NotificationSetting {
 
   @@id([userId, kind])
   @@map("notification_setting")
+}
+
+/// Σχόλιο σε κοινό έγγραφο (συνεργασία, Φ9). Έξω από το Yjs: σχολιάζει όποιος
+/// βλέπει το έγγραφο, φέρνει ειδοποιήσεις, σβήνεται από τον συντάκτη. Σβήνεται
+/// μαζί με το έγγραφο (βλ. `CollabService.remove`).
+model Comment {
+  id           String    @id @default(uuid()) @db.Uuid
+  /// Το κοινό έγγραφο, π.χ. `drasi:<id>:item:<id>` (βλ. `collabDocument`).
+  document     String
+  /// Το κείμενο μέσα στο έγγραφο (`description`, `block:<id>`…)· `null` = όλο το έγγραφο.
+  field        String?
+  /// Η φράση: relative positions του Yjs (base64) — μένει στη θέση της όσο αλλάζει το κείμενο.
+  anchorStart  String?
+  anchorEnd    String?
+  /// Η φράση όπως ήταν όταν γράφτηκε (φαίνεται κι αν σβηστεί από το κείμενο).
+  quote        String?
+  body         String
+  /// Όσοι αναφέρθηκαν με «@» (στελέχη).
+  mentionIds   String[]  @db.Uuid
+  authorId     String?   @db.Uuid
+  /// Απάντηση σε αυτό το σχόλιο (νήμα ενός επιπέδου).
+  parentId     String?   @db.Uuid
+  resolvedAt   DateTime?
+  resolvedById String?   @db.Uuid
+  editedAt     DateTime?
+  createdAt    DateTime  @default(now())
+
+  author     User?     @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+  resolvedBy User?     @relation("CommentResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+  parent     Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies    Comment[] @relation("CommentReplies")
+
+  @@index([document, createdAt])
+  @@index([parentId])
+  @@map("comment")
 }
 
 model AuditLog {

@@ -253,7 +253,7 @@ export const NOTIFICATION_KINDS = {
   role: 'Νέος ρόλος σε δράση',
   responsible: 'Υπεύθυνος σε στοιχείο του προγράμματος',
   mention: 'Αναφορά σε σχόλιο',
-  comment: 'Απαντήσεις σε σχόλια',
+  comment: 'Νέα σχόλια και απαντήσεις',
   approval: 'Εγκρίσεις προγραμματικών και γευμάτων',
   reminder: 'Υπενθυμίσεις προγράμματος',
   announcement: 'Ανακοινώσεις δράσεων',
@@ -275,4 +275,60 @@ export interface NotificationView {
 export interface NotificationsView {
   unread: number;
   items: NotificationView[];
+}
+
+// ───────────────────────── Σχόλια ─────────────────────────
+
+/**
+ * Σχόλια στα κοινά έγγραφα (Φ9). Ζουν **έξω** από το Yjs: σχολιάζει όποιος βλέπει
+ * το έγγραφο (ακόμα κι αν δεν το γράφει), φέρνουν ειδοποιήσεις και σβήνονται από
+ * τον συντάκτη τους. Η φράση κρατιέται με relative positions του Yjs, οπότε μένει
+ * στη θέση της όσο αλλάζει το κείμενο γύρω· αν σβηστεί, μένει το απόσπασμα.
+ */
+export const COMMENT_LIMITS = {
+  body: 4000,
+  quote: 300,
+  /** Μία relative position του Yjs σε base64. */
+  anchor: 256,
+  /** Το κλειδί του κειμένου μέσα στο έγγραφο (`description`, `block:<id>`…). */
+  field: 80,
+  mentions: 20,
+  /** Σχόλια (με τις απαντήσεις) ανά έγγραφο. */
+  perDocument: 2000,
+} as const;
+
+/** Η φράση ενός σχολίου: αρχή και τέλος ως relative positions του Yjs (base64). */
+export interface CommentAnchor {
+  start: string;
+  end: string;
+}
+
+/** Στέλεχος που αναφέρεται με «@» — ποτέ παιδιά. */
+export interface CommentPerson {
+  id: string;
+  firstName: string;
+  lastName: string;
+}
+
+export interface CommentView {
+  id: string;
+  /** Το κείμενο μέσα στο έγγραφο· `null` = σε όλο το έγγραφο. */
+  field: string | null;
+  anchor: CommentAnchor | null;
+  /** Η φράση όπως ήταν όταν γράφτηκε το σχόλιο. */
+  quote: string | null;
+  body: string;
+  mentions: CommentPerson[];
+  /** `null` αν ο λογαριασμός δεν υπάρχει πια. */
+  author: CommentPerson | null;
+  parentId: string | null;
+  resolvedAt: string | null;
+  resolvedBy: CommentPerson | null;
+  editedAt: string | null;
+  createdAt: string;
+}
+
+/** Ένα νήμα: το πρώτο σχόλιο με τις απαντήσεις του (παλιότερη πρώτη). */
+export interface CommentThreadView extends CommentView {
+  replies: CommentView[];
 }
