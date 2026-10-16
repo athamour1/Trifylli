@@ -1,9 +1,10 @@
 import { Injectable, type OnModuleInit } from '@nestjs/common';
-import { COLLAB_FIELDS, TOPIKO_SYMVOULIA, can, type KladosType } from '@trifylli/shared';
+import { MemberKind, MemberStatus } from '@prisma/client';
+import { COLLAB_FIELDS, TOPIKO_SYMVOULIA, can, type CommentPerson, type KladosType } from '@trifylli/shared';
 import type { RequestUser } from '../../common/auth/types';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { accessProfileOf, hasCapabilityFor } from '../../common/util/klados-scope';
-import { textDocument, type CollabAccess } from '../collab/collab-documents';
+import { textDocument, type CollabAccess, type CollabDocumentAbout } from '../collab/collab-documents';
 import { CollabService } from '../collab/collab.service';
 
 /**
@@ -28,8 +29,37 @@ export class SymvoulioCollab implements OnModuleInit {
         access: (user, ids) => this.access(user, ids),
         load: (ids) => this.load(ids),
         save: (ids, values) => this.save(ids, values),
+        about: (ids) => this.about(ids),
+        people: (ids) => this.people(ids),
       }),
     );
+  }
+
+  /** Για τα σχόλια: «στο συμβούλιο «…»», και τα μαθαίνει όποιος προεδρεύει. */
+  async about([id]: readonly string[]): Promise<CollabDocumentAbout | null> {
+    const symvoulio = await this.prisma.symvoulio.findUnique({ where: { id }, select: { title: true, date: true, chairId: true } });
+    if (!symvoulio) return null;
+    const name = symvoulio.title?.trim()
+      ? `«${symvoulio.title.trim()}»`
+      : `της ${symvoulio.date.toLocaleDateString('el-GR', { day: 'numeric', month: 'numeric', timeZone: 'Europe/Athens' })}`;
+    return { title: `στο συμβούλιο ${name}`, link: `/symvoulia/${id}`, watchers: symvoulio.chairId ? [symvoulio.chairId] : [] };
+  }
+
+  /** Όσοι μπορούν να συμμετέχουν (ίδια εμβέλεια με τους συμμετέχοντες): τα στελέχη του κλάδου ή του Τοπικού. */
+  async people([id]: readonly string[]): Promise<CommentPerson[]> {
+    const symvoulio = await this.prisma.symvoulio.findUnique({ where: { id }, select: { topikoId: true, kladosId: true } });
+    if (!symvoulio) return [];
+    return this.prisma.user.findMany({
+      where: {
+        topikoId: symvoulio.topikoId,
+        archivedAt: null,
+        status: MemberStatus.ENERGO,
+        kind: MemberKind.STELEXOS,
+        ...(symvoulio.kladosId ? { memberships: { some: { kladosId: symvoulio.kladosId, leftAt: null } } } : {}),
+      },
+      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+      select: { id: true, firstName: true, lastName: true },
+    });
   }
 
   async access(user: RequestUser, [id]: readonly string[]): Promise<CollabAccess | null> {

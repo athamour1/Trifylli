@@ -1,11 +1,11 @@
 import { Injectable, type OnModuleInit } from '@nestjs/common';
 import { MemberKind, MemberStatus } from '@prisma/client';
-import type { KladosType } from '@trifylli/shared';
+import type { CommentPerson, KladosType } from '@trifylli/shared';
 import type { Doc } from 'yjs';
 import type { RequestUser } from '../../common/auth/types';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { hasCapabilityFor } from '../../common/util/klados-scope';
-import type { CollabAccess } from '../collab/collab-documents';
+import type { CollabAccess, CollabDocumentAbout } from '../collab/collab-documents';
 import { CollabService } from '../collab/collab.service';
 import { normalizePlan, readPlan, seedPlan } from './syggentrwsh-plan';
 
@@ -32,6 +32,41 @@ export class SyggentrwshCollab implements OnModuleInit {
       access: (user, ids) => this.access(user, ids),
       seed: (doc, ids) => this.seed(doc, ids),
       project: (doc, ids) => this.project(doc, ids),
+      about: (ids) => this.about(ids),
+      people: (ids) => this.people(ids),
+    });
+  }
+
+  /** Για τα σχόλια: «στη συγκέντρωση «…»», και τα μαθαίνουν τα στελέχη της. */
+  async about([id]: readonly string[]): Promise<CollabDocumentAbout | null> {
+    const syggentrwsh = await this.prisma.syggentrwsh.findUnique({
+      where: { id },
+      select: { title: true, date: true, stelexi: { select: { userId: true } } },
+    });
+    if (!syggentrwsh) return null;
+    const name = syggentrwsh.title?.trim()
+      ? `«${syggentrwsh.title.trim()}»`
+      : `της ${syggentrwsh.date.toLocaleDateString('el-GR', { day: 'numeric', month: 'numeric', timeZone: 'Europe/Athens' })}`;
+    return { title: `στη συγκέντρωση ${name}`, link: `/syggentrwseis/${id}`, watchers: syggentrwsh.stelexi.map((s) => s.userId) };
+  }
+
+  /** Τα ενεργά στελέχη του κλάδου — αυτά αναφέρονται με «@». */
+  async people([id]: readonly string[]): Promise<CommentPerson[]> {
+    const syggentrwsh = await this.prisma.syggentrwsh.findUnique({
+      where: { id },
+      select: { kladosId: true, klados: { select: { topikoId: true } } },
+    });
+    if (!syggentrwsh) return [];
+    return this.prisma.user.findMany({
+      where: {
+        topikoId: syggentrwsh.klados.topikoId,
+        archivedAt: null,
+        status: MemberStatus.ENERGO,
+        kind: MemberKind.STELEXOS,
+        memberships: { some: { kladosId: syggentrwsh.kladosId, leftAt: null } },
+      },
+      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+      select: { id: true, firstName: true, lastName: true },
     });
   }
 
