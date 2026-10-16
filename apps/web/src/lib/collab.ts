@@ -1,4 +1,4 @@
-import { HocuspocusProviderWebsocket } from '@hocuspocus/provider';
+import { HocuspocusProviderWebsocket, WebSocketStatus } from '@hocuspocus/provider';
 import { COLLAB_PATH, COLLAB_PROTOCOL } from '@trifylli/shared';
 import { API_URL, DEV_ACCOUNT_EMAIL, currentAccessToken } from './api';
 import { onCollabPurge } from './collab-storage';
@@ -40,6 +40,11 @@ export function collabSocket(): HocuspocusProviderWebsocket {
     window.addEventListener('pagehide', () => socket?.disconnect());
     window.addEventListener('pageshow', (event) => {
       if (event.persisted) void socket?.connect();
+    });
+    // Μόλις επιστρέψει το σήμα, νέα προσπάθεια αμέσως — όχι στο επόμενο βήμα της
+    // αναμονής (έως 30″), όσο η σελίδα γράφει «χωρίς σύνδεση».
+    window.addEventListener('online', () => {
+      if (socket && socket.status !== WebSocketStatus.Connected) void socket.connect();
     });
   }
   return socket;
