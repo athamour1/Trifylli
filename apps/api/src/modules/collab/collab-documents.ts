@@ -1,4 +1,6 @@
+import type { Doc } from 'yjs';
 import type { RequestUser } from '../../common/auth/types';
+import { readFields, seedTexts } from './collab-yjs';
 
 /** Τι επιτρέπεται σε μια σύνδεση: γράφει ή μόνο βλέπει. Καμία πρόσβαση = `null`. */
 export type CollabAccess = 'write' | 'read';
@@ -18,14 +20,40 @@ export interface CollabDocumentType {
   readonly kind: string;
   /** Πόσα ids έχει το όνομα (1 ή 2) — π.χ. δράση και στοιχείο του ωρολογίου. */
   readonly arity: 1 | 2;
-  /** Τα πεδία του εγγράφου — ένα `Y.Text` ανά πεδίο. */
-  readonly fields: readonly string[];
   /** Ίδιος κανόνας με το `GET` (βλέπει) και το `PATCH` (γράφει) της οντότητας. */
   access(user: RequestUser, ids: readonly string[]): Promise<CollabAccess | null>;
-  /** Οι τιμές των πεδίων στη βάση — για το πρώτο γέμισμα. `null` αν η οντότητα δεν υπάρχει. */
+  /** Πρώτο γέμισμα του (άδειου) εγγράφου από τη βάση. `false` αν η οντότητα δεν υπάρχει. */
+  seed(doc: Doc, ids: readonly string[]): Promise<boolean>;
+  /** Γράφει την κατάσταση του εγγράφου στην οντότητα (εκτύπωση, εξαγωγές, `GET`). */
+  project(doc: Doc, ids: readonly string[]): Promise<void>;
+}
+
+/**
+ * Το συνηθισμένο είδος: απλά κείμενα, ένα `Y.Text` ανά πεδίο, που γράφονται ως
+ * τιμές στα αντίστοιχα πεδία της οντότητας.
+ */
+export function textDocument(spec: {
+  kind: string;
+  arity: 1 | 2;
+  fields: readonly string[];
+  access(user: RequestUser, ids: readonly string[]): Promise<CollabAccess | null>;
+  /** Οι τιμές των πεδίων στη βάση· `null` αν η οντότητα δεν υπάρχει. */
   load(ids: readonly string[]): Promise<Record<string, string> | null>;
-  /** Γράφει τις απλές τιμές στα πεδία της οντότητας (εκτύπωση, εξαγωγές, `GET`). */
-  project(ids: readonly string[], values: Record<string, string>): Promise<void>;
+  /** Γράφει τις τιμές στην οντότητα. */
+  save(ids: readonly string[], values: Record<string, string>): Promise<void>;
+}): CollabDocumentType {
+  return {
+    kind: spec.kind,
+    arity: spec.arity,
+    access: (user, ids) => spec.access(user, ids),
+    seed: async (doc, ids) => {
+      const values = await spec.load(ids);
+      if (!values) return false;
+      seedTexts(doc, values);
+      return true;
+    },
+    project: (doc, ids) => spec.save(ids, readFields(doc, spec.fields)),
+  };
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;

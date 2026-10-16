@@ -3,7 +3,7 @@ import { COLLAB_FIELDS, TOPIKO_SYMVOULIA, can, type KladosType } from '@trifylli
 import type { RequestUser } from '../../common/auth/types';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { accessProfileOf, hasCapabilityFor } from '../../common/util/klados-scope';
-import type { CollabAccess, CollabDocumentType } from '../collab/collab-documents';
+import { textDocument, type CollabAccess } from '../collab/collab-documents';
 import { CollabService } from '../collab/collab.service';
 
 /**
@@ -13,18 +13,23 @@ import { CollabService } from '../collab/collab.service';
  * αλλάξει (`PATCH`) — και κανείς μετά την οριστικοποίηση.
  */
 @Injectable()
-export class SymvoulioCollab implements CollabDocumentType, OnModuleInit {
-  readonly kind = 'symvoulio';
-  readonly arity = 1;
-  readonly fields = COLLAB_FIELDS.symvoulio;
-
+export class SymvoulioCollab implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly collab: CollabService,
   ) {}
 
   onModuleInit(): void {
-    this.collab.registry.register(this);
+    this.collab.registry.register(
+      textDocument({
+        kind: 'symvoulio',
+        arity: 1,
+        fields: COLLAB_FIELDS.symvoulio,
+        access: (user, ids) => this.access(user, ids),
+        load: (ids) => this.load(ids),
+        save: (ids, values) => this.save(ids, values),
+      }),
+    );
   }
 
   async access(user: RequestUser, [id]: readonly string[]): Promise<CollabAccess | null> {
@@ -51,7 +56,7 @@ export class SymvoulioCollab implements CollabDocumentType, OnModuleInit {
     return symvoulio ? { agenda: symvoulio.agenda ?? '', minutes: symvoulio.minutes ?? '' } : null;
   }
 
-  async project([id]: readonly string[], values: Record<string, string>): Promise<void> {
+  async save([id]: readonly string[], values: Record<string, string>): Promise<void> {
     await this.prisma.symvoulio.update({ where: { id }, data: { agenda: values.agenda, minutes: values.minutes } });
   }
 }

@@ -7,7 +7,7 @@ import { parseCollabToken, readFields, seedDocument } from './collab-yjs';
 const ID = '3f2b8c1e-9a4d-4f6b-8e2a-1c5d7e9f0a3b';
 
 function fakeType(kind: string, arity: 1 | 2 = 1): CollabDocumentType {
-  return { kind, arity, fields: ['text'], access: async () => 'write', load: async () => ({ text: '' }), project: async () => undefined };
+  return { kind, arity, access: async () => 'write', seed: async () => true, project: async () => undefined };
 }
 
 describe('γέμισμα εγγράφου', () => {

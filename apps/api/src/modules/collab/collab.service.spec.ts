@@ -6,7 +6,7 @@ import { COLLAB_PROTOCOL, CollabRejection } from '@trifylli/shared';
 import WebSocket from 'ws';
 import { Doc } from 'yjs';
 import type { RequestUser } from '../../common/auth/types';
-import type { CollabAccess, CollabDocumentType } from './collab-documents';
+import { textDocument, type CollabAccess, type CollabDocumentType } from './collab-documents';
 import { CollabService } from './collab.service';
 
 /**
@@ -55,16 +55,16 @@ describe('CollabService', () => {
   const rows = new Map<string, { name: string; state: Buffer; generation: string }>();
   const clients: HocuspocusProvider[] = [];
 
-  const noteType: CollabDocumentType = {
+  const noteType: CollabDocumentType = textDocument({
     kind: 'note',
     arity: 1,
     fields: ['text'],
     access: async (u) => access[u.id] ?? null,
     load: async () => ({ ...entity }),
-    project: async (_id, values) => {
+    save: async (_id, values) => {
       entity.text = values.text ?? '';
     },
-  };
+  });
 
   const prisma = {
     collabDocument: {

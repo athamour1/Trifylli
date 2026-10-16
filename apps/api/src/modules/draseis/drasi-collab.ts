@@ -3,7 +3,7 @@ import { DrasiStatus } from '@prisma/client';
 import { COLLAB_FIELDS, drasiCan, drasiEditScope, type DrasiPerm } from '@trifylli/shared';
 import type { RequestUser } from '../../common/auth/types';
 import { PrismaService } from '../../common/prisma/prisma.service';
-import type { CollabAccess, CollabDocumentType } from '../collab/collab-documents';
+import { textDocument, type CollabAccess, type CollabDocumentType } from '../collab/collab-documents';
 import { projectedText } from '../collab/collab-fields';
 import { CollabService } from '../collab/collab.service';
 import { DrasiAccessService } from './drasi-access.service';
@@ -47,7 +47,7 @@ export class DrasiCollab implements OnModuleInit {
 
   private types(): CollabDocumentType[] {
     const prisma = this.prisma;
-    return [
+    const specs: Parameters<typeof textDocument>[0][] = [
       {
         kind: 'drasi:settings',
         arity: 1,
@@ -57,7 +57,7 @@ export class DrasiCollab implements OnModuleInit {
           const drasi = await prisma.drasi.findUnique({ where: { id: drasiId }, select: { description: true } });
           return drasi ? { description: drasi.description ?? '' } : null;
         },
-        project: async ([drasiId], values) => {
+        save: async ([drasiId], values) => {
           await prisma.drasi.updateMany({ where: { id: drasiId }, data: { description: projectedText(values.description) } });
         },
       },
@@ -70,7 +70,7 @@ export class DrasiCollab implements OnModuleInit {
           const drasi = await prisma.drasi.findUnique({ where: { id: drasiId }, select: { mythosText: true } });
           return drasi ? { text: drasi.mythosText ?? '' } : null;
         },
-        project: async ([drasiId], values) => {
+        save: async ([drasiId], values) => {
           await prisma.drasi.updateMany({ where: { id: drasiId }, data: { mythosText: projectedText(values.text) } });
         },
       },
@@ -91,7 +91,7 @@ export class DrasiCollab implements OnModuleInit {
           const character = await prisma.drasiCharacter.findFirst({ where: { id: characterId, drasiId }, select: { lore: true } });
           return character ? { lore: character.lore ?? '' } : null;
         },
-        project: async ([drasiId, characterId], values) => {
+        save: async ([drasiId, characterId], values) => {
           await prisma.drasiCharacter.updateMany({ where: { id: characterId, drasiId }, data: { lore: projectedText(values.lore) } });
         },
       },
@@ -114,7 +114,7 @@ export class DrasiCollab implements OnModuleInit {
           const item = await prisma.drasiScheduleItem.findFirst({ where: { id: itemId, drasiId }, select: { description: true } });
           return item ? { description: item.description ?? '' } : null;
         },
-        project: async ([drasiId, itemId], values) => {
+        save: async ([drasiId, itemId], values) => {
           await prisma.drasiScheduleItem.updateMany({ where: { id: itemId, drasiId }, data: { description: projectedText(values.description) } });
         },
       },
@@ -135,11 +135,12 @@ export class DrasiCollab implements OnModuleInit {
           });
           return item ? { recipe: item.meal?.recipe ?? '' } : null;
         },
-        project: async ([, itemId], values) => {
+        save: async ([, itemId], values) => {
           const recipe = projectedText(values.recipe);
           await prisma.drasiMeal.upsert({ where: { itemId }, create: { itemId: itemId!, recipe }, update: { recipe } });
         },
       },
     ];
+    return specs.map(textDocument);
   }
 }

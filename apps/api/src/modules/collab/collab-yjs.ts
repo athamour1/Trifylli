@@ -2,20 +2,31 @@ import { COLLAB_GENERATION_KEY, COLLAB_META, type CollabTokenPayload } from '@tr
 import type { Doc } from 'yjs';
 
 /**
- * Πρώτο γέμισμα ενός εγγράφου από τη βάση — **μόνο** ο server το κάνει.
+ * Πρώτο γέμισμα κειμένων από τη βάση — **μόνο** ο server το κάνει.
  *
  * Αν γέμιζε ο client, δύο που ανοίγουν μαζί θα έγραφαν το ίδιο κείμενο από δύο
- * ανεξάρτητες εισαγωγές και η ένωσή τους θα ήταν διπλό κείμενο. Για τον ίδιο
- * λόγο το γέμισμα παίρνει νέα γενιά: ένα αντίγραφο συσκευής από προηγούμενο
- * γέμισμα δεν πρέπει να ενωθεί με αυτό.
+ * ανεξάρτητες εισαγωγές και η ένωσή τους θα ήταν διπλό κείμενο.
  */
-export function seedDocument(doc: Doc, values: Record<string, string>, generation: string): void {
+export function seedTexts(doc: Doc, values: Record<string, string>): void {
   doc.transact(() => {
-    doc.getMap(COLLAB_META).set(COLLAB_GENERATION_KEY, generation);
     for (const [field, value] of Object.entries(values)) {
       if (value) doc.getText(field).insert(0, value);
     }
   });
+}
+
+/**
+ * Η γενιά του γεμίσματος: ένα αντίγραφο συσκευής από προηγούμενο γέμισμα δεν
+ * πρέπει να ενωθεί με αυτό (βλ. `CollabService.authenticate`).
+ */
+export function stampGeneration(doc: Doc, generation: string): void {
+  doc.transact(() => doc.getMap(COLLAB_META).set(COLLAB_GENERATION_KEY, generation));
+}
+
+/** Ίδιο με `seedTexts` + `stampGeneration` — για δοκιμές και απλά έγγραφα. */
+export function seedDocument(doc: Doc, values: Record<string, string>, generation: string): void {
+  seedTexts(doc, values);
+  stampGeneration(doc, generation);
 }
 
 /** Οι απλές τιμές των πεδίων — ό,τι γράφεται στην οντότητα. */

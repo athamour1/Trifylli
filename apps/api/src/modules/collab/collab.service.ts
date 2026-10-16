@@ -38,7 +38,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
 import { CollabAuthService } from './collab-auth.service';
 import { CollabDocumentRegistry, type CollabAccess } from './collab-documents';
-import { parseCollabToken, readFields, seedDocument } from './collab-yjs';
+import { parseCollabToken, stampGeneration } from './collab-yjs';
 
 /** Ό,τι ξέρει ο server για μια σύνδεση, μετά τον έλεγχο. */
 export interface CollabContext {
@@ -270,10 +270,9 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
 
     // Πρώτο άνοιγμα: γεμίζει από τα σημερινά πεδία και σώζεται αμέσως, ώστε η
     // γενιά να είναι γνωστή πριν συνδεθεί δεύτερος.
-    const values = await target.type.load(target.ids);
-    if (!values) throw reject(CollabRejection.FORBIDDEN);
+    if (!(await target.type.seed(document, target.ids))) throw reject(CollabRejection.FORBIDDEN);
     const generation = randomUUID();
-    seedDocument(document, values, generation);
+    stampGeneration(document, generation);
     await this.prisma.collabDocument.create({
       data: { name: documentName, state: Buffer.from(encodeStateAsUpdate(document)), generation },
     });
@@ -293,7 +292,7 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
         create: { name: documentName, state, generation },
         update: { state },
       });
-      await target.type.project(target.ids, readFields(document, target.type.fields));
+      await target.type.project(document, target.ids);
     } catch (error) {
       // Το έγγραφο μένει στη μνήμη και ξαναδοκιμάζει στην επόμενη αλλαγή.
       this.logger.error({ event: 'collab-store-failed', document: documentName, message: (error as Error).message });
