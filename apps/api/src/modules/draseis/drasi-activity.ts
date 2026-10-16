@@ -62,7 +62,11 @@ export class DrasiActivityService implements OnModuleInit {
     this.collab.onDocumentWritten((name, writers) => {
       const target = activityOfDocument(name);
       if (!target) return;
-      for (const userId of writers) void this.record(target.drasiId, userId, target.topic, 'write');
+      for (const userId of writers) {
+        void this.record(target.drasiId, userId, target.topic, 'write');
+        // Και στο δωμάτιο της δράσης: η σελίδα βάζει σημαδάκι στην ενότητα.
+        this.collab.broadcast(collabDocument.drasiRoom(target.drasiId), { topic: target.topic, by: userId, origin: null });
+      }
     });
   }
 
