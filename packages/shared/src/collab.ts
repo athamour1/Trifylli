@@ -55,15 +55,35 @@ export function collabShortName(firstName: string, lastName: string): string {
   return [firstName.trim(), initial ? `${initial}.` : ''].filter(Boolean).join(' ');
 }
 
-/** Τα ονόματα των εγγράφων — ίδια στον server και στον client. */
+/**
+ * Τα ονόματα των εγγράφων — ίδια στον server και στον client. Τα έγγραφα μιας
+ * δράσης ξεκινούν όλα με `drasi:<id>:`, ώστε να κλείνουν ή να σβήνουν μαζί.
+ */
 export const collabDocument = {
   /** Συμβούλιο: ατζέντα και πρακτικά. */
   symvoulio: (id: string) => `symvoulio:${id}`,
+  /** Δράση: η περιγραφή (Ρυθμίσεις). */
+  drasiSettings: (drasiId: string) => `drasi:${drasiId}:settings`,
+  /** Δράση: η ιστορία του μύθου. */
+  drasiMythos: (drasiId: string) => `drasi:${drasiId}:mythos`,
+  /** Ρόλος του μύθου: το lore. */
+  drasiCharacter: (drasiId: string, characterId: string) => `drasi:${drasiId}:character:${characterId}`,
+  /** Στοιχείο του ωρολογίου: το προγραμματικό. */
+  drasiItem: (drasiId: string, itemId: string) => `drasi:${drasiId}:item:${itemId}`,
+  /** Γεύμα: η συνταγή. */
+  drasiMeal: (drasiId: string, itemId: string) => `drasi:${drasiId}:meal:${itemId}`,
+  /** Το πρόθεμα όλων των εγγράφων μιας δράσης. */
+  drasiPrefix: (drasiId: string) => `drasi:${drasiId}:`,
 } as const;
 
 /** Τα πεδία κάθε εγγράφου (ένα `Y.Text` ανά πεδίο). */
 export const COLLAB_FIELDS = {
   symvoulio: ['agenda', 'minutes'],
+  drasiSettings: ['description'],
+  drasiMythos: ['text'],
+  drasiCharacter: ['lore'],
+  drasiItem: ['description'],
+  drasiMeal: ['recipe'],
 } as const;
 
 /**
