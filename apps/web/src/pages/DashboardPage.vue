@@ -25,6 +25,11 @@
                 <q-badge v-if="d.status === 'KLEISTI'" color="grey-7" label="Κλειστή" />
               </div>
               <div class="text-caption text-grey-7 q-mt-xs">{{ formatDateRange(d.dateStart, d.dateEnd) }}</div>
+              <!-- Ποιοι δουλεύουν τώρα σε αυτή τη δράση. -->
+              <div v-if="presence[d.id]?.length" class="row items-center q-gutter-xs q-mt-sm">
+                <CollabPresence :peers="presence[d.id] ?? []" compact />
+                <span class="text-caption text-grey-7">δουλεύουν τώρα</span>
+              </div>
               <div v-if="d.roles.length" class="row q-gutter-xs q-mt-sm">
                 <q-chip v-for="r in d.roles" :key="r" dense square class="q-ma-none my-drasi__role" :label="DRASI_ROLE_LABEL[r]" />
               </div>
@@ -133,9 +138,10 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { onBeforeUnmount, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
-import { DRASI_ROLE_LABEL, KLADOS_LABEL, type CalendarEvent, type MyDrasiView } from '@trifylli/shared';
+import { DRASI_ROLE_LABEL, KLADOS_LABEL, type CalendarEvent, type CollabPresenceUser, type MyDrasiView } from '@trifylli/shared';
+import CollabPresence from '../components/CollabPresence.vue';
 import PageState from '../components/PageState.vue';
 import { useAsyncData } from '../composables/useAsyncData';
 import { get } from '../lib/api';
@@ -160,12 +166,30 @@ const { data, loading, error, stale, reload } = useAsyncData(
   { cacheKey: 'dashboard', immediate: !auth.isExternal },
 );
 const myDraseis = ref<MyDrasiView[]>([]);
+/** Ποιοι δουλεύουν τώρα σε κάθε δράση — ανανεώνεται κάθε λεπτό όσο είσαι εδώ. */
+const presence = ref<Record<string, CollabPresenceUser[]>>({});
+async function loadPresence(): Promise<void> {
+  if (!myDraseis.value.length || document.hidden) return;
+  try {
+    presence.value = await get<Record<string, CollabPresenceUser[]>>('/draseis/presence', {
+      params: { ids: myDraseis.value.map((d) => d.id).join(',') },
+    });
+  } catch {
+    // Δευτερεύον — οι κάρτες δουλεύουν και χωρίς.
+  }
+}
+let presenceTimer: ReturnType<typeof setInterval> | null = null;
 onMounted(async () => {
   try {
     myDraseis.value = await get<MyDrasiView[]>('/draseis/mine');
   } catch {
     // Χωρίς τη λίστα, η Αρχική δουλεύει όπως πριν.
   }
+  void loadPresence();
+  presenceTimer = setInterval(() => void loadPresence(), 60_000);
+});
+onBeforeUnmount(() => {
+  if (presenceTimer) clearInterval(presenceTimer);
 });
 
 const KIND_ICON: Record<CalendarEvent['kind'], string> = {
