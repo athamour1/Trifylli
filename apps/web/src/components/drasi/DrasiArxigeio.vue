@@ -216,16 +216,21 @@ const rolesOf = (list: readonly DrasiRoleView[]): RolesMap => {
   for (const r of list) next[r.kind].push(r.user.id);
   return next;
 };
-/** Ό,τι έφερε τελευταίο ο server — αν η φόρμα διαφέρει, ο χρήστης γράφει και δεν έχει σώσει. */
-let loaded = JSON.stringify(roles.value);
+/**
+ * Από πού ξεκίνησε ο χρήστης: ό,τι έφερε τελευταίο ο server. Αν η φόρμα διαφέρει,
+ * γράφει και δεν έχει σώσει — και η αποθήκευση στέλνει μόνο τις δικές του
+ * αλλαγές από εκεί, όχι «ό,τι λείπει» σε σχέση με όσα πρόσθεσαν άλλοι στο μεταξύ.
+ */
+let startedFrom = rolesOf([]);
+const untouched = (): boolean => JSON.stringify(roles.value) === JSON.stringify(startedFrom);
 watch(
   () => props.roles,
   (list) => {
     // Οι ρόλοι ξαναέρχονται και όταν αλλάζει κάτι κάποιος άλλος (ζωντανά): ό,τι
     // διαλέγει ο χρήστης αυτή τη στιγμή δεν το πατάει η ανανέωση.
-    if (JSON.stringify(roles.value) !== loaded) return;
+    if (!untouched()) return;
     roles.value = rolesOf(list);
-    loaded = JSON.stringify(roles.value);
+    startedFrom = rolesOf(list);
   },
   { immediate: true },
 );
@@ -352,16 +357,16 @@ const saving = ref(false);
 async function save(): Promise<void> {
   saving.value = true;
   try {
-    const server = rolesOf(props.roles);
     for (const kind of Object.values(DrasiRoleKind)) {
       if (!DRASI_ARXIGEIO_KINDS.includes(kind)) continue;
-      const before = new Set(server[kind]);
+      const before = new Set(startedFrom[kind]);
       const after = new Set(roles.value[kind]);
       for (const userId of after) if (!before.has(userId)) await post(`/draseis/${props.drasiId}/roles/${kind}/${userId}`, {});
       for (const userId of before) if (!after.has(userId)) await del(`/draseis/${props.drasiId}/roles/${kind}/${userId}`);
     }
-    // Σώθηκε: η επόμενη φόρτωση ξαναγράφει τη φόρμα με ό,τι έχει ο server.
-    loaded = JSON.stringify(roles.value);
+    // Σώθηκε: η επόμενη φόρτωση ξαναγράφει τη φόρμα με ό,τι έχει ο server
+    // (μαζί με όσα πρόσθεσαν οι άλλοι στο μεταξύ).
+    startedFrom = JSON.parse(JSON.stringify(roles.value)) as RolesMap;
     $q.notify({ type: 'positive', message: 'Το αρχηγείο αποθηκεύτηκε.' });
     emit('changed');
   } catch (err) {
