@@ -16,7 +16,11 @@
             >
               {{ summary.marked }} / {{ sheet.entries.length }}
             </q-chip>
-            <SaveStatus :status="saveStatus" @retry="saveNow" />
+            <div class="row items-center q-gutter-xs no-wrap">
+              <!-- Ποιος άλλος είναι τώρα σε αυτή τη συγκέντρωση. -->
+              <CollabPresence :peers="room.peers.value" />
+              <SaveStatus :status="saveStatus" @retry="saveNow" />
+            </div>
           </div>
         </div>
 
@@ -81,13 +85,18 @@ import {
   KLADOS_LABEL,
   PAROUSIA_LABEL,
   MEMBER_KIND_LABEL,
+  collabDocument,
   type KladosType,
   type ParousiaStatus,
   type MemberKind,
 } from '@trifylli/shared';
+import CollabPresence from '../components/CollabPresence.vue';
 import PageState from '../components/PageState.vue';
 import SaveStatus from '../components/SaveStatus.vue';
 import { useAsyncData } from '../composables/useAsyncData';
+import { useCollabDoc, useCollabMe } from '../composables/useCollabDoc';
+import { useLiveReload } from '../composables/useLiveChanges';
+import { markEntries, mergeMarks, settle, type PendingMark } from '../lib/attendance';
 import { useKladosThemeStore } from '../stores/klados-theme';
 import { ApiError, get } from '../lib/api';
 import { formatDate } from '../lib/format';
@@ -149,28 +158,31 @@ const AUTOSAVE_DELAY_MS = 900;
 
 /** Τοπική κατάσταση σημάνσεων· γεμίζει από το φύλλο και επιβιώνει offline. */
 const marks = reactive<Record<string, ParousiaStatus | undefined>>({});
+/**
+ * Οι σημάνσεις που δεν έχουν σταλεί ακόμη, με τη στιγμή που πατήθηκαν. Μόνο
+ * αυτές φεύγουν (βλ. `markEntries`) — ποτέ όλο το φύλλο της οθόνης.
+ */
+const pending = reactive(new Map<string, PendingMark>());
+const dirty = computed(() => pending.size > 0);
 
 const saveStatus = ref<SaveState>('clean');
-const dirty = ref(false);
 let timer: ReturnType<typeof setTimeout> | null = null;
 
-/** Κρατά κλειστό τον watcher της αποθήκευσης όσο γεμίζει η φόρμα από τον server. */
-let hydrating = false;
-
+/** Από τον server — και ξανά όταν σημειώνει κάποιος άλλος (ζωντανά): οι δικές μας που δεν στάλθηκαν μένουν. */
 watch(
   sheet,
   (value) => {
-    if (!value || dirty.value) return;
-    hydrating = true;
-    for (const entry of value.entries) {
-      if (entry.status) marks[entry.memberId] = entry.status;
-    }
-    void Promise.resolve().then(() => {
-      hydrating = false;
-    });
+    if (!value) return;
+    const next = mergeMarks(value.entries, pending);
+    for (const key of Object.keys(marks)) if (!(key in next)) delete marks[key];
+    Object.assign(marks, next);
   },
   { immediate: true },
 );
+
+// ── Ζωντανά: ποιος άλλος σημειώνει, και οι σημάνσεις του ──
+const room = useCollabDoc(collabDocument.syggentrwsh(id), useCollabMe(), { persist: false });
+useLiveReload(['parousiologio'], reload, { subscribe: room.onChange });
 
 const summary = computed(() => {
   const counts: Record<ParousiaStatus, number> = {
@@ -188,32 +200,39 @@ const summary = computed(() => {
   return { counts, marked };
 });
 
+function setMark(memberId: string, status: ParousiaStatus | undefined, at: string): void {
+  marks[memberId] = status;
+  // Αναίρεση σήμανσης που δεν στάλθηκε: δεν φεύγει τίποτα. Ο server δεν σβήνει
+  // καταχωρήσεις — μια σταλμένη σήμανση αλλάζει μόνο με άλλη σήμανση.
+  if (status) pending.set(memberId, { status, recordedAt: at });
+  else pending.delete(memberId);
+  scheduleSave();
+}
+
 function mark(memberId: string, status: ParousiaStatus): void {
   // Δεύτερο πάτημα στην ίδια επιλογή την αναιρεί — βοηθά όταν πατηθεί κατά λάθος.
-  marks[memberId] = marks[memberId] === status ? undefined : status;
+  setMark(memberId, marks[memberId] === status ? undefined : status, new Date().toISOString());
 }
 
 function markAll(status: ParousiaStatus): void {
-  for (const entry of sheet.value?.entries ?? []) marks[entry.memberId] = status;
+  const at = new Date().toISOString();
+  for (const entry of sheet.value?.entries ?? []) setMark(entry.memberId, status, at);
 }
 
+/** Αδειάζει την οθόνη (και ό,τι δεν στάλθηκε) — όχι τον server. */
 function clearAll(): void {
   for (const key of Object.keys(marks)) delete marks[key];
+  pending.clear();
+  scheduleSave();
 }
 
 // ───────────────────────── Αυτόματη αποθήκευση ─────────────────────────
 
-watch(
-  marks,
-  () => {
-    if (hydrating) return;
-    dirty.value = true;
-    saveStatus.value = 'pending';
-    if (timer) clearTimeout(timer);
-    timer = setTimeout(() => void saveNow(), AUTOSAVE_DELAY_MS);
-  },
-  { deep: true },
-);
+function scheduleSave(): void {
+  saveStatus.value = pending.size ? 'pending' : 'clean';
+  if (timer) clearTimeout(timer);
+  if (pending.size) timer = setTimeout(() => void saveNow(), AUTOSAVE_DELAY_MS);
+}
 
 /**
  * Το `recordedAt` είναι η **στιγμή της συμπλήρωσης**, όχι της αποστολής.
@@ -226,22 +245,11 @@ async function saveNow(): Promise<void> {
   }
   if (!dirty.value || !sheet.value) return;
 
-  const entries = Object.entries(marks)
-    .filter((pair): pair is [string, ParousiaStatus] => pair[1] !== undefined)
-    .map(([memberId, status]) => ({ memberId, status }));
-
-  // Καμία σήμανση δεν σημαίνει τίποτα να σταλεί: το API γράφει καταχωρήσεις,
-  // δεν τις σβήνει. Ο «Καθαρισμός» αδειάζει την οθόνη, όχι τον server.
-  if (!entries.length) {
-    dirty.value = false;
-    saveStatus.value = 'clean';
-    return;
-  }
-
+  const entries = markEntries(pending);
   saveStatus.value = 'saving';
   try {
-    // `replace`: η οθόνη στέλνει κάθε φορά ολόκληρο το φύλλο, οπότε μια παλιότερη
-    // εκδοχή στην ουρά δεν προσθέτει τίποτα — μόνο θόρυβο στον συγχρονισμό.
+    // `replace`: κάθε αποστολή έχει **όλες** τις σημάνσεις που δεν έχουν φτάσει
+    // ακόμη, οπότε μια παλιότερη στην ουρά δεν προσθέτει τίποτα.
     const result = await offline.submit<{ written: number; stale: unknown[] }>(
       'PUT',
       `/parousiologio/syggentrwsh/${id}`,
@@ -249,14 +257,16 @@ async function saveNow(): Promise<void> {
       { replace: true },
     );
 
-    dirty.value = false;
-
     if (result.queued) {
+      // Στην ουρά της συσκευής: φεύγει μόνη της με την επιστροφή του δικτύου. Οι
+      // σημάνσεις μένουν «σε αναμονή»: η επόμενη αποστολή (που αντικαθιστά αυτή
+      // στην ουρά) πρέπει να τις έχει όλες.
       saveStatus.value = 'offline';
       return;
     }
 
-    saveStatus.value = 'saved';
+    settle(pending, entries);
+    saveStatus.value = pending.size ? 'pending' : 'saved';
 
     // Μόνο όταν ο server απέρριψε κάτι αξίζει διακοπή: σε κανονική αποθήκευση
     // μιλάει η ένδειξη, χωρίς ένα μήνυμα σε κάθε πάτημα.
