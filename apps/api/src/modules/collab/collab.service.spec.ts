@@ -84,7 +84,12 @@ describe('CollabService', () => {
   /** Πότε λήγει το token σε κάθε έλεγχο (με τη σειρά)· κενό = δεν λήγει. */
   const expiries: number[] = [];
   const auth = {
-    verify: async (token: string) => (USERS[token] ? { user: USERS[token], expiresAt: expiries.shift() ?? null } : null),
+    verify: async (token: string) =>
+      token === 'anaklithike'
+        ? 'no-access'
+        : USERS[token]
+          ? { user: USERS[token], expiresAt: expiries.shift() ?? null }
+          : 'invalid',
   };
 
   function connect(token: string, options: { g?: string; p?: number; origin?: string } = {}) {
@@ -191,6 +196,7 @@ describe('CollabService', () => {
   it.each([
     ['παλιά έκδοση εφαρμογής', { p: COLLAB_PROTOCOL - 1 }, 'maria', CollabRejection.UPDATE_REQUIRED],
     ['άκυρο token', {}, 'agnwstos', CollabRejection.UNAUTHENTICATED],
+    ['λογαριασμό που έχασε την πρόσβαση', {}, 'anaklithike', CollabRejection.FORBIDDEN],
     ['χωρίς πρόσβαση', {}, 'sofia', CollabRejection.FORBIDDEN],
   ] as const)('απορρίπτει %s με λόγο που καταλαβαίνει ο client', async (_label, options, token, reason) => {
     access['u-sofia'] = null;

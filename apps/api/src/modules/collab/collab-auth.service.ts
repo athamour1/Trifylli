@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { ForbiddenException, Inject, Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { JwksClient } from 'jwks-rsa';
 import { AppConfigToken } from '../../common/config/config.module';
@@ -12,6 +12,12 @@ export interface CollabIdentity {
   /** Πότε λήγει το token (ms) — τότε κλείνει και η σύνδεση. `null` στο dev bypass. */
   expiresAt: number | null;
 }
+
+/**
+ * Γιατί δεν έγινε δεκτό: `invalid` = άκυρο ή ληγμένο token (ο client το ανανεώνει),
+ * `no-access` = ο λογαριασμός δεν έχει πια πρόσβαση (ένα νέο token δεν αλλάζει τίποτα).
+ */
+export type CollabVerifyFailure = 'invalid' | 'no-access';
 
 /**
  * Ποιος συνδέεται στο WebSocket της συνεργασίας.
@@ -35,8 +41,8 @@ export class CollabAuthService {
       : new JwksClient({ jwksUri: config.OIDC_JWKS_URI, cache: true, rateLimit: true, jwksRequestsPerMinute: 10 });
   }
 
-  /** Ο λογαριασμός του token, ή `null` αν το token δεν ισχύει ή ο λογαριασμός δεν έχει πρόσβαση. */
-  async verify(token: string): Promise<CollabIdentity | null> {
+  /** Ο λογαριασμός του token — ή γιατί δεν έγινε δεκτό. */
+  async verify(token: string): Promise<CollabIdentity | CollabVerifyFailure> {
     try {
       if (!this.jwks) {
         // Dev bypass: ο client στέλνει το email του λογαριασμού, όπως το `x-dev-email`.
@@ -53,8 +59,8 @@ export class CollabAuthService {
       });
       const user = await this.directory.resolveFromToken(tokenIdentity(payload));
       return { user, expiresAt: typeof payload.exp === 'number' ? payload.exp * 1000 : null };
-    } catch {
-      return null;
+    } catch (error) {
+      return error instanceof ForbiddenException ? 'no-access' : 'invalid';
     }
   }
 }

@@ -169,7 +169,8 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
     if (!target || this.removed.has(data.documentName)) throw refuse(CollabRejection.FORBIDDEN);
 
     const identity = await this.auth.verify(token.t);
-    if (!identity) throw refuse(CollabRejection.UNAUTHENTICATED);
+    if (identity === 'no-access') throw refuse(CollabRejection.FORBIDDEN);
+    if (identity === 'invalid') throw refuse(CollabRejection.UNAUTHENTICATED);
     const access = await target.type.access(identity.user, target.id);
     if (!access) throw refuse(CollabRejection.FORBIDDEN, identity.user.id);
 
@@ -242,8 +243,8 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
   /** Το νέο token του client: ίδιος λογαριασμός, νέα λήξη. */
   private async tokenSynced(token: string, connection: Connection<CollabContext>, userId: string | undefined): Promise<void> {
     const parsed = parseCollabToken(token);
-    const identity = parsed ? await this.auth.verify(parsed.t) : null;
-    if (!identity || identity.user.id !== userId) throw reject(CollabRejection.UNAUTHENTICATED);
+    const identity = parsed ? await this.auth.verify(parsed.t) : 'invalid';
+    if (typeof identity === 'string' || identity.user.id !== userId) throw reject(CollabRejection.UNAUTHENTICATED);
     this.watchToken(connection, identity.expiresAt);
   }
 
