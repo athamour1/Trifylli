@@ -843,6 +843,26 @@ export interface DrasiDiatrofologioView {
 }
 
 /** Η σελίδα ενός γεύματος. */
+/** Μία γραμμή της ροής δραστηριότητας της δράσης (βλ. `DrasiActivityView`). */
+export interface DrasiActivityEvent {
+  id: string;
+  /** Το σημείο: το κομμάτι της διαδρομής του API (`schedule`, `groups`…) ή κοινό έγγραφο (`doc:item`…). */
+  topic: string;
+  /** `add`, `change`, `remove` ή `write` (σε κοινό έγγραφο). */
+  verb: string;
+  /** Πόσες συνεχόμενες αλλαγές του ίδιου ατόμου μαζεύει η γραμμή. */
+  count: number;
+  /** Η τελευταία της. */
+  at: string;
+  actor: { id: string; firstName: string; lastName: string } | null;
+}
+
+/** Η ροή δραστηριότητας και πότε την είδε τελευταία φορά ο χρήστης. */
+export interface DrasiActivityView {
+  lastSeenAt: string | null;
+  events: DrasiActivityEvent[];
+}
+
 export interface DrasiMealView {
   itemId: string;
   /** YYYY-MM-DD στη ζώνη του Τοπικού. */
