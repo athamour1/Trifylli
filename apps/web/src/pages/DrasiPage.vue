@@ -114,6 +114,7 @@
                 Προσχέδιο: το στήσιμο δεν ολοκληρώθηκε. Δεν εμφανίζεται στο ημερολόγιο μέχρι να ολοκληρωθεί.
               </q-banner>
 
+              <DrasiHeadcounts :drasi-id="id" :can-start="canEdit('rythmiseis')" />
               <DrasiAnnouncements :drasi-id="id" :can-post="canEdit('rythmiseis')" />
 
               <!-- Αριθμοί με μια ματιά -->
@@ -418,6 +419,7 @@ import {
 import CollabPresence from '../components/CollabPresence.vue';
 import PageState from '../components/PageState.vue';
 import DrasiAnnouncements from '../components/drasi/DrasiAnnouncements.vue';
+import DrasiHeadcounts from '../components/drasi/DrasiHeadcounts.vue';
 import DrasiApprovals from '../components/drasi/DrasiApprovals.vue';
 import DrasiAxiologisi from '../components/drasi/DrasiAxiologisi.vue';
 import DrasiArxigeio from '../components/drasi/DrasiArxigeio.vue';
