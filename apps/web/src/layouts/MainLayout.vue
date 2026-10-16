@@ -171,10 +171,12 @@
       <!-- `key` στο id της διαδρομής: οι σελίδες λεπτομέρειας (δράση, συγκέντρωση,
            συμβούλιο, μέλος) διαβάζουν το id μία φορά, και από δράση σε δράση το Vue
            Router ξαναχρησιμοποιεί το ίδιο component — έμεναν τα δεδομένα της
-           προηγούμενης. Η αλλαγή ενότητας μέσα στην ίδια δράση κρατά το ίδιο key. -->
+           προηγούμενης. Η αλλαγή ενότητας μέσα στην ίδια δράση κρατά το ίδιο key.
+           Οι σελίδες ενός στοιχείου της δράσης (προγραμματικό, γεύμα) ανοίγουν το
+           κοινό του έγγραφο μία φορά: ξαναστήνονται για κάθε στοιχείο. -->
       <router-view v-slot="{ Component, route: viewRoute }">
         <transition name="tf-page" mode="out-in">
-          <component :is="Component" :key="String(viewRoute.params.id ?? viewRoute.name)" />
+          <component :is="Component" :key="String(viewRoute.params.itemId ?? viewRoute.params.id ?? viewRoute.name)" />
         </transition>
       </router-view>
     </q-page-container>

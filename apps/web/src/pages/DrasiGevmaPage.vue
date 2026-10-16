@@ -2,7 +2,8 @@
   <!--
     Ένα γεύμα του διατροφολογίου: τι τρώμε, η συνταγή (Markdown με εικόνες, όπως
     στο προγραμματικό) και το ποσολόγιο. Το γεύμα το ορίζει το πρόγραμμα· εδώ
-    γράφουν μαγείρισσα και τροφοδοσία. Σώζει μόνη της — δεν έχει κουμπί.
+    γράφουν μαγείρισσα και τροφοδοσία — μαζί, ζωντανά: όλα είναι ένα κοινό
+    έγγραφο (`drasi:<id>:meal:<id>`) που σώζεται μόνο του.
   -->
   <q-page padding>
     <PageState :loading="loading && !meal" :error="error" :stale="stale" @retry="reload">
@@ -24,10 +25,12 @@
             </div>
             <div class="col-12 col-sm-auto row items-center q-gutter-sm">
               <CollabPresence :peers="peers" />
-              <SaveStatus v-if="editable" :status="worstSaveState(saveStatus, textState)" @retry="saveNow" />
+              <SaveStatus v-if="editable" :status="saveState" />
             </div>
           </div>
         </div>
+
+        <CollabBanner :status="status" :ready="ready" :editable="editable" target="στο γεύμα" />
 
         <!-- ── Η συνταγή, με το μενού και το ποσολόγιο στο πλάι (δεξιά) ── -->
         <div class="tf-split">
@@ -36,16 +39,17 @@
             <q-separator />
             <q-card-section>
               <q-input
-                v-model="form.menu"
-                :readonly="!editable"
+                :model-value="view.menu"
+                :readonly="!fieldsEditable"
                 label="Τι τρώμε"
                 type="textarea"
                 autogrow
                 outlined
                 dense
                 color="klados"
-                maxlength="500"
+                :maxlength="ROW_LIMITS.menu"
                 placeholder="π.χ. Μακαρόνια με κιμά, σαλάτα, φρούτο"
+                @update:model-value="(value) => setMenu(doc, String(value ?? ''))"
               />
             </q-card-section>
           </q-card>
@@ -53,19 +57,25 @@
           <q-card flat bordered class="tf-split__main">
             <q-card-section>
               <!-- Τη γράφουν μαζί μαγείρισσα και τροφοδοσία — ζωντανά, με κέρσορες. -->
-              <CollabTextField
-                :key="textName"
-                :name="textName"
-                field="recipe"
-                :fallback="meal?.recipe"
+              <CollabMarkdownField
+                v-if="ready"
+                :doc="doc"
+                :field="MEAL_DOC.recipe"
+                :document-name="docName"
+                :awareness="awareness"
                 :klados="drasi.klados?.type ?? null"
-                :readonly="!editable"
+                :readonly="!textEditable"
                 label="Συνταγή"
                 placeholder="Markdown: βήματα, χρόνοι, πόσες μερίδες, τι προσέχουμε… Σύρε ή επικόλλησε εικόνες."
                 empty-text="Δεν έχει γραφτεί συνταγή."
                 :min-height="360"
-                @state="textState = $event"
-                @peers="peers = $event"
+              />
+              <MarkdownField
+                v-else
+                :model-value="meal.recipe ?? ''"
+                readonly
+                :klados="drasi.klados?.type ?? null"
+                empty-text="Δεν έχει γραφτεί συνταγή."
               />
             </q-card-section>
           </q-card>
@@ -78,34 +88,60 @@
             </q-card-section>
             <q-separator />
             <q-card-section class="q-py-sm">
-              <div v-if="!form.ingredients.length" class="text-caption text-grey-6 q-pb-sm">
-                {{ editable ? 'Κενή λίστα.' : 'Δεν έχει γραφτεί ποσολόγιο.' }}
+              <div v-if="!view.ingredients.length" class="text-caption text-grey-6 q-pb-sm">
+                {{ fieldsEditable ? 'Κενή λίστα.' : 'Δεν έχει γραφτεί ποσολόγιο.' }}
               </div>
-              <div v-for="(row, index) in form.ingredients" :key="row.key" class="row items-center q-col-gutter-xs q-mb-xs">
+              <div v-for="row in view.ingredients" :key="row.id" class="row items-center q-col-gutter-xs q-mb-xs">
                 <div class="col-auto">
-                  <q-checkbox v-model="row.bought" :disable="!editable" dense color="klados">
+                  <q-checkbox
+                    :model-value="row.bought"
+                    :disable="!fieldsEditable"
+                    dense
+                    color="klados"
+                    @update:model-value="(value) => updateIngredient(doc, row.id, { bought: value })"
+                  >
                     <q-tooltip>Αγοράστηκε</q-tooltip>
                   </q-checkbox>
                 </div>
                 <div class="col">
                   <q-input
-                    v-model="row.label"
-                    :readonly="!editable"
+                    :model-value="row.label"
+                    :readonly="!fieldsEditable"
                     dense
                     outlined
                     placeholder="π.χ. μακαρόνια"
+                    :data-row-id="row.id"
                     :class="row.bought ? 'text-grey-6' : ''"
-                    @keydown.enter.prevent="addIngredientAfter(index)"
+                    @update:model-value="(value) => updateIngredient(doc, row.id, { label: String(value ?? '') })"
+                    @keydown.enter.prevent="addRow(row.id)"
                   />
                 </div>
                 <div class="col-auto" style="width: 96px">
-                  <q-input v-model="row.qty" :readonly="!editable" dense outlined placeholder="π.χ. 4 kg" @keydown.enter.prevent="addIngredientAfter(index)" />
+                  <q-input
+                    :model-value="row.qty"
+                    :readonly="!fieldsEditable"
+                    dense
+                    outlined
+                    placeholder="π.χ. 4 kg"
+                    :maxlength="ROW_LIMITS.ingredientQty"
+                    @update:model-value="(value) => updateIngredient(doc, row.id, { qty: String(value ?? '') })"
+                    @keydown.enter.prevent="addRow(row.id)"
+                  />
                 </div>
-                <div v-if="editable" class="col-auto">
-                  <q-btn dense flat round size="sm" icon="close" color="negative" @click="form.ingredients.splice(index, 1)" />
+                <div v-if="fieldsEditable" class="col-auto">
+                  <q-btn dense flat round size="sm" icon="close" color="negative" @click="removeIngredient(doc, row.id)" />
                 </div>
               </div>
-              <q-btn v-if="editable" flat dense no-caps color="klados" icon="add" label="Προσθήκη" @click="addIngredientAfter(form.ingredients.length - 1)" />
+              <q-btn
+                v-if="fieldsEditable"
+                flat
+                dense
+                no-caps
+                color="klados"
+                icon="add"
+                label="Προσθήκη"
+                @click="addRow(view.ingredients.at(-1)?.id ?? null)"
+              />
             </q-card-section>
           </q-card>
         </div>
@@ -115,30 +151,35 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue';
-import { useQuasar } from 'quasar';
-import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, shallowRef, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import {
   DRASI_SNACK_LABEL,
+  MEAL_DOC,
+  ROW_LIMITS,
   collabDocument,
   drasiCan,
-  type CollabPresenceUser,
   type DrasiAccess,
   type DrasiMealView,
   type DrasiStatus,
+  type IngredientSnapshot,
   type KladosType,
 } from '@trifylli/shared';
+import CollabBanner from '../components/CollabBanner.vue';
 import CollabPresence from '../components/CollabPresence.vue';
-import CollabTextField from '../components/CollabTextField.vue';
+import MarkdownField from '../components/MarkdownField.vue';
 import PageState from '../components/PageState.vue';
 import SaveStatus from '../components/SaveStatus.vue';
-import { ingredientPayload, sameIngredients, type IngredientRow } from '../components/drasi/types';
 import { useAsyncData } from '../composables/useAsyncData';
-import { ApiError, OfflineError, get, patch } from '../lib/api';
+import { useCollabDoc, useCollabMe } from '../composables/useCollabDoc';
+import { get } from '../lib/api';
+import { addIngredientAfter, hasSchema, readMealDoc, removeIngredient, setMenu, updateIngredient } from '../lib/drasi-docs';
 import { formatDateLong } from '../lib/format';
-import { worstSaveState, type SaveState } from '../lib/save-state';
+import { keepFocus } from '../lib/keep-focus';
 import { useKladosThemeStore } from '../stores/klados-theme';
-import { useOfflineStore } from '../stores/offline';
+
+// CodeMirror φορτώνεται μόνο όταν ανοίξει σελίδα με κείμενα για γράψιμο.
+const CollabMarkdownField = defineAsyncComponent(() => import('../components/CollabMarkdownField.vue'));
 
 interface DrasiHead {
   id: string;
@@ -150,11 +191,10 @@ interface DrasiHead {
 
 const route = useRoute();
 const router = useRouter();
-const $q = useQuasar();
-const offline = useOfflineStore();
 const kladosTheme = useKladosThemeStore();
 const drasiId = String(route.params.id);
-const itemId = computed(() => String(route.params.itemId));
+// Η σελίδα ξαναστήνεται για κάθε γεύμα (βλ. το `key` στο MainLayout).
+const itemId = String(route.params.itemId);
 
 const hm = (iso: string): string => {
   const d = new Date(iso);
@@ -166,11 +206,11 @@ const { data, loading, error, stale, reload } = useAsyncData(
   async () => {
     const [drasi, meal] = await Promise.all([
       get<DrasiHead>(`/draseis/${drasiId}`),
-      get<DrasiMealView>(`/draseis/${drasiId}/diatrofologio/${itemId.value}`),
+      get<DrasiMealView>(`/draseis/${drasiId}/diatrofologio/${itemId}`),
     ]);
     return { drasi, meal };
   },
-  { forbiddenPage: true, cacheKey: `drasi-gevma:${drasiId}:${itemId.value}` },
+  { forbiddenPage: true, cacheKey: `drasi-gevma:${drasiId}:${itemId}` },
 );
 const drasi = computed(() => data.value?.drasi ?? null);
 const meal = computed(() => data.value?.meal ?? null);
@@ -184,98 +224,57 @@ watch(
 /** Γράφουν μαγείρισσα, τροφοδοσία και η εφεδρεία (ο ίδιος κανόνας με το API)· κλειστή δράση δεν αλλάζει. */
 const editable = computed(() => !!drasi.value && drasi.value.status !== 'KLEISTI' && drasiCan(drasi.value.access, 'diatrofologio', 'edit'));
 
-// ── Η συνταγή: κοινό έγγραφο, σώζει μόνη της ──
-const textName = computed(() => collabDocument.drasiMeal(drasiId, itemId.value));
-const textState = ref<SaveState>('clean');
-const peers = ref<CollabPresenceUser[]>([]);
+// ── Το γεύμα: κοινό έγγραφο, σώζει μόνο του ──
+const docName = collabDocument.drasiMeal(drasiId, itemId);
+const { doc, awareness, ready, writable, status, peers, saveState } = useCollabDoc(docName, useCollabMe());
 
-// ── Τοπική κατάσταση ──
-const AUTOSAVE_DELAY_MS = 1200;
-const saveStatus = ref<SaveState>('clean');
-const dirty = ref(false);
-let timer: ReturnType<typeof setTimeout> | null = null;
-const form = reactive({
-  menu: '',
-  ingredients: [] as IngredientRow[],
-});
-let hydrating = false;
-/** Το γεύμα που γέμισε τελευταίο τη φόρμα — σε άλλο γεύμα η λίστα ξαναγράφεται. */
-let hydratedId: string | null = null;
-let ingredientKey = 0;
+/** Το γεύμα όπως είναι τώρα στο έγγραφο — ξαναδιαβάζεται σε κάθε αλλαγή, δική μας ή άλλων. */
+const docMeal = shallowRef<ReturnType<typeof readMealDoc> | null>(null);
+const schemaOk = shallowRef(false);
+let stopWatchingDoc: (() => void) | null = null;
 watch(
-  meal,
-  (m) => {
-    // Ό,τι γράφει ο χρήστης αυτή τη στιγμή δεν το πατάει η επαναφόρτωση.
-    if (!m || dirty.value) return;
-    hydrating = true;
-    form.menu = m.menu ?? '';
-    // Μετά την αποθήκευση η λίστα είναι ήδη αυτή του server: δεν ξαναγράφεται,
-    // ώστε να μένουν το focus και η άδεια γραμμή που μόλις προστέθηκε.
-    if (m.itemId !== hydratedId || !sameIngredients(form.ingredients, m.ingredients)) {
-      form.ingredients = m.ingredients.map((y) => ({ key: ++ingredientKey, label: y.label, qty: y.qty, bought: y.bought }));
-    }
-    hydratedId = m.itemId;
-    dirty.value = false;
-    if (saveStatus.value !== 'saved') saveStatus.value = 'clean';
-    // Ο watcher της φόρμας τρέχει μετά από αυτό το sync block (pre-flush), οπότε
-    // κατεβάζουμε τη σημαία στον επόμενο κύκλο.
-    void Promise.resolve().then(() => (hydrating = false));
+  doc,
+  (current) => {
+    stopWatchingDoc?.();
+    const refresh = (): void =>
+      keepFocus(() => {
+        docMeal.value = readMealDoc(current);
+        schemaOk.value = hasSchema(current, MEAL_DOC.schema);
+      });
+    current.on('update', refresh);
+    stopWatchingDoc = () => current.off('update', refresh);
+    refresh();
   },
   { immediate: true },
 );
+onBeforeUnmount(() => stopWatchingDoc?.());
 
-// ── Αυτόματη αποθήκευση ──
-watch(
-  form,
-  () => {
-    if (hydrating || !editable.value) return;
-    dirty.value = true;
-    saveStatus.value = 'pending';
-    if (timer) clearTimeout(timer);
-    timer = setTimeout(() => void saveNow(), AUTOSAVE_DELAY_MS);
-  },
-  { deep: true },
-);
+/** Η συνταγή γράφεται όταν γράφεται το γεύμα **και** ο server το επιτρέπει. */
+const textEditable = computed(() => editable.value && ready.value && writable.value);
+/**
+ * Μενού και ποσολόγιο: επιπλέον, το έγγραφο να έχει έρθει από τον server με
+ * αυτά μέσα — ένα παλιό αντίγραφο συσκευής (μόνο με τη συνταγή) θα έγραφε από κενό.
+ */
+const fieldsEditable = computed(() => textEditable.value && schemaOk.value);
 
-async function saveNow(): Promise<void> {
-  if (timer) {
-    clearTimeout(timer);
-    timer = null;
-  }
-  if (!dirty.value || !editable.value) return;
-  saveStatus.value = 'saving';
-  try {
-    await patch(`/draseis/${drasiId}/diatrofologio/${itemId.value}`, {
-      menu: form.menu.trim() || null,
-      ingredients: ingredientPayload(form.ingredients),
-    });
-    dirty.value = false;
-    saveStatus.value = 'saved';
-    if (!dirty.value) await reload();
-  } catch (err) {
-    if (err instanceof OfflineError) {
-      saveStatus.value = 'offline';
-      return;
-    }
-    saveStatus.value = 'error';
-    $q.notify({ type: 'negative', message: err instanceof ApiError ? err.message : 'Αποτυχία αποθήκευσης.' });
-  }
-}
-watch(
-  () => offline.online,
-  (online) => {
-    if (online && dirty.value) void saveNow();
-  },
-);
-onBeforeRouteLeave(() => {
-  if (dirty.value) void saveNow();
+/** Ό,τι δείχνει η σελίδα: το έγγραφο όταν έχει τα πεδία, αλλιώς ό,τι έφερε το `GET`. */
+const view = computed<{ menu: string; ingredients: IngredientSnapshot[] }>(() => {
+  if (ready.value && schemaOk.value && docMeal.value) return docMeal.value;
+  return {
+    menu: meal.value?.menu ?? '',
+    ingredients: (meal.value?.ingredients ?? []).map((y, order) => ({ ...y, order })),
+  };
 });
 
 // ── Ποσολόγιο ──
-const ingredientCount = computed(() => ingredientPayload(form.ingredients).length);
-const boughtCount = computed(() => ingredientPayload(form.ingredients).filter((y) => y.bought).length);
-function addIngredientAfter(index: number): void {
-  form.ingredients.splice(index + 1, 0, { key: ++ingredientKey, label: '', qty: '', bought: false });
+const filled = computed(() => view.value.ingredients.filter((y) => y.label.trim()));
+const ingredientCount = computed(() => filled.value.length);
+const boughtCount = computed(() => filled.value.filter((y) => y.bought).length);
+
+/** Νέα γραμμή: η εστίαση πάει στο όνομά της, για να συνεχιστεί η πληκτρολόγηση. */
+function addRow(afterId: string | null): void {
+  const id = addIngredientAfter(doc.value, afterId);
+  void nextTick(() => document.querySelector<HTMLInputElement>(`[data-row-id="${id}"]`)?.focus());
 }
 
 // ── Πλοήγηση ──
