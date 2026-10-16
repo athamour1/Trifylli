@@ -21,6 +21,7 @@ import type { RequestUser } from '../../common/auth/types';
 import { CheckoutService } from '../yliko/checkout.service';
 import { DraseisGroupsService } from './draseis-groups.service';
 import { DraseisService } from './draseis.service';
+import { DrasiActivityService } from './drasi-activity';
 import { QueryGuestsDto } from './dto/drasi-groups.dto';
 import { DrasiRoleKind } from '@trifylli/shared';
 import {
@@ -47,6 +48,7 @@ export class DraseisController {
     private readonly checkouts: CheckoutService,
     private readonly groups: DraseisGroupsService,
     private readonly audit: AuditService,
+    private readonly activity: DrasiActivityService,
   ) {}
 
   @Get()
@@ -60,6 +62,13 @@ export class DraseisController {
   @ApiOperation({ summary: 'Οι δράσεις όπου είμαι στέλεχος (για την Αρχική)' })
   mine(@CurrentUser() user: RequestUser) {
     return this.draseis.mine(user);
+  }
+
+  // Χωρίς ικανότητα κλάδου, όπως το `mine`: κάθε δράση ελέγχεται μία-μία.
+  @Get('presence')
+  @ApiOperation({ summary: 'Ποιοι δουλεύουν τώρα σε κάθε δράση (για τις κάρτες της Αρχικής)' })
+  presence(@CurrentUser() user: RequestUser, @Query('ids') ids?: string) {
+    return this.activity.presence(user, (ids ?? '').split(',').filter(Boolean));
   }
 
   @Get('kataskinoseis')
@@ -82,6 +91,20 @@ export class DraseisController {
   @RequireDrasi('episkopisi')
   findOne(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.draseis.findOne(user, id);
+  }
+
+  @Get(':id/activity')
+  @RequireDrasi('episkopisi')
+  @ApiOperation({ summary: 'Η ροή δραστηριότητας της δράσης και πότε την είδες τελευταία φορά' })
+  activityFeed(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.activity.feed(user, id);
+  }
+
+  @Post(':id/activity/seen')
+  @RequireDrasi('episkopisi')
+  @ApiOperation({ summary: 'Είδα τη δράση τώρα — για το «τι άλλαξε από την τελευταία σου επίσκεψη»' })
+  activitySeen(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.activity.seen(user, id);
   }
 
   @Get(':id/stats')

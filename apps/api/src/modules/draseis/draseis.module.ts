@@ -3,6 +3,7 @@ import { FilesModule } from '../files/files.module';
 import { IntegrationsModule } from '../integrations/integrations.module';
 import { YlikoModule } from '../yliko/yliko.module';
 import { DrasiAccessService } from './drasi-access.service';
+import { DrasiActivityService } from './drasi-activity';
 import { DrasiCollab } from './drasi-collab';
 import { DrasiPermGuard } from './drasi-perm.guard';
 import { DraseisController } from './draseis.controller';
@@ -49,6 +50,7 @@ import { DraseisService } from './draseis.service';
   ],
   providers: [
     DrasiAccessService,
+    DrasiActivityService,
     DrasiCollab,
     DrasiPermGuard,
     DraseisService,
