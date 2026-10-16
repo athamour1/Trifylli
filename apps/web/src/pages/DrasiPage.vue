@@ -34,6 +34,9 @@
             >
               <q-item-section avatar><q-icon :name="s.icon" size="20px" /></q-item-section>
               <q-item-section>{{ s.label }}</q-item-section>
+              <q-item-section v-if="unseen.has(s.name)" side>
+                <span class="drasi-nav__dot" aria-label="Άλλαξε από την τελευταία σου επίσκεψη" />
+              </q-item-section>
               <q-item-section v-if="s.badge" side><q-badge color="grey-4" text-color="grey-9" :label="s.badge" /></q-item-section>
             </q-item>
           </q-list>
@@ -97,6 +100,7 @@
                   <q-icon :name="s.icon" size="24px" />
                   <span>{{ s.label }}</span>
                   <q-badge v-if="s.badge" floating rounded color="klados" text-color="klados-on" :label="s.badge" />
+                  <span v-else-if="unseen.has(s.name)" class="drasi-nav__dot section-sheet__dot" aria-label="Άλλαξε από την τελευταία σου επίσκεψη" />
                 </button>
               </q-card-section>
             </q-card>
@@ -150,6 +154,20 @@
           Δεν έχει δηλωθεί ποιοι έρχονται.
         </span>
               </div>
+
+              <!-- Τι άλλαξε: η ροή δραστηριότητας, με όσα έγιναν από την τελευταία σου επίσκεψη τονισμένα. -->
+              <q-card v-if="feed.length" flat bordered class="q-mb-md">
+                <q-card-section class="text-subtitle2 q-pb-xs">Τι άλλαξε</q-card-section>
+                <q-list dense class="q-pb-sm">
+                  <q-item v-for="event in feed.slice(0, 8)" :key="event.id" :class="{ 'text-weight-medium': isNew(event) }">
+                    <q-item-section avatar>
+                      <q-icon :name="isNew(event) ? 'fiber_new' : 'history'" size="18px" :color="isNew(event) ? 'klados' : 'grey-6'" />
+                    </q-item-section>
+                    <q-item-section>{{ activityPhrase(event) }}</q-item-section>
+                    <q-item-section side class="text-caption">{{ formatDateTime(event.at) }}</q-item-section>
+                  </q-item>
+                </q-list>
+              </q-card>
 
               <!-- Το αρχηγείο: ονόματα και τηλέφωνα — αυτό ψάχνει κανείς στις 7 το πρωί. -->
       <!-- Στο κινητό αρχηγείο και υπηρεσίες ανοίγουν με πάτημα: είναι μακριές λίστες
@@ -366,7 +384,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
   drasiCan,
@@ -382,6 +400,8 @@ import {
   KLADOS_LABEL,
   KLADOS_META,
   collabDocument,
+  type DrasiActivityEvent,
+  type DrasiActivityView,
   type DrasiGuestTopikoView,
   type DrasiRoleKind,
   type DrasiRoleView,
@@ -414,7 +434,9 @@ import { provideLiveChanges, useLiveReload } from '../composables/useLiveChanges
 import { useSlidingThumb } from '../composables/useSlidingThumb';
 import { kladosVars } from '../lib/klados-theme';
 import { useKladosThemeStore } from '../stores/klados-theme';
-import { get } from '../lib/api';
+import { get, post } from '../lib/api';
+import { activityPhrase, sectionOfTopic, unseenSections } from '../lib/activity';
+import { CLIENT_ID } from '../lib/client-id';
 import { formatDateRange, formatDateTime, formatTime } from '../lib/format';
 import { useAuthStore } from '../stores/auth';
 
@@ -533,6 +555,39 @@ const { data, loading, error, stale, reload } = useAsyncData(
   { forbiddenPage: true, cacheKey: `drasi:${id}` },
 );
 
+// ── Τι άλλαξε: η ροή δραστηριότητας και τα σημαδάκια στις ενότητες ──
+const feed = ref<DrasiActivityEvent[]>([]);
+/** Πότε είδε τελευταία φορά τη δράση ο χρήστης (πριν από αυτή την επίσκεψη). */
+const lastSeenAt = ref<string | null>(null);
+/** Ενότητες όπου άλλαξε κάτι κάποιος άλλος — από την τελευταία επίσκεψη ή όσο είσαι εδώ. */
+const unseen = ref(new Set<string>());
+const isNew = (event: DrasiActivityEvent): boolean =>
+  !!lastSeenAt.value && event.actor?.id !== auth.user?.id && new Date(event.at) > new Date(lastSeenAt.value);
+
+async function loadFeed(first = false): Promise<void> {
+  try {
+    const view = await get<DrasiActivityView>(`/draseis/${id}/activity`);
+    feed.value = view.events;
+    if (first) {
+      lastSeenAt.value = view.lastSeenAt;
+      unseen.value = unseenSections(view.events, view.lastSeenAt, auth.user?.id);
+      unseen.value.delete(section.value);
+      // Η επόμενη επίσκεψη μετρά από τώρα.
+      void post(`/draseis/${id}/activity/seen`, {}).catch(() => undefined);
+    }
+  } catch {
+    // Χωρίς ροή η δράση δουλεύει όπως πριν.
+  }
+}
+void loadFeed(true);
+// Η ενότητα που ανοίγεις δεν έχει πια «καινούργιο».
+watch(section, (name) => {
+  if (!unseen.value.has(name)) return;
+  const next = new Set(unseen.value);
+  next.delete(name);
+  unseen.value = next;
+});
+
 // ── Το δωμάτιο της δράσης: ποιος είναι εδώ, και «άλλαξε αυτό» για κάθε ενότητα ──
 const room = useCollabDoc(collabDocument.drasiRoom(id), useCollabMe(), { persist: false });
 const roomPeers = room.peers;
@@ -540,6 +595,18 @@ provideLiveChanges({ subscribe: room.onChange, setFocus: room.setFocus, peerFocu
 // Η ίδια η δράση: κεφαλίδα, επισκόπηση, αρχηγείο, ρυθμίσεις.
 useLiveReload(['drasi', 'roles', 'kladoi', 'guest-topika', 'closed', 'settings', 'slots', 'rotate', 'participants', 'guests', 'ypiresies'], reload, {
   subscribe: room.onChange,
+});
+// Ό,τι αλλάζουν οι άλλοι όσο είσαι εδώ: σημαδάκι στην ενότητα (αν δεν είσαι σε αυτήν) και νέα ροή.
+let feedTimer: ReturnType<typeof setTimeout> | null = null;
+room.onChange((change) => {
+  if (change.origin === CLIENT_ID || change.by === auth.user?.id) return;
+  const changed = sectionOfTopic(change.topic);
+  if (changed && changed !== section.value) unseen.value = new Set([...unseen.value, changed]);
+  if (feedTimer) clearTimeout(feedTimer);
+  feedTimer = setTimeout(() => void loadFeed(), 1500);
+});
+onBeforeUnmount(() => {
+  if (feedTimer) clearTimeout(feedTimer);
 });
 
 // Η σελίδα ζει εκτός `/k/:klados`, οπότε το layout δεν ξέρει τον κλάδο της· τον
@@ -681,6 +748,19 @@ watch(
 }
 .drasi-nav {
   position: relative;
+}
+/* «Άλλαξε από την τελευταία σου επίσκεψη»: μια τελεία στο χρώμα του κλάδου. */
+.drasi-nav__dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--klados-ink, var(--q-primary));
+}
+.section-sheet__dot {
+  position: absolute;
+  top: 8px;
+  right: 10px;
 }
 /* Το χρώμα του ενεργού στοιχείου το φέρνει το χάπι από κάτω, όχι το ίδιο. */
 .drasi-nav__active {
