@@ -100,9 +100,6 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
       },
       connected: async ({ connection, context, documentName }) => this.opened(connection, context, documentName),
       onTokenSync: ({ token, connection, context }) => this.tokenSynced(token, connection, context.userId),
-      onDisconnect: async ({ context, documentName }) => {
-        this.logger.log({ event: 'collab-close', document: documentName, userId: context.userId, requestId: context.requestId });
-      },
       afterUnloadDocument: async ({ documentName }) => {
         this.removed.delete(documentName);
       },
@@ -157,23 +154,29 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
   }
 
   /** Ποιος, τι, και αν γράφει — μία φορά ανά έγγραφο που ανοίγει. */
-  async authenticate(data: Pick<onAuthenticatePayload<CollabContext>, 'token' | 'documentName' | 'connectionConfig'>): Promise<Partial<CollabContext>> {
+  async authenticate(
+    data: Pick<onAuthenticatePayload<CollabContext>, 'token' | 'documentName' | 'connectionConfig' | 'context'>,
+  ): Promise<Partial<CollabContext>> {
+    const refuse = (reason: CollabRejection, userId?: string) => {
+      this.logger.log({ event: 'collab-reject', document: data.documentName, reason, userId, requestId: data.context?.requestId });
+      return reject(reason);
+    };
     const token = parseCollabToken(data.token);
-    if (!token) throw reject(CollabRejection.UNAUTHENTICATED);
-    if (token.p !== COLLAB_PROTOCOL) throw reject(CollabRejection.UPDATE_REQUIRED);
+    if (!token) throw refuse(CollabRejection.UNAUTHENTICATED);
+    if (token.p !== COLLAB_PROTOCOL) throw refuse(CollabRejection.UPDATE_REQUIRED);
 
     const target = this.registry.resolve(data.documentName);
-    if (!target || this.removed.has(data.documentName)) throw reject(CollabRejection.FORBIDDEN);
+    if (!target || this.removed.has(data.documentName)) throw refuse(CollabRejection.FORBIDDEN);
 
     const identity = await this.auth.verify(token.t);
-    if (!identity) throw reject(CollabRejection.UNAUTHENTICATED);
+    if (!identity) throw refuse(CollabRejection.UNAUTHENTICATED);
     const access = await target.type.access(identity.user, target.id);
-    if (!access) throw reject(CollabRejection.FORBIDDEN);
+    if (!access) throw refuse(CollabRejection.FORBIDDEN, identity.user.id);
 
     // Το αντίγραφο της συσκευής ενώνεται μόνο με την ίδια γενιά. Αλλιώς (ο server
     // ξαναγέμισε το έγγραφο από τη βάση) η ένωση θα έβγαζε διπλό κείμενο.
     if (token.g && token.g !== (await this.currentGeneration(data.documentName))) {
-      throw reject(CollabRejection.STALE_GENERATION);
+      throw refuse(CollabRejection.STALE_GENERATION, identity.user.id);
     }
 
     if (access === 'read' || this.frozen.has(data.documentName)) data.connectionConfig.readOnly = true;
@@ -199,7 +202,16 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
       requestId: context.requestId,
     });
     this.watchToken(connection, context.expiresAt ?? null);
-    connection.onClose(() => clearTimeout(this.tokenTimers.get(connection)));
+    connection.onClose((_document, event) => {
+      clearTimeout(this.tokenTimers.get(connection));
+      this.logger.log({
+        event: 'collab-close',
+        document: documentName,
+        userId: context.userId,
+        reason: event?.reason,
+        requestId: context.requestId,
+      });
+    });
   }
 
   /**
