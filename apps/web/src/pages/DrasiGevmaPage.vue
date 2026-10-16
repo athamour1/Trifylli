@@ -23,7 +23,8 @@
               </div>
             </div>
             <div class="col-12 col-sm-auto row items-center q-gutter-sm">
-              <SaveStatus v-if="editable" :status="saveStatus" @retry="saveNow" />
+              <CollabPresence :peers="peers" />
+              <SaveStatus v-if="editable" :status="worstSaveState(saveStatus, textState)" @retry="saveNow" />
             </div>
           </div>
         </div>
@@ -51,14 +52,20 @@
 
           <q-card flat bordered class="tf-split__main">
             <q-card-section>
-              <MarkdownField
-                v-model="form.recipe"
+              <!-- Τη γράφουν μαζί μαγείρισσα και τροφοδοσία — ζωντανά, με κέρσορες. -->
+              <CollabTextField
+                :key="textName"
+                :name="textName"
+                field="recipe"
+                :fallback="meal?.recipe"
                 :klados="drasi.klados?.type ?? null"
                 :readonly="!editable"
                 label="Συνταγή"
                 placeholder="Markdown: βήματα, χρόνοι, πόσες μερίδες, τι προσέχουμε… Σύρε ή επικόλλησε εικόνες."
                 empty-text="Δεν έχει γραφτεί συνταγή."
                 :min-height="360"
+                @state="textState = $event"
+                @peers="peers = $event"
               />
             </q-card-section>
           </q-card>
@@ -111,15 +118,25 @@
 import { computed, reactive, ref, watch } from 'vue';
 import { useQuasar } from 'quasar';
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
-import { DRASI_SNACK_LABEL, drasiCan, type DrasiAccess, type DrasiMealView, type DrasiStatus, type KladosType } from '@trifylli/shared';
-import MarkdownField from '../components/MarkdownField.vue';
+import {
+  DRASI_SNACK_LABEL,
+  collabDocument,
+  drasiCan,
+  type CollabPresenceUser,
+  type DrasiAccess,
+  type DrasiMealView,
+  type DrasiStatus,
+  type KladosType,
+} from '@trifylli/shared';
+import CollabPresence from '../components/CollabPresence.vue';
+import CollabTextField from '../components/CollabTextField.vue';
 import PageState from '../components/PageState.vue';
 import SaveStatus from '../components/SaveStatus.vue';
 import { ingredientPayload, sameIngredients, type IngredientRow } from '../components/drasi/types';
 import { useAsyncData } from '../composables/useAsyncData';
 import { ApiError, OfflineError, get, patch } from '../lib/api';
 import { formatDateLong } from '../lib/format';
-import type { SaveState } from '../lib/save-state';
+import { worstSaveState, type SaveState } from '../lib/save-state';
 import { useKladosThemeStore } from '../stores/klados-theme';
 import { useOfflineStore } from '../stores/offline';
 
@@ -167,6 +184,11 @@ watch(
 /** Γράφουν μαγείρισσα, τροφοδοσία και η εφεδρεία (ο ίδιος κανόνας με το API)· κλειστή δράση δεν αλλάζει. */
 const editable = computed(() => !!drasi.value && drasi.value.status !== 'KLEISTI' && drasiCan(drasi.value.access, 'diatrofologio', 'edit'));
 
+// ── Η συνταγή: κοινό έγγραφο, σώζει μόνη της ──
+const textName = computed(() => collabDocument.drasiMeal(drasiId, itemId.value));
+const textState = ref<SaveState>('clean');
+const peers = ref<CollabPresenceUser[]>([]);
+
 // ── Τοπική κατάσταση ──
 const AUTOSAVE_DELAY_MS = 1200;
 const saveStatus = ref<SaveState>('clean');
@@ -174,7 +196,6 @@ const dirty = ref(false);
 let timer: ReturnType<typeof setTimeout> | null = null;
 const form = reactive({
   menu: '',
-  recipe: '',
   ingredients: [] as IngredientRow[],
 });
 let hydrating = false;
@@ -188,7 +209,6 @@ watch(
     if (!m || dirty.value) return;
     hydrating = true;
     form.menu = m.menu ?? '';
-    form.recipe = m.recipe ?? '';
     // Μετά την αποθήκευση η λίστα είναι ήδη αυτή του server: δεν ξαναγράφεται,
     // ώστε να μένουν το focus και η άδεια γραμμή που μόλις προστέθηκε.
     if (m.itemId !== hydratedId || !sameIngredients(form.ingredients, m.ingredients)) {
@@ -227,7 +247,6 @@ async function saveNow(): Promise<void> {
   try {
     await patch(`/draseis/${drasiId}/diatrofologio/${itemId.value}`, {
       menu: form.menu.trim() || null,
-      recipe: form.recipe || null,
       ingredients: ingredientPayload(form.ingredients),
     });
     dirty.value = false;
