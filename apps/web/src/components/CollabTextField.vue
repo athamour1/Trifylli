@@ -7,7 +7,7 @@
       :field="field"
       :document-name="name"
       :awareness="awareness"
-      :readonly="readonly || readOnly || status === 'update-required'"
+      :readonly="readonly || !writable"
     />
     <template v-else>
       <!-- Δεν έχει ανοίξει ποτέ σε αυτή τη συσκευή: το κείμενο από το cache, μόνο για ανάγνωση. -->
@@ -18,6 +18,9 @@
     </template>
     <div v-if="status === 'update-required'" class="text-caption text-orange-9 q-mt-sm">
       Βγήκε νέα έκδοση της εφαρμογής — ανανέωσε τη σελίδα για να γράψεις εδώ.
+    </div>
+    <div v-else-if="status === 'forbidden' && !readonly" class="text-caption text-grey-7 q-mt-sm">
+      Δεν έχεις πια πρόσβαση για αλλαγές εδώ — φαίνεται η τελευταία εκδοχή που έφτασε.
     </div>
   </div>
 </template>
@@ -65,7 +68,7 @@ const emit = defineEmits<{ state: [SaveState]; peers: [CollabPresenceUser[]] }>(
 // CodeMirror φορτώνεται μόνο όταν υπάρχει κείμενο για γράψιμο.
 const CollabMarkdownField = defineAsyncComponent(() => import('./CollabMarkdownField.vue'));
 
-const { doc, awareness, ready, readOnly, status, peers, saveState, whenSaved } = useCollabDoc(props.name, useCollabMe());
+const { doc, awareness, ready, writable, status, peers, saveState, whenSaved } = useCollabDoc(props.name, useCollabMe());
 
 // Οι κοινές ρυθμίσεις των δύο εμφανίσεων — ως αντικείμενα, για να μην περνούν
 // `undefined` σε props που δεν το δέχονται.

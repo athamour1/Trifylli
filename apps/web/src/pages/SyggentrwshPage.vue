@@ -55,6 +55,10 @@
             <q-btn flat no-caps color="orange-10" label="Ανανέωση" @click="reloadPage" />
           </template>
         </q-banner>
+        <q-banner v-else-if="editable && collabStatus === 'forbidden'" dense class="bg-grey-3 text-grey-9 q-mb-md">
+          <template #avatar><q-icon name="lock" /></template>
+          Δεν έχεις πια πρόσβαση για αλλαγές στο πρόγραμμα — φαίνεται η τελευταία εκδοχή που έφτασε.
+        </q-banner>
         <div v-else-if="editable && !collabReady && collabStatus === 'offline'" class="text-caption text-grey-7 q-mb-md">
           <q-icon name="cloud_off" size="16px" class="q-mr-xs" />
           Χωρίς σύνδεση: το πρόγραμμα φαίνεται μόνο για ανάγνωση σε αυτή τη συσκευή — η επεξεργασία ανοίγει μόλις συνδεθείς.
@@ -673,7 +677,7 @@ const {
   doc: collabDoc,
   awareness,
   ready: collabReady,
-  readOnly: collabReadOnly,
+  writable: collabWritable,
   status: collabStatus,
   peers,
   saveState: collabSaveState,
@@ -704,9 +708,7 @@ const restPlan = computed<PlanSnapshot | null>(() => (data.value ? planFromDetai
 const planSource = computed<PlanSnapshot | null>(() => (collabReady.value ? docPlan.value : restPlan.value));
 
 /** Το πρόγραμμα γράφεται όταν γράφεται η σελίδα **και** ο server το επιτρέπει. */
-const planEditable = computed(
-  () => editable.value && collabReady.value && !collabReadOnly.value && collabStatus.value !== 'update-required',
-);
+const planEditable = computed(() => editable.value && collabReady.value && collabWritable.value);
 
 const plan = computed<PlanPart[]>(() => {
   const source = planSource.value;

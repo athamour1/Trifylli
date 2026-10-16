@@ -56,6 +56,11 @@
           </template>
         </q-banner>
 
+        <q-banner v-else-if="editable && collabStatus === 'forbidden'" dense class="bg-grey-3 text-grey-9 q-mb-md">
+          <template #avatar><q-icon name="lock" /></template>
+          Δεν έχεις πια πρόσβαση για αλλαγές στα κείμενα — φαίνεται η τελευταία εκδοχή που έφτασε.
+        </q-banner>
+
         <q-banner v-if="data.finalized" dense class="bg-grey-3 text-grey-9 q-mb-md">
           <template #avatar><q-icon name="lock" /></template>
           Τα πρακτικά έχουν οριστικοποιηθεί και δεν τροποποιούνται.
@@ -337,7 +342,7 @@ const {
   doc: collabDoc,
   awareness,
   ready: collabReady,
-  readOnly: collabReadOnly,
+  writable: collabWritable,
   status: collabStatus,
   peers,
   saveState: collabSaveState,
@@ -345,7 +350,7 @@ const {
 } = useCollabDoc(collabDocument.symvoulio(id), useCollabMe());
 
 /** Τα κείμενα γράφονται όταν γράφεται η σελίδα **και** ο server το επιτρέπει. */
-const textsEditable = computed(() => editable.value && !collabReadOnly.value && collabStatus.value !== 'update-required');
+const textsEditable = computed(() => editable.value && collabWritable.value);
 
 const combinedSave = computed(() => worstSaveState(saveStatus.value, collabSaveState.value));
 

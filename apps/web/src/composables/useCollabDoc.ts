@@ -232,6 +232,13 @@ export function useCollabDoc(name: string, me: () => CollabPresenceUser | null) 
     });
   }
 
+  /**
+   * Αν γράφεται τώρα: ο server το επιτρέπει και η σύνδεση δεν έχει κλείσει
+   * οριστικά. Χωρίς πρόσβαση πια (αφαιρέθηκε, αρχειοθετήθηκε) ό,τι γραφόταν δεν
+   * θα έφτανε ποτέ — καλύτερα να μη γράφεται καθόλου.
+   */
+  const writable = computed(() => !readOnly.value && status.value !== 'update-required' && status.value !== 'forbidden');
+
   /** Για το `SaveStatus`: τι έγινε με ό,τι γράφτηκε. */
   const saveState = computed<SaveState>(() => {
     switch (status.value) {
@@ -241,7 +248,8 @@ export function useCollabDoc(name: string, me: () => CollabPresenceUser | null) 
         return 'offline';
       case 'update-required':
       case 'forbidden':
-        return 'error';
+        // Ό,τι δεν έφτασε δεν θα φτάσει πια· αν δεν εκκρεμούσε τίποτα, δεν χάθηκε τίποτα.
+        return unsynced.value > 0 ? 'error' : 'saved';
       default:
         if (unsynced.value === 0) return 'saved';
         // Ο browser ξέρει ήδη ότι δεν υπάρχει δίκτυο· το socket το καταλαβαίνει
@@ -272,7 +280,7 @@ export function useCollabDoc(name: string, me: () => CollabPresenceUser | null) 
     doc.value.destroy();
   });
 
-  return { doc, awareness, status, readOnly, ready, unsynced, peers, saveState, whenSaved };
+  return { doc, awareness, status, readOnly, writable, ready, unsynced, peers, saveState, whenSaved };
 }
 
 /** Ο συνδεδεμένος χρήστης όπως τον δείχνει η παρουσία — ίδια μορφή με αυτή που ορίζει ο server. */
