@@ -21,6 +21,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
 import { refuseCollabFields } from '../collab/collab-fields';
 import { CollabService } from '../collab/collab.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { DrasiAccessService } from './drasi-access.service';
 import { planResponsibles } from './schedule-assignees';
 import { moveAfter } from './schedule-order';
@@ -55,7 +56,19 @@ export class DraseisPlanService {
     private readonly prisma: PrismaService,
     private readonly access: DrasiAccessService,
     private readonly collab: CollabService,
+    private readonly notifications: NotificationsService,
   ) {}
+
+  /** Ειδοποίηση σε όσους έγιναν υπεύθυνοι ενός στοιχείου — τι και πού (όχι ο ίδιος που το όρισε). */
+  private responsiblesAdded(user: RequestUser, drasi: { id: string; title: string }, item: { id: string; title: string }, userIds: string[]): void {
+    const others = userIds.filter((userId) => userId !== user.id);
+    if (!others.length) return;
+    void this.notifications.notify(others, {
+      kind: 'responsible',
+      title: `Υπεύθυνος στο «${item.title}» — δράση «${drasi.title}»`,
+      link: `/draseis/${drasi.id}/programma/${item.id}`,
+    });
+  }
 
   // ───────────────────────── Ωρολόγιο & προγραμματικό ─────────────────────────
 
@@ -119,7 +132,7 @@ export class DraseisPlanService {
   }
 
   async addScheduleItem(user: RequestUser, id: string, dto: CreateScheduleItemDto): Promise<DrasiScheduleItemView> {
-    await this.access.load(user, id, 'write');
+    const drasi = await this.access.load(user, id, 'write');
     const { create: responsibles } = planResponsibles([], dto.responsibleIds);
     const yliko = ylikoRows(dto.yliko ?? []);
     await this.assertDrasiStelexi(id, responsibles);
@@ -141,6 +154,7 @@ export class DraseisPlanService {
       },
       include: scheduleInclude,
     });
+    this.responsiblesAdded(user, drasi, row, responsibles);
     return this.itemWithTimes(user, id, row.id);
   }
 
@@ -152,7 +166,7 @@ export class DraseisPlanService {
   async updateScheduleItem(user: RequestUser, id: string, itemId: string, dto: UpdateScheduleItemDto): Promise<DrasiScheduleItemView> {
     // Προγραμματικό, χώρος και υλικό γράφονται πια μαζί (`drasi:<id>:item:<id>`).
     refuseCollabFields(dto, COLLAB_FIELDS.drasiItem);
-    await this.access.load(user, id, 'write');
+    const drasi = await this.access.load(user, id, 'write');
     const item = await this.prisma.drasiScheduleItem.findFirst({
       where: { id: itemId, drasiId: id },
       include: { assignees: { select: { userId: true } } },
@@ -198,6 +212,7 @@ export class DraseisPlanService {
     });
     // Άλλοι υπεύθυνοι: άλλοι γράφουν «το δικό τους» προγραμματικό.
     if (responsibles.create.length || responsibles.remove.length) this.collab.revoke(collabDocument.drasiItem(id, itemId));
+    this.responsiblesAdded(user, drasi, { id: itemId, title: dto.title?.trim() || item.title }, responsibles.create);
     // Ένα στοιχείο που έπαψε να είναι γεύμα δεν έχει πια συνταγή να γράφεται.
     if (dto.kind !== undefined || dto.snack !== undefined) this.collab.revoke(collabDocument.drasiMeal(id, itemId));
     return this.itemWithTimes(user, id, itemId);
