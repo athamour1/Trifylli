@@ -1590,6 +1590,9 @@ model StoredFile {
   contentType String
   size        Int
   createdById String?  @db.Uuid
+  /// Εικόνα Markdown που ανέβηκε σε κοινό έγγραφο (π.χ. `drasi:<id>:item:<id>`):
+  /// τη βλέπει όποιος βλέπει το έγγραφο και δεν σβήνεται όσο αυτό ζει.
+  collabDocument String?
   createdAt   DateTime @default(now())
 
   topiko        Topiko         @relation(fields: [topikoId], references: [id], onDelete: Cascade)
@@ -1600,6 +1603,7 @@ model StoredFile {
   drasiForm     DrasiForm?     @relation("DrasiFormSignature")
 
   @@index([topikoId, kladosId, purpose])
+  @@index([collabDocument])
   @@map("stored_file")
 }
 
