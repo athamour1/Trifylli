@@ -31,21 +31,26 @@
 
       <q-card-section>
         <template v-if="editing">
-          <MarkdownField
-            v-model="draft.text"
-            label="Η ιστορία"
+          <!-- Η ιστορία είναι κοινό κείμενο: τη γράφουν μαζί, σώζεται μόνη της. -->
+          <CollabTextField
+            :name="collabDocument.drasiMythos(drasiId)"
+            field="text"
+            :fallback="view?.text"
+            :klados="organiser"
+            label="Η ιστορία — αποθηκεύεται μόνη της"
             placeholder="Πώς ξεκινά, τι διακυβεύεται, πώς τελειώνει — ό,τι χρειάζεται ένα στέλεχος για να μπει στον κόσμο της δράσης."
             :min-height="180"
-            :klados="organiser"
           />
           <div class="row justify-end q-gutter-sm q-mt-sm">
-            <q-btn flat no-caps label="Άκυρο" :disable="saving" @click="editing = false" />
-            <q-btn unelevated no-caps color="klados" text-color="klados-on" icon="save" label="Αποθήκευση" :loading="saving" @click="saveMythos" />
+            <q-btn unelevated no-caps color="klados" text-color="klados-on" icon="done" label="Τέλος" :loading="saving" @click="finishMythos" />
           </div>
         </template>
-        <MarkdownField
+        <!-- Ανάγνωση: ζωντανά, καθώς τη γράφει κάποιος άλλος. -->
+        <CollabTextField
           v-else-if="view?.text"
-          :model-value="view.text"
+          :name="collabDocument.drasiMythos(drasiId)"
+          field="text"
+          :fallback="view.text"
           readonly
           :klados="organiser"
           class="mythos-book__story"
@@ -140,7 +145,7 @@
     </div>
 
     <!-- ── Νέος / επεξεργασία ρόλου ── -->
-    <q-dialog v-model="dialog.open" :maximized="$q.screen.lt.sm">
+    <q-dialog v-model="dialog.open" :maximized="$q.screen.lt.sm" @hide="load">
       <q-card style="width: 640px; max-width: 100%">
         <q-card-section class="text-h6">{{ dialog.id ? (canWrite ? 'Ο ρόλος' : 'Ο ρόλος σου') : 'Νέος ρόλος' }}</q-card-section>
         <q-card-section class="q-pt-none q-gutter-md">
@@ -166,7 +171,19 @@
               </q-item>
             </template>
           </q-select>
+          <!-- Υπάρχων ρόλος: το lore είναι κοινό κείμενο (το γράφει και όποιος τον παίζει), σώζεται μόνο του. -->
+          <CollabTextField
+            v-if="dialog.id"
+            :name="collabDocument.drasiCharacter(drasiId, dialog.id)"
+            field="lore"
+            :fallback="dialog.lore"
+            :klados="organiser"
+            label="Lore — αποθηκεύεται μόνο του"
+            placeholder="Ποιος είναι, από πού έρχεται, τι θέλει, πώς μιλά, τι ξέρει που οι άλλοι δεν ξέρουν…"
+            :min-height="160"
+          />
           <MarkdownField
+            v-else
             v-model="dialog.lore"
             label="Lore"
             placeholder="Ποιος είναι, από πού έρχεται, τι θέλει, πώς μιλά, τι ξέρει που οι άλλοι δεν ξέρουν…"
@@ -187,6 +204,7 @@
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useQuasar } from 'quasar';
 import {
+  collabDocument,
   drasiCan,
   drasiEditScope,
   type DrasiAccess,
@@ -196,6 +214,7 @@ import {
   type DrasiMythosView,
   type KladosType,
 } from '@trifylli/shared';
+import CollabTextField from '../CollabTextField.vue';
 import MarkdownField from '../MarkdownField.vue';
 import { ApiError, del, get, patch, post, put } from '../../lib/api';
 import { useAuthStore } from '../../stores/auth';
@@ -236,16 +255,20 @@ const assignedCount = computed(() => view.value?.characters.filter((c) => c.stel
 
 // ── Ο μύθος ──
 const editing = ref(false);
-const draft = reactive({ title: '', text: '' });
+const draft = reactive({ title: '' });
 function startEdit(): void {
   draft.title = view.value?.title ?? '';
-  draft.text = view.value?.text ?? '';
   editing.value = true;
 }
-async function saveMythos(): Promise<void> {
+/** Η ιστορία έχει ήδη σωθεί (κοινό κείμενο)· εδώ σώζεται ο τίτλος, αν άλλαξε. */
+async function finishMythos(): Promise<void> {
   saving.value = true;
   try {
-    view.value = await put<DrasiMythosView>(`/draseis/${props.drasiId}/mythos`, { title: draft.title, text: draft.text });
+    if (draft.title !== (view.value?.title ?? '')) {
+      view.value = await put<DrasiMythosView>(`/draseis/${props.drasiId}/mythos`, { title: draft.title });
+    } else {
+      await load();
+    }
     editing.value = false;
   } catch (err) {
     fail(err, 'Ο μύθος δεν αποθηκεύτηκε.');
@@ -294,11 +317,10 @@ async function saveCharacter(): Promise<void> {
   saving.value = true;
   try {
     // Όποιος παίζει τον ρόλο δεν στέλνει «ποιος τον παίζει» — δεν το αλλάζει.
-    const body = canWrite.value
-      ? { name: dialog.name.trim(), lore: dialog.lore, participantId: dialog.participantId }
-      : { name: dialog.name.trim(), lore: dialog.lore };
+    // Το lore ενός υπάρχοντος ρόλου έχει ήδη σωθεί (κοινό κείμενο)· στέλνεται μόνο στη δημιουργία.
+    const body = canWrite.value ? { name: dialog.name.trim(), participantId: dialog.participantId } : { name: dialog.name.trim() };
     if (dialog.id) await patch(`/draseis/${props.drasiId}/characters/${dialog.id}`, body);
-    else await post(`/draseis/${props.drasiId}/characters`, { ...body, participantId: dialog.participantId ?? undefined });
+    else await post(`/draseis/${props.drasiId}/characters`, { ...body, lore: dialog.lore, participantId: dialog.participantId ?? undefined });
     dialog.open = false;
     await load();
   } catch (err) {
