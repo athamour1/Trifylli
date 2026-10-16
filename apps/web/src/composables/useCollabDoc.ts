@@ -152,6 +152,8 @@ export function useCollabDoc(name: string, me: () => CollabPresenceUser | null, 
       // Ο server έκλεισε **αυτό** το έγγραφο ενώ η σύνδεση ζει (ανάκληση
       // δικαιωμάτων): ξανανοίγει, με τα νέα δικαιώματα.
       onClose: () => {
+        // Ό,τι έστειλε ο server όσο ήταν κλειστό χάθηκε: στον επόμενο συγχρονισμό «*».
+        missed ||= everSynced;
         if (collabSocket().status === WebSocketStatus.Connected) reopenSoon();
       },
       onAwarenessChange: ({ states }) => {
