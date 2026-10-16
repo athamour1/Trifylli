@@ -14,6 +14,7 @@ import { Awareness } from 'y-protocols/awareness';
 import { Doc } from 'yjs';
 import { refreshAccessToken } from '../lib/api';
 import { useAuthStore } from '../stores/auth';
+import { useOfflineStore } from '../stores/offline';
 import { collabSocket, collabToken } from '../lib/collab';
 import { COLLAB_DB_PREFIX, rememberCollabDb } from '../lib/collab-storage';
 import type { SaveState } from '../lib/save-state';
@@ -73,6 +74,7 @@ export function useCollabDoc(name: string, me: () => CollabPresenceUser | null) 
   const readOnly = ref(false);
   const ready = ref(false);
   const unsynced = ref(0);
+  const offline = useOfflineStore();
   const peers = ref<CollabPresenceUser[]>([]);
 
   const dbName = COLLAB_DB_PREFIX + name;
@@ -241,7 +243,10 @@ export function useCollabDoc(name: string, me: () => CollabPresenceUser | null) 
       case 'forbidden':
         return 'error';
       default:
-        return unsynced.value > 0 ? 'saving' : 'saved';
+        if (unsynced.value === 0) return 'saved';
+        // Ο browser ξέρει ήδη ότι δεν υπάρχει δίκτυο· το socket το καταλαβαίνει
+        // αργότερα (όταν σιωπήσει), και ως τότε το «αποθήκευση…» θα ήταν ψέμα.
+        return offline.online ? 'saving' : 'offline';
     }
   });
 
