@@ -4,7 +4,7 @@ import { Notify, copyToClipboard } from 'quasar';
 import { computed, onBeforeUnmount, ref, shallowRef } from 'vue';
 import { IndexeddbPersistence } from 'y-indexeddb';
 import { Awareness } from 'y-protocols/awareness';
-import { Doc, Text as YText } from 'yjs';
+import { Doc } from 'yjs';
 import { refreshAccessToken } from '../lib/api';
 import { collabSocket, collabToken } from '../lib/collab';
 import { COLLAB_DB_PREFIX, rememberCollabDb } from '../lib/collab-storage';
@@ -31,10 +31,21 @@ function otherPeers(states: StatesArray, myClientId: number, myUserId: string | 
   return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name, 'el'));
 }
 
-/** Τα κείμενα ενός εγγράφου — για να μη χαθεί τίποτα όταν πετιέται ένα αντίγραφο. */
+/**
+ * Τα κείμενα ενός εγγράφου — για να μη χαθεί τίποτα όταν πετιέται ένα αντίγραφο.
+ * Με `getText` και όχι με έλεγχο τύπου: ένα πεδίο που δεν έχει ανοίξει ακόμα κανείς
+ * επεξεργαστής είναι, μετά το φόρτωμα από τη συσκευή, ένας «άτυπος» τύπος.
+ */
 function texts(doc: Doc): Record<string, string> {
   const out: Record<string, string> = {};
-  for (const [key, type] of doc.share) if (type instanceof YText) out[key] = type.toString();
+  for (const key of doc.share.keys()) {
+    if (key === COLLAB_META) continue;
+    try {
+      out[key] = doc.getText(key).toString();
+    } catch {
+      // Όχι κείμενο (άλλος τύπος) — δεν αφορά εδώ.
+    }
+  }
   return out;
 }
 
@@ -122,6 +133,12 @@ export function useCollabDoc(name: string, me: () => CollabPresenceUser | null) 
   function disconnect(): void {
     if (reopenTimer) clearTimeout(reopenTimer);
     reopenTimer = null;
+    // Απορρίφθηκε (δεν άνοιξε ποτέ στον server): χωρίς μήνυμα κλεισίματος. Ο server
+    // κρατά στην ουρά ό,τι έρχεται για έγγραφο χωρίς σύνδεση, και θα το εφάρμοζε
+    // στην επόμενη, πετυχημένη σύνδεση του ίδιου εγγράφου — κλείνοντάς την.
+    if (provider && !provider.isAuthenticated) {
+      provider.configuration.websocketProvider.configuration.providerMap.delete(provider.effectiveName);
+    }
     provider?.destroy();
     provider = null;
   }
@@ -184,7 +201,9 @@ export function useCollabDoc(name: string, me: () => CollabPresenceUser | null) 
     awareness.value = new Awareness(doc.value);
     ready.value = false;
     await open();
-    provider?.on('synced', () => {
+    const fresh = provider;
+    fresh?.on('synced', function compare() {
+      fresh.off('synced', compare);
       const after = texts(doc.value);
       const lost = Object.entries(before)
         .filter(([key, text]) => text.trim() && text !== (after[key] ?? ''))
