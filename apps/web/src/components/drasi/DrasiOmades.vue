@@ -214,9 +214,10 @@ import {
   type DrasiScheduleView,
   type KladosType,
 } from '@trifylli/shared';
-import { ApiError, del, get, patch, post, put } from '../../lib/api';
+import { ApiError, del, get, patch, post } from '../../lib/api';
 import { formatTime } from '../../lib/format';
 import { kladosVars } from '../../lib/klados-theme';
+import { useLiveReload } from '../../composables/useLiveChanges';
 
 const props = defineProps<{
   drasiId: string;
@@ -361,18 +362,26 @@ async function reload(): Promise<void> {
   }
 }
 onMounted(reload);
+// Ζωντανά: ό,τι αλλάζουν οι άλλοι εμφανίζεται χωρίς ανανέωση της σελίδας.
+useLiveReload(['groups', 'participants'], reload);
+useLiveReload(['schedule'], () => {
+  schedule.value = null;
+  return loadSchedule();
+});
 
 // ── Μέλη ──
+// Ένα-ένα («βάλε τον Χ», «βγάλε τον Χ»), όχι όλη η λίστα: δύο που μοιράζουν
+// παιδιά μαζί δεν σβήνουν ο ένας τον άλλον.
 async function addMember(g: DrasiGroupView, participantId: string): Promise<void> {
   if (!participantId) return;
-  await setMembers(g, [...g.members.map((m) => m.participantId), participantId]);
+  await changeMembers(() => post(`/draseis/${props.drasiId}/groups/${g.id}/members/${participantId}`, {}));
 }
 async function removeMember(g: DrasiGroupView, m: DrasiGroupMemberView): Promise<void> {
-  await setMembers(g, g.members.filter((x) => x.participantId !== m.participantId).map((x) => x.participantId));
+  await changeMembers(() => del(`/draseis/${props.drasiId}/groups/${g.id}/members/${m.participantId}`));
 }
-async function setMembers(g: DrasiGroupView, participantIds: string[]): Promise<void> {
+async function changeMembers(request: () => Promise<unknown>): Promise<void> {
   try {
-    await put(`/draseis/${props.drasiId}/groups/${g.id}/members`, { participantIds });
+    await request();
     await reload();
   } catch (err) {
     notifyError(err, 'Αποτυχία.');
