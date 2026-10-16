@@ -387,4 +387,49 @@ describe('CollabService', () => {
 
     expect(closed).toEqual(['maria']);
   });
+
+  it('έγγραφο που ξεπερνά το όριο μεγέθους σώζεται και μένει μόνο για ανάγνωση', async () => {
+    service.limits = { ...service.limits, documentBytes: 200 };
+    const maria = connect('maria');
+    await until(() => maria.provider.isSynced);
+    let readOnly = false;
+    maria.provider.on('authenticated', ({ scope }: { scope: string }) => (readOnly = scope === 'readonly'));
+    // Όπως ο client της εφαρμογής: έγγραφο που έκλεισε ο server ξανανοίγει (βλ. useCollabDoc).
+    maria.provider.on('close', () => setTimeout(() => void maria.provider.onOpen(new Event('open')), 50));
+
+    maria.document.getText('text').insert(0, 'α'.repeat(300));
+    await until(() => (service.hocuspocus.documents.get(NAME)?.getText('text').length ?? 0) > 300);
+    await service.flush(NAME);
+    await until(() => readOnly);
+
+    expect(entity.text.length).toBeGreaterThan(300);
+  });
+
+  it('μια σύνδεση δεν ανοίγει απεριόριστα έγγραφα', async () => {
+    service.limits = { ...service.limits, documentsPerSocket: 1 };
+    const socket = new HocuspocusProviderWebsocket({
+      url: `ws://127.0.0.1:${port}/api/collab`,
+      WebSocketPolyfill: socketWithOrigin(APP_ORIGIN),
+      maxAttempts: 1,
+    });
+    const failures: string[] = [];
+    const open = (name: string) => {
+      const provider = new HocuspocusProvider({
+        websocketProvider: socket,
+        name,
+        document: new Doc(),
+        token: JSON.stringify({ t: 'maria', g: '', p: COLLAB_PROTOCOL }),
+        onAuthenticationFailed: ({ reason }) => failures.push(`${name}:${reason}`),
+      });
+      provider.attach();
+      clients.push(provider);
+      return provider;
+    };
+    const first = open(NAME);
+    await until(() => first.isSynced);
+    open(CARD);
+    await until(() => failures.length > 0);
+
+    expect(failures).toEqual([`${CARD}:${CollabRejection.FORBIDDEN}`]);
+  });
 });

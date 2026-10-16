@@ -40,6 +40,7 @@ import type { RequestUser } from '../../common/auth/types';
 import { CollabAuthService } from './collab-auth.service';
 import { CollabDocumentRegistry, type CollabAccess, type CollabDocumentType } from './collab-documents';
 import { documentSchema, parseCollabToken, stampGeneration, stampSchema } from './collab-yjs';
+import { COLLAB_LIMITS, MessageBudget } from './collab-limits';
 
 /** Ό,τι ξέρει ο server για μια σύνδεση, μετά τον έλεγχο. */
 export interface CollabContext {
@@ -82,6 +83,12 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
   private readonly frozen = new Set<string>();
   /** Ο επόμενος έλεγχος token κάθε σύνδεσης. */
   private readonly tokenTimers = new WeakMap<Connection<CollabContext>, ReturnType<typeof setTimeout>>();
+  /** Τα ανοιχτά έγγραφα κάθε socket (καρτέλας) — για το όριο `documentsPerSocket`. */
+  private readonly socketDocuments = new Map<string, Set<string>>();
+  /** Έγγραφα που ξεπέρασαν το όριο μεγέθους: μένουν μόνο για ανάγνωση (ώσπου να ξεκινήσει ξανά ο server). */
+  private readonly oversized = new Set<string>();
+  /** Τα όρια (βλ. `COLLAB_LIMITS`) — αλλάζουν μόνο στις δοκιμές. */
+  limits: { messages: { burst: number; perSecond: number }; documentsPerSocket: number; documentBytes: number } = { ...COLLAB_LIMITS };
 
   constructor(
     private readonly prisma: PrismaService,
@@ -100,7 +107,7 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
         if (!context?.user) return;
         for (const state of states.values()) state.user = context.user;
       },
-      connected: async ({ connection, context, documentName }) => this.opened(connection, context, documentName),
+      connected: async ({ connection, context, documentName, socketId }) => this.opened(connection, context, documentName, socketId),
       onTokenSync: ({ token, connection, context }) => this.tokenSynced(token, connection, context.userId),
       afterUnloadDocument: async ({ documentName }) => {
         this.removed.delete(documentName);
@@ -149,7 +156,14 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
       headers: req.headers.origin ? { origin: req.headers.origin } : {},
     });
     const client = this.hocuspocus.handleConnection(ws, request, { requestId });
-    ws.on('message', (data: RawData) => client.handleMessage(toBytes(data)));
+    // Πλημμύρα μηνυμάτων (όχι άνθρωπος που γράφει): κλείνει. Ο client ξανασυνδέεται
+    // και συγχρονίζεται από την αρχή — ένα μήνυμα που απλώς πετιέται θα χαλούσε τον συγχρονισμό.
+    const budget = new MessageBudget(this.limits.messages);
+    ws.on('message', (data: RawData) => {
+      if (budget.take()) return client.handleMessage(toBytes(data));
+      this.logger.warn({ event: 'collab-rate-limit', requestId });
+      ws.close(4429, 'rate-limit');
+    });
     ws.on('close', (code: number, reason: Buffer) => client.handleClose({ code, reason: reason.toString() }));
     ws.on('pong', () => client.touch());
     ws.on('error', (error: Error) => this.logger.warn({ event: 'collab-socket-error', message: error.message, requestId }));
@@ -157,7 +171,7 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
 
   /** Ποιος, τι, και αν γράφει — μία φορά ανά έγγραφο που ανοίγει. */
   async authenticate(
-    data: Pick<onAuthenticatePayload<CollabContext>, 'token' | 'documentName' | 'connectionConfig' | 'context'>,
+    data: Pick<onAuthenticatePayload<CollabContext>, 'token' | 'documentName' | 'connectionConfig' | 'context' | 'socketId'>,
   ): Promise<Partial<CollabContext>> {
     const refuse = (reason: CollabRejection, userId?: string) => {
       this.logger.log({ event: 'collab-reject', document: data.documentName, reason, userId, requestId: data.context?.requestId });
@@ -169,6 +183,10 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
 
     const target = this.registry.resolve(data.documentName);
     if (!target || this.isRemoved(data.documentName)) throw refuse(CollabRejection.FORBIDDEN);
+    const open = this.socketDocuments.get(data.socketId);
+    if (open && !open.has(data.documentName) && open.size >= this.limits.documentsPerSocket) {
+      throw refuse(CollabRejection.FORBIDDEN);
+    }
 
     const identity = await this.auth.verify(token.t);
     if (identity === 'no-access') throw refuse(CollabRejection.FORBIDDEN);
@@ -182,7 +200,9 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
       throw refuse(CollabRejection.STALE_GENERATION, identity.user.id);
     }
 
-    if (access === 'read' || target.type.room || this.frozen.has(data.documentName)) data.connectionConfig.readOnly = true;
+    if (access === 'read' || target.type.room || this.frozen.has(data.documentName) || this.oversized.has(data.documentName)) {
+      data.connectionConfig.readOnly = true;
+    }
     const { user } = identity;
     return {
       userId: user.id,
@@ -196,7 +216,14 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
     };
   }
 
-  private opened(connection: Connection<CollabContext>, context: CollabContext, documentName: string): void {
+  private opened(connection: Connection<CollabContext>, context: CollabContext, documentName: string, socketId: string): void {
+    const open = this.socketDocuments.get(socketId) ?? new Set<string>();
+    open.add(documentName);
+    this.socketDocuments.set(socketId, open);
+    connection.onClose(() => {
+      open.delete(documentName);
+      if (!open.size) this.socketDocuments.delete(socketId);
+    });
     this.logger.log({
       event: 'collab-open',
       document: documentName,
@@ -307,6 +334,7 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
 
     try {
       const state = Buffer.from(encodeStateAsUpdate(document));
+      if (state.byteLength > this.limits.documentBytes && !this.oversized.has(documentName)) this.tooLarge(documentName, state.byteLength);
       await this.prisma.collabDocument.upsert({
         where: { name: documentName },
         create: { name: documentName, state, generation },
@@ -319,6 +347,19 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
       reportError(error, { userId: lastContext?.userId });
       throw error;
     }
+  }
+
+  /**
+   * Το έγγραφο ξεπέρασε το όριο μεγέθους: ό,τι έχει σώζεται, αλλά από εδώ και
+   * πέρα μόνο διαβάζεται — οι συνδέσεις ξανανοίγουν και το μαθαίνουν. Δεν
+   * συμβαίνει με κανονική χρήση (Markdown, εικόνες ως αναφορές): είναι σφάλμα ή
+   * κατάχρηση, και πάει στο GlitchTip — χωρίς περιεχόμενο.
+   */
+  private tooLarge(documentName: string, bytes: number): void {
+    this.oversized.add(documentName);
+    this.logger.warn({ event: 'collab-too-large', document: documentName, bytes });
+    reportError(new Error(`Κοινό έγγραφο πάνω από το όριο μεγέθους (${bytes} bytes)`), {});
+    this.hocuspocus.closeConnections(documentName);
   }
 
   // ───────────────────────── Για τα υπόλοιπα modules ─────────────────────────
