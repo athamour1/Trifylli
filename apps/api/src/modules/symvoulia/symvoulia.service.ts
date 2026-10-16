@@ -10,6 +10,7 @@ import {
   KLADOS_SYMVOULIA,
   SYMVOULIO_TYPE_LABEL,
   TOPIKO_SYMVOULIA,
+  COLLAB_FIELDS,
   can,
   collabDocument,
   type KladosType,
@@ -19,6 +20,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
 import { accessProfileOf, assertKladosAccess, scopedKladoi } from '../../common/util/klados-scope';
 import { MemberKind, MemberStatus } from '@prisma/client';
+import { refuseCollabFields } from '../collab/collab-fields';
 import { CollabService } from '../collab/collab.service';
 import { FilesService } from '../files/files.service';
 import type { CreateSymvoulioDto, UpdateSymvoulioDto } from './dto/symvoulio.dto';
@@ -126,11 +128,7 @@ export class SymvouliaService {
    */
   async update(user: RequestUser, id: string, dto: UpdateSymvoulioDto) {
     // Ατζέντα και πρακτικά γράφονται πια μαζί, ως κοινό έγγραφο (`symvoulio:<id>`).
-    // Ένα tab από πριν την αλλαγή θα έστελνε όλο το κείμενο και θα έσβηνε ό,τι
-    // γράφουν οι άλλοι — του λέμε να ανανεώσει.
-    if (dto.agenda !== undefined || dto.minutes !== undefined) {
-      throw new ConflictException('Η εφαρμογή ενημερώθηκε — ανανέωσε τη σελίδα για να συνεχίσεις.');
-    }
+    refuseCollabFields(dto, COLLAB_FIELDS.symvoulio);
     await this.assertEditable(user, id);
     const { participantIds, ...fields } = dto;
 

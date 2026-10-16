@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { DrasiGroupKind, Prisma } from '@prisma/client';
 import {
+  collabDocument,
   DRASI_ROLE_LABEL,
   DRASI_YPIRESIA_KINDS,
   YpiresiesRotation,
@@ -11,6 +12,7 @@ import {
 } from '@trifylli/shared';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
+import { CollabService } from '../collab/collab.service';
 import { DrasiAccessService } from './drasi-access.service';
 import { DraseisPlanService, localDate } from './draseis-plan.service';
 import type { CreateYpiresiaDto, SetResponsiblesDto, SetYpiresiaSlotsDto, SetYpiresiesSettingsDto, UpdateYpiresiaDto } from './dto/drasi-ypiresies.dto';
@@ -32,6 +34,7 @@ export class DraseisYpiresiesService {
     private readonly prisma: PrismaService,
     private readonly access: DrasiAccessService,
     private readonly plan: DraseisPlanService,
+    private readonly collab: CollabService,
   ) {}
 
   async view(user: RequestUser, id: string): Promise<DrasiYpiresiesView> {
@@ -102,6 +105,8 @@ export class DraseisYpiresiesService {
     await this.access.load(user, id, 'write');
     await this.find(id, serviceId);
     await this.prisma.drasiYpiresia.delete({ where: { id: serviceId } });
+    // Υπεύθυνος υπηρεσίας = στέλεχος της δράσης: αλλάζει ποιος βλέπει τα κείμενά της.
+    this.collab.revokeAll(collabDocument.drasiPrefix(id));
     return this.services(id);
   }
 
@@ -115,6 +120,7 @@ export class DraseisYpiresiesService {
       this.prisma.drasiYpiresiaResponsible.deleteMany({ where: { ypiresiaId: serviceId } }),
       this.prisma.drasiYpiresiaResponsible.createMany({ data: ids.map((userId) => ({ ypiresiaId: serviceId, userId })) }),
     ]);
+    this.collab.revokeAll(collabDocument.drasiPrefix(id));
     return this.services(id);
   }
 

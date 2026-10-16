@@ -2,6 +2,8 @@ import { BadRequestException, ForbiddenException, Injectable, NotFoundException 
 import { MemberKind } from '@prisma/client';
 import {
   CHARACTER_OWN_FIELDS,
+  COLLAB_FIELDS,
+  collabDocument,
   drasiEditScope,
   fieldsOutside,
   type DrasiCharacterView,
@@ -10,6 +12,8 @@ import {
 } from '@trifylli/shared';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
+import { refuseCollabFields } from '../collab/collab-fields';
+import { CollabService } from '../collab/collab.service';
 import { DrasiAccessService } from './drasi-access.service';
 import type { CreateCharacterDto, OrderCharactersDto, UpdateCharacterDto, UpdateMythosDto } from './dto/drasi-mythos.dto';
 
@@ -27,6 +31,7 @@ export class DraseisMythosService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly access: DrasiAccessService,
+    private readonly collab: CollabService,
   ) {}
 
   async view(user: RequestUser, id: string): Promise<DrasiMythosView> {
@@ -49,6 +54,8 @@ export class DraseisMythosService {
   }
 
   async update(user: RequestUser, id: string, dto: UpdateMythosDto): Promise<DrasiMythosView> {
+    // Η ιστορία γράφεται πια μαζί (`drasi:<id>:mythos`)· εδώ μόνο ο τίτλος.
+    refuseCollabFields(dto, COLLAB_FIELDS.drasiMythos);
     await this.access.load(user, id, 'write');
     await this.prisma.drasi.update({
       where: { id },
@@ -83,6 +90,8 @@ export class DraseisMythosService {
    * και lore (`CHARACTER_OWN_FIELDS`)· ποιος τον παίζει το ορίζει το Πρόγραμμα.
    */
   async updateCharacter(user: RequestUser, id: string, characterId: string, dto: UpdateCharacterDto): Promise<DrasiCharacterView> {
+    // Το lore γράφεται πια μαζί (`drasi:<id>:character:<id>`).
+    refuseCollabFields(dto, COLLAB_FIELDS.drasiCharacter);
     await this.access.load(user, id, 'write');
     const character = await this.findCharacter(id, characterId);
     const grant = user.drasiGrant?.drasiId === id ? user.drasiGrant.access : null;
@@ -101,12 +110,15 @@ export class DraseisMythosService {
       },
       include: { participant: { select: stelexosSelect } },
     });
+    // Άλλο στέλεχος παίζει τον ρόλο: άλλος γράφει «το δικό του» lore.
+    if (dto.participantId !== undefined) this.collab.revoke(collabDocument.drasiCharacter(id, characterId));
     return toCharacter(updated);
   }
 
   async deleteCharacter(user: RequestUser, id: string, characterId: string): Promise<{ ok: true }> {
     await this.access.load(user, id, 'write');
     await this.findCharacter(id, characterId);
+    await this.collab.remove(collabDocument.drasiCharacter(id, characterId));
     await this.prisma.drasiCharacter.delete({ where: { id: characterId } });
     return { ok: true };
   }

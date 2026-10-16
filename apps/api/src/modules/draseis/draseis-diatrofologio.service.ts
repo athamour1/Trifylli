@@ -1,7 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import type { DrasiDiatrofologioView, DrasiMealSummary, DrasiMealView, DrasiScheduleItemView } from '@trifylli/shared';
+import { COLLAB_FIELDS, type DrasiDiatrofologioView, type DrasiMealSummary, type DrasiMealView, type DrasiScheduleItemView } from '@trifylli/shared';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
+import { refuseCollabFields } from '../collab/collab-fields';
 import { DrasiAccessService } from './drasi-access.service';
 import { DraseisPlanService } from './draseis-plan.service';
 import { ingredientRows, isMeal } from './diatrofologio';
@@ -59,15 +60,16 @@ export class DraseisDiatrofologioService {
   }
 
   async updateMeal(user: RequestUser, id: string, itemId: string, dto: UpdateMealDto): Promise<DrasiMealView> {
+    // Η συνταγή γράφεται πια μαζί (`drasi:<id>:meal:<id>`)· εδώ μενού και ποσολόγιο.
+    refuseCollabFields(dto, COLLAB_FIELDS.drasiMeal);
     await this.access.load(user, id, 'write');
     await this.mealItem(user, id, itemId);
     await this.prisma.$transaction(async (tx) => {
       await tx.drasiMeal.upsert({
         where: { itemId },
-        create: { itemId, menu: dto.menu?.trim() || null, recipe: dto.recipe?.trim() || null },
+        create: { itemId, menu: dto.menu?.trim() || null },
         update: {
           ...(dto.menu !== undefined ? { menu: dto.menu?.trim() || null } : {}),
-          ...(dto.recipe !== undefined ? { recipe: dto.recipe?.trim() || null } : {}),
         },
       });
       if (dto.ingredients) {

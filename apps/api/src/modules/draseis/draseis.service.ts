@@ -2,6 +2,8 @@ import { BadRequestException, ConflictException, ForbiddenException, Injectable,
 import { AccountRole, CheckoutStatus, DrasiStatus, DrasiType, MemberKind, Prisma } from '@prisma/client';
 import {
   can,
+  COLLAB_FIELDS,
+  collabDocument,
   KLADOS_LABEL,
   KLADOS_META,
   type DrasiRoleKind,
@@ -13,6 +15,8 @@ import {
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
 import { accessProfileOf, assertKladosAccess, scopedKladoi } from '../../common/util/klados-scope';
+import { refuseCollabFields } from '../collab/collab-fields';
+import { CollabService } from '../collab/collab.service';
 import { DrasiAccessService } from './drasi-access.service';
 import { defaultFeeKind } from './draseis-finance.service';
 import { planGuestTopika } from './guest-topika';
@@ -34,7 +38,17 @@ export class DraseisService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly drasiAccess: DrasiAccessService,
+    private readonly collab: CollabService,
   ) {}
+
+  /**
+   * Άλλαξε κάτι που ορίζει ποιος βλέπει ή γράφει στη δράση (ρόλοι, συμμετέχοντες,
+   * κλάδοι, κλείσιμο): οι ανοιχτές συνδέσεις στα κοινά κείμενά της κλείνουν και
+   * ξανανοίγουν με τα νέα δικαιώματα.
+   */
+  private accessChanged(id: string): void {
+    this.collab.revokeAll(collabDocument.drasiPrefix(id));
+  }
 
   async list(user: RequestUser, query: QueryDraseisDto): Promise<Paginated<unknown>> {
     if (query.klados) assertKladosAccess(user, query.klados);
@@ -231,6 +245,8 @@ export class DraseisService {
   }
 
   async update(user: RequestUser, id: string, dto: UpdateDrasiDto) {
+    // Η περιγραφή γράφεται πια μαζί, ως κοινό έγγραφο (`drasi:<id>:settings`).
+    refuseCollabFields(dto, COLLAB_FIELDS.drasiSettings);
     const drasi = await this.assertAccess(user, id);
     const type = dto.type ?? drasi.type;
     const dateStart = dto.dateStart ?? drasi.dateStart;
@@ -264,16 +280,20 @@ export class DraseisService {
     if (!closed && drasi.status !== DrasiStatus.KLEISTI) {
       throw new BadRequestException('Η δράση δεν είναι κλειστή.');
     }
-    return this.prisma.drasi.update({
+    const updated = await this.prisma.drasi.update({
       where: { id },
       data: { status: closed ? DrasiStatus.KLEISTI : DrasiStatus.ENERGI },
       select: { id: true, status: true },
     });
+    this.accessChanged(id);
+    return updated;
   }
 
   async archive(user: RequestUser, id: string) {
     await this.assertAccess(user, id);
-    return this.prisma.drasi.update({ where: { id }, data: { archivedAt: new Date() } });
+    const archived = await this.prisma.drasi.update({ where: { id }, data: { archivedAt: new Date() } });
+    this.accessChanged(id);
+    return archived;
   }
 
   /**
@@ -311,6 +331,8 @@ export class DraseisService {
     if (blockers.length) {
       throw new ConflictException(`Η δράση έχει ${blockers.join(', ')} — αρχειοθέτησέ την αντί να τη σβήσεις.`);
     }
+    // Ό,τι γράφεται αυτή τη στιγμή σώζεται και τα κοινά κείμενα σβήνουν μαζί της.
+    await this.collab.removeAll(collabDocument.drasiPrefix(id));
     await this.prisma.drasi.delete({ where: { id } });
     return { id, title: drasi.title };
   }
@@ -339,6 +361,7 @@ export class DraseisService {
       this.prisma.drasiKlados.deleteMany({ where: { drasiId: id } }),
       this.prisma.drasiKlados.createMany({ data: rows.map((r) => ({ drasiId: id, kladosId: r.id })) }),
     ]);
+    this.accessChanged(id);
 
     return rows
       .map((r) => r.type as KladosType)
@@ -402,6 +425,7 @@ export class DraseisService {
         })),
       }),
     ]);
+    this.accessChanged(id);
 
     return this.prisma.drasiRole.findMany({
       where: { drasiId: id },
@@ -445,6 +469,7 @@ export class DraseisService {
       }),
     );
 
+    this.accessChanged(id);
     return { added: valid.length };
   }
 
@@ -463,6 +488,7 @@ export class DraseisService {
       this.prisma.drasiScheduleAssignee.deleteMany({ where: { userId: memberId, item: { drasiId: id } } }),
       this.prisma.drasiParticipant.delete({ where: { drasiId_userId: { drasiId: id, userId: memberId } } }),
     ]);
+    this.accessChanged(id);
     return removed;
   }
 

@@ -1,8 +1,10 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { CheckoutStatus, MemberKind, Prisma, SymvoulioType, YlikoCategory } from '@prisma/client';
 import {
+  COLLAB_FIELDS,
   DRASI_EXPENSE_CATEGORIES,
   SCHEDULE_ITEM_OWN_FIELDS,
+  collabDocument,
   drasiEditScope,
   fieldsOutside,
   type DrasiExternalYlikoView,
@@ -17,6 +19,8 @@ import {
 } from '@trifylli/shared';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
+import { refuseCollabFields } from '../collab/collab-fields';
+import { CollabService } from '../collab/collab.service';
 import { DrasiAccessService } from './drasi-access.service';
 import { planResponsibles } from './schedule-assignees';
 import { ylikoRows } from './schedule-yliko';
@@ -49,6 +53,7 @@ export class DraseisPlanService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly access: DrasiAccessService,
+    private readonly collab: CollabService,
   ) {}
 
   // ───────────────────────── Ωρολόγιο & προγραμματικό ─────────────────────────
@@ -142,6 +147,8 @@ export class DraseisPlanService {
    * προγραμματικό του (`SCHEDULE_ITEM_OWN_FIELDS`).
    */
   async updateScheduleItem(user: RequestUser, id: string, itemId: string, dto: UpdateScheduleItemDto): Promise<DrasiScheduleItemView> {
+    // Το προγραμματικό γράφεται πια μαζί (`drasi:<id>:item:<id>`).
+    refuseCollabFields(dto, COLLAB_FIELDS.drasiItem);
     await this.access.load(user, id, 'write');
     const item = await this.prisma.drasiScheduleItem.findFirst({
       where: { id: itemId, drasiId: id },
@@ -189,10 +196,13 @@ export class DraseisPlanService {
           ...(dto.kind !== undefined ? { kind: dto.kind } : {}),
           ...(dto.snack !== undefined ? { snack: dto.snack } : {}),
           ...(dto.location !== undefined ? { location: dto.location?.trim() || null } : {}),
-          ...(dto.description !== undefined ? { description: dto.description?.trim() || null } : {}),
         },
       });
     });
+    // Άλλοι υπεύθυνοι: άλλοι γράφουν «το δικό τους» προγραμματικό.
+    if (responsibles.create.length || responsibles.remove.length) this.collab.revoke(collabDocument.drasiItem(id, itemId));
+    // Ένα στοιχείο που έπαψε να είναι γεύμα δεν έχει πια συνταγή να γράφεται.
+    if (dto.kind !== undefined || dto.snack !== undefined) this.collab.revoke(collabDocument.drasiMeal(id, itemId));
     return this.itemWithTimes(user, id, itemId);
   }
 
@@ -200,6 +210,10 @@ export class DraseisPlanService {
     await this.access.load(user, id, 'write');
     const item = await this.prisma.drasiScheduleItem.findFirst({ where: { id: itemId, drasiId: id } });
     if (!item) throw new NotFoundException('Το στοιχείο του ωρολογίου δεν βρέθηκε.');
+    await Promise.all([
+      this.collab.remove(collabDocument.drasiItem(id, itemId)),
+      this.collab.remove(collabDocument.drasiMeal(id, itemId)),
+    ]);
     await this.prisma.drasiScheduleItem.delete({ where: { id: itemId } });
     return { deleted: true };
   }
