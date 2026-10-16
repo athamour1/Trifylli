@@ -5,15 +5,22 @@ import { DraseisService } from './draseis.service';
 const DRASI = 'd-1';
 const ME = { id: 'u-me', topikoId: 't-1', drasiGrant: { drasiId: DRASI } } as unknown as RequestUser;
 
-/** Οι ρόλοι μιας δράσης στη μνήμη — ένα (ευθύνη, άτομο) μία φορά. */
-function setup() {
+/**
+ * Οι ρόλοι μιας δράσης στη μνήμη — ένα (ευθύνη, άτομο) μία φορά. Το `u-4` είναι
+ * στέλεχος του Τοπικού που δεν συμμετέχει στη δράση.
+ */
+function setup({ stelexi = ['u-1', 'u-2', 'u-3', 'u-me'] }: { stelexi?: string[] } = {}) {
   const roles: { drasiId: string; kind: string; userId: string; note: string | null }[] = [{ drasiId: DRASI, kind: 'ARXIGOS', userId: 'u-1', note: null }];
   const revoked: string[] = [];
   const prisma = {
     drasi: { findFirst: async () => ({ id: DRASI, title: 'Πεζοπορία', klados: { type: 'ODIGOI' } }) },
     user: {
       findFirst: async ({ where }: { where: { id: string; topikoId: string } }) =>
-        ['u-1', 'u-2', 'u-3', 'u-me'].includes(where.id) && where.topikoId === 't-1' ? { id: where.id } : null,
+        ['u-1', 'u-2', 'u-3', 'u-4', 'u-me'].includes(where.id) && where.topikoId === 't-1' ? { id: where.id } : null,
+    },
+    drasiParticipant: {
+      count: async ({ where }: { where: { drasiId: string; kind: string; userId: string } }) =>
+        where.drasiId === DRASI && where.kind === 'STELEXOS' && stelexi.includes(where.userId) ? 1 : 0,
     },
     drasiRole: {
       findUnique: async ({ where }: { where: { drasiId_kind_userId: { drasiId: string; kind: string; userId: string } } }) => {
@@ -65,6 +72,20 @@ describe('ρόλοι της δράσης ένας-ένας', () => {
   it('άγνωστο στέλεχος: όχι', async () => {
     const { service } = setup();
     await expect(service.addRole(ME, DRASI, 'PROGRAMMA', 'u-ξένος')).rejects.toThrow(/Άγνωστο στέλεχος/);
+  });
+
+  it('στέλεχος του Τοπικού που δεν συμμετέχει στη δράση: δεν παίρνει ρόλο', async () => {
+    const { service, roles } = setup();
+    await expect(service.addRole(ME, DRASI, 'TAMIAS', 'u-4')).rejects.toThrow(/συμμετέχουν στη δράση/);
+    expect(roles.map((r) => `${r.kind}:${r.userId}`)).toEqual(['ARXIGOS:u-1']);
+  });
+
+  it('όποιος είχε ήδη τον ρόλο πριν από τον κανόνα: μένει, και βγαίνει κανονικά', async () => {
+    const { service, roles } = setup({ stelexi: ['u-2'] });
+    await service.addRole(ME, DRASI, 'ARXIGOS', 'u-1', 'σημείωση');
+    expect(roles).toEqual([{ drasiId: DRASI, kind: 'ARXIGOS', userId: 'u-1', note: 'σημείωση' }]);
+    await service.removeRole(ME, DRASI, 'ARXIGOS', 'u-1');
+    expect(roles).toEqual([]);
   });
 
   it('κάθε αλλαγή ρόλου κλείνει τις συνδέσεις της δράσης (νέα δικαιώματα)', async () => {

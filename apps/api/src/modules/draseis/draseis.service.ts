@@ -458,12 +458,17 @@ export class DraseisService {
   /**
    * Ένας ρόλος σε ένα στέλεχος — χωρίς να σταλεί όλο το αρχηγείο: δύο που ορίζουν
    * ρόλους μαζί δεν σβήνουν ο ένας τον άλλον. Ήδη υπάρχει: μένει (με τη νέα σημείωση, αν δόθηκε).
+   * Νέος ρόλος μόνο σε στέλεχος που συμμετέχει στη δράση· όσοι τον είχαν από πριν
+   * ισχύσει ο κανόνας μένουν μέχρι να βγουν.
    */
   async addRole(user: RequestUser, id: string, kind: DrasiRoleKind, userId: string, note?: string | null) {
     const drasi = await this.assertAccess(user, id);
     const known = await this.prisma.user.findFirst({ where: { id: userId, topikoId: user.topikoId, archivedAt: null }, select: { id: true } });
     if (!known) throw new BadRequestException('Άγνωστο στέλεχος.');
     const existed = await this.prisma.drasiRole.findUnique({ where: { drasiId_kind_userId: { drasiId: id, kind, userId } }, select: { userId: true } });
+    if (!existed && !(await this.prisma.drasiParticipant.count({ where: { drasiId: id, kind: MemberKind.STELEXOS, userId } }))) {
+      throw new BadRequestException('Ρόλο παίρνουν μόνο στελέχη που συμμετέχουν στη δράση.');
+    }
     await this.prisma.drasiRole.upsert({
       where: { drasiId_kind_userId: { drasiId: id, kind, userId } },
       create: { drasiId: id, kind, userId, note: note?.trim() || null },
