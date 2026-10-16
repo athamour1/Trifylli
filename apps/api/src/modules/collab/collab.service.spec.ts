@@ -432,4 +432,13 @@ describe('CollabService', () => {
 
     expect(failures).toEqual([`${CARD}:${CollabRejection.FORBIDDEN}`]);
   });
+
+  it('μετρήσεις: πόσα έγγραφα είναι ανοιχτά και πόσες συνδέσεις έχουν', async () => {
+    const maria = connect('maria');
+    const sofia = connect('sofia');
+    const card = connect('eleni', { name: CARD });
+    await until(() => maria.provider.isSynced && sofia.provider.isSynced && card.provider.isSynced);
+
+    expect(service.stats()).toEqual({ documents: 2, connections: 3, sockets: 3 });
+  });
 });

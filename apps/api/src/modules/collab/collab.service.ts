@@ -52,6 +52,8 @@ export interface CollabContext {
 
 /** Το μήνυμα ενός WebSocket δεν περνά τα 2 MB (Markdown, όχι αρχεία — οι εικόνες είναι αναφορές). */
 const MAX_MESSAGE_BYTES = 2 * 1024 * 1024;
+/** Κάθε πότε γράφεται η γραμμή `collab-stats` στο log. */
+const STATS_EVERY_MS = 5 * 60_000;
 /** Πόσο πριν τη λήξη του token ο server ζητά το καινούργιο (ο client το ανανεώνει ένα λεπτό πριν). */
 const TOKEN_REFRESH_LEAD_MS = 30_000;
 
@@ -87,6 +89,7 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
   private readonly socketDocuments = new Map<string, Set<string>>();
   /** Έγγραφα που ξεπέρασαν το όριο μεγέθους: μένουν μόνο για ανάγνωση (ώσπου να ξεκινήσει ξανά ο server). */
   private readonly oversized = new Set<string>();
+  private statsTimer: ReturnType<typeof setInterval> | null = null;
   /** Τα όρια (βλ. `COLLAB_LIMITS`) — αλλάζουν μόνο στις δοκιμές. */
   limits: { messages: { burst: number; perSecond: number }; documentsPerSocket: number; documentBytes: number } = { ...COLLAB_LIMITS };
 
@@ -147,6 +150,22 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
       this.wss.handleUpgrade(req, socket, head, (ws) => this.accept(ws, req));
     });
     this.logger.log(`Συνεργασία: ws ${path}`);
+    // Μία γραμμή στο log κάθε 5΄ όσο υπάρχει κίνηση: πόσα έγγραφα ζουν στη μνήμη,
+    // πόσες συνδέσεις, πόση μνήμη τρώει η διεργασία — για το όριο μνήμης του container.
+    this.statsTimer = setInterval(() => {
+      const stats = this.stats();
+      if (!stats.connections) return;
+      const memory = process.memoryUsage();
+      this.logger.log({ event: 'collab-stats', ...stats, rssMb: Math.round(memory.rss / 1048576), heapMb: Math.round(memory.heapUsed / 1048576) });
+    }, STATS_EVERY_MS);
+    this.statsTimer.unref();
+  }
+
+  /** Τι ζει τώρα στη μνήμη: ανοιχτά έγγραφα, συνδέσεις σε αυτά, sockets (καρτέλες). */
+  stats(): { documents: number; connections: number; sockets: number } {
+    let connections = 0;
+    for (const document of this.hocuspocus.documents.values()) connections += document.getConnectionsCount();
+    return { documents: this.hocuspocus.documents.size, connections, sockets: this.wss.clients.size };
   }
 
   private accept(ws: WebSocket, req: IncomingMessage): void {
@@ -470,6 +489,7 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
   }
 
   async beforeApplicationShutdown(): Promise<void> {
+    if (this.statsTimer) clearInterval(this.statsTimer);
     this.wss.close();
     // Ό,τι γράφτηκε τα τελευταία δευτερόλεπτα σώζεται πριν σβήσει το container.
     await Promise.allSettled(
