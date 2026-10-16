@@ -42,17 +42,27 @@
           <q-item-section>
             <q-item-label :class="s.purchasedAt ? 'text-grey-7' : ''">{{ s.name }} <span class="text-grey-6">× {{ s.qty }}</span></q-item-label>
             <q-item-label caption>
-              <span v-if="s.assignee">{{ s.assignee.lastName }} {{ s.assignee.firstName }}</span>
+              <span v-if="s.purchasedAt" class="text-positive">
+                αγοράστηκε{{ s.purchasedBy ? ` από ${s.purchasedBy.firstName} ${s.purchasedBy.lastName.charAt(0)}.` : '' }} · {{ tickTime(s.purchasedAt) }}
+              </span>
+              <span v-else-if="s.assignee" :class="s.assignee.id === me ? 'text-klados' : ''">
+                {{ s.assignee.id === me ? 'το παίρνεις εσύ' : `το παίρνει ${s.assignee.firstName} ${s.assignee.lastName.charAt(0)}.` }}
+              </span>
               <span v-if="s.estimatedCost !== null"> · εκτίμηση {{ formatEuro(s.estimatedCost) }}</span>
               <span v-if="s.treasuryEntry" class="text-negative"> · έξοδο {{ formatEuro(s.treasuryEntry.amount) }} ({{ TREASURY_CATEGORY_LABEL[s.treasuryEntry.category] }})</span>
               <span v-if="s.yliko" class="text-positive"> · στην αποθήκη</span>
               <span v-if="s.note"> · {{ s.note }}</span>
             </q-item-label>
           </q-item-section>
-          <q-item-section v-if="canWrite" side>
-            <div class="row no-wrap">
-              <q-btn v-if="!s.purchasedAt" dense flat color="klados" icon="paid" label="Αγοράστηκε" @click="openPurchase(s)" />
-              <q-btn v-if="!s.treasuryEntry" dense flat round icon="delete" color="negative" @click="removeShopping(s)" />
+          <q-item-section side>
+            <div class="row no-wrap items-center">
+              <!-- Εθελοντικά: όποιος βλέπει τη λίστα «το παίρνει» — και το κλείνει για τους άλλους. -->
+              <q-btn v-if="!s.purchasedAt && !s.assignee" dense flat no-caps color="klados" icon="front_hand" label="Το παίρνω εγώ" :loading="claiming === s.id" @click="claim(s, true)" />
+              <q-btn v-else-if="!s.purchasedAt && s.assignee?.id === me" dense flat no-caps icon="undo" label="Δεν το παίρνω" :loading="claiming === s.id" @click="claim(s, false)" />
+              <template v-if="canWrite">
+                <q-btn v-if="!s.purchasedAt" dense flat color="klados" icon="paid" label="Αγοράστηκε" @click="openPurchase(s)" />
+                <q-btn v-if="!s.treasuryEntry" dense flat round icon="delete" color="negative" @click="removeShopping(s)" />
+              </template>
             </div>
           </q-item-section>
         </q-item>
@@ -68,12 +78,20 @@
       <div v-if="list && !list.checkouts.length" class="text-center text-grey-6 q-pa-lg">Καμία δέσμευση.</div>
       <q-list v-else-if="list" bordered separator class="rounded-borders">
         <q-item v-for="c in list.checkouts" :key="c.id">
+          <q-item-section side class="loaded-tick">
+            <q-checkbox :model-value="!!c.loaded" dense color="positive" @update:model-value="(v: boolean) => setLoaded('checkouts', c.id, v)">
+              <q-tooltip>{{ c.loaded ? `Μπήκε · ${tickWho(c.loaded)}` : 'Μπήκε στη φόρτωση;' }}</q-tooltip>
+            </q-checkbox>
+          </q-item-section>
           <q-item-section avatar>
             <q-avatar size="30px" :style="kladosVars(c.kladosType)" :class="c.kladosType ? 'bg-klados text-klados-on' : 'bg-grey-4'"><q-icon name="inventory_2" size="16px" /></q-avatar>
           </q-item-section>
           <q-item-section>
             <q-item-label>{{ c.name }}</q-item-label>
-            <q-item-label caption>{{ c.qty }} {{ c.unit ?? '' }} · {{ c.kladosType ? KLADOS_LABEL[c.kladosType] : 'Κεντρική αποθήκη' }}</q-item-label>
+            <q-item-label caption>
+              {{ c.qty }} {{ c.unit ?? '' }} · {{ c.kladosType ? KLADOS_LABEL[c.kladosType] : 'Κεντρική αποθήκη' }}
+              <span v-if="c.loaded" class="text-positive"> · μπήκε ({{ tickWho(c.loaded) }})</span>
+            </q-item-label>
           </q-item-section>
           <q-item-section side><q-badge :label="CHECKOUT_STATUS_LABEL[c.status]" /></q-item-section>
         </q-item>
@@ -98,6 +116,11 @@
       <div v-if="list && !list.external.length" class="text-center text-grey-6 q-pa-lg">Τίποτα από άλλους.</div>
       <q-list v-else-if="list" bordered separator class="rounded-borders">
         <q-item v-for="x in list.external" :key="x.id">
+          <q-item-section side class="loaded-tick">
+            <q-checkbox :model-value="!!x.loaded" dense color="positive" @update:model-value="(v: boolean) => setLoaded('external', x.id, v)">
+              <q-tooltip>{{ x.loaded ? `Μπήκε · ${tickWho(x.loaded)}` : 'Μπήκε στη φόρτωση;' }}</q-tooltip>
+            </q-checkbox>
+          </q-item-section>
           <q-item-section avatar>
             <q-icon :name="x.returnedAt ? 'assignment_return' : 'luggage'" :color="x.returnedAt ? 'positive' : 'grey-7'" />
           </q-item-section>
@@ -106,6 +129,7 @@
             <q-item-label caption>
               {{ ownerLabel(x) }}
               <span v-if="x.responsible"> · {{ x.responsible.lastName }} {{ x.responsible.firstName }}</span>
+              <span v-if="x.loaded && !x.returnedAt" class="text-positive"> · μπήκε ({{ tickWho(x.loaded) }})</span>
               <span v-if="x.returnedAt" class="text-positive"> · επιστράφηκε {{ formatDate(x.returnedAt) }}</span>
             </q-item-label>
           </q-item-section>
@@ -178,11 +202,11 @@
       <h2>Λίστα φόρτωσης</h2>
       <template v-if="list">
         <h3 v-if="list.checkouts.length">Από τις αποθήκες</h3>
-        <ul><li v-for="c in list.checkouts" :key="c.id">☐ {{ c.name }} × {{ c.qty }} {{ c.unit ?? '' }} <small>({{ c.kladosType ? KLADOS_LABEL[c.kladosType] : 'κεντρική' }})</small></li></ul>
+        <ul><li v-for="c in list.checkouts" :key="c.id">{{ c.loaded ? '☑' : '☐' }} {{ c.name }} × {{ c.qty }} {{ c.unit ?? '' }} <small>({{ c.kladosType ? KLADOS_LABEL[c.kladosType] : 'κεντρική' }})</small></li></ul>
         <h3 v-if="list.shopping.length">Αγορές</h3>
-        <ul><li v-for="s in list.shopping" :key="s.id">☐ {{ s.name }} × {{ s.qty }} <small v-if="s.assignee">({{ s.assignee.lastName }} {{ s.assignee.firstName }})</small></li></ul>
+        <ul><li v-for="s in list.shopping" :key="s.id">{{ s.purchasedAt ? '☑' : '☐' }} {{ s.name }} × {{ s.qty }} <small v-if="s.assignee">({{ s.assignee.lastName }} {{ s.assignee.firstName }})</small></li></ul>
         <h3 v-if="list.external.length">Φέρνουν άλλοι — να επιστραφούν</h3>
-        <ul><li v-for="x in list.external" :key="x.id">☐ {{ x.name }} × {{ x.qty }} <small>({{ ownerLabel(x) }})</small></li></ul>
+        <ul><li v-for="x in list.external" :key="x.id">{{ x.loaded ? '☑' : '☐' }} {{ x.name }} × {{ x.qty }} <small>({{ ownerLabel(x) }})</small></li></ul>
       </template>
     </div>
   </div>
@@ -199,6 +223,7 @@ import {
   TREASURY_CATEGORY_LABEL,
   type DrasiExternalYlikoView,
   type DrasiGuestTopikoView,
+  type DrasiLoadedTick,
   type DrasiLoadingList,
   type DrasiShoppingItemView,
   type KladosType,
@@ -212,6 +237,7 @@ import { formatDate, formatEuro } from '../../lib/format';
 import { kladosVars } from '../../lib/klados-theme';
 import { printElement } from '../../lib/print';
 import { useLiveReload } from '../../composables/useLiveChanges';
+import { useAuthStore } from '../../stores/auth';
 
 const props = defineProps<{
   drasiId: string;
@@ -254,6 +280,41 @@ onMounted(async () => {
     // Χωρίς στελέχη οι pickers μένουν άδειοι.
   }
 });
+
+// ── Ζωντανές λίστες: «το παίρνω εγώ», «μπήκε» — με το ποιος και το πότε ──
+const auth = useAuthStore();
+const me = computed(() => auth.user?.id ?? null);
+const claiming = ref<string | null>(null);
+
+function tickTime(at: string): string {
+  return new Date(at).toLocaleString('el-GR', { weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false });
+}
+function tickWho(tick: DrasiLoadedTick): string {
+  const who = tick.by ? (tick.by.id === me.value ? 'εσύ' : `${tick.by.firstName} ${tick.by.lastName.charAt(0)}.`) : '';
+  return [who, tickTime(tick.at)].filter(Boolean).join(' · ');
+}
+
+async function claim(s: DrasiShoppingItemView, on: boolean): Promise<void> {
+  claiming.value = s.id;
+  try {
+    await post(`/draseis/${props.drasiId}/yliko/shopping/${s.id}/claim`, { claim: on });
+    await reload();
+  } catch (err) {
+    notifyError(err, 'Δεν έγινε.');
+    await reload();
+  } finally {
+    claiming.value = null;
+  }
+}
+
+async function setLoaded(what: 'checkouts' | 'external', id: string, loaded: boolean): Promise<void> {
+  try {
+    await post(`/draseis/${props.drasiId}/yliko/${what}/${id}/loaded`, { loaded });
+    await reload();
+  } catch (err) {
+    notifyError(err, 'Δεν σημειώθηκε.');
+  }
+}
 
 // ── Αγορές ──
 const shopForm = reactive({ name: '', qty: 1, estimatedCost: null as number | null, assignee: [] as string[] });
@@ -432,6 +493,10 @@ function notifyError(err: unknown, fallback: string): void {
 </script>
 
 <style scoped>
+.loaded-tick {
+  padding-right: 4px;
+  min-width: 0;
+}
 @media print {
   .loading-sheet h2 { font-size: 20px; margin: 0 0 8px; }
   .loading-sheet h3 { font-size: 14px; margin: 12px 0 4px; }
