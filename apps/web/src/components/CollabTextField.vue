@@ -5,6 +5,7 @@
       v-bind="editorView"
       :doc="doc"
       :field="field"
+      :document-name="name"
       :awareness="awareness"
       :readonly="readonly || readOnly || status === 'update-required'"
     />

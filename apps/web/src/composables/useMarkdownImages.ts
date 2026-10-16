@@ -20,6 +20,8 @@ export function useMarkdownImages(options: {
   insert: (snippet: string) => void;
   /** Δέχεται το πεδίο αυτή τη στιγμή εικόνες (γράφεται, όχι προβολή); */
   accepts: () => boolean;
+  /** Κοινό έγγραφο του κειμένου: η εικόνα ανήκει σε αυτό (τη βλέπει όποιος το βλέπει). */
+  document?: () => string | null;
 }) {
   const $q = useQuasar();
 
@@ -52,9 +54,11 @@ export function useMarkdownImages(options: {
     try {
       for (const file of files) {
         const klados = options.klados();
+        const document = options.document?.() ?? null;
         const ref = await upload<{ id: string }>('/files', file, {
           purpose: 'MARKDOWN',
           ...(klados ? { kladosType: klados } : {}),
+          ...(document ? { collabDocument: document } : {}),
         });
         options.insert(`\n![${altFor(file.name)}](${IMAGE_REF_PREFIX}${ref.id})\n`);
       }

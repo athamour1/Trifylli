@@ -74,6 +74,7 @@
                 <CollabMarkdownField
                   v-if="collabReady"
                   :doc="collabDoc"
+                  :document-name="collabDocument.symvoulio(id)"
                   field="agenda"
                   :awareness="awareness"
                   :klados="data.klados?.type ?? null"
@@ -104,6 +105,7 @@
                 <CollabMarkdownField
                   v-if="collabReady"
                   :doc="collabDoc"
+                  :document-name="collabDocument.symvoulio(id)"
                   field="minutes"
                   :awareness="awareness"
                   :klados="data.klados?.type ?? null"

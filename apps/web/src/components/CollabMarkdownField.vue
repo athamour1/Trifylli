@@ -90,6 +90,8 @@ const props = withDefaults(
   defineProps<{
     doc: Doc;
     field: string;
+    /** Το όνομα του κοινού εγγράφου — οι εικόνες που ανεβαίνουν ανήκουν σε αυτό. */
+    documentName?: string | null;
     awareness?: Awareness | null;
     label?: string;
     placeholder?: string;
@@ -100,6 +102,7 @@ const props = withDefaults(
     klados?: KladosType | null;
   }>(),
   {
+    documentName: null,
     awareness: null,
     label: 'Σημειώσεις',
     placeholder: 'Markdown: **έντονα**, - λίστα, # τίτλος…',
@@ -135,6 +138,7 @@ const { html, uploading, dragActive, uploadFiles, onPaste, onDragEnter, onDragOv
     klados: () => props.klados,
     insert,
     accepts: () => !props.readonly && mode.value === 'edit',
+    document: () => props.documentName,
   });
 
 /** Το κείμενο μπαίνει εκεί που είναι ο κέρσορας — και φεύγει στους άλλους όπως κάθε πληκτρολόγηση. */
