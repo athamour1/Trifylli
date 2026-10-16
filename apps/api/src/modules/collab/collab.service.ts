@@ -26,6 +26,7 @@ import {
   CollabRejection,
   collabColor,
   collabShortName,
+  type CollabChange,
   type CollabPresenceUser,
 } from '@trifylli/shared';
 import { WebSocketServer, type RawData, type WebSocket } from 'ws';
@@ -181,7 +182,7 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
       throw refuse(CollabRejection.STALE_GENERATION, identity.user.id);
     }
 
-    if (access === 'read' || this.frozen.has(data.documentName)) data.connectionConfig.readOnly = true;
+    if (access === 'read' || target.type.room || this.frozen.has(data.documentName)) data.connectionConfig.readOnly = true;
     const { user } = identity;
     return {
       userId: user.id,
@@ -262,6 +263,9 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
     const target = this.registry.resolve(documentName);
     if (!target) throw reject(CollabRejection.FORBIDDEN);
 
+    // Δωμάτιο: κανένα περιεχόμενο να φορτωθεί ή να σωθεί.
+    if (target.type.room) return;
+
     const row = await this.prisma.collabDocument.findUnique({ where: { name: documentName } });
     if (row) {
       applyUpdate(document, new Uint8Array(row.state));
@@ -297,7 +301,7 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
   async storeDocument({ document, documentName, lastContext }: Pick<onStoreDocumentPayload<CollabContext>, 'document' | 'documentName' | 'lastContext'>): Promise<void> {
     if (this.isRemoved(documentName)) return;
     const target = this.registry.resolve(documentName);
-    if (!target) return;
+    if (!target || target.type.room) return;
     const generation = document.getMap(COLLAB_META).get(COLLAB_GENERATION_KEY) as string | undefined;
     if (!generation) return;
 
@@ -363,6 +367,14 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
     this.frozen.add(name);
     for (const connection of this.hocuspocus.documents.get(name)?.getConnections() ?? []) connection.readOnly = true;
     await this.flush(name);
+  }
+
+  /**
+   * «Άλλαξε αυτό» σε όσους έχουν ανοιχτό το έγγραφο ή το δωμάτιο (βλ.
+   * `LiveChangesInterceptor`). Αν δεν το έχει ανοιχτό κανείς, δεν γίνεται τίποτα.
+   */
+  broadcast(name: string, change: CollabChange): void {
+    this.hocuspocus.documents.get(name)?.broadcastStateless(JSON.stringify(change));
   }
 
   /** Κλείνει τις συνδέσεις ενός εγγράφου· στην επανασύνδεση ισχύουν τα νέα δικαιώματα. */

@@ -20,6 +20,12 @@ export interface CollabDocumentType {
   readonly kind: string;
   /** Πόσα ids έχει το όνομα (1 ή 2) — π.χ. δράση και στοιχείο του ωρολογίου. */
   readonly arity: 1 | 2;
+  /**
+   * Δωμάτιο: χωρίς περιεχόμενο — μόνο ποιος είναι εκεί και τα μηνύματα του
+   * server (βλ. `CollabService.broadcast`). Δεν φορτώνεται, δεν σώζεται, και
+   * κανείς δεν γράφει σε αυτό.
+   */
+  readonly room?: boolean;
   /** Ίδιος κανόνας με το `GET` (βλέπει) και το `PATCH` (γράφει) της οντότητας. */
   access(user: RequestUser, ids: readonly string[]): Promise<CollabAccess | null>;
   /**

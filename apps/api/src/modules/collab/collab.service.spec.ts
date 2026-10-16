@@ -92,6 +92,17 @@ describe('CollabService', () => {
     project: async () => undefined,
   };
 
+  /** Δωμάτιο: χωρίς περιεχόμενο — μόνο παρουσία και μηνύματα του server. */
+  const ROOM = `room:${ID}`;
+  const roomType: CollabDocumentType = {
+    kind: 'room',
+    arity: 1,
+    room: true,
+    access: async (u) => access[u.id] ?? null,
+    seed: async () => true,
+    project: async () => undefined,
+  };
+
   const prisma = {
     collabDocument: {
       findUnique: async ({ where }: { where: { name: string } }) => rows.get(where.name) ?? null,
@@ -126,6 +137,7 @@ describe('CollabService', () => {
   function connect(token: string, options: { g?: string; p?: number; origin?: string; name?: string } = {}) {
     const document = new Doc();
     const failures: string[] = [];
+    const messages: string[] = [];
     const socket = new HocuspocusProviderWebsocket({
       url: `ws://127.0.0.1:${port}/api/collab`,
       WebSocketPolyfill: socketWithOrigin(options.origin ?? APP_ORIGIN),
@@ -137,10 +149,11 @@ describe('CollabService', () => {
       document,
       token: JSON.stringify({ t: token, g: options.g ?? '', p: options.p ?? COLLAB_PROTOCOL }),
       onAuthenticationFailed: ({ reason }) => failures.push(reason),
+      onStateless: ({ payload }) => messages.push(payload),
     });
     provider.attach();
     clients.push(provider);
-    return { provider, document, failures, text: () => document.getText('text').toString() };
+    return { provider, document, failures, messages, text: () => document.getText('text').toString() };
   }
 
   beforeEach(async () => {
@@ -159,6 +172,7 @@ describe('CollabService', () => {
     );
     service.registry.register(noteType);
     service.registry.register(cardType);
+    service.registry.register(roomType);
     upgrades.length = 0;
     service.onApplicationBootstrap();
     await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -336,5 +350,25 @@ describe('CollabService', () => {
     applyUpdate(stored, new Uint8Array(rows.get(CARD)!.state));
     expect(stored.getMap(COLLAB_META).get(COLLAB_SCHEMA_KEY)).toBe(2);
     expect(stored.getMap('fields').get('extra')).toBe('Από τη βάση');
+  });
+
+  it('δωμάτιο: όσοι είναι μέσα παίρνουν τα μηνύματα του server, και τίποτα δεν σώζεται', async () => {
+    const maria = connect('maria', { name: ROOM });
+    const eleni = connect('eleni', { name: ROOM });
+    await until(() => maria.provider.isSynced && eleni.provider.isSynced);
+
+    service.broadcast(ROOM, { topic: 'schedule', by: 'u-sofia', origin: 'tab-1' });
+    await until(() => maria.messages.length > 0 && eleni.messages.length > 0);
+
+    expect(JSON.parse(maria.messages[0]!)).toEqual({ topic: 'schedule', by: 'u-sofia', origin: 'tab-1' });
+    // Κανείς δεν γράφει περιεχόμενο σε δωμάτιο — ούτε όποιος γράφει στην οντότητα.
+    maria.document.getText('text').insert(0, 'Δεν πρέπει να μείνει.');
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(service.hocuspocus.documents.get(ROOM)?.getText('text').toString()).toBe('');
+    expect(rows.has(ROOM)).toBe(false);
+  });
+
+  it('μήνυμα σε έγγραφο που δεν έχει ανοίξει κανείς: δεν γίνεται τίποτα', () => {
+    expect(() => service.broadcast(ROOM, { topic: 'schedule', by: null, origin: null })).not.toThrow();
   });
 });
