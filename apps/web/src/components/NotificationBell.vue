@@ -1,12 +1,13 @@
 <template>
   <q-btn flat dense round icon="notifications" :aria-label="label">
     <q-badge v-if="store.view.unread" floating rounded color="negative" :label="store.view.unread > 99 ? '99+' : store.view.unread" />
+    <!-- Σκέτη λίστα, όπως το μενού του λογαριασμού: το μενού είναι ήδη το πλαίσιο. -->
     <q-menu anchor="bottom right" self="top right" @show="void store.load()">
-      <q-card style="width: min(360px, 94vw)">
-        <q-card-section class="row items-center q-py-sm">
-          <div class="text-subtitle2 col">Ειδοποιήσεις</div>
+      <q-list style="width: min(360px, 94vw)">
+        <div class="row items-center no-wrap q-pr-sm">
+          <q-item-label header class="col">Ειδοποιήσεις</q-item-label>
           <q-btn v-if="store.view.unread" flat dense no-caps size="sm" color="klados" label="Όλες διαβάστηκαν" @click="store.markAllRead()" />
-        </q-card-section>
+        </div>
         <q-separator />
         <q-list v-if="store.view.items.length" separator class="notification-list">
           <q-item v-for="item in store.view.items" :key="item.id" v-close-popup clickable :class="{ 'notification--unread': !item.readAt }" @click="open(item)">
@@ -21,10 +22,11 @@
         </q-list>
         <div v-else class="text-caption text-grey-7 q-pa-md text-center">Καμία ειδοποίηση.</div>
         <q-separator />
-        <q-card-actions align="right">
-          <q-btn v-close-popup flat dense no-caps size="sm" icon="tune" label="Ρυθμίσεις" :to="{ name: 'settings' }" />
-        </q-card-actions>
-      </q-card>
+        <q-item v-close-popup clickable :to="{ name: 'settings' }">
+          <q-item-section avatar><q-icon name="tune" /></q-item-section>
+          <q-item-section>Ρυθμίσεις</q-item-section>
+        </q-item>
+      </q-list>
     </q-menu>
   </q-btn>
 </template>
