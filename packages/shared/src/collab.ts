@@ -85,11 +85,36 @@ export const collabDocument = {
   drasiItem: (drasiId: string, itemId: string) => `drasi:${drasiId}:item:${itemId}`,
   /** Γεύμα: η συνταγή, το μενού και το ποσολόγιο (βλ. `MEAL_DOC`). */
   drasiMeal: (drasiId: string, itemId: string) => `drasi:${drasiId}:meal:${itemId}`,
+  /**
+   * Το δωμάτιο της δράσης: χωρίς περιεχόμενο — μόνο ποιος είναι εκεί και τα
+   * μηνύματα «άλλαξε αυτό» (βλ. `CollabChange`). Κλείνει μαζί με τα έγγραφά της.
+   */
+  drasiRoom: (drasiId: string) => `drasi:${drasiId}:room`,
   /** Το πρόθεμα όλων των εγγράφων μιας δράσης. */
   drasiPrefix: (drasiId: string) => `drasi:${drasiId}:`,
   /** Συγκέντρωση: όλο το πρόγραμμα — μέρη, κομμάτια, υλικό, στελέχη. */
   syggentrwsh: (id: string) => `syggentrwsh:${id}`,
 } as const;
+
+/**
+ * Μήνυμα του server σε όσους έχουν ανοιχτό ένα δωμάτιο ή έγγραφο, μετά από μια
+ * αλλαγή μέσω API: «άλλαξε αυτό». Το περιεχόμενο δεν ταξιδεύει — η σελίδα
+ * ξαναφορτώνει ό,τι την αφορά, κρατώντας ό,τι γράφει η ίδια και δεν έχει σωθεί.
+ */
+export interface CollabChange {
+  /**
+   * Τι άλλαξε: το κομμάτι της διαδρομής του API μετά το id (`schedule`, `groups`,
+   * `participants`, …), ή `drasi` / `header` για την ίδια την οντότητα.
+   */
+  topic: string;
+  /** Ποιος (λογαριασμός). */
+  by: string | null;
+  /** Η καρτέλα που έκανε την αλλαγή (`COLLAB_CLIENT_HEADER`) — αυτή ξέρει ήδη. */
+  origin: string | null;
+}
+
+/** Η κεφαλίδα με την οποία κάθε καρτέλα λέει στο API ποια είναι (βλ. `CollabChange.origin`). */
+export const COLLAB_CLIENT_HEADER = 'X-Client-Id';
 
 /**
  * Τα πεδία της οντότητας που ζουν πια στο κοινό έγγραφο — ο `PATCH` τους απαντά
