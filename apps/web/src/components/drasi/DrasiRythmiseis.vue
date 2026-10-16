@@ -26,7 +26,19 @@
           <div v-if="basic.type !== 'MONOIMERI'" class="col-7 col-sm-4 col-md-3"><DateField v-model="basic.dateEnd" label="Λήξη" /></div>
           <div class="col-5 col-sm-2 col-md-2"><TimeField v-model="basic.timeEnd" label="Ώρα λήξης" /></div>
           <div class="col-12 col-md-4"><q-input v-model="basic.location" label="Τόπος" outlined dense maxlength="200" color="klados" /></div>
-          <div class="col-12"><MarkdownField v-model="basic.description" label="Περιγραφή" placeholder="Λίγα λόγια για τη δράση — φαίνονται στο ντοσιέ." :min-height="80" /></div>
+          <div class="col-12">
+            <!-- Κοινό κείμενο: σώζεται μόνο του, ζωντανά — όχι με το «Αποθήκευση». -->
+            <CollabTextField
+              :name="collabDocument.drasiSettings(data.id)"
+              field="description"
+              :fallback="data.description"
+              :klados="organiser"
+              label="Περιγραφή — αποθηκεύεται μόνη της"
+              placeholder="Λίγα λόγια για τη δράση — φαίνονται στο ντοσιέ."
+              empty-text="Χωρίς περιγραφή."
+              :min-height="80"
+            />
+          </div>
           <div v-if="basicError" class="col-12 text-negative text-caption">{{ basicError }}</div>
         </div>
       </q-card-section>
@@ -174,6 +186,7 @@ import {
   DRASI_STATUS_LABEL,
   DRASI_TYPE_LABEL,
   KLADOI_IN_ORDER,
+  collabDocument,
   KLADOS_LABEL,
   type DrasiGuestTopikoView,
   type DrasiRoleView,
@@ -182,7 +195,7 @@ import {
   type KladosType,
 } from '@trifylli/shared';
 import DateField from '../DateField.vue';
-import MarkdownField from '../MarkdownField.vue';
+import CollabTextField from '../CollabTextField.vue';
 import TimeField from '../TimeField.vue';
 import GuestTopikaEditor from './GuestTopikaEditor.vue';
 import { guestTopikaErrors, guestTopikaPayload, toGuestTopikoForm, type GuestTopikoForm } from './types';
@@ -228,7 +241,7 @@ const toNum = (v: string | number | null): number | null => (v === null || v ===
 
 // ── Βασικά ──
 const typeOptions = (Object.keys(DRASI_TYPE_LABEL) as DrasiType[]).map((value) => ({ label: DRASI_TYPE_LABEL[value], value }));
-const basic = reactive({ title: '', type: 'MONOIMERI' as DrasiType, dateStart: '', timeStart: '09:00', dateEnd: '', timeEnd: '17:00', location: '', description: '', hasSkines: true });
+const basic = reactive({ title: '', type: 'MONOIMERI' as DrasiType, dateStart: '', timeStart: '09:00', dateEnd: '', timeEnd: '17:00', location: '', hasSkines: true });
 const basicError = computed(() => {
   if (!basic.title.trim()) return 'Η δράση θέλει τίτλο.';
   if (!basic.dateStart || !basic.timeStart) return 'Διάλεξε ημερομηνία και ώρα έναρξης.';
@@ -255,7 +268,6 @@ async function saveBasic(): Promise<void> {
       dateStart: at(basic.dateStart, basic.timeStart),
       dateEnd: at(basic.type === 'MONOIMERI' ? basic.dateStart : basic.dateEnd, basic.timeEnd || basic.timeStart),
       location: basic.location.trim() || undefined,
-      description: basic.description.trim() || undefined,
       // Στη μονοήμερη δεν στέλνουμε τίποτα: η ρύθμιση μένει όπως ήταν, για αν ξαναγίνει πολυήμερη.
       ...(basic.type !== 'MONOIMERI' ? { hasSkines: basic.hasSkines } : {}),
     });
@@ -377,7 +389,6 @@ function fill(d: DrasiSettingsData): void {
     dateEnd: toISODate(new Date(d.dateEnd)),
     timeEnd: hm(d.dateEnd),
     location: d.location ?? '',
-    description: d.description ?? '',
     hasSkines: d.hasSkines,
   });
   kladoi.value = d.kladoi;
