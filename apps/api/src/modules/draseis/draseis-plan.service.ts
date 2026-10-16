@@ -38,7 +38,7 @@ import type {
 
 const scheduleInclude = {
   assignees: { select: { user: { select: { id: true, firstName: true, lastName: true } } } },
-  yliko: { select: { label: true, qty: true, packed: true }, orderBy: { order: 'asc' } },
+  yliko: { select: { id: true, label: true, qty: true, packed: true }, orderBy: { order: 'asc' } },
 } as const;
 
 /**
@@ -149,7 +149,7 @@ export class DraseisPlanService {
    * προγραμματικό του (`SCHEDULE_ITEM_OWN_FIELDS`).
    */
   async updateScheduleItem(user: RequestUser, id: string, itemId: string, dto: UpdateScheduleItemDto): Promise<DrasiScheduleItemView> {
-    // Το προγραμματικό γράφεται πια μαζί (`drasi:<id>:item:<id>`).
+    // Προγραμματικό, χώρος και υλικό γράφονται πια μαζί (`drasi:<id>:item:<id>`).
     refuseCollabFields(dto, COLLAB_FIELDS.drasiItem);
     await this.access.load(user, id, 'write');
     const item = await this.prisma.drasiScheduleItem.findFirst({
@@ -184,11 +184,6 @@ export class DraseisPlanService {
       if (responsibles.create.length) {
         await tx.drasiScheduleAssignee.createMany({ data: responsibles.create.map((userId) => ({ itemId, userId })) });
       }
-      if (dto.yliko) {
-        await tx.drasiScheduleYlikoItem.deleteMany({ where: { itemId } });
-        const rows = ylikoRows(dto.yliko);
-        if (rows.length) await tx.drasiScheduleYlikoItem.createMany({ data: rows.map((y) => ({ itemId, ...y })) });
-      }
       await tx.drasiScheduleItem.update({
         where: { id: itemId },
         data: {
@@ -197,7 +192,6 @@ export class DraseisPlanService {
           ...(dto.title !== undefined ? { title: dto.title.trim() } : {}),
           ...(dto.kind !== undefined ? { kind: dto.kind } : {}),
           ...(dto.snack !== undefined ? { snack: dto.snack } : {}),
-          ...(dto.location !== undefined ? { location: dto.location?.trim() || null } : {}),
         },
       });
     });
@@ -248,6 +242,8 @@ export class DraseisPlanService {
   /** Αντιγραφή του ωρολογίου μιας ημέρας σε άλλη — μαζί με τα προγραμματικά και την ώρα έναρξης. */
   async copyDay(user: RequestUser, id: string, dto: CopyDayDto): Promise<{ copied: number }> {
     const drasi = await this.access.load(user, id, 'write');
+    // Ό,τι γράφεται αυτή τη στιγμή στα προγραμματικά της ημέρας αντιγράφεται κι αυτό.
+    await this.collab.flushPending(collabDocument.drasiPrefix(id));
     const source = await this.prisma.drasiScheduleItem.findMany({
       where: { drasiId: id, date: dateColumn(dto.from) },
       orderBy: { order: 'asc' },
@@ -619,7 +615,7 @@ export function toScheduleView(
     location: string | null;
     description: string | null;
     assignees: { user: { id: string; firstName: string; lastName: string } }[];
-    yliko: { label: string; qty: number; packed: boolean }[];
+    yliko: { id: string; label: string; qty: number; packed: boolean }[];
   },
   startsAt: Date,
   endsAt: Date,
@@ -640,7 +636,7 @@ export function toScheduleView(
     location: r.location,
     description: r.description,
     responsibles,
-    yliko: r.yliko.map((y) => ({ label: y.label, qty: y.qty, packed: y.packed })),
+    yliko: r.yliko.map((y) => ({ id: y.id, label: y.label, qty: y.qty, packed: y.packed })),
     hasProgramma: Boolean(r.description || responsibles.length || r.yliko.length),
   };
 }

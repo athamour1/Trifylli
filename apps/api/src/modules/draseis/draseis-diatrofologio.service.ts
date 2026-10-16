@@ -5,7 +5,7 @@ import type { RequestUser } from '../../common/auth/types';
 import { refuseCollabFields } from '../collab/collab-fields';
 import { DrasiAccessService } from './drasi-access.service';
 import { DraseisPlanService } from './draseis-plan.service';
-import { ingredientRows, isMeal } from './diatrofologio';
+import { isMeal } from './diatrofologio';
 import type { UpdateMealDto } from './dto/drasi-diatrofologio.dto';
 
 /**
@@ -55,29 +55,17 @@ export class DraseisDiatrofologioService {
       endsAt: item.endsAt,
       menu: meal?.menu ?? null,
       recipe: meal?.recipe ?? null,
-      ingredients: (meal?.ingredients ?? []).map((y) => ({ label: y.label, qty: y.qty, bought: y.bought })),
+      ingredients: (meal?.ingredients ?? []).map((y) => ({ id: y.id, label: y.label, qty: y.qty, bought: y.bought })),
     };
   }
 
+  /**
+   * Συνταγή, μενού και ποσολόγιο γράφονται πια μαζί (`drasi:<id>:meal:<id>`): ένα
+   * tab από πριν που στέλνει ολόκληρη τη φόρμα παίρνει 409 «ανανέωσε».
+   */
   async updateMeal(user: RequestUser, id: string, itemId: string, dto: UpdateMealDto): Promise<DrasiMealView> {
-    // Η συνταγή γράφεται πια μαζί (`drasi:<id>:meal:<id>`)· εδώ μενού και ποσολόγιο.
     refuseCollabFields(dto, COLLAB_FIELDS.drasiMeal);
     await this.access.load(user, id, 'write');
-    await this.mealItem(user, id, itemId);
-    await this.prisma.$transaction(async (tx) => {
-      await tx.drasiMeal.upsert({
-        where: { itemId },
-        create: { itemId, menu: dto.menu?.trim() || null },
-        update: {
-          ...(dto.menu !== undefined ? { menu: dto.menu?.trim() || null } : {}),
-        },
-      });
-      if (dto.ingredients) {
-        await tx.drasiMealIngredient.deleteMany({ where: { itemId } });
-        const rows = ingredientRows(dto.ingredients);
-        if (rows.length) await tx.drasiMealIngredient.createMany({ data: rows.map((y) => ({ itemId, ...y })) });
-      }
-    });
     return this.meal(user, id, itemId);
   }
 

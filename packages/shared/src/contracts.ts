@@ -615,7 +615,8 @@ export interface DrasiScheduleItemView {
   /** Οι υπεύθυνοι: ένα ή περισσότερα στελέχη της δράσης. */
   responsibles: { id: string; firstName: string; lastName: string }[];
   /** Το υλικό: λίστα όπως στις συγκεντρώσεις (`packed` = μπήκε στο σακίδιο). */
-  yliko: { label: string; qty: number; packed: boolean }[];
+  /** Η λίστα υλικού — τα id είναι σταθερά (οι γραμμές του κοινού εγγράφου του στοιχείου). */
+  yliko: { id: string; label: string; qty: number; packed: boolean }[];
   /** Έχει γραφτεί προγραμματικό (περιγραφή ή υπεύθυνος ή υλικό). */
   hasProgramma: boolean;
 }
@@ -813,6 +814,8 @@ export interface DrasiScheduleView {
 
 /** Γραμμή του ποσολογίου ενός γεύματος. */
 export interface DrasiMealIngredient {
+  /** Σταθερό — το id της γραμμής στο κοινό έγγραφο του γεύματος. */
+  id: string;
   label: string;
   /** Συνολική ποσότητα ως κείμενο — «2 kg», «3 πακέτα». */
   qty: string;
