@@ -92,6 +92,18 @@ describe('offline outbox', () => {
     expect(offline.outbox).toHaveLength(0);
   });
 
+  it('μια ουρά που άδειασε σημαίνει ότι υπάρχει δίκτυο — κι ας μην ήρθε ποτέ το «online»', async () => {
+    const offline = useOfflineStore();
+    offline.online = false;
+    await offline.enqueue({ method: 'PUT', url: '/a', body: {} });
+
+    request.mockResolvedValue({ data: {} });
+    await offline.flush();
+
+    expect(offline.outbox).toHaveLength(0);
+    expect(offline.online).toBe(true);
+  });
+
   it('με `replace`, η νέα εκδοχή διώχνει την προηγούμενη της ίδιας οθόνης', async () => {
     const offline = useOfflineStore();
     offline.online = false;

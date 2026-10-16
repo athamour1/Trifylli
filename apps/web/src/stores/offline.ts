@@ -10,6 +10,8 @@ const CACHE_PREFIX = 'trifylli:cache:';
 
 /** Πόσες φορές ξαναπροσπαθούμε πριν σημάνουμε μια εγγραφή ως αποτυχημένη. */
 const MAX_ATTEMPTS = 5;
+/** Κάθε πότε ξαναδοκιμάζει μόνη της μια ουρά που περιμένει. */
+const RETRY_EVERY_MS = 30_000;
 
 /**
  * Offline-first πυρήνας.
@@ -49,6 +51,17 @@ export const useOfflineStore = defineStore('offline', {
         });
         window.addEventListener('offline', () => {
           this.online = false;
+        });
+        // Στο βουνό το σήμα πάει κι έρχεται και το «online» δεν έρχεται πάντα (ή
+        // λέει ψέματα): όσο κάτι περιμένει δίκτυο, ξαναδοκιμάζουμε μόνοι μας — και
+        // όταν η εφαρμογή ξαναβγαίνει μπροστά. (Όσα απέτυχαν στον server
+        // ξαναδοκιμάζονται, όπως πριν, με το «online» ή με το χέρι.)
+        const waitingForNetwork = () => this.outbox.some((item) => item.attempts === 0);
+        setInterval(() => {
+          if (waitingForNetwork()) void this.flush();
+        }, RETRY_EVERY_MS);
+        document.addEventListener('visibilitychange', () => {
+          if (document.visibilityState === 'visible' && waitingForNetwork()) void this.flush();
         });
       }
 
@@ -136,6 +149,8 @@ export const useOfflineStore = defineStore('offline', {
         try {
           await http.request({ method: item.method, url: item.url, data: item.body });
           sent += 1;
+          // Πέρασε: υπάρχει δίκτυο, ό,τι κι αν λέει το `navigator.onLine`.
+          this.online = true;
         } catch (error) {
           if (error instanceof OfflineError) {
             // Χάθηκε ξανά το δίκτυο: κρατάμε ΟΛΑ τα υπόλοιπα ανέπαφα, χωρίς να
