@@ -41,6 +41,7 @@
 | `HEARTBEAT_IMAGE_SWEEP_URL` | API — σάρωση ορφανών εικόνων | cron `0 4 * * *`, UTC | 1 ώρα |
 | `HEARTBEAT_PHARMACY_RETURNS_URL` | API — αυτόματες επιστροφές φαρμακείων | 1 ώρα | 30 λεπτά |
 | `HEARTBEAT_PHARMACY_ACCESS_URL` | API — συγχρονισμός προσβάσεων φαρμακείων | 30 λεπτά | 30 λεπτά |
+| `HEARTBEAT_DRASI_REMINDERS_URL` | API — υπενθυμίσεις «σε 10΄ αρχίζει» των δράσεων | 1 λεπτό | 5 λεπτά |
 
 **Ο watchdog είναι και ο «νεκρός διακόπτης».** Αν πέσει ο server, το ρεύμα ή το
 internet του σπιτιού, σταματούν τα pings του και ειδοποιείσαι μέσα σε 15 λεπτά —

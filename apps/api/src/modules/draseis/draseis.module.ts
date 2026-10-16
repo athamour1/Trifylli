@@ -10,6 +10,7 @@ import { DraseisController } from './draseis.controller';
 import { DraseisDiatrofologioController } from './draseis-diatrofologio.controller';
 import { DraseisDiatrofologioService } from './draseis-diatrofologio.service';
 import { DraseisDossierService } from './draseis-dossier.service';
+import { DrasiRemindersService } from './drasi-reminders.service';
 import { DraseisExportService } from './draseis-export.service';
 import { DraseisExternalsController } from './draseis-externals.controller';
 import { DraseisYpiresiesController } from './draseis-ypiresies.controller';
@@ -66,6 +67,7 @@ import { DraseisService } from './draseis.service';
     DraseisYpiresiesService,
     DraseisReviewService,
     DraseisDossierService,
+    DrasiRemindersService,
   ],
   exports: [DraseisService],
 })

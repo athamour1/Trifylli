@@ -34,6 +34,7 @@ const schema = z.object({
   HEARTBEAT_IMAGE_SWEEP_URL: blankToUndefined(z.string().url()),
   HEARTBEAT_PHARMACY_RETURNS_URL: blankToUndefined(z.string().url()),
   HEARTBEAT_PHARMACY_ACCESS_URL: blankToUndefined(z.string().url()),
+  HEARTBEAT_DRASI_REMINDERS_URL: blankToUndefined(z.string().url()),
   /**
    * Web Push (ειδοποιήσεις στο κινητό): κλειδιά VAPID — τα βγάζει το `gen-env`.
    * Χωρίς αυτά οι ειδοποιήσεις μένουν στο καμπανάκι της εφαρμογής.

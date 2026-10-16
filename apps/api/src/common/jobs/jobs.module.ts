@@ -17,6 +17,7 @@ import { JobMonitor } from './job-monitor';
           'image-sweep': config.HEARTBEAT_IMAGE_SWEEP_URL,
           'pharmacy-returns': config.HEARTBEAT_PHARMACY_RETURNS_URL,
           'pharmacy-access': config.HEARTBEAT_PHARMACY_ACCESS_URL,
+          'drasi-reminders': config.HEARTBEAT_DRASI_REMINDERS_URL,
         }),
     },
   ],

@@ -3,7 +3,7 @@ import { scrubEmails } from '@trifylli/shared';
 import { reportError } from '../errors/error-reporting';
 
 /** Οι περιοδικές εργασίες του API που στέλνουν heartbeat (βλ. docs/monitoring.md). */
-export type JobName = 'eseo-sync' | 'health-purge' | 'image-sweep' | 'pharmacy-returns' | 'pharmacy-access';
+export type JobName = 'eseo-sync' | 'health-purge' | 'image-sweep' | 'pharmacy-returns' | 'pharmacy-access' | 'drasi-reminders';
 
 export interface HeartbeatRequest {
   url: string;
