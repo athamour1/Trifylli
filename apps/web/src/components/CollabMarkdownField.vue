@@ -89,7 +89,10 @@ import { useMarkdownImages } from '../composables/useMarkdownImages';
 const props = withDefaults(
   defineProps<{
     doc: Doc;
-    field: string;
+    /** Το πεδίο (κείμενο) στη ρίζα του εγγράφου… */
+    field?: string;
+    /** …ή ένα κείμενο μέσα στη δομή του (π.χ. η περιγραφή ενός κομματιού της συγκέντρωσης). */
+    text?: YText | null;
     /** Το όνομα του κοινού εγγράφου — οι εικόνες που ανεβαίνουν ανήκουν σε αυτό. */
     documentName?: string | null;
     awareness?: Awareness | null;
@@ -102,6 +105,8 @@ const props = withDefaults(
     klados?: KladosType | null;
   }>(),
   {
+    field: '',
+    text: null,
     documentName: null,
     awareness: null,
     label: 'Σημειώσεις',
@@ -127,8 +132,8 @@ const syncText = (): void => {
 
 function bindText(): void {
   ytext?.unobserve(syncText);
-  ytext = props.doc.getText(props.field);
-  ytext.observe(syncText);
+  ytext = props.text ?? (props.field ? props.doc.getText(props.field) : null);
+  ytext?.observe(syncText);
   syncText();
 }
 
@@ -237,7 +242,7 @@ function destroyEditor(): void {
 // Νέο έγγραφο (π.χ. το αντίγραφο της συσκευής αντικαταστάθηκε) ή νέα awareness:
 // ο επεξεργαστής ξαναστήνεται πάνω τους.
 watch(
-  () => [props.doc, props.field, props.awareness, props.readonly] as const,
+  () => [props.doc, props.field, props.text, props.awareness, props.readonly] as const,
   async () => {
     bindText();
     await nextTick();
