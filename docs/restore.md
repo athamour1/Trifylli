@@ -48,10 +48,12 @@ dc stop api web authentik-server authentik-worker ouchtracker-backend
 
 # 3. Γύρνα το TAG στο .env.prod στην προηγούμενη έκδοση (π.χ. v1.0.2).
 
-# 4. Επαναφορά — για κάθε βάση, από την ίδια ώρα:
-dc run --rm -e CONFIRM=trifylli --entrypoint restore-db predeploy-backup \
+# 4. Επαναφορά — για κάθε βάση, από την ίδια ώρα. Με COLLAB_RESET=1 τα κοινά
+#    έγγραφα (πρακτικά, προγραμματικά, συγκεντρώσεις…) ξαναγεμίζουν από το
+#    backup με νέα γενιά: οι συσκευές δεν ξαναφέρνουν όσα γράφτηκαν μετά.
+dc run --rm -e CONFIRM=trifylli -e COLLAB_RESET=1 --entrypoint restore-db predeploy-backup \
   trifylli /backups/predeploy/trifylli-<ώρα>.dump
-#    (το ίδιο για authentik και ouchtracker, αν τις άγγιξε η νέα έκδοση)
+#    (το ίδιο για authentik και ouchtracker, αν τις άγγιξε η νέα έκδοση — χωρίς COLLAB_RESET)
 
 # 5. Πάνω, με την παλιά έκδοση.
 dc pull && dc up -d
@@ -75,6 +77,14 @@ dc run --rm -e CONFIRM=trifylli --entrypoint restore-db predeploy-backup \
   trifylli /backups/pg/daily/trifylli-<ημερομηνία>.sql.gz
 dc up -d
 ```
+
+Τα κοινά έγγραφα (πρακτικά, προγραμματικά, συγκεντρώσεις, γεύματα): **χωρίς**
+`COLLAB_RESET`, όποια συσκευή έχει νεότερο αντίγραφο το στέλνει μόλις συνδεθεί —
+σε απώλεια δεδομένων αυτό σώζει ό,τι γράφτηκε μετά το backup. Αν θέλεις να
+γυρίσουν **και αυτά** πίσω (π.χ. κάποιος έσβησε πρακτικά και ο server έχει ήδη
+το σβήσιμο), βάλε `-e COLLAB_RESET=1`: ξαναγεμίζουν από το backup με νέα γενιά
+και οι συσκευές πετούν τα αντίγραφά τους (ό,τι δεν είχε σταλεί εμφανίζεται για
+αντιγραφή).
 
 ---
 
