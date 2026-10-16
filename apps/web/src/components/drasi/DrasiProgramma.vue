@@ -7,10 +7,19 @@
   -->
   <div>
     <div class="row items-center q-mb-sm q-gutter-sm">
-      <SegmentedToggle v-model="dayKey" dense unelevated toggle-color="klados" toggle-text-color="klados-on" :options="dayOptions" />
+      <SegmentedToggle
+        v-model="mode"
+        dense flat no-caps
+        toggle-color="klados"
+        :options="[
+          { label: 'Ωρολόγιο', value: 'plan' },
+          { label: 'Ζωντανά', value: 'live' },
+        ]"
+      />
+      <SegmentedToggle v-if="mode === 'plan'" v-model="dayKey" dense unelevated toggle-color="klados" toggle-text-color="klados-on" :options="dayOptions" />
       <q-space />
       <q-select
-        v-if="approvalRows.length || approvalFilter !== 'all'"
+        v-if="mode === 'plan' && (approvalRows.length || approvalFilter !== 'all')"
         v-model="approvalFilter"
         :options="approvalFilterOptions"
         dense
@@ -23,8 +32,12 @@
         style="min-width: 170px"
       />
       <SaveStatus v-if="canWrite && saveStatus !== 'clean'" :status="saveStatus" @retry="saveNow" />
-      <q-btn v-if="canWrite && current?.items.length && dayOptions.length > 1" flat color="klados" icon="content_copy" label="Αντιγραφή ημέρας σε…" @click="copyDialog = true" />
+      <q-btn v-if="mode === 'plan' && canWrite && current?.items.length && dayOptions.length > 1" flat color="klados" icon="content_copy" label="Αντιγραφή ημέρας σε…" @click="copyDialog = true" />
     </div>
+
+    <DrasiLive v-if="mode === 'live' && view" :drasi-id="drasiId" :view="view" :can-write="canWrite" @changed="reload" />
+
+    <template v-if="mode === 'plan'">
 
     <!-- Έναρξη ημέρας: την πρώτη την ορίζει το Στήσιμο, τις άλλες μπορείς να τις αλλάξεις -->
     <div v-if="current" class="row items-center q-gutter-sm q-mb-md text-body2">
@@ -91,7 +104,13 @@
           <div v-if="canWrite && approvalFilter === 'all'" class="si-drag" @mousedown="dragArmed = row.id" @touchstart.passive="dragArmed = row.id">
             <q-icon name="drag_indicator" color="grey-5" size="24px" />
           </div>
-          <div class="si-start text-weight-medium">{{ times[idx]?.start }}</div>
+          <div class="si-start text-weight-medium">
+            {{ times[idx]?.start }}
+            <div v-if="times[idx]?.delay" class="si-delay text-orange-9">
+              {{ times[idx]!.delay > 0 ? '+' : '−' }}{{ Math.abs(times[idx]!.delay) }}΄
+              <q-tooltip>Προγραμματισμένη ώρα {{ times[idx]?.planned }} — με την καθυστέρηση {{ times[idx]?.start }}</q-tooltip>
+            </div>
+          </div>
           <div class="si-end text-caption text-grey-6">{{ times[idx]?.end }}</div>
           <q-btn
             class="si-kind"
@@ -188,6 +207,8 @@
       </div>
     </q-list>
 
+    </template>
+
     <!-- ── Αντιγραφή ημέρας ── -->
     <q-dialog v-model="copyDialog">
       <q-card style="min-width: min(380px, 94vw)">
@@ -227,6 +248,8 @@ import { scheduleCaption } from './types';
 import type { SaveState } from '../../lib/save-state';
 import { useLiveReload, useRowPresence } from '../../composables/useLiveChanges';
 import { APPROVAL_META, approvalsByItem, type ItemApproval } from '../../lib/approvals';
+import { delaysOf } from '../../lib/schedule-live';
+import DrasiLive from './DrasiLive.vue';
 
 const props = defineProps<{
   drasiId: string;
@@ -266,6 +289,16 @@ watch(dayOptions, (opts) => {
   if (!opts.some((o) => o.value === dayKey.value) && opts[0]) dayKey.value = opts[0].value;
 });
 const current = computed(() => view.value?.days.find((d) => d.date === dayKey.value) ?? null);
+
+/** «Ωρολόγιο» για τον σχεδιασμό, «Ζωντανά» την ώρα της δράσης — αυτό ανοίγει όταν η δράση τρέχει σήμερα. */
+const mode = ref<'plan' | 'live'>('plan');
+let modeChosen = false;
+watch(view, (value) => {
+  if (modeChosen || !value) return;
+  modeChosen = true;
+  const today = new Date().toLocaleDateString('en-CA');
+  if (value.days.some((d) => d.date === today && d.items.length)) mode.value = 'live';
+});
 const isFirstDay = computed(() => view.value?.days[0]?.date === dayKey.value);
 const dayStartDraft = computed(() => current.value?.startTime ?? '');
 
@@ -417,11 +450,14 @@ const clampMin = (v: unknown): number => (typeof v === 'number' && Number.isFini
 const times = computed(() => {
   const [h, m] = (current.value?.startTime ?? '00:00').split(':').map(Number);
   let cursor = (h ?? 0) * 60 + (m ?? 0);
-  const fmt = (min: number) => `${String(Math.floor(min / 60) % 24).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+  const fmt = (min: number) => `${String(Math.floor((((min / 60) % 24) + 24) % 24)).padStart(2, '0')}:${String(((min % 60) + 60) % 60).padStart(2, '0')}`;
+  // Η καθυστέρηση («καθυστερούμε 15΄ από εδώ») μετακινεί τις ώρες — με τη σειρά που βλέπεις.
+  const delays = delaysOf(rows.value.map((r) => r.id), current.value?.delays ?? []);
   return rows.value.map((r) => {
     const start = cursor;
     cursor += clampMin(r.durationMin);
-    return { start: fmt(start), end: fmt(cursor) };
+    const delay = delays.get(r.id) ?? 0;
+    return { start: fmt(start + delay), end: fmt(cursor + delay), planned: fmt(start), delay };
   });
 });
 const totalMin = computed(() => rows.value.reduce((s, r) => s + clampMin(r.durationMin), 0));
@@ -617,6 +653,10 @@ function notifyError(err: unknown, fallback: string): void {
 }
 .si-start {
   grid-area: start;
+}
+.si-delay {
+  font-size: 11px;
+  line-height: 1.1;
 }
 .si-end {
   grid-area: end;
