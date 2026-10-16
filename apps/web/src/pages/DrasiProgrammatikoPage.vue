@@ -26,10 +26,12 @@
             </div>
             <div class="col-12 col-sm-auto row items-center q-gutter-sm">
               <CollabPresence :peers="peers" />
-              <SaveStatus v-if="editable" :status="worstSaveState(saveStatus, textState)" @retry="saveNow" />
+              <SaveStatus v-if="editable" :status="worstSaveState(saveStatus, collabSaveState)" @retry="saveNow" />
             </div>
           </div>
         </div>
+
+        <CollabBanner :status="collabStatus" :ready="ready" :editable="editable" target="στο προγραμματικό" />
 
         <!-- ── Το προγραμματικό, με τα στοιχεία και το υλικό στο πλάι (δεξιά) ── -->
         <div class="tf-split">
@@ -41,7 +43,16 @@
               <q-select v-model="form.kind" :readonly="!editAll" :options="kindOptions" label="Είδος" outlined dense emit-value map-options color="klados">
                 <template #prepend><q-icon :name="KIND_ICON[form.kind]" :color="KIND_COLOR[form.kind]" /></template>
               </q-select>
-              <q-input v-model="form.location" :readonly="!editable" label="Χώρος" outlined dense color="klados" />
+              <q-input
+                :model-value="view.location"
+                :readonly="!fieldsEditable"
+                label="Χώρος"
+                outlined
+                dense
+                color="klados"
+                :maxlength="ROW_LIMITS.location"
+                @update:model-value="(value) => setLocation(doc, String(value ?? ''))"
+              />
               <StelexosPicker v-if="editAll" v-model="form.responsible" :label="responsiblesLabel(form.responsible.length)" :options="stelexiOptions" />
               <q-input v-else :model-value="namesOf(form.responsible)" :label="responsiblesLabel(form.responsible.length)" outlined dense readonly />
             </q-card-section>
@@ -53,19 +64,25 @@
           <q-card flat bordered class="tf-split__main">
             <q-card-section>
               <!-- Το γράφουν μαζί το Πρόγραμμα και οι υπεύθυνοι — ζωντανά, με κέρσορες. -->
-              <CollabTextField
-                :key="textName"
-                :name="textName"
-                field="description"
-                :fallback="item.description"
+              <CollabMarkdownField
+                v-if="ready"
+                :doc="doc"
+                :field="ITEM_DOC.description"
+                :document-name="docName"
+                :awareness="awareness"
                 :klados="drasi.klados?.type ?? null"
-                :readonly="!editable"
+                :readonly="!textEditable"
                 label="Προγραμματικό"
                 placeholder="Markdown: στόχος, πορεία, οδηγίες, κανόνες, εναλλακτική αν βρέξει… Σύρε ή επικόλλησε εικόνες."
                 empty-text="Δεν έχει γραφτεί προγραμματικό."
                 :min-height="360"
-                @state="textState = $event"
-                @peers="peers = $event"
+              />
+              <MarkdownField
+                v-else
+                :model-value="item.description ?? ''"
+                readonly
+                :klados="drasi.klados?.type ?? null"
+                empty-text="Δεν έχει γραφτεί προγραμματικό."
               />
             </q-card-section>
           </q-card>
@@ -78,32 +95,57 @@
             </q-card-section>
             <q-separator />
             <q-card-section class="q-py-sm">
-              <div v-if="!form.yliko.length" class="text-caption text-grey-6 q-pb-sm">
-                {{ editable ? 'Κενή λίστα.' : 'Δεν έχει δηλωθεί υλικό.' }}
+              <div v-if="!view.yliko.length" class="text-caption text-grey-6 q-pb-sm">
+                {{ fieldsEditable ? 'Κενή λίστα.' : 'Δεν έχει δηλωθεί υλικό.' }}
               </div>
-              <div v-for="(row, index) in form.yliko" :key="row.key" class="row items-center q-col-gutter-xs q-mb-xs">
+              <div v-for="row in view.yliko" :key="row.id" class="row items-center q-col-gutter-xs q-mb-xs">
                 <div class="col-auto">
-                  <q-checkbox v-model="row.packed" :disable="!editable" dense color="klados" />
+                  <q-checkbox
+                    :model-value="row.packed"
+                    :disable="!fieldsEditable"
+                    dense
+                    color="klados"
+                    @update:model-value="(value) => updateItemYliko(doc, row.id, { packed: value })"
+                  />
                 </div>
                 <div class="col">
                   <q-input
-                    v-model="row.label"
-                    :readonly="!editable"
+                    :model-value="row.label"
+                    :readonly="!fieldsEditable"
                     dense
                     outlined
                     placeholder="π.χ. σπάγκος"
+                    :data-row-id="row.id"
                     :class="row.packed ? 'text-grey-6' : ''"
-                    @keydown.enter.prevent="addYlikoAfter(index)"
+                    @update:model-value="(value) => updateItemYliko(doc, row.id, { label: String(value ?? '') })"
+                    @keydown.enter.prevent="addRow(row.id)"
                   />
                 </div>
                 <div class="col-auto" style="width: 76px">
-                  <q-input v-model.number="row.qty" :readonly="!editable" type="number" min="1" dense outlined />
+                  <q-input
+                    :model-value="row.qty"
+                    :readonly="!fieldsEditable"
+                    type="number"
+                    min="1"
+                    dense
+                    outlined
+                    @update:model-value="(value) => setQty(row.id, value)"
+                  />
                 </div>
-                <div v-if="editable" class="col-auto">
-                  <q-btn dense flat round size="sm" icon="close" color="negative" @click="form.yliko.splice(index, 1)" />
+                <div v-if="fieldsEditable" class="col-auto">
+                  <q-btn dense flat round size="sm" icon="close" color="negative" @click="removeItemYliko(doc, row.id)" />
                 </div>
               </div>
-              <q-btn v-if="editable" flat dense no-caps color="klados" icon="add" label="Προσθήκη" @click="addYlikoAfter(form.yliko.length - 1)" />
+              <q-btn
+                v-if="fieldsEditable"
+                flat
+                dense
+                no-caps
+                color="klados"
+                icon="add"
+                label="Προσθήκη"
+                @click="addRow(view.yliko.at(-1)?.id ?? null)"
+              />
             </q-card-section>
           </q-card>
         </div>
@@ -113,38 +155,47 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, reactive, ref, shallowRef, watch } from 'vue';
 import { useQuasar } from 'quasar';
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 import {
   DRASI_SCHEDULE_KIND_LABEL,
   DrasiScheduleKind,
-  SCHEDULE_ITEM_OWN_FIELDS,
+  ITEM_DOC,
+  ROW_LIMITS,
   collabDocument,
   drasiEditScope,
-  type CollabPresenceUser,
   type DrasiAccess,
   type DrasiEditScope,
   type DrasiScheduleItemView,
   type DrasiScheduleView,
   type DrasiStatus,
   type KladosType,
+  type PlanYlikoSnapshot,
 } from '@trifylli/shared';
+import CollabBanner from '../components/CollabBanner.vue';
 import CollabPresence from '../components/CollabPresence.vue';
-import CollabTextField from '../components/CollabTextField.vue';
+import MarkdownField from '../components/MarkdownField.vue';
 import PageState from '../components/PageState.vue';
 import SaveStatus from '../components/SaveStatus.vue';
 import StelexosPicker from '../components/StelexosPicker.vue';
-import { responsiblesLabel, sameYliko, ylikoPayload, type YlikoRow } from '../components/drasi/types';
+import { responsiblesLabel } from '../components/drasi/types';
 import { useAsyncData } from '../composables/useAsyncData';
+import { useCollabDoc, useCollabMe } from '../composables/useCollabDoc';
 import { ApiError, OfflineError, del, get, patch } from '../lib/api';
+import { addItemYlikoAfter, hasSchema, readItemDoc, removeItemYliko, setLocation, updateItemYliko } from '../lib/drasi-docs';
 import { formatDateLong, formatDuration } from '../lib/format';
 import { useKladosThemeStore } from '../stores/klados-theme';
+import { keepFocus } from '../lib/keep-focus';
 import { worstSaveState, type SaveState } from '../lib/save-state';
+import { typedNumber } from '../lib/syggentrwsh-plan';
 import { useAuthStore } from '../stores/auth';
 import { useOfflineStore } from '../stores/offline';
 
 const kladosTheme = useKladosThemeStore();
+
+// CodeMirror φορτώνεται μόνο όταν ανοίξει σελίδα με κείμενα για γράψιμο.
+const CollabMarkdownField = defineAsyncComponent(() => import('../components/CollabMarkdownField.vue'));
 
 interface DrasiHead {
   id: string;
@@ -160,7 +211,8 @@ const $q = useQuasar();
 const auth = useAuthStore();
 const offline = useOfflineStore();
 const drasiId = String(route.params.id);
-const itemId = computed(() => String(route.params.itemId));
+// Η σελίδα ξαναστήνεται για κάθε στοιχείο (βλ. το `key` στο MainLayout).
+const itemId = String(route.params.itemId);
 
 const KIND_ICON: Record<DrasiScheduleKind, string> = {
   DRASTIRIOTITA: 'hiking',
@@ -196,8 +248,8 @@ const { data, loading, error, stale, reload } = useAsyncData(
   { forbiddenPage: true, cacheKey: `drasi-schedule:${drasiId}` },
 );
 const drasi = computed(() => data.value?.drasi ?? null);
-const dayOf = computed(() => data.value?.schedule.days.find((d) => d.items.some((i) => i.id === itemId.value)) ?? null);
-const item = computed<DrasiScheduleItemView | null>(() => dayOf.value?.items.find((i) => i.id === itemId.value) ?? null);
+const dayOf = computed(() => data.value?.schedule.days.find((d) => d.items.some((i) => i.id === itemId)) ?? null);
+const item = computed<DrasiScheduleItemView | null>(() => dayOf.value?.items.find((i) => i.id === itemId) ?? null);
 
 watch(
   () => (drasi.value ? (drasi.value.klados?.type ?? null) : undefined),
@@ -239,28 +291,69 @@ const stelexiOptions = computed(() => {
 const namesOf = (ids: string[]): string =>
   ids.map((id) => stelexiOptions.value.find((o) => o.value === id)?.label ?? '').filter(Boolean).join(', ') || '—';
 
-// ── Το προγραμματικό: κοινό έγγραφο, σώζει μόνο του ──
-const textName = computed(() => collabDocument.drasiItem(drasiId, itemId.value));
-const textState = ref<SaveState>('clean');
-const peers = ref<CollabPresenceUser[]>([]);
+// ── Προγραμματικό, χώρος, υλικό: κοινό έγγραφο, σώζει μόνο του ──
+const docName = collabDocument.drasiItem(drasiId, itemId);
+const {
+  doc,
+  awareness,
+  ready,
+  writable,
+  status: collabStatus,
+  peers,
+  saveState: collabSaveState,
+} = useCollabDoc(docName, useCollabMe());
+
+/** Το στοιχείο όπως είναι τώρα στο έγγραφο — ξαναδιαβάζεται σε κάθε αλλαγή, δική μας ή άλλων. */
+const docItem = shallowRef<ReturnType<typeof readItemDoc> | null>(null);
+const schemaOk = shallowRef(false);
+let stopWatchingDoc: (() => void) | null = null;
+watch(
+  doc,
+  (current) => {
+    stopWatchingDoc?.();
+    const refresh = (): void =>
+      keepFocus(() => {
+        docItem.value = readItemDoc(current);
+        schemaOk.value = hasSchema(current, ITEM_DOC.schema);
+      });
+    current.on('update', refresh);
+    stopWatchingDoc = () => current.off('update', refresh);
+    refresh();
+  },
+  { immediate: true },
+);
+onBeforeUnmount(() => stopWatchingDoc?.());
+
+/** Το προγραμματικό γράφεται όταν γράφεται το στοιχείο **και** ο server το επιτρέπει. */
+const textEditable = computed(() => editable.value && ready.value && writable.value);
+/**
+ * Χώρος και υλικό: επιπλέον, το έγγραφο να έχει έρθει από τον server με αυτά
+ * μέσα — ένα παλιό αντίγραφο συσκευής (μόνο με το κείμενο) θα έγραφε από κενό.
+ */
+const fieldsEditable = computed(() => textEditable.value && schemaOk.value);
+
+/** Ό,τι δείχνει η σελίδα: το έγγραφο όταν έχει τα πεδία, αλλιώς ό,τι έφερε το `GET`. */
+const view = computed<{ location: string; yliko: PlanYlikoSnapshot[] }>(() => {
+  if (ready.value && schemaOk.value && docItem.value) return docItem.value;
+  return {
+    location: item.value?.location ?? '',
+    yliko: (item.value?.yliko ?? []).map((y, order) => ({ ...y, order })),
+  };
+});
 
 // ── Τοπική κατάσταση ──
 const AUTOSAVE_DELAY_MS = 1200;
 const saveStatus = ref<SaveState>('clean');
 const dirty = ref(false);
 let timer: ReturnType<typeof setTimeout> | null = null;
+/** Η γραμμή του ωρολογίου — σώζεται όπως πριν (`PATCH`)· τα υπόλοιπα είναι στο έγγραφο. */
 const form = reactive({
   title: '',
   durationMin: 30,
   kind: 'DRASTIRIOTITA' as DrasiScheduleKind,
-  location: '',
   responsible: [] as string[],
-  yliko: [] as YlikoRow[],
 });
 let hydrating = false;
-/** Το στοιχείο που γέμισε τελευταίο τη φόρμα — σε άλλο στοιχείο η λίστα υλικού ξαναγράφεται. */
-let hydratedId: string | null = null;
-let ylikoKey = 0;
 watch(
   item,
   (it) => {
@@ -271,15 +364,8 @@ watch(
       title: it.title,
       durationMin: it.durationMin,
       kind: it.kind,
-      location: it.location ?? '',
       responsible: it.responsibles.map((p) => p.id),
     });
-    // Μετά την αποθήκευση η λίστα είναι ήδη αυτή του server: δεν ξαναγράφεται,
-    // ώστε να μένουν το focus και η άδεια γραμμή που μόλις προστέθηκε.
-    if (it.id !== hydratedId || !sameYliko(form.yliko, it.yliko)) {
-      form.yliko = it.yliko.map((y) => ({ key: ++ylikoKey, label: y.label, qty: y.qty, packed: y.packed }));
-    }
-    hydratedId = it.id;
     dirty.value = false;
     if (saveStatus.value !== 'saved') saveStatus.value = 'clean';
     // Ο watcher της φόρμας τρέχει μετά από αυτό το sync block (pre-flush), οπότε
@@ -295,7 +381,7 @@ const clampMin = (v: unknown): number => (typeof v === 'number' && Number.isFini
 watch(
   form,
   () => {
-    if (hydrating || !editable.value) return;
+    if (hydrating || !editAll.value) return;
     dirty.value = true;
     saveStatus.value = 'pending';
     if (timer) clearTimeout(timer);
@@ -309,21 +395,15 @@ async function saveNow(): Promise<void> {
     clearTimeout(timer);
     timer = null;
   }
-  if (!dirty.value || !editable.value) return;
+  if (!dirty.value || !editAll.value) return;
   saveStatus.value = 'saving';
-  const change: Record<string, unknown> = {
-    ...(form.title.trim() ? { title: form.title.trim() } : {}),
-    durationMin: clampMin(form.durationMin),
-    kind: form.kind,
-    location: form.location.trim() || null,
-    responsibleIds: form.responsible,
-    yliko: ylikoPayload(form.yliko),
-  };
-  // Ο υπεύθυνος στέλνει μόνο ό,τι του επιτρέπεται — τα υπόλοιπα τα απορρίπτει το API.
-  const allowed: readonly string[] = SCHEDULE_ITEM_OWN_FIELDS;
-  const body = scope.value === 'all' ? change : Object.fromEntries(Object.entries(change).filter(([key]) => allowed.includes(key)));
   try {
-    await patch(`/draseis/${drasiId}/schedule/${itemId.value}`, body);
+    await patch(`/draseis/${drasiId}/schedule/${itemId}`, {
+      ...(form.title.trim() ? { title: form.title.trim() } : {}),
+      durationMin: clampMin(form.durationMin),
+      kind: form.kind,
+      responsibleIds: form.responsible,
+    });
     dirty.value = false;
     saveStatus.value = 'saved';
     // Οι ώρες στην κεφαλίδα ξαναβγαίνουν από τον server (άλλαξαν αν άλλαξαν τα λεπτά).
@@ -348,10 +428,20 @@ onBeforeRouteLeave(() => {
 });
 
 // ── Υλικό ──
-const ylikoCount = computed(() => ylikoPayload(form.yliko).length);
-const packedCount = computed(() => ylikoPayload(form.yliko).filter((y) => y.packed).length);
-function addYlikoAfter(index: number): void {
-  form.yliko.splice(index + 1, 0, { key: ++ylikoKey, label: '', qty: 1, packed: false });
+const filled = computed(() => view.value.yliko.filter((y) => y.label.trim()));
+const ylikoCount = computed(() => filled.value.length);
+const packedCount = computed(() => filled.value.filter((y) => y.packed).length);
+
+/** Νέα γραμμή: η εστίαση πάει στο όνομά της, για να συνεχιστεί η πληκτρολόγηση. */
+function addRow(afterId: string | null): void {
+  const id = addItemYlikoAfter(doc.value, afterId);
+  void nextTick(() => document.querySelector<HTMLInputElement>(`[data-row-id="${id}"]`)?.focus());
+}
+
+/** Όσο το πεδίο είναι κενό δεν γράφεται τίποτα (βλ. `typedNumber`). */
+function setQty(rowId: string, value: string | number | null): void {
+  const qty = typedNumber(value);
+  if (qty !== null) updateItemYliko(doc.value, rowId, { qty });
 }
 
 // ── Πλοήγηση ──
