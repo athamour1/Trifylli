@@ -56,6 +56,7 @@ export class DrasiActivityService implements OnModuleInit {
 
   onModuleInit(): void {
     this.collab.onApiChange((change) => {
+      if (change.quiet) return;
       const target = activityOfRoom(change.room, change.topic);
       if (target && change.by) void this.record(target.drasiId, change.by, target.topic, change.verb);
     });

@@ -6,9 +6,9 @@ export function parseChange(payload: string): CollabChange | null {
   try {
     const value = JSON.parse(payload) as unknown;
     if (typeof value !== 'object' || value === null) return null;
-    const { topic, by, origin } = value as Record<string, unknown>;
+    const { topic, by, origin, quiet } = value as Record<string, unknown>;
     if (typeof topic !== 'string') return null;
-    return { topic, by: typeof by === 'string' ? by : null, origin: typeof origin === 'string' ? origin : null };
+    return { topic, by: typeof by === 'string' ? by : null, origin: typeof origin === 'string' ? origin : null, ...(quiet === true ? { quiet: true } : {}) };
   } catch {
     return null;
   }

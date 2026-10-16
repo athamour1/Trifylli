@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CapabilityGuard } from '../../common/auth/capability.guard';
 import { CurrentUser, RequireDrasi } from '../../common/auth/decorators';
 import type { RequestUser } from '../../common/auth/types';
+import { QuietChange } from '../collab/live-changes';
 import { DraseisAnnouncementsService } from './draseis-announcements.service';
 import { DrasiPermGuard } from './drasi-perm.guard';
 import { CreateAnnouncementDto, SeenAnnouncementsDto } from './dto/drasi-announcements.dto';
@@ -31,6 +32,7 @@ export class DraseisAnnouncementsController {
 
   @Post('announcements/seen')
   @RequireDrasi('episkopisi')
+  @QuietChange()
   @ApiOperation({ summary: '«Τις είδα»' })
   async seen(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: SeenAnnouncementsDto) {
     await this.announcements.seen(user, id, dto.ids);

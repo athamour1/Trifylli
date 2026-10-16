@@ -3,6 +3,11 @@ import { CLIENT_ID, randomId } from '../src/lib/client-id';
 import { concernsMe, parseChange } from '../src/lib/live-changes';
 
 describe('μηνύματα «άλλαξε αυτό»', () => {
+  it('«ήσυχη» αλλαγή (π.χ. «τις είδα»): ξαναφορτώνει, αλλά χωρίς σημαδάκι', () => {
+    expect(parseChange(JSON.stringify({ topic: 'announcements', by: 'u-1', origin: null, quiet: true }))).toEqual({ topic: 'announcements', by: 'u-1', origin: null, quiet: true });
+    expect(parseChange(JSON.stringify({ topic: 'schedule', by: 'u-1', origin: null }))).toEqual({ topic: 'schedule', by: 'u-1', origin: null });
+  });
+
   it('διαβάζονται μόνο όταν έχουν τη σωστή μορφή', () => {
     expect(parseChange(JSON.stringify({ topic: 'schedule', by: 'u-1', origin: 'tab-1' }))).toEqual({ topic: 'schedule', by: 'u-1', origin: 'tab-1' });
     expect(parseChange(JSON.stringify({ topic: 'schedule', by: null, origin: null }))).toEqual({ topic: 'schedule', by: null, origin: null });

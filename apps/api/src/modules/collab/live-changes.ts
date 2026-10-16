@@ -1,4 +1,5 @@
-import { Inject, Injectable, type CallHandler, type ExecutionContext, type NestInterceptor } from '@nestjs/common';
+import { Inject, Injectable, SetMetadata, type CallHandler, type ExecutionContext, type NestInterceptor } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { COLLAB_CLIENT_HEADER, collabDocument } from '@trifylli/shared';
 import type { Request } from 'express';
 import { tap, type Observable } from 'rxjs';
@@ -52,6 +53,14 @@ export function clientOrigin(header: unknown): string | null {
   return typeof header === 'string' && CLIENT_ID.test(header) ? header : null;
 }
 
+const QUIET_CHANGE = 'collab:quiet-change';
+
+/**
+ * Η αλλαγή φτάνει ζωντανά, αλλά δεν γράφεται στη ροή δραστηριότητας — π.χ. το
+ * «τις είδα» των ανακοινώσεων, που δεν είναι πράξη πάνω στη δράση.
+ */
+export const QuietChange = (): MethodDecorator => SetMetadata(QUIET_CHANGE, true);
+
 /** Τι έγινε, από τη μέθοδο: νέο, αλλαγή ή αφαίρεση — η μετακίνηση είναι αλλαγή. */
 export function verbOf(method: string, path: string): 'add' | 'change' | 'remove' {
   if (method === 'DELETE') return 'remove';
@@ -70,6 +79,7 @@ export class LiveChangesInterceptor implements NestInterceptor {
   constructor(
     private readonly collab: CollabService,
     @Inject(AppConfigToken) private readonly config: AppConfig,
+    private readonly reflector: Reflector,
   ) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
@@ -79,8 +89,11 @@ export class LiveChangesInterceptor implements NestInterceptor {
     const room = liveRoom((req.route as { path?: string } | undefined)?.path, req.params, this.config.API_PREFIX);
     if (!room) return next.handle();
     const origin = clientOrigin(req.headers[COLLAB_CLIENT_HEADER.toLowerCase()]);
+    const quiet = this.reflector.get<boolean | undefined>(QUIET_CHANGE, context.getHandler()) === true;
     return next.handle().pipe(
-      tap(() => this.collab.apiChanged({ room: room.name, topic: room.topic, verb: verbOf(req.method, req.path), by: req.user?.id ?? null, origin })),
+      tap(() =>
+        this.collab.apiChanged({ room: room.name, topic: room.topic, verb: verbOf(req.method, req.path), by: req.user?.id ?? null, origin, quiet }),
+      ),
     );
   }
 }

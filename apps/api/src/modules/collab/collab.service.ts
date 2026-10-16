@@ -51,6 +51,8 @@ export interface ApiChange {
   verb: 'add' | 'change' | 'remove';
   by: string | null;
   origin: string | null;
+  /** Φτάνει ζωντανά, αλλά δεν είναι δραστηριότητα (βλ. `QuietChange`). */
+  quiet?: boolean;
 }
 
 /** Ό,τι ξέρει ο server για μια σύνδεση, μετά τον έλεγχο. */
@@ -494,7 +496,7 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
 
   /** Μια αλλαγή μέσω API: πάει στο δωμάτιό της και σε όσους την παρακολουθούν (ροή δραστηριότητας). */
   apiChanged(change: ApiChange): void {
-    this.broadcast(change.room, { topic: change.topic, by: change.by, origin: change.origin });
+    this.broadcast(change.room, { topic: change.topic, by: change.by, origin: change.origin, ...(change.quiet ? { quiet: true } : {}) });
     for (const listener of this.apiListeners) listener(change);
   }
 

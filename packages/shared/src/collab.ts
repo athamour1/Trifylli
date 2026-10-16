@@ -113,6 +113,8 @@ export interface CollabChange {
   by: string | null;
   /** Η καρτέλα που έκανε την αλλαγή (`COLLAB_CLIENT_HEADER`) — αυτή ξέρει ήδη. */
   origin: string | null;
+  /** Δεν είναι πράξη πάνω στη δράση (π.χ. «τις είδα»): ξαναφορτώνει, χωρίς σημαδάκι «άλλαξε». */
+  quiet?: boolean;
 }
 
 /** Η κεφαλίδα με την οποία κάθε καρτέλα λέει στο API ποια είναι (βλ. `CollabChange.origin`). */
