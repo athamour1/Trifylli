@@ -4,6 +4,7 @@ import {
   can,
   COLLAB_FIELDS,
   collabDocument,
+  DRASI_ROLE_LABEL,
   KLADOS_LABEL,
   KLADOS_META,
   type DrasiRoleKind,
@@ -17,6 +18,7 @@ import type { RequestUser } from '../../common/auth/types';
 import { accessProfileOf, assertKladosAccess, scopedKladoi } from '../../common/util/klados-scope';
 import { refuseCollabFields } from '../collab/collab-fields';
 import { CollabService } from '../collab/collab.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { DrasiAccessService } from './drasi-access.service';
 import { defaultFeeKind } from './draseis-finance.service';
 import { planGuestTopika } from './guest-topika';
@@ -39,6 +41,7 @@ export class DraseisService {
     private readonly prisma: PrismaService,
     private readonly drasiAccess: DrasiAccessService,
     private readonly collab: CollabService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /**
@@ -402,7 +405,10 @@ export class DraseisService {
 
   /** Αντικαθιστά όλες τις ευθύνες. Τα ids ελέγχονται στο Τοπικό — όχι ευθύνες-φαντάσματα. */
   async setRoles(user: RequestUser, id: string, dto: SetDrasiRolesDto) {
-    await this.assertAccess(user, id);
+    const drasi = await this.assertAccess(user, id);
+    const before = new Set(
+      (await this.prisma.drasiRole.findMany({ where: { drasiId: id }, select: { kind: true, userId: true } })).map((r) => `${r.kind}:${r.userId}`),
+    );
 
     const userIds = [...new Set(dto.roles.map((r) => r.userId))];
     const known = await this.prisma.user.findMany({
@@ -428,6 +434,13 @@ export class DraseisService {
       }),
     ]);
     this.accessChanged(id);
+    // Όσοι πήραν νέο ρόλο (όχι ο ίδιος) ειδοποιούνται — ένα μήνυμα ανά ρόλο.
+    const given = new Map<DrasiRoleKind, string[]>();
+    for (const r of unique.values()) {
+      if (before.has(`${r.kind}:${r.userId}`) || r.userId === user.id) continue;
+      given.set(r.kind, [...(given.get(r.kind) ?? []), r.userId]);
+    }
+    for (const [kind, userIds] of given) this.roleGiven(id, drasi.title, kind, userIds);
 
     return this.prisma.drasiRole.findMany({
       where: { drasiId: id },
@@ -441,16 +454,28 @@ export class DraseisService {
    * ρόλους μαζί δεν σβήνουν ο ένας τον άλλον. Ήδη υπάρχει: μένει (με τη νέα σημείωση, αν δόθηκε).
    */
   async addRole(user: RequestUser, id: string, kind: DrasiRoleKind, userId: string, note?: string | null) {
-    await this.assertAccess(user, id);
+    const drasi = await this.assertAccess(user, id);
     const known = await this.prisma.user.findFirst({ where: { id: userId, topikoId: user.topikoId, archivedAt: null }, select: { id: true } });
     if (!known) throw new BadRequestException('Άγνωστο στέλεχος.');
+    const existed = await this.prisma.drasiRole.findUnique({ where: { drasiId_kind_userId: { drasiId: id, kind, userId } }, select: { userId: true } });
     await this.prisma.drasiRole.upsert({
       where: { drasiId_kind_userId: { drasiId: id, kind, userId } },
       create: { drasiId: id, kind, userId, note: note?.trim() || null },
       update: note === undefined ? {} : { note: note?.trim() || null },
     });
     this.accessChanged(id);
+    if (!existed && userId !== user.id) this.roleGiven(id, drasi.title, kind, [userId]);
     return { added: true };
+  }
+
+  /** Ειδοποίηση σε όσους πήραν νέο ρόλο — τι και πού (ποτέ ονόματα παιδιών). */
+  private roleGiven(drasiId: string, title: string, kind: DrasiRoleKind, userIds: string[]): void {
+    if (!userIds.length) return;
+    void this.notifications.notify(userIds, {
+      kind: 'role',
+      title: `Νέος ρόλος στη δράση «${title}»: ${DRASI_ROLE_LABEL[kind]}`,
+      link: `/draseis/${drasiId}`,
+    });
   }
 
   /** Ένας ρόλος φεύγει από ένα στέλεχος — οι υπόλοιποι μένουν όπως είναι. */

@@ -10,12 +10,16 @@ function setup() {
   const roles: { drasiId: string; kind: string; userId: string; note: string | null }[] = [{ drasiId: DRASI, kind: 'ARXIGOS', userId: 'u-1', note: null }];
   const revoked: string[] = [];
   const prisma = {
-    drasi: { findFirst: async () => ({ id: DRASI, klados: { type: 'ODIGOI' } }) },
+    drasi: { findFirst: async () => ({ id: DRASI, title: 'Πεζοπορία', klados: { type: 'ODIGOI' } }) },
     user: {
       findFirst: async ({ where }: { where: { id: string; topikoId: string } }) =>
-        ['u-1', 'u-2', 'u-3'].includes(where.id) && where.topikoId === 't-1' ? { id: where.id } : null,
+        ['u-1', 'u-2', 'u-3', 'u-me'].includes(where.id) && where.topikoId === 't-1' ? { id: where.id } : null,
     },
     drasiRole: {
+      findUnique: async ({ where }: { where: { drasiId_kind_userId: { drasiId: string; kind: string; userId: string } } }) => {
+        const key = where.drasiId_kind_userId;
+        return roles.find((r) => r.drasiId === key.drasiId && r.kind === key.kind && r.userId === key.userId) ?? null;
+      },
       upsert: async ({ where, create, update }: { where: { drasiId_kind_userId: { drasiId: string; kind: string; userId: string } }; create: (typeof roles)[number]; update: Partial<(typeof roles)[number]> }) => {
         const key = where.drasiId_kind_userId;
         const row = roles.find((r) => r.drasiId === key.drasiId && r.kind === key.kind && r.userId === key.userId);
@@ -31,8 +35,10 @@ function setup() {
     },
   };
   const collab = { revokeAll: (prefix: string) => revoked.push(prefix) };
-  const service = new DraseisService(prisma as never, {} as never, collab as never);
-  return { service, roles, revoked };
+  const notified: { userIds: string[]; kind: string; title: string; link?: string | null }[] = [];
+  const notifications = { notify: async (userIds: string[], input: { kind: string; title: string; link?: string | null }) => void notified.push({ userIds, ...input }) };
+  const service = new DraseisService(prisma as never, {} as never, collab as never, notifications as never);
+  return { service, roles, revoked, notified };
 }
 
 describe('ρόλοι της δράσης ένας-ένας', () => {
@@ -66,5 +72,15 @@ describe('ρόλοι της δράσης ένας-ένας', () => {
     await service.addRole(ME, DRASI, 'PROGRAMMA', 'u-2');
     await service.removeRole(ME, DRASI, 'PROGRAMMA', 'u-2');
     expect(revoked).toEqual([`drasi:${DRASI}:`, `drasi:${DRASI}:`]);
+  });
+
+  it('όποιος παίρνει ρόλο ειδοποιείται — με τι και πού, όχι ποιος άλλος', async () => {
+    const { service, notified } = setup();
+    await service.addRole(ME, DRASI, 'PROGRAMMA', 'u-2');
+    await service.addRole(ME, DRASI, 'PROGRAMMA', 'u-me');
+
+    expect(notified).toEqual([
+      { userIds: ['u-2'], kind: 'role', title: 'Νέος ρόλος στη δράση «Πεζοπορία»: Πρόγραμμα', link: `/draseis/${DRASI}` },
+    ]);
   });
 });
