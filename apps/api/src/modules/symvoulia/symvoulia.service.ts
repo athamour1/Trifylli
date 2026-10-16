@@ -127,12 +127,14 @@ export class SymvouliaService {
    *
    * Το `participantIds` αντικαθιστά τη λίστα· η απουσία του σημαίνει «δεν την
    * πειράζω», ώστε μια αποθήκευση που αφορά μόνο το κείμενο να μην τη σβήνει.
+   * Η σελίδα στέλνει πια «πρόσθεσε / αφαίρεσε» (`addParticipantIds`,
+   * `removeParticipantIds`): δύο που τσεκάρουν μαζί δεν σβήνουν ο ένας τον άλλον.
    */
   async update(user: RequestUser, id: string, dto: UpdateSymvoulioDto) {
     // Ατζέντα και πρακτικά γράφονται πια μαζί, ως κοινό έγγραφο (`symvoulio:<id>`).
     refuseCollabFields(dto, COLLAB_FIELDS.symvoulio);
     await this.assertEditable(user, id);
-    const { participantIds, ...fields } = dto;
+    const { participantIds, addParticipantIds, removeParticipantIds, ...fields } = dto;
 
     return this.prisma.$transaction(async (tx) => {
       const symvoulio = await tx.symvoulio.update({ where: { id }, data: { ...fields } });
@@ -144,6 +146,15 @@ export class SymvouliaService {
             data: [...new Set(participantIds)].map((userId) => ({ symvoulioId: id, userId })),
           });
         }
+      }
+      if (removeParticipantIds?.length) {
+        await tx.symvoulioParticipant.deleteMany({ where: { symvoulioId: id, userId: { in: removeParticipantIds } } });
+      }
+      if (addParticipantIds?.length) {
+        await tx.symvoulioParticipant.createMany({
+          data: [...new Set(addParticipantIds)].map((userId) => ({ symvoulioId: id, userId })),
+          skipDuplicates: true,
+        });
       }
 
       return symvoulio;

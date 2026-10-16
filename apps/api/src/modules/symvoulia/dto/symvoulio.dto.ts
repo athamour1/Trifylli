@@ -1,6 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   IsArray,
   IsDate,
   IsEnum,
@@ -94,4 +95,18 @@ export class UpdateSymvoulioDto {
   @IsArray()
   @IsUUID(undefined, { each: true })
   participantIds?: string[];
+
+  @ApiPropertyOptional({ type: [String], format: 'uuid', description: 'Συμμετέχοντες που προστίθενται — χωρίς να σταλεί όλη η λίστα.' })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(200)
+  @IsUUID(undefined, { each: true })
+  addParticipantIds?: string[];
+
+  @ApiPropertyOptional({ type: [String], format: 'uuid', description: 'Συμμετέχοντες που βγαίνουν.' })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(200)
+  @IsUUID(undefined, { each: true })
+  removeParticipantIds?: string[];
 }
