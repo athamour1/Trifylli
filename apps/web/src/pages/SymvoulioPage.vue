@@ -124,6 +124,8 @@
                 </div>
               </q-card-section>
             </q-card>
+
+            <SymvoulioPolls :symvoulio-id="id" :can-manage="textsEditable" />
           </div>
 
           <div class="col-12 col-md-4">
@@ -227,6 +229,7 @@ import CollabBanner from '../components/CollabBanner.vue';
 import CollabPresence from '../components/CollabPresence.vue';
 import DocumentHistory from '../components/collab/DocumentHistory.vue';
 import ReadReceipts from '../components/collab/ReadReceipts.vue';
+import SymvoulioPolls from '../components/SymvoulioPolls.vue';
 import DateField from '../components/DateField.vue';
 import MarkdownField from '../components/MarkdownField.vue';
 import PageState from '../components/PageState.vue';
