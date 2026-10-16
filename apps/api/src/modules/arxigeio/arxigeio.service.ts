@@ -11,6 +11,7 @@ import {
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
 import { assertKladosAccess } from '../../common/util/klados-scope';
+import { CollabService } from '../collab/collab.service';
 
 const RANK_ORDER: Record<string, number> = { [LeaderRank.ARCHIGOS]: 0, [LeaderRank.YPARCHIGOS]: 1, [LeaderRank.VOITHOS]: 2 };
 
@@ -23,7 +24,10 @@ const RANK_ORDER: Record<string, number> = { [LeaderRank.ARCHIGOS]: 0, [LeaderRa
  */
 @Injectable()
 export class ArxigeioService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly collab: CollabService,
+  ) {}
 
   async view(user: RequestUser, klados: KladosType): Promise<ArxigeioView> {
     assertKladosAccess(user, klados);
@@ -45,6 +49,8 @@ export class ArxigeioService {
         skipDuplicates: true,
       }),
     ]);
+    // Οι υπευθυνότητες δίνουν δικαιώματα: οι ανοιχτές συνδέσεις του ξανανοίγουν με τα νέα.
+    this.collab.revokeUser(userId);
     return { ...member, duties: wanted };
   }
 

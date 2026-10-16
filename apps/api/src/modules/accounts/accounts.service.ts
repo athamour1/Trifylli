@@ -19,6 +19,7 @@ import type { RequestUser } from '../../common/auth/types';
 import { AuthentikClient } from '../integrations/authentik.client';
 import type { CreateAccountDto, UpdateAccountDto } from './dto/account.dto';
 import { toExternalAccountRow } from './external-accounts';
+import { CollabService } from '../collab/collab.service';
 
 /**
  * Διαχείριση των λογαριασμών που μπαίνουν στην εφαρμογή.
@@ -39,6 +40,7 @@ export class AccountsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly authentik: AuthentikClient,
+    private readonly collab: CollabService,
   ) {}
 
   async list(user: RequestUser): Promise<{ accounts: AccountSummary[]; kladoiWithoutAdmin: KladosType[] }> {
@@ -206,6 +208,8 @@ export class AccountsService {
       },
       include: { adminKlados: { select: { type: true } } },
     });
+    // Νέος ρόλος: οι ανοιχτές συνδέσεις στα κοινά έγγραφα ξανανοίγουν με τα νέα δικαιώματα.
+    this.collab.revokeUser(id);
 
     return this.toSummary(updated);
   }
@@ -230,6 +234,8 @@ export class AccountsService {
       // καθαρά με το Authentik αντί να κληρονομήσει παλιά ταυτότητα.
       data: { accountRole: null, adminKladosId: null, ssoId: null },
     });
+    // Ό,τι έχει ανοιχτό κλείνει τώρα — όχι όταν λήξει το token.
+    this.collab.revokeUser(id);
 
     return { revoked: true };
   }
