@@ -19,7 +19,8 @@ FROM dxflrs/garage:v1.1.0 AS garage
 FROM alpine:3.20
 # pg_dump/psql ίδιας major έκδοσης με τον server (postgres:16)· restic + rclone
 # (+ ssh για SFTP) για τα αντίγραφα εκτός server.
-RUN apk add --no-cache postgresql16-client restic rclone openssh-client
+# openssl: τα κλειδιά VAPID του gen-env.
+RUN apk add --no-cache postgresql16-client restic rclone openssh-client openssl
 # Το στατικό binary του Garage — το garage-init δεν κατεβάζει πια τίποτα στο deploy.
 COPY --from=garage /garage /usr/local/bin/garage
 

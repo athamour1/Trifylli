@@ -15,6 +15,15 @@ rand_b64() { head -c "$(( $1 + 8 ))" /dev/urandom | base64 | tr -d '\n+/=' | cut
 OUCH_PASSWORD=$(rand_b64 24)
 DOMAIN=${DOMAIN:-trifylli.gr}
 
+# Κλειδιά VAPID (Web Push): ζεύγος P-256, σε base64url όπως τα θέλει το web-push —
+# το ιδιωτικό είναι τα 32 bytes του κλειδιού, το δημόσιο το (ασυμπίεστο) σημείο.
+b64url() { base64 | tr -d '\n=' | tr '+/' '-_'; }
+vapid_dir=$(mktemp -d)
+openssl ecparam -name prime256v1 -genkey -noout -out "$vapid_dir/key.pem" 2>/dev/null
+VAPID_PRIVATE=$(openssl ec -in "$vapid_dir/key.pem" -outform DER 2>/dev/null | tail -c +8 | head -c 32 | b64url)
+VAPID_PUBLIC=$(openssl ec -in "$vapid_dir/key.pem" -pubout -outform DER 2>/dev/null | tail -c 65 | b64url)
+rm -rf "$vapid_dir"
+
 while IFS= read -r line || [ -n "$line" ]; do
   case "$line" in
     *'# GK + openssl rand -hex '*)
@@ -27,6 +36,8 @@ while IFS= read -r line || [ -n "$line" ]; do
     *'# openssl rand -base64 '*)
       key=${line%%=*}; n=$(echo "$line" | sed 's/.*openssl rand -base64 \([0-9]*\).*/\1/')
       echo "$key=$(rand_b64 "$n")" ;;
+    *'# vapid public'*) echo "${line%%=*}=$VAPID_PUBLIC" ;;
+    *'# vapid private'*) echo "${line%%=*}=$VAPID_PRIVATE" ;;
     TAG=*)
       version=$(cat /config/VERSION 2>/dev/null || true)
       case "$version" in
