@@ -456,4 +456,16 @@ describe('CollabService', () => {
 
     expect(written).toEqual([{ name: NAME, writers: ['u-maria', 'u-sofia'] }]);
   });
+
+  it('ποιοι είναι τώρα σε ένα δωμάτιο — όπως τους ξέρει ο server', async () => {
+    const maria = connect('maria', { name: ROOM });
+    const sofia = connect('sofia', { name: ROOM });
+    await until(() => maria.provider.isSynced && sofia.provider.isSynced);
+    maria.provider.setAwarenessField('focus', null);
+    sofia.provider.setAwarenessField('focus', null);
+    await until(() => service.presence(ROOM).length === 2);
+
+    expect(service.presence(ROOM).map((user) => user.id).sort()).toEqual(['u-maria', 'u-sofia']);
+    expect(service.presence(`room:${'0'.repeat(8)}-0000-4000-8000-000000000000`)).toEqual([]);
+  });
 });

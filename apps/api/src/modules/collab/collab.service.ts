@@ -185,6 +185,22 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
     this.statsTimer.unref();
   }
 
+  /**
+   * Ποιοι είναι τώρα σε ένα έγγραφο ή δωμάτιο — ένας ανά άτομο, όπως τους
+   * σφραγίζει ο server (όνομα και χρώμα από τον λογαριασμό). Για τις κάρτες της
+   * αρχικής, που δεν ανοίγουν σύνδεση για κάθε δράση.
+   */
+  presence(name: string): CollabPresenceUser[] {
+    const document = this.hocuspocus.documents.get(name);
+    if (!document) return [];
+    const byId = new Map<string, CollabPresenceUser>();
+    for (const state of document.awareness.getStates().values()) {
+      const user = (state as { user?: CollabPresenceUser }).user;
+      if (user?.id) byId.set(user.id, user);
+    }
+    return [...byId.values()];
+  }
+
   /** Τι ζει τώρα στη μνήμη: ανοιχτά έγγραφα, συνδέσεις σε αυτά, sockets (καρτέλες). */
   stats(): { documents: number; connections: number; sockets: number } {
     let connections = 0;
