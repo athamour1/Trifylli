@@ -196,7 +196,10 @@ export const useOfflineStore = defineStore('offline', {
     },
 
     async persist(): Promise<void> {
-      await idbSet(OUTBOX_KEY, [...this.outbox]);
+      // Απλά αντικείμενα: το IndexedDB αντιγράφει με structured clone, και τα
+      // Proxy της κατάστασης του Pinia δεν αντιγράφονται (DataCloneError) — η
+      // ουρά δεν θα έφτανε ποτέ στη συσκευή. Τα σώματα είναι JSON ούτως ή άλλως.
+      await idbSet(OUTBOX_KEY, JSON.parse(JSON.stringify(this.outbox)) as OutboxItem[]);
     },
 
     // ───────────────────── Cache δεδομένων ανάγνωσης ─────────────────────

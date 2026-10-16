@@ -13,8 +13,9 @@ const store = new Map<string, unknown>();
 
 vi.mock('idb-keyval', () => ({
   get: vi.fn((key: string) => Promise.resolve(store.get(key))),
+  // Όπως το IndexedDB: αντιγράφει με structured clone — ένα Proxy του Vue/Pinia δεν περνά.
   set: vi.fn((key: string, value: unknown) => {
-    store.set(key, value);
+    store.set(key, structuredClone(value));
     return Promise.resolve();
   }),
   del: vi.fn((key: string) => {
