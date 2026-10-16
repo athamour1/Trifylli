@@ -109,6 +109,10 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
   private readonly apiListeners = new Set<(change: ApiChange) => void>();
   /** Όσοι κρατούν κάτι για τα έγγραφα έξω από αυτά (σχόλια, εκδόσεις): σβήνουν μαζί τους. */
   private readonly removedListeners = new Set<(name: string, prefix: boolean) => Promise<void>>();
+  /** Όσοι θέλουν να ξέρουν πότε ένα έγγραφο άδειασε (έφυγε και ο τελευταίος). */
+  private readonly idleListeners = new Set<(name: string) => void>();
+  /** Όσοι κρατούν ορόσημα (το ιστορικό εκδόσεων). */
+  private readonly milestoneListeners = new Set<(name: string, label: string) => Promise<void>>();
   /** Τα όρια (βλ. `COLLAB_LIMITS`) — αλλάζουν μόνο στις δοκιμές. */
   limits: { messages: { burst: number; perSecond: number }; documentsPerSocket: number; documentBytes: number } = { ...COLLAB_LIMITS };
 
@@ -137,6 +141,10 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
         for (const state of states.values()) state.user = context.user;
       },
       connected: async ({ connection, context, documentName, socketId }) => this.opened(connection, context, documentName, socketId),
+      // Έφυγε και ο τελευταίος: για το ιστορικό, η στιγμή να κρατηθεί έκδοση.
+      onDisconnect: async ({ documentName, clientsCount }) => {
+        if (clientsCount === 0) for (const listener of this.idleListeners) listener(documentName);
+      },
       onTokenSync: ({ token, connection, context }) => this.tokenSynced(token, connection, context.userId),
       afterUnloadDocument: async ({ documentName }) => {
         this.removed.delete(documentName);
@@ -493,6 +501,39 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
   /** Ακούει τις αλλαγές μέσω API (βλ. `apiChanged`). */
   onApiChange(listener: (change: ApiChange) => void): void {
     this.apiListeners.add(listener);
+  }
+
+  /** Ακούει τα έγγραφα που άδειασαν (έφυγε και η τελευταία σύνδεση). */
+  onDocumentIdle(listener: (name: string) => void): void {
+    this.idleListeners.add(listener);
+  }
+
+  /** Ακούει τα ορόσημα (βλ. `milestone`). */
+  onMilestone(listener: (name: string, label: string) => Promise<void>): void {
+    this.milestoneListeners.add(listener);
+  }
+
+  /**
+   * Ορόσημο ενός εγγράφου — «Οριστικοποίηση», «Εγκρίθηκε», «Κλειστή δράση»: το
+   * ιστορικό κρατά έκδοση τώρα, με αυτή την ετικέτα. Αποτυχία δεν σταματά την
+   * πράξη που το ζήτησε.
+   */
+  async milestone(name: string, label: string): Promise<void> {
+    await Promise.all([...this.milestoneListeners].map((listener) => listener(name, label).catch((error: Error) => {
+      this.logger.warn({ event: 'collab-milestone-failed', document: name, message: error.message });
+    })));
+  }
+
+  /** Το ίδιο για όλα τα (σωσμένα ή ανοιχτά) έγγραφα με αυτό το πρόθεμα — π.χ. μια δράση που κλείνει. */
+  async milestoneAll(prefix: string, label: string): Promise<void> {
+    const saved = await this.prisma.collabDocument.findMany({ where: { name: { startsWith: prefix } }, select: { name: true } });
+    const names = new Set([...saved.map((row) => row.name), ...[...this.hocuspocus.documents.keys()].filter((name) => name.startsWith(prefix))]);
+    for (const name of names) await this.milestone(name, label);
+  }
+
+  /** Γράφεται ακόμα; Όχι αν σβήστηκε, πάγωσε ή ξεπέρασε το όριο μεγέθους. */
+  isWritable(name: string): boolean {
+    return !this.isRemoved(name) && !this.frozen.has(name) && !this.oversized.has(name);
   }
 
   /** Ακούει τα έγγραφα που σβήνονται (`name` ή, με `prefix`, όλα όσα αρχίζουν έτσι). */

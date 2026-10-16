@@ -362,6 +362,7 @@ model User {
   pushSubscriptions       PushSubscription[]
   notificationSettings    NotificationSetting[]
   comments                Comment[]                  @relation("CommentAuthor")
+  docReads                DocRead[]
   commentsResolved        Comment[]                  @relation("CommentResolver")
   ypiresiesResponsible    DrasiYpiresiaResponsible[]
   drasiFeesCollected      DrasiParticipant[]         @relation("DrasiFeeCollector")
@@ -1704,6 +1705,41 @@ model CollabDocument {
   updatedAt  DateTime @updatedAt
 
   @@map("collab_document")
+}
+
+/// Έκδοση ενός κοινού εγγράφου (συνεργασία, Φ10): η απλή μορφή του (κείμενα,
+/// λίστες) όταν σταμάτησε να αλλάζει, όταν έφυγε ο τελευταίος, ή σε ορόσημο.
+/// Σβήνεται μαζί με το έγγραφο.
+model CollabVersion {
+  id        String   @id @default(uuid()) @db.Uuid
+  document  String
+  /// Ό,τι επαναφέρεται: η απλή μορφή του εγγράφου (βλ. `CollabDocumentType.snapshot`).
+  content   Json
+  /// Όσοι έγραψαν από την προηγούμενη έκδοση.
+  writerIds String[] @db.Uuid
+  /// Ορόσημο («Οριστικοποίηση», «Επαναφορά»…) — `null` για τις αυτόματες.
+  label     String?
+  createdAt DateTime @default(now())
+
+  reads DocRead[]
+
+  @@index([document, createdAt])
+  @@map("collab_version")
+}
+
+/// «Το διάβασαν»: ποιος άνοιξε ποια έκδοση ενός εγγράφου (μία γραμμή ανά άτομο).
+model DocRead {
+  document  String
+  userId    String   @db.Uuid
+  versionId String   @db.Uuid
+  readAt    DateTime @default(now())
+
+  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  version CollabVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+  @@id([document, userId])
+  @@index([versionId])
+  @@map("doc_read")
 }
 
 /// Αποθηκευμένο αρχείο σε object storage (S3/Garage). Το περιεχόμενο ζει στο
