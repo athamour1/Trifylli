@@ -312,7 +312,7 @@
               <q-separator />
 
               <q-card-section class="q-py-sm">
-                <div v-if="!allYliko.length" class="text-caption text-grey-6 q-pb-sm">
+                <div v-if="!yliko.length && !allYliko.length" class="text-caption text-grey-6 q-pb-sm">
                   {{ planEditable ? 'Κενή λίστα.' : 'Δεν έχει δηλωθεί υλικό.' }}
                 </div>
 
@@ -337,9 +337,10 @@
                       dense
                       outlined
                       placeholder="π.χ. σπάγκος"
+                      :data-yliko-id="item.id"
                       :class="item.packed ? 'text-grey-6' : ''"
                       @update:model-value="(value) => updateYliko(collabDoc, item.id, { label: String(value ?? '') })"
-                      @keydown.enter.prevent="addYlikoAfter(collabDoc, item.id)"
+                      @keydown.enter.prevent="addYlikoRow(item.id)"
                     />
                   </div>
                   <div class="col-auto" style="width: 76px">
@@ -374,7 +375,7 @@
                   color="klados"
                   icon="add"
                   label="Προσθήκη"
-                  @click="addYlikoAfter(collabDoc, yliko.at(-1)?.id ?? null)"
+                  @click="addYlikoRow(yliko.at(-1)?.id ?? null)"
                 />
               </q-card-section>
 
@@ -743,6 +744,12 @@ function setPartMinutes(section: TimelineSection, value: string | number | null)
 function setBlockMinutes(blockId: string, value: string | number | null): void {
   const minutes = typedNumber(value);
   if (minutes !== null) updateBlock(collabDoc.value, blockId, { durationMin: minutes });
+}
+
+/** Νέα γραμμή υλικού: η εστίαση πάει στο όνομά της, για να συνεχιστεί η πληκτρολόγηση. */
+function addYlikoRow(afterId: string | null): void {
+  const id = addYlikoAfter(collabDoc.value, afterId);
+  void nextTick(() => document.querySelector<HTMLInputElement>(`[data-yliko-id="${id}"]`)?.focus());
 }
 
 function setYlikoQty(itemId: string, value: string | number | null): void {
