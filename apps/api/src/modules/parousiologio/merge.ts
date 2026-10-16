@@ -58,6 +58,13 @@ export function mergeParousies(
     }
     if (entry.recordedAt > current.recordedAt) {
       toWrite.push(entry);
+    } else if (
+      entry.recordedAt.getTime() === current.recordedAt.getTime() &&
+      entry.status === current.status &&
+      (entry.note ?? null) === (current.note ?? null)
+    ) {
+      // Η ίδια σήμανση ξανά (η σελίδα και η ουρά της συσκευής): ήδη γραμμένη.
+      continue;
     } else {
       stale.push({ userId: entry.userId, keptRecordedAt: current.recordedAt });
     }

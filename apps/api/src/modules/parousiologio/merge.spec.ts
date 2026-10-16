@@ -29,6 +29,14 @@ describe('mergeParousies', () => {
     const existing = [{ userId: 'a', status: 'PAROUSIA', note: null, recordedAt: t('18:00') }];
     const result = mergeParousies(existing, [{ userId: 'a', status: 'PAROUSIA', recordedAt: t('18:00') }]);
     expect(result.toWrite).toHaveLength(0);
+    // Ούτε «παλαιότερη»: είναι η ίδια σήμανση, ήδη γραμμένη.
+    expect(result.stale).toHaveLength(0);
+  });
+
+  it('ίδια ώρα αλλά άλλη σήμανση: κρατά την υπάρχουσα και το λέει', () => {
+    const existing = [{ userId: 'a', status: 'PAROUSIA', note: null, recordedAt: t('18:00') }];
+    const result = mergeParousies(existing, [{ userId: 'a', status: 'APOUSIA', recordedAt: t('18:00') }]);
+    expect(result.toWrite).toHaveLength(0);
     expect(result.stale).toHaveLength(1);
   });
 
@@ -76,5 +84,14 @@ describe('κάθε σήμανση με τη δική της ώρα', () => {
     const existing = [{ userId: 'a', status: 'PAROUSIA', note: null, recordedAt: t('18:01') }];
     const result = mergeParousies(existing, incomingEntries([{ memberId: 'b', status: 'APOUSIA', recordedAt: t('18:02') }], t('18:02')));
     expect(result.toWrite.map((e) => e.userId)).toEqual(['b']);
+  });
+});
+
+describe('η ίδια σήμανση δεύτερη φορά', () => {
+  it('δεν γράφεται ξανά και δεν μετράει ως «παλαιότερη»', () => {
+    // Η σελίδα και η ουρά της συσκευής μπορεί να στείλουν την ίδια σήμανση.
+    const existing = [{ userId: 'a', status: 'PAROUSIA', note: null, recordedAt: t('18:00') }];
+    const result = mergeParousies(existing, [{ userId: 'a', status: 'PAROUSIA', note: null, recordedAt: t('18:00') }]);
+    expect(result).toEqual({ toWrite: [], stale: [] });
   });
 });
