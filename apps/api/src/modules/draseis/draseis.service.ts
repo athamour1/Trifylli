@@ -290,6 +290,12 @@ export class DraseisService {
       data: { status: closed ? DrasiStatus.KLEISTI : DrasiStatus.ENERGI },
       select: { id: true, status: true },
     });
+    if (closed) {
+      // Όλα τα κοινά έγγραφα της δράσης όπως έκλεισε: ορόσημο στο ιστορικό τους.
+      const prefix = collabDocument.drasiPrefix(id);
+      await this.collab.flushPending(prefix);
+      await this.collab.milestoneAll(prefix, 'Κλειστή δράση');
+    }
     this.accessChanged(id);
     return updated;
   }

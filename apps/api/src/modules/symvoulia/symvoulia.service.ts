@@ -211,7 +211,10 @@ export class SymvouliaService {
       if (!minutes?.trim()) {
         throw new BadRequestException('Δεν μπορεί να οριστικοποιηθεί συμβούλιο χωρίς πρακτικά.');
       }
-      return await this.prisma.symvoulio.update({ where: { id }, data: { finalizedAt: new Date() } });
+      const finalized = await this.prisma.symvoulio.update({ where: { id }, data: { finalizedAt: new Date() } });
+      // Τα πρακτικά όπως κλείδωσαν: ορόσημο στο ιστορικό (και η έκδοση του «Το διάβασαν»).
+      await this.collab.milestone(document, 'Οριστικοποίηση');
+      return finalized;
     } finally {
       this.collab.revoke(document);
     }
