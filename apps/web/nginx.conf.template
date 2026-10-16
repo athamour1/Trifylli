@@ -47,8 +47,18 @@ server {
     add_header Content-Security-Policy "${CSP_BASE} frame-ancestors 'none'" always;
   }
 
-  # Front-channel Single Logout: η ΜΟΝΗ διαδρομή που επιτρέπεται να μπει σε
-  # iframe — και μόνο από το δικό μας Authentik. Παντού αλλού frame-ancestors 'none'.
+  # Σιωπηλή ανανέωση της συνεδρίας: το Authentik γυρίζει εδώ το κρυφό iframe που
+  # ανοίγει η ίδια η εφαρμογή (prompt=none). Το πλαισιώνει μόνο το δικό μας origin —
+  # με 'none' ο browser το έκοβε, η ανανέωση αποτύγχανε και η συνεδρία έληγε μαζί
+  # με το access token (30΄), σβήνοντας και ό,τι δεν είχε σταλεί.
+  location = /auth/silent {
+    include /etc/nginx/trifylli-headers.conf;
+    add_header Content-Security-Policy "${CSP_BASE} frame-ancestors 'self'" always;
+    try_files /index.html =404;
+  }
+
+  # Front-channel Single Logout: η ΜΟΝΗ ξένη σελίδα που μπορεί να μας βάλει σε
+  # iframe — και μόνο το δικό μας Authentik. Παντού αλλού frame-ancestors 'none'.
   location = /auth/frontchannel-logout {
     include /etc/nginx/trifylli-headers.conf;
     add_header Content-Security-Policy "${CSP_BASE} frame-ancestors ${FRAME_ANCESTORS_SLO}" always;

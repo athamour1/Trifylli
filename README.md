@@ -729,7 +729,9 @@ layout + bucket + key (idempotent) στο πρώτο boot.
 * **CSP** από το nginx της PWA, αποδίδεται στον entrypoint με τα origins του API
   και του Authentik: `script-src 'self'` (κανένα inline script — το SLO είναι
   εξωτερικό `/slo.js`), `object-src 'none'`, `frame-ancestors 'none'` παντού
-  εκτός από το `/auth/frontchannel-logout`, που επιτρέπει **μόνο** το Authentik.
+  εκτός από το `/auth/frontchannel-logout`, που επιτρέπει **μόνο** το Authentik, και
+  το `/auth/silent` (σιωπηλή ανανέωση), που επιτρέπει μόνο την ίδια την εφαρμογή
+  (`'self'`) — με `'none'` εκεί η συνεδρία έληγε κάθε 30΄.
   Μαζί: `nosniff`, `Referrer-Policy`, `Permissions-Policy`, HSTS.
 * **Single Logout μόνο από το δικό μας Authentik**: το `iss` ελέγχεται πριν
   σηκωθεί το σήμα — αλλιώς κάθε ξένο site με ένα iframe θα αποσυνδέει όλους.
