@@ -221,9 +221,7 @@ import { useQuasar } from 'quasar';
 import {
   KLADOS_LABEL,
   TOPIKO_SYMVOULIA,
-  collabColor,
   collabDocument,
-  collabShortName,
   type KladosType,
   type SymvoulioType,
 } from '@trifylli/shared';
@@ -233,7 +231,7 @@ import MarkdownField from '../components/MarkdownField.vue';
 import PageState from '../components/PageState.vue';
 import SaveStatus from '../components/SaveStatus.vue';
 import { useAsyncData } from '../composables/useAsyncData';
-import { useCollabDoc } from '../composables/useCollabDoc';
+import { useCollabDoc, useCollabMe } from '../composables/useCollabDoc';
 import { ApiError, OfflineError, get, patch, post } from '../lib/api';
 import { useKladosThemeStore } from '../stores/klados-theme';
 import { worstSaveState, type SaveState } from '../lib/save-state';
@@ -342,12 +340,7 @@ const {
   peers,
   saveState: collabSaveState,
   whenSaved,
-} = useCollabDoc(collabDocument.symvoulio(id), () => {
-  const user = auth.profile?.user;
-  return user
-    ? { id: user.id, name: collabShortName(user.firstName, user.lastName), fullName: auth.displayName, color: collabColor(user.id) }
-    : null;
-});
+} = useCollabDoc(collabDocument.symvoulio(id), useCollabMe());
 
 /** Τα κείμενα γράφονται όταν γράφεται η σελίδα **και** ο server το επιτρέπει. */
 const textsEditable = computed(() => editable.value && !collabReadOnly.value && collabStatus.value !== 'update-required');

@@ -1,11 +1,19 @@
 import { HocuspocusProvider, WebSocketStatus, type StatesArray } from '@hocuspocus/provider';
-import { COLLAB_GENERATION_KEY, COLLAB_META, CollabRejection, type CollabPresenceUser } from '@trifylli/shared';
+import {
+  COLLAB_GENERATION_KEY,
+  COLLAB_META,
+  CollabRejection,
+  collabColor,
+  collabShortName,
+  type CollabPresenceUser,
+} from '@trifylli/shared';
 import { Notify, copyToClipboard } from 'quasar';
 import { computed, onBeforeUnmount, ref, shallowRef } from 'vue';
 import { IndexeddbPersistence } from 'y-indexeddb';
 import { Awareness } from 'y-protocols/awareness';
 import { Doc } from 'yjs';
 import { refreshAccessToken } from '../lib/api';
+import { useAuthStore } from '../stores/auth';
 import { collabSocket, collabToken } from '../lib/collab';
 import { COLLAB_DB_PREFIX, rememberCollabDb } from '../lib/collab-storage';
 import type { SaveState } from '../lib/save-state';
@@ -260,4 +268,15 @@ export function useCollabDoc(name: string, me: () => CollabPresenceUser | null) 
   });
 
   return { doc, awareness, status, readOnly, ready, unsynced, peers, saveState, whenSaved };
+}
+
+/** Ο συνδεδεμένος χρήστης όπως τον δείχνει η παρουσία — ίδια μορφή με αυτή που ορίζει ο server. */
+export function useCollabMe(): () => CollabPresenceUser | null {
+  const auth = useAuthStore();
+  return () => {
+    const user = auth.profile?.user;
+    return user
+      ? { id: user.id, name: collabShortName(user.firstName, user.lastName), fullName: auth.displayName, color: collabColor(user.id) }
+      : null;
+  };
 }
