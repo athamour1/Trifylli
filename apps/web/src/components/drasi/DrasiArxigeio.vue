@@ -174,7 +174,7 @@ import {
 } from '@trifylli/shared';
 import DrasiRolesEditor from './DrasiRolesEditor.vue';
 import { emptyRoles, externalStelexosOption, looksLikeEmail, type RolesMap } from './types';
-import { ApiError, del, get, post, put } from '../../lib/api';
+import { ApiError, del, get, post } from '../../lib/api';
 import { useLiveReload } from '../../composables/useLiveChanges';
 
 const props = defineProps<{
@@ -211,12 +211,21 @@ const holders = (kind: DrasiRoleKind) => props.roles.filter((r) => r.kind === ki
 // ── Επεξεργασία ──
 const roles = ref<RolesMap>(emptyRoles(Object.values(DrasiRoleKind)));
 const enabledServices = ref<DrasiRoleKind[]>([]);
+const rolesOf = (list: readonly DrasiRoleView[]): RolesMap => {
+  const next = emptyRoles(Object.values(DrasiRoleKind));
+  for (const r of list) next[r.kind].push(r.user.id);
+  return next;
+};
+/** Ό,τι έφερε τελευταίο ο server — αν η φόρμα διαφέρει, ο χρήστης γράφει και δεν έχει σώσει. */
+let loaded = JSON.stringify(roles.value);
 watch(
   () => props.roles,
   (list) => {
-    const next = emptyRoles(Object.values(DrasiRoleKind));
-    for (const r of list) next[r.kind].push(r.user.id);
-    roles.value = next;
+    // Οι ρόλοι ξαναέρχονται και όταν αλλάζει κάτι κάποιος άλλος (ζωντανά): ό,τι
+    // διαλέγει ο χρήστης αυτή τη στιγμή δεν το πατάει η ανανέωση.
+    if (JSON.stringify(roles.value) !== loaded) return;
+    roles.value = rolesOf(list);
+    loaded = JSON.stringify(roles.value);
   },
   { immediate: true },
 );
@@ -336,15 +345,23 @@ async function grantAccess(): Promise<void> {
 }
 
 const saving = ref(false);
+/**
+ * Μόνο οι διαφορές από ό,τι έχει ο server, ένας ρόλος τη φορά («δώσε», «πάρε»):
+ * δύο που ορίζουν το αρχηγείο μαζί δεν σβήνουν ο ένας τον άλλον.
+ */
 async function save(): Promise<void> {
   saving.value = true;
   try {
-    const payload: { kind: DrasiRoleKind; userId: string }[] = [];
+    const server = rolesOf(props.roles);
     for (const kind of Object.values(DrasiRoleKind)) {
       if (!DRASI_ARXIGEIO_KINDS.includes(kind)) continue;
-      for (const userId of roles.value[kind]) payload.push({ kind, userId });
+      const before = new Set(server[kind]);
+      const after = new Set(roles.value[kind]);
+      for (const userId of after) if (!before.has(userId)) await post(`/draseis/${props.drasiId}/roles/${kind}/${userId}`, {});
+      for (const userId of before) if (!after.has(userId)) await del(`/draseis/${props.drasiId}/roles/${kind}/${userId}`);
     }
-    await put(`/draseis/${props.drasiId}/roles`, { roles: payload });
+    // Σώθηκε: η επόμενη φόρτωση ξαναγράφει τη φόρμα με ό,τι έχει ο server.
+    loaded = JSON.stringify(roles.value);
     $q.notify({ type: 'positive', message: 'Το αρχηγείο αποθηκεύτηκε.' });
     emit('changed');
   } catch (err) {
