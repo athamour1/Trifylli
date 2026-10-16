@@ -73,9 +73,8 @@ rate limiting, καθάρισμα ιατρικών. Λείπουν αυτά, μ�
 15. [ ] CI (GitHub Actions): typecheck + tests, images από tag, scan ευπαθειών,
     Renovate. **M**
 16. [ ] Οδηγίες reverse proxy (από την [ενότητα 1](#1-εγκατάσταση-με-μία-εντολή)):
-    HSTS, όριο σώματος, timeouts, admin UI του Authentik, WebSocket (στο Zoraxy:
-    «Skip WebSocket Origin Check» στον κανόνα του `api.` — αλλιώς 403 στη
-    συνεργασία). **S**
+    HSTS, όριο σώματος, timeouts, admin UI του Authentik, WebSocket στο
+    `/api/collab` (για τη συνεργασία· βλ. README). **S**
 17. [ ] Authentik: MFA υποχρεωτικό για υπερδιαχειριστή και `akadmin` (για τους
     άλλους μένει προαιρετικό)· σβήσιμο του `AUTHENTIK_BOOTSTRAP_PASSWORD` μετά το
     πρώτο boot. **S**
