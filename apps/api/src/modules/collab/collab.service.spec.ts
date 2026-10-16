@@ -441,4 +441,19 @@ describe('CollabService', () => {
 
     expect(service.stats()).toEqual({ documents: 2, connections: 3, sockets: 3 });
   });
+
+  it('μετά από κάθε αποθήκευση λέει ποιοι έγραψαν στο έγγραφο από την προηγούμενη', async () => {
+    const written: { name: string; writers: string[] }[] = [];
+    service.onDocumentWritten((name, writers) => written.push({ name, writers: [...writers].sort() }));
+    const maria = connect('maria');
+    const sofia = connect('sofia');
+    await until(() => maria.provider.isSynced && sofia.provider.isSynced);
+
+    maria.document.getText('text').insert(0, 'Μ');
+    sofia.document.getText('text').insert(0, 'Σ');
+    await until(() => service.hocuspocus.documents.get(NAME)?.getText('text').toString().length === 'Αρχικό κείμενο'.length + 2);
+    await service.flush(NAME);
+
+    expect(written).toEqual([{ name: NAME, writers: ['u-maria', 'u-sofia'] }]);
+  });
 });

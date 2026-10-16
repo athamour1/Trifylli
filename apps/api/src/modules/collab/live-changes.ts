@@ -47,6 +47,13 @@ export function liveRoom(
   return { name: room.name(id), topic };
 }
 
+/** Τι έγινε, από τη μέθοδο: νέο, αλλαγή ή αφαίρεση — η μετακίνηση είναι αλλαγή. */
+export function verbOf(method: string, path: string): 'add' | 'change' | 'remove' {
+  if (method === 'DELETE') return 'remove';
+  if (method === 'POST' && !/\/(move|reorder|finalize)\/?$/.test(path)) return 'add';
+  return 'change';
+}
+
 /**
  * Μετά από κάθε επιτυχημένη αλλαγή μέσω API, όσοι έχουν ανοιχτή τη δράση, τη
  * συγκέντρωση ή το συμβούλιο παίρνουν «άλλαξε αυτό» (βλ. `CollabChange`) και
@@ -69,7 +76,7 @@ export class LiveChangesInterceptor implements NestInterceptor {
     const header = req.headers[COLLAB_CLIENT_HEADER.toLowerCase()];
     const origin = typeof header === 'string' && CLIENT_ID.test(header) ? header : null;
     return next.handle().pipe(
-      tap(() => this.collab.broadcast(room.name, { topic: room.topic, by: req.user?.id ?? null, origin })),
+      tap(() => this.collab.apiChanged({ room: room.name, topic: room.topic, verb: verbOf(req.method, req.path), by: req.user?.id ?? null, origin })),
     );
   }
 }

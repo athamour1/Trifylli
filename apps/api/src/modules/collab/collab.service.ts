@@ -42,6 +42,17 @@ import { CollabDocumentRegistry, type CollabAccess, type CollabDocumentType } fr
 import { documentSchema, parseCollabToken, stampGeneration, stampSchema } from './collab-yjs';
 import { COLLAB_LIMITS, MessageBudget } from './collab-limits';
 
+/** Μια αλλαγή μέσω API, όπως τη βλέπει το `LiveChangesInterceptor`. */
+export interface ApiChange {
+  /** Το δωμάτιο (ή κοινό έγγραφο) της οντότητας. */
+  room: string;
+  topic: string;
+  /** `add`, `change` ή `remove` — από τη μέθοδο του αιτήματος. */
+  verb: 'add' | 'change' | 'remove';
+  by: string | null;
+  origin: string | null;
+}
+
 /** Ό,τι ξέρει ο server για μια σύνδεση, μετά τον έλεγχο. */
 export interface CollabContext {
   requestId: string;
@@ -90,6 +101,12 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
   /** Έγγραφα που ξεπέρασαν το όριο μεγέθους: μένουν μόνο για ανάγνωση (ώσπου να ξεκινήσει ξανά ο server). */
   private readonly oversized = new Set<string>();
   private statsTimer: ReturnType<typeof setInterval> | null = null;
+  /** Όσοι έγραψαν σε κάθε έγγραφο από την τελευταία αποθήκευση. */
+  private readonly writers = new Map<string, Set<string>>();
+  /** Όσοι θέλουν να ξέρουν ποιος έγραψε (π.χ. η ροή δραστηριότητας της δράσης). */
+  private readonly writtenListeners = new Set<(name: string, writers: ReadonlySet<string>) => void>();
+  /** Όσοι θέλουν να ξέρουν τις αλλαγές μέσω API (βλ. `apiChanged`). */
+  private readonly apiListeners = new Set<(change: ApiChange) => void>();
   /** Τα όρια (βλ. `COLLAB_LIMITS`) — αλλάζουν μόνο στις δοκιμές. */
   limits: { messages: { burst: number; perSecond: number }; documentsPerSocket: number; documentBytes: number } = { ...COLLAB_LIMITS };
 
@@ -104,6 +121,13 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
       onAuthenticate: (data) => this.authenticate(data),
       onLoadDocument: (data) => this.loadDocument(data),
       onStoreDocument: (data) => this.storeDocument(data),
+      // Ποιος έγραψε τι, ως την επόμενη αποθήκευση (για τη ροή δραστηριότητας).
+      onChange: async ({ documentName, context }) => {
+        if (!context?.userId) return;
+        const writers = this.writers.get(documentName) ?? new Set<string>();
+        writers.add(context.userId);
+        this.writers.set(documentName, writers);
+      },
       // Η παρουσία δείχνει ό,τι λέει ο server για τη σύνδεση — όνομα και χρώμα
       // δεν τα διαλέγει ο client (αλλιώς γράφει όποιος «Αρχηγός» θέλει).
       beforeHandleAwareness: async ({ states, context }) => {
@@ -360,6 +384,11 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
         update: { state },
       });
       await target.type.project(document, target.ids);
+      const writers = this.writers.get(documentName);
+      if (writers?.size) {
+        this.writers.delete(documentName);
+        for (const listener of this.writtenListeners) listener(documentName, writers);
+      }
     } catch (error) {
       // Το έγγραφο μένει στη μνήμη και ξαναδοκιμάζει στην επόμενη αλλαγή.
       this.logger.error({ event: 'collab-store-failed', document: documentName, message: (error as Error).message });
@@ -435,6 +464,22 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
    */
   broadcast(name: string, change: CollabChange): void {
     this.hocuspocus.documents.get(name)?.broadcastStateless(JSON.stringify(change));
+  }
+
+  /** Μια αλλαγή μέσω API: πάει στο δωμάτιό της και σε όσους την παρακολουθούν (ροή δραστηριότητας). */
+  apiChanged(change: ApiChange): void {
+    this.broadcast(change.room, { topic: change.topic, by: change.by, origin: change.origin });
+    for (const listener of this.apiListeners) listener(change);
+  }
+
+  /** Ακούει τις αλλαγές μέσω API (βλ. `apiChanged`). */
+  onApiChange(listener: (change: ApiChange) => void): void {
+    this.apiListeners.add(listener);
+  }
+
+  /** Ακούει ποιοι έγραψαν σε ένα έγγραφο, μετά από κάθε αποθήκευσή του. */
+  onDocumentWritten(listener: (name: string, writers: ReadonlySet<string>) => void): void {
+    this.writtenListeners.add(listener);
   }
 
   /** Κλείνει τις συνδέσεις ενός εγγράφου· στην επανασύνδεση ισχύουν τα νέα δικαιώματα. */
