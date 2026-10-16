@@ -11,6 +11,8 @@ import { DraseisDiatrofologioController } from './draseis-diatrofologio.controll
 import { DraseisDiatrofologioService } from './draseis-diatrofologio.service';
 import { DraseisDossierService } from './draseis-dossier.service';
 import { DrasiRemindersService } from './drasi-reminders.service';
+import { DraseisAnnouncementsService } from './draseis-announcements.service';
+import { DraseisAnnouncementsController } from './draseis-announcements.controller';
 import { DraseisExportService } from './draseis-export.service';
 import { DraseisExternalsController } from './draseis-externals.controller';
 import { DraseisYpiresiesController } from './draseis-ypiresies.controller';
@@ -37,6 +39,7 @@ import { DraseisService } from './draseis.service';
   imports: [YlikoModule, IntegrationsModule, FilesModule],
   controllers: [
     DraseisController,
+    DraseisAnnouncementsController,
     DraseisFinanceController,
     DraseisGroupsController,
     DraseisFormsController,
@@ -68,6 +71,7 @@ import { DraseisService } from './draseis.service';
     DraseisReviewService,
     DraseisDossierService,
     DrasiRemindersService,
+    DraseisAnnouncementsService,
   ],
   exports: [DraseisService],
 })

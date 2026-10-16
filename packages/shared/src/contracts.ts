@@ -1022,3 +1022,22 @@ export interface DrasiYpiresiesView {
   shifts: { date: string; half: number }[];
   slots: DrasiYpiresiaSlotView[];
 }
+
+// ───────────────────────── Δράσεις: ανακοινώσεις ─────────────────────────
+
+/** Πόσο μεγάλη μια ανακοίνωση — σύντομο μήνυμα, όχι κείμενο. */
+export const ANNOUNCEMENT_MAX = 1000;
+
+/** Ανακοίνωση προς τα στελέχη της δράσης, με το «το είδαν N/M». Χωρίς απαντήσεις. */
+export interface DrasiAnnouncementView {
+  id: string;
+  body: string;
+  /** Σε ποιους ρόλους του αρχηγείου· κενό = σε όλα τα στελέχη. */
+  roles: DrasiRoleKind[];
+  by: { id: string; firstName: string; lastName: string } | null;
+  at: string;
+  /** Όσοι την πήραν — και πότε την είδε όποιος την είδε. */
+  audience: { id: string; firstName: string; lastName: string; seenAt: string | null }[];
+  /** Είναι για μένα και δεν την έχω δει ακόμα. */
+  unseen: boolean;
+}

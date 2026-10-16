@@ -367,6 +367,8 @@ model User {
   shoppingPurchased       DrasiShoppingItem[]        @relation("ShoppingPurchaser")
   checkoutsLoaded         YlikoCheckout[]            @relation("CheckoutLoadedBy")
   externalLoaded          DrasiExternalYliko[]       @relation("ExternalLoadedBy")
+  announcements           DrasiAnnouncement[]        @relation("DrasiAnnouncementAuthor")
+  announcementsSeen       DrasiAnnouncementSeen[]
   approvalsRequested      DocApproval[]              @relation("ApprovalRequester")
   approvalsDecided        DocApproval[]              @relation("ApprovalDecider")
   commentsResolved        Comment[]                  @relation("CommentResolver")
@@ -588,6 +590,7 @@ model Drasi {
   activity        DrasiActivity[]
   visits          DrasiVisit[]
   delays          DrasiDelay[]
+  announcements   DrasiAnnouncement[]
 
   @@index([topikoId, dateStart])
   @@index([kladosId, dateStart])
@@ -688,6 +691,39 @@ model DrasiDelay {
 
   @@index([drasiId])
   @@map("drasi_delay")
+}
+
+/// Ανακοίνωση προς τα στελέχη της δράσης (συνεργασία, Φ12): σύντομο μήνυμα, με
+/// ειδοποίηση και «το είδαν 6/9». Χωρίς απαντήσεις — δεν είναι chat.
+model DrasiAnnouncement {
+  id          String          @id @default(uuid()) @db.Uuid
+  drasiId     String          @db.Uuid
+  body        String
+  /// Σε ποιους ρόλους του αρχηγείου· κενό = σε όλα τα στελέχη της δράσης.
+  roles       DrasiRoleKind[]
+  /// Όσοι την πήραν τη στιγμή που στάλθηκε — για το «το είδαν N/M».
+  audienceIds String[]        @db.Uuid
+  createdById String?         @db.Uuid
+  createdAt   DateTime        @default(now())
+
+  drasi     Drasi                   @relation(fields: [drasiId], references: [id], onDelete: Cascade)
+  createdBy User?                   @relation("DrasiAnnouncementAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  seen      DrasiAnnouncementSeen[]
+
+  @@index([drasiId, createdAt])
+  @@map("drasi_announcement")
+}
+
+model DrasiAnnouncementSeen {
+  announcementId String   @db.Uuid
+  userId         String   @db.Uuid
+  seenAt         DateTime @default(now())
+
+  announcement DrasiAnnouncement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  user         User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([announcementId, userId])
+  @@map("drasi_announcement_seen")
 }
 
 /// Υπενθυμίσεις «σε 10΄ αρχίζει» που στάλθηκαν — μία ανά στοιχείο και ώρα
