@@ -81,9 +81,9 @@ export const collabDocument = {
   drasiMythos: (drasiId: string) => `drasi:${drasiId}:mythos`,
   /** Ρόλος του μύθου: το lore. */
   drasiCharacter: (drasiId: string, characterId: string) => `drasi:${drasiId}:character:${characterId}`,
-  /** Στοιχείο του ωρολογίου: το προγραμματικό. */
+  /** Στοιχείο του ωρολογίου: το προγραμματικό, ο χώρος και το υλικό (βλ. `ITEM_DOC`). */
   drasiItem: (drasiId: string, itemId: string) => `drasi:${drasiId}:item:${itemId}`,
-  /** Γεύμα: η συνταγή. */
+  /** Γεύμα: η συνταγή, το μενού και το ποσολόγιο (βλ. `MEAL_DOC`). */
   drasiMeal: (drasiId: string, itemId: string) => `drasi:${drasiId}:meal:${itemId}`,
   /** Το πρόθεμα όλων των εγγράφων μιας δράσης. */
   drasiPrefix: (drasiId: string) => `drasi:${drasiId}:`,
@@ -170,6 +170,40 @@ export interface PlanSnapshot {
   /** Ταξινομημένα κατά `order`. */
   yliko: PlanYlikoSnapshot[];
   stelexi: string[];
+}
+
+// ───────────────────────── Στοιχείο του ωρολογίου & γεύμα ─────────────────────────
+
+/**
+ * `drasi:<id>:item:<id>` (δομή 2): το προγραμματικό (`description`, Y.Text), ο
+ * χώρος (`fields.location`) και το υλικό (`yliko`: id → `{ order, label, qty, packed }`).
+ */
+export const ITEM_DOC = { schema: 2, description: 'description', location: 'location', yliko: 'yliko' } as const;
+
+/**
+ * `drasi:<id>:meal:<id>` (δομή 2): η συνταγή (`recipe`, Y.Text), το μενού
+ * (`fields.menu`) και το ποσολόγιο (`ingredients`: id → `{ order, label, qty, bought }`,
+ * με την ποσότητα ως κείμενο — «2 kg»).
+ */
+export const MEAL_DOC = { schema: 2, recipe: 'recipe', menu: 'menu', ingredients: 'ingredients' } as const;
+
+/** Όρια των λιστών και των μικρών πεδίων — ο server κόβει ό,τι βγαίνει έξω. */
+export const ROW_LIMITS = {
+  label: 200,
+  location: 200,
+  menu: 500,
+  ingredientQty: 60,
+  ylikoQty: { min: 1, max: 999 },
+  rows: 200,
+} as const;
+
+/** Γραμμή του ποσολογίου όπως είναι στο έγγραφο. */
+export interface IngredientSnapshot {
+  id: string;
+  order: number;
+  label: string;
+  qty: string;
+  bought: boolean;
 }
 
 /** Ακέραιος μέσα στα όρια — ό,τι δεν είναι αριθμός παίρνει το `fallback`. */
