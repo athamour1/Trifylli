@@ -371,4 +371,20 @@ describe('CollabService', () => {
   it('μήνυμα σε έγγραφο που δεν έχει ανοίξει κανείς: δεν γίνεται τίποτα', () => {
     expect(() => service.broadcast(ROOM, { topic: 'schedule', by: null, origin: null })).not.toThrow();
   });
+
+  it('άλλαξε ο λογαριασμός: κλείνουν μόνο οι δικές του συνδέσεις, και ξανανοίγουν με τα νέα δικαιώματα', async () => {
+    const maria = connect('maria');
+    const sofia = connect('sofia');
+    await until(() => maria.provider.isSynced && sofia.provider.isSynced);
+    const closed: string[] = [];
+    maria.provider.on('close', () => closed.push('maria'));
+    sofia.provider.on('close', () => closed.push('sofia'));
+
+    access['u-maria'] = null;
+    service.revokeUser('u-maria');
+    await until(() => closed.includes('maria'));
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    expect(closed).toEqual(['maria']);
+  });
 });

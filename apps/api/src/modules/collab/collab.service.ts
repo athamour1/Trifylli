@@ -384,6 +384,21 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
   }
 
   /**
+   * Άλλαξε ο λογαριασμός (ρόλος, ευθύνες, ανάκληση πρόσβασης): κλείνουν οι
+   * συνδέσεις του σε όλα τα έγγραφα και ξανανοίγουν με τα νέα δικαιώματα — ή δεν
+   * ξανανοίγουν. Χωρίς αυτό θα έγραφε με τα παλιά ώσπου να λήξει το token.
+   */
+  revokeUser(userId: string): void {
+    for (const document of this.hocuspocus.documents.values()) {
+      for (const connection of document.getConnections()) {
+        if ((connection.context as CollabContext | undefined)?.userId === userId) {
+          connection.close({ code: 4403, reason: 'access-changed' });
+        }
+      }
+    }
+  }
+
+  /**
    * Το ίδιο για όλα τα ανοιχτά έγγραφα με αυτό το πρόθεμα — π.χ. όταν αλλάζουν οι
    * ρόλοι ή οι συμμετέχοντες μιας δράσης (`collabDocument.drasiPrefix`).
    */
