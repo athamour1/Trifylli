@@ -198,10 +198,11 @@ import {
 } from '@trifylli/shared';
 import SaveStatus from '../SaveStatus.vue';
 import TimeField from '../TimeField.vue';
-import { ApiError, OfflineError, get, patch, post, put } from '../../lib/api';
+import { ApiError, OfflineError, get, patch, post } from '../../lib/api';
 import { formatDate, formatDuration } from '../../lib/format';
 import { scheduleCaption } from './types';
 import type { SaveState } from '../../lib/save-state';
+import { useLiveReload } from '../../composables/useLiveChanges';
 
 const props = defineProps<{
   drasiId: string;
@@ -297,21 +298,44 @@ function toRow(it: DrasiScheduleItemView): Row {
   };
 }
 
-// Ό,τι έρχεται από τον server γίνεται η νέα βάση — και το στιγμιότυπο, ώστε
-// η παρακολούθηση αλλαγών να μη θεωρήσει «αλλαγή» την ίδια τη φόρτωση.
-// Τα δύο σύνολα δηλώνονται ΠΡΙΝ τον watcher: με `immediate: true` η συνάρτηση
-// τρέχει εδώ, συγχρονισμένα, και ένα `const` παρακάτω δεν υπάρχει ακόμη (TDZ).
-const snapshots = new Map<string, string>();
-const dirty = new Set<string>();
+/**
+ * Η βάση κάθε γραμμής: ό,τι ξέρουμε ότι έχει ο server. Μια αλλαγή είναι ό,τι
+ * διαφέρει από αυτήν — και μόνο αυτό στέλνεται (όχι όλη η γραμμή), ώστε δύο που
+ * αλλάζουν διαφορετικά πεδία της ίδιας γραμμής να μη σβήνουν ο ένας τον άλλον.
+ */
+const EDITABLE = ['title', 'durationMin', 'kind', 'snack'] as const;
+type Editable = (typeof EDITABLE)[number];
+type Change = Partial<Pick<Row, Editable>>;
+const bases = new Map<string, Row>();
+/** Αλλαγές που περιμένουν να σταλούν, ανά γραμμή — ακόμη κι αν η γραμμή δεν φαίνεται (άλλη ημέρα). */
+const pending = new Map<string, Change>();
+/** Γραμμές που στέλνονται αυτή τη στιγμή. */
+const sending = new Set<string>();
+
+/**
+ * Νέα εικόνα από τον server (φόρτωση, ή αλλαγή κάποιου άλλου, ζωντανά): γίνεται
+ * η νέα βάση. Ό,τι έχει αλλάξει εδώ και δεν έχει φτάσει ακόμη στον server μένει
+ * όπως το έγραψε ο χρήστης· όλα τα άλλα έρχονται από τον server.
+ */
 watch(
   current,
   (day) => {
-    rows.value = (day?.items ?? []).map(toRow);
-    snapshots.clear();
-    for (const r of rows.value) snapshots.set(r.id, JSON.stringify(r));
+    const mine = new Map(rows.value.map((r) => [r.id, r]));
+    rows.value = (day?.items ?? []).map((item) => {
+      const server = toRow(item);
+      bases.set(server.id, server);
+      const local = mine.get(server.id);
+      const change = pending.get(server.id);
+      if (!local || !(change || sending.has(server.id))) return server;
+      return { ...server, ...(change ?? pick(local, EDITABLE)) };
+    });
   },
   { immediate: true },
 );
+
+function pick(row: Row, fields: readonly Editable[]): Change {
+  return Object.fromEntries(fields.map((field) => [field, row[field]])) as Change;
+}
 
 /** Οι ώρες βγαίνουν εδώ, από την έναρξη της ημέρας και τις διάρκειες — ίδια πράξη με τον server. */
 const clampMin = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? Math.min(1440, Math.max(1, Math.round(v))) : 1);
@@ -327,7 +351,7 @@ const times = computed(() => {
 });
 const totalMin = computed(() => rows.value.reduce((s, r) => s + clampMin(r.durationMin), 0));
 
-// ── Αυτόματη αποθήκευση: ποια γραμμή άλλαξε, PATCH μόνο αυτή ──
+// ── Αυτόματη αποθήκευση: ποια πεδία ποιας γραμμής άλλαξαν, PATCH μόνο αυτά ──
 const AUTOSAVE_DELAY_MS = 1000;
 const saveStatus = ref<SaveState>('clean');
 let timer: ReturnType<typeof setTimeout> | null = null;
@@ -337,16 +361,18 @@ watch(
   (list) => {
     let changed = false;
     for (const r of list) {
-      const json = JSON.stringify(r);
-      if (snapshots.get(r.id) === json) continue;
-      snapshots.set(r.id, json);
-      dirty.add(r.id);
-      changed = true;
+      const base = bases.get(r.id);
+      if (!base) continue;
+      const change = Object.fromEntries(EDITABLE.filter((field) => r[field] !== base[field]).map((field) => [field, r[field]])) as Change;
+      const before = JSON.stringify(pending.get(r.id) ?? {});
+      if (Object.keys(change).length) pending.set(r.id, change);
+      else pending.delete(r.id);
+      if (JSON.stringify(change) !== before) changed = true;
     }
     if (!changed || !props.canWrite) return;
-    saveStatus.value = 'pending';
+    saveStatus.value = pending.size ? 'pending' : 'saved';
     if (timer) clearTimeout(timer);
-    timer = setTimeout(() => void saveNow(), AUTOSAVE_DELAY_MS);
+    if (pending.size) timer = setTimeout(() => void saveNow(), AUTOSAVE_DELAY_MS);
   },
   { deep: true },
 );
@@ -356,24 +382,32 @@ async function saveNow(): Promise<void> {
     clearTimeout(timer);
     timer = null;
   }
-  if (!dirty.size) return;
+  if (!pending.size) return;
   saveStatus.value = 'saving';
-  const ids = [...dirty];
-  dirty.clear();
+  const batch = [...pending.entries()];
   try {
-    for (const id of ids) {
-      const r = rows.value.find((x) => x.id === id);
-      if (!r) continue;
-      await patch(`/draseis/${props.drasiId}/schedule/${id}`, {
-        ...(r.title.trim() ? { title: r.title.trim() } : {}),
-        durationMin: clampMin(r.durationMin),
-        kind: r.kind,
-        snack: r.snack,
-      });
+    for (const [id, change] of batch) {
+      const body: Record<string, unknown> = { ...change };
+      if ('title' in change) {
+        if (change.title?.trim()) body.title = change.title.trim();
+        else delete body.title;
+      }
+      if ('durationMin' in change) body.durationMin = clampMin(change.durationMin);
+      if (!Object.keys(body).length) continue;
+      sending.add(id);
+      try {
+        await patch(`/draseis/${props.drasiId}/schedule/${id}`, body);
+      } finally {
+        sending.delete(id);
+      }
+      // Ό,τι στάλθηκε είναι πια η βάση· ό,τι γράφτηκε στο μεταξύ μένει να σταλεί.
+      const base = bases.get(id);
+      if (base) bases.set(id, { ...base, ...body });
+      if (pending.get(id) === change) pending.delete(id);
     }
-    saveStatus.value = dirty.size ? 'pending' : 'saved';
+    saveStatus.value = pending.size ? 'pending' : 'saved';
+    if (pending.size && !timer) timer = setTimeout(() => void saveNow(), AUTOSAVE_DELAY_MS);
   } catch (err) {
-    for (const id of ids) dirty.add(id);
     if (err instanceof OfflineError) {
       saveStatus.value = 'offline';
       return;
@@ -383,8 +417,12 @@ async function saveNow(): Promise<void> {
   }
 }
 onBeforeUnmount(() => {
-  if (dirty.size) void saveNow();
+  if (pending.size) void saveNow();
 });
+
+// Ζωντανά: ό,τι αλλάζουν οι άλλοι στο ωρολόγιο εμφανίζεται εδώ — με τις δικές
+// μας αλλαγές που δεν έχουν σταλεί ακόμη στη θέση τους.
+useLiveReload(['schedule', 'participants', 'roles'], reload, { busy: () => sending.size > 0 });
 
 // ── Ωρολόγιο: προσθήκη ──
 const draft = reactive({ title: '', durationMin: 30, kind: 'DRASTIRIOTITA' as DrasiScheduleKind });
@@ -429,8 +467,11 @@ async function onDrop(targetId: string): Promise<void> {
   const [moved] = list.splice(fromIdx, 1);
   list.splice(toIdx, 0, moved!);
   rows.value = list;
+  // «Βάλε το Χ μετά το Ψ» — όχι όλη η λίστα: ό,τι πρόσθεσε ή μετακίνησε κάποιος
+  // άλλος στο μεταξύ μένει στη θέση του.
+  const at = list.findIndex((r) => r.id === from);
   try {
-    await put(`/draseis/${props.drasiId}/schedule/reorder`, { date: dayKey.value, ids: list.map((r) => r.id) });
+    await post(`/draseis/${props.drasiId}/schedule/${from}/move`, { afterId: at > 0 ? list[at - 1]!.id : null });
   } catch (err) {
     notifyError(err, 'Αποτυχία αλλαγής σειράς.');
     await reload();
