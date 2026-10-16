@@ -26,6 +26,7 @@ export class SymvoulioCollab implements OnModuleInit {
         kind: 'symvoulio',
         arity: 1,
         fields: COLLAB_FIELDS.symvoulio,
+        labels: { agenda: 'Ατζέντα', minutes: 'Πρακτικά' },
         access: (user, ids) => this.access(user, ids),
         load: (ids) => this.load(ids),
         save: (ids, values) => this.save(ids, values),

@@ -303,12 +303,15 @@ export interface CommentAnchor {
   end: string;
 }
 
-/** Στέλεχος που αναφέρεται με «@» — ποτέ παιδιά. */
-export interface CommentPerson {
+/** Στέλεχος όπως φαίνεται γύρω από ένα κοινό έγγραφο (σχόλια, ιστορικό, «Το διάβασαν») — ποτέ παιδιά. */
+export interface CollabPerson {
   id: string;
   firstName: string;
   lastName: string;
 }
+
+/** Στέλεχος που αναφέρεται με «@». */
+export type CommentPerson = CollabPerson;
 
 export interface CommentView {
   id: string;
@@ -331,4 +334,36 @@ export interface CommentView {
 /** Ένα νήμα: το πρώτο σχόλιο με τις απαντήσεις του (παλιότερη πρώτη). */
 export interface CommentThreadView extends CommentView {
   replies: CommentView[];
+}
+
+// ───────────────────────── Ιστορικό εκδόσεων & «Το διάβασαν» ─────────────────────────
+
+/** Μια έκδοση στη λίστα του ιστορικού: πότε, ποιοι έγραψαν από την προηγούμενη, ορόσημο. */
+export interface CollabVersionSummary {
+  id: string;
+  createdAt: string;
+  /** «Οριστικοποίηση», «Επαναφορά»… — `null` για τις αυτόματες. */
+  label: string | null;
+  writers: CollabPerson[];
+}
+
+/** Ένα κομμάτι μιας έκδοσης όπως διαβάζεται — π.χ. «Προγραμματικό», ή «Υλικό» ως γραμμές. */
+export interface CollabVersionPart {
+  key: string;
+  label: string;
+  text: string;
+}
+
+export interface CollabVersionView extends CollabVersionSummary {
+  parts: CollabVersionPart[];
+  /** Η προηγούμενη έκδοση, για τη σύγκριση — `null` για την πρώτη. */
+  previous: CollabVersionPart[] | null;
+}
+
+/** «Το διάβασαν 5/8»: ποιοι άνοιξαν την τελευταία έκδοση. */
+export interface DocReadersView {
+  version: { id: string; createdAt: string; label: string | null } | null;
+  /** Τα στελέχη του εγγράφου — όσοι θα έπρεπε να το διαβάσουν. */
+  audience: CollabPerson[];
+  readers: { person: CollabPerson; readAt: string; current: boolean }[];
 }

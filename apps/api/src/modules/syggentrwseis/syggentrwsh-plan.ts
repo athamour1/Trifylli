@@ -1,14 +1,17 @@
 import {
   PLAN_KEYS,
   PLAN_LIMITS,
+  TIMELINE_SECTION_LABEL,
   TIMELINE_SECTION_ORDER,
   clampInt,
+  type CollabVersionPart,
   type PlanBlockSnapshot,
   type PlanSnapshot,
   type PlanYlikoSnapshot,
   type TimelineSection,
 } from '@trifylli/shared';
 import { Map as YMap, Text as YText, type Doc } from 'yjs';
+import { setRows, setText } from '../collab/collab-restore';
 
 /**
  * Το πρόγραμμα της συγκέντρωσης ως κοινό έγγραφο (βλ. `PLAN_KEYS`): γέμισμα από
@@ -189,4 +192,86 @@ export function normalizePlan(plan: PlanSnapshot, allowed: { stelexi: ReadonlySe
     }));
 
   return { blocks, sections, yliko, stelexi: plan.stelexi.filter((userId) => allowed.stelexi.has(userId)) };
+}
+
+// ───────────────────────── Ιστορικό ─────────────────────────
+
+/** Μια έκδοση του προγράμματος (από το JSON της βάσης) — ό,τι λείπει ή είναι λάθος, κενό. */
+function versionPlan(content: Record<string, unknown>): PlanSnapshot {
+  const sections = (typeof content.sections === 'object' && content.sections !== null ? content.sections : {}) as PlanSnapshot['sections'];
+  const list = <T>(value: unknown): T[] => (Array.isArray(value) ? (value as T[]) : []);
+  return {
+    sections,
+    blocks: list<PlanBlockSnapshot>(content.blocks).filter((block) => typeof block?.id === 'string'),
+    yliko: list<PlanYlikoSnapshot>(content.yliko).filter((item) => typeof item?.id === 'string'),
+    stelexi: list<string>(content.stelexi).filter((id) => typeof id === 'string'),
+  };
+}
+
+/** Το πρόγραμμα όπως διαβάζεται: κάθε μέρος με τις σημειώσεις και τα κομμάτια του, μετά το υλικό. */
+export function presentPlan(content: Record<string, unknown>): CollabVersionPart[] {
+  const plan = versionPlan(content);
+  const parts: CollabVersionPart[] = TIMELINE_SECTION_ORDER.map((section) => {
+    const notes = String(plan.sections[section]?.notes ?? '');
+    const blocks = plan.blocks
+      .filter((block) => block.section === section)
+      .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
+      .map((block) => [`- ${block.title || 'Χωρίς τίτλο'} (${Number(block.durationMin) || 0}΄)`, ...String(block.description ?? '').split('\n').filter((line) => line.trim()).map((line) => `  ${line}`)].join('\n'));
+    return { key: section, label: TIMELINE_SECTION_LABEL[section], text: [notes, ...blocks].filter(Boolean).join('\n') };
+  });
+  parts.push({
+    key: 'yliko',
+    label: 'Υλικό',
+    text: [...plan.yliko]
+      .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
+      .map((item) => `- ${item.label}${item.qty > 1 ? ` ×${item.qty}` : ''}${item.packed ? ' ✓' : ''}`)
+      .join('\n'),
+  });
+  parts.push({ key: 'stelexi', label: 'Στελέχη', text: plan.stelexi.length ? `${plan.stelexi.length} στελέχη` : '' });
+  return parts;
+}
+
+/** Το πρόγραμμα όπως ήταν στην έκδοση — ως νέα αλλαγή, με τις μικρότερες αλλαγές. */
+export function restorePlan(doc: Doc, content: Record<string, unknown>): void {
+  const plan = versionPlan(content);
+  doc.transact(() => {
+    const sections = doc.getMap<YMap<unknown>>(PLAN_KEYS.sections);
+    for (const section of TIMELINE_SECTION_ORDER) {
+      const wanted = plan.sections[section];
+      let part = sections.get(section);
+      if (!(part instanceof YMap)) {
+        part = new YMap<unknown>();
+        part.set('notes', new YText(''));
+        part.set('durationMin', 0);
+        sections.set(section, part);
+      }
+      const notes = part.get('notes');
+      if (notes instanceof YText) setText(notes, String(wanted?.notes ?? ''));
+      else part.set('notes', new YText(String(wanted?.notes ?? '')));
+      const minutes = Number(wanted?.durationMin ?? 0) || 0;
+      if (part.get('durationMin') !== minutes) part.set('durationMin', minutes);
+    }
+    setRows(
+      doc.getMap(PLAN_KEYS.blocks),
+      plan.blocks.map((block) => ({
+        id: block.id,
+        section: block.section,
+        order: block.order,
+        title: block.title,
+        durationMin: block.durationMin,
+        responsibleId: block.responsibleId ?? null,
+        yliko: block.yliko ?? [],
+        description: block.description ?? '',
+      })),
+      ['description'],
+    );
+    setRows(
+      doc.getMap(PLAN_KEYS.yliko),
+      plan.yliko.map((item) => ({ id: item.id, order: item.order, label: item.label, qty: item.qty, packed: item.packed === true })),
+    );
+    const stelexi = doc.getMap<boolean>(PLAN_KEYS.stelexi);
+    const wanted = new Set(plan.stelexi);
+    for (const userId of [...stelexi.keys()]) if (!wanted.has(userId)) stelexi.delete(userId);
+    for (const userId of wanted) if (stelexi.get(userId) !== true) stelexi.set(userId, true);
+  });
 }

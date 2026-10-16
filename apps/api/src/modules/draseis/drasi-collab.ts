@@ -17,7 +17,20 @@ import { projectedText } from '../collab/collab-fields';
 import { CollabService } from '../collab/collab.service';
 import { DrasiAccessService } from './drasi-access.service';
 import { isMeal } from './diatrofologio';
-import { normalizeItem, normalizeMeal, readItem, readMeal, seedItem, seedMeal, upgradeItem, upgradeMeal } from './drasi-docs';
+import {
+  normalizeItem,
+  normalizeMeal,
+  presentItem,
+  presentMeal,
+  readItem,
+  readMeal,
+  restoreItem,
+  restoreMeal,
+  seedItem,
+  seedMeal,
+  upgradeItem,
+  upgradeMeal,
+} from './drasi-docs';
 
 /**
  * Τα κοινά έγγραφα μιας δράσης (βλ. docs/synergasia.md): περιγραφή, μύθος, lore
@@ -110,6 +123,7 @@ export class DrasiCollab implements OnModuleInit {
         kind: 'drasi:settings',
         arity: 1,
         fields: COLLAB_FIELDS.drasiSettings,
+        labels: { description: 'Περιγραφή' },
         access: (user, [drasiId]) => this.scope(user, drasiId!, { view: 'episkopisi', edit: 'rythmiseis' }),
         load: async ([drasiId]) => {
           const drasi = await prisma.drasi.findUnique({ where: { id: drasiId }, select: { description: true } });
@@ -131,6 +145,7 @@ export class DrasiCollab implements OnModuleInit {
         kind: 'drasi:mythos',
         arity: 1,
         fields: COLLAB_FIELDS.drasiMythos,
+        labels: { text: 'Ιστορία του μύθου' },
         access: (user, [drasiId]) => this.scope(user, drasiId!, { view: 'mythos', edit: 'mythos' }),
         load: async ([drasiId]) => {
           const drasi = await prisma.drasi.findUnique({ where: { id: drasiId }, select: { mythosText: true } });
@@ -152,6 +167,7 @@ export class DrasiCollab implements OnModuleInit {
         kind: 'drasi:character',
         arity: 2,
         fields: COLLAB_FIELDS.drasiCharacter,
+        labels: { lore: 'Ο ρόλος (lore)' },
         access: async (user, [drasiId, characterId]) => {
           const character = await prisma.drasiCharacter.findFirst({
             where: { id: characterId, drasiId },
@@ -258,6 +274,9 @@ export class DrasiCollab implements OnModuleInit {
           }
         });
       },
+      snapshot: (doc) => ({ ...readItem(doc) }),
+      present: presentItem,
+      restore: restoreItem,
       // Τα σχόλια του προγραμματικού τα μαθαίνουν οι υπεύθυνοι του στοιχείου.
       about: async ([drasiId, itemId]) => {
         const item = await prisma.drasiScheduleItem.findFirst({ where: { id: itemId, drasiId }, select: { title: true } });
@@ -331,6 +350,9 @@ export class DrasiCollab implements OnModuleInit {
           }
         });
       },
+      snapshot: (doc) => ({ ...readMeal(doc) }),
+      present: presentMeal,
+      restore: restoreMeal,
       // Τα σχόλια του γεύματος: οι υπεύθυνοί του, η μαγείρισσα και η τροφοδοσία.
       about: async ([drasiId, itemId]) => {
         const item = await prisma.drasiScheduleItem.findFirst({ where: { id: itemId, drasiId }, select: { title: true } });

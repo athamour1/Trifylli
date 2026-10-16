@@ -60,6 +60,7 @@ describe('CollabService', () => {
     kind: 'note',
     arity: 1,
     fields: ['text'],
+    labels: { text: 'Κείμενο' },
     access: async (u) => access[u.id] ?? null,
     load: async () => ({ ...entity }),
     save: async (_id, values) => {

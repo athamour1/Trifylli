@@ -1,7 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { COLLAB_SCALARS, ITEM_DOC, MEAL_DOC } from '@trifylli/shared';
 import { Doc, Map as YMap, applyUpdate, encodeStateAsUpdate } from 'yjs';
-import { normalizeItem, normalizeMeal, readItem, readMeal, seedItem, seedMeal, upgradeItem, upgradeMeal } from './drasi-docs';
+import {
+  normalizeItem,
+  normalizeMeal,
+  presentItem,
+  presentMeal,
+  readItem,
+  readMeal,
+  restoreItem,
+  restoreMeal,
+  seedItem,
+  seedMeal,
+  upgradeItem,
+  upgradeMeal,
+} from './drasi-docs';
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
@@ -114,5 +127,38 @@ describe('γεύμα ως κοινό έγγραφο', () => {
       [id(12), 1, 'Κιμάς', 4, true],
       [id(13), 2, 'Αλάτι', 60, false],
     ]);
+  });
+});
+
+describe('ιστορικό του στοιχείου και του γεύματος', () => {
+  it('στοιχείο: η έκδοση ξαναγίνεται έγγραφο — κείμενο, χώρος, υλικό — και διαβάζεται ως γραμμές', () => {
+    const doc = new Doc();
+    seedItem(doc, { description: 'Πορεία από το ρέμα.', location: 'Ξέφωτο', yliko: [{ id: id(1), order: 0, label: 'Σχοινί', qty: 2, packed: true }] });
+    const version = JSON.parse(JSON.stringify(readItem(doc))) as Record<string, unknown>;
+
+    doc.getText(ITEM_DOC.description).insert(0, 'Αλλαγή. ');
+    doc.getMap<unknown>(COLLAB_SCALARS).set(ITEM_DOC.location, 'Αλλού');
+    addRow(doc, ITEM_DOC.yliko, id(2), { order: 1, label: 'Πυξίδα', qty: 1, packed: false });
+    restoreItem(doc, version);
+
+    expect(readItem(doc)).toEqual(version);
+    expect(presentItem(version).map((part) => [part.label, part.text])).toEqual([
+      ['Προγραμματικό', 'Πορεία από το ρέμα.'],
+      ['Χώρος', 'Ξέφωτο'],
+      ['Υλικό', '- Σχοινί ×2 ✓'],
+    ]);
+  });
+
+  it('γεύμα: συνταγή, μενού και ποσολόγιο όπως ήταν', () => {
+    const doc = new Doc();
+    seedMeal(doc, { recipe: 'Βράζουμε.', menu: 'Μακαρόνια', ingredients: [{ id: id(1), order: 0, label: 'Ζυμαρικά', qty: '2 kg', bought: false }] });
+    const version = JSON.parse(JSON.stringify(readMeal(doc))) as Record<string, unknown>;
+
+    doc.getMap<YMap<unknown>>(MEAL_DOC.ingredients).delete(id(1));
+    doc.getText(MEAL_DOC.recipe).delete(0, 3);
+    restoreMeal(doc, version);
+
+    expect(readMeal(doc)).toEqual(version);
+    expect(presentMeal(version).at(-1)?.text).toBe('- Ζυμαρικά — 2 kg');
   });
 });

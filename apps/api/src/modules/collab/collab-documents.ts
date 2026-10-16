@@ -1,6 +1,7 @@
-import type { CommentPerson } from '@trifylli/shared';
+import type { CollabVersionPart, CommentPerson } from '@trifylli/shared';
 import type { Doc } from 'yjs';
 import type { RequestUser } from '../../common/auth/types';
+import { setText } from './collab-restore';
 import { readFields, seedTexts } from './collab-yjs';
 
 /** Τι επιτρέπεται σε μια σύνδεση: γράφει ή μόνο βλέπει. Καμία πρόσβαση = `null`. */
@@ -62,6 +63,15 @@ export interface CollabDocumentType {
   about?(ids: readonly string[]): Promise<CollabDocumentAbout | null>;
   /** Τα στελέχη που αναφέρονται με «@» στα σχόλια — ποτέ παιδιά. */
   people?(ids: readonly string[]): Promise<CommentPerson[]>;
+  /**
+   * Για το ιστορικό: η απλή μορφή του εγγράφου (κείμενα, λίστες) — ό,τι κρατά μια
+   * έκδοση και ό,τι επαναφέρεται. Χωρίς αυτό, το είδος δεν έχει ιστορικό.
+   */
+  snapshot?(doc: Doc): Record<string, unknown>;
+  /** Μια έκδοση όπως διαβάζεται: κομμάτια με τίτλο, οι λίστες ως γραμμές. */
+  present?(content: Record<string, unknown>): CollabVersionPart[];
+  /** Το έγγραφο γίνεται όπως η έκδοση, με τις μικρότερες αλλαγές (βλ. `setText`, `setRows`). */
+  restore?(doc: Doc, content: Record<string, unknown>): void;
 }
 
 /**
@@ -77,6 +87,8 @@ export function textDocument(spec: {
   load(ids: readonly string[]): Promise<Record<string, string> | null>;
   /** Γράφει τις τιμές στην οντότητα. */
   save(ids: readonly string[], values: Record<string, string>): Promise<void>;
+  /** Ο τίτλος κάθε πεδίου στο ιστορικό («Ατζέντα», «Πρακτικά»). */
+  labels: Record<string, string>;
   about?(ids: readonly string[]): Promise<CollabDocumentAbout | null>;
   people?(ids: readonly string[]): Promise<CommentPerson[]>;
 }): CollabDocumentType {
@@ -86,6 +98,13 @@ export function textDocument(spec: {
     access: (user, ids) => spec.access(user, ids),
     ...(spec.about ? { about: spec.about } : {}),
     ...(spec.people ? { people: spec.people } : {}),
+    snapshot: (doc) => readFields(doc, spec.fields),
+    present: (content) => spec.fields.map((field) => ({ key: field, label: spec.labels[field] ?? field, text: String(content[field] ?? '') })),
+    restore: (doc, content) => {
+      doc.transact(() => {
+        for (const field of spec.fields) setText(doc.getText(field), String(content[field] ?? ''));
+      });
+    },
     seed: async (doc, ids) => {
       const values = await spec.load(ids);
       if (!values) return false;

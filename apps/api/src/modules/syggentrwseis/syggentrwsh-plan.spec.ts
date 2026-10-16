@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { PLAN_KEYS } from '@trifylli/shared';
 import { Doc, Map as YMap, Text as YText, applyUpdate, encodeStateAsUpdate } from 'yjs';
-import { normalizePlan, readPlan, seedPlan, type PlanRows } from './syggentrwsh-plan';
+import { normalizePlan, presentPlan, readPlan, restorePlan, seedPlan, type PlanRows } from './syggentrwsh-plan';
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
@@ -109,5 +109,33 @@ describe('πρόγραμμα συγκέντρωσης ως κοινό έγγρα
       ['Τραγούδι', 0],
       ['Κυνήγι', 1],
     ]);
+  });
+});
+
+describe('ιστορικό του προγράμματος', () => {
+  it('η έκδοση ξαναγίνεται έγγραφο: σημειώσεις, κομμάτια (και οι περιγραφές τους), υλικό, στελέχη', () => {
+    const doc = new Doc();
+    seedPlan(doc, rows);
+    const version = JSON.parse(JSON.stringify(readPlan(doc))) as Record<string, unknown>;
+
+    const blocks = doc.getMap<YMap<unknown>>(PLAN_KEYS.blocks);
+    (blocks.get(id(1))!.get('description') as YText).insert(0, 'Νέο. ');
+    blocks.delete(id(2));
+    doc.getMap<YMap<unknown>>(PLAN_KEYS.yliko).get(id(80))!.set('packed', true);
+    doc.getMap<boolean>(PLAN_KEYS.stelexi).delete(id(51));
+    const notes = doc.getMap<YMap<unknown>>(PLAN_KEYS.sections).get('ANOIGMA')!.get('notes') as YText;
+    notes.delete(0, notes.length);
+
+    restorePlan(doc, version);
+    expect(readPlan(doc)).toEqual(version);
+  });
+
+  it('διαβάζεται ανά μέρος, με τα κομμάτια ως γραμμές', () => {
+    const doc = new Doc();
+    seedPlan(doc, rows);
+    const parts = presentPlan(JSON.parse(JSON.stringify(readPlan(doc))) as Record<string, unknown>);
+    expect(parts.map((part) => part.label)).toEqual(['Άνοιγμα', 'Κύριο Μέρος', 'Κλείσιμο', 'Υλικό', 'Στελέχη']);
+    expect(parts[1]!.text).toBe('- Κυνήγι (30΄)\n  Κανόνες…\n- Τραγούδι (10΄)');
+    expect(parts[3]!.text).toBe('- Σπάγκος ×3');
   });
 });

@@ -4,11 +4,13 @@ import {
   MEAL_DOC,
   ROW_LIMITS,
   clampInt,
+  type CollabVersionPart,
   type IngredientSnapshot,
   type PlanYlikoSnapshot,
 } from '@trifylli/shared';
 import { Map as YMap, type Doc } from 'yjs';
 import { projectedText } from '../collab/collab-fields';
+import { setRows, setText } from '../collab/collab-restore';
 
 /**
  * Το στοιχείο του ωρολογίου (`ITEM_DOC`) και το γεύμα (`MEAL_DOC`) ως κοινά
@@ -176,4 +178,69 @@ export function normalizeMeal(meal: MealSnapshot): MealWrite {
       bought: y.bought === true,
     })),
   };
+}
+
+// ───────────────────────── Ιστορικό ─────────────────────────
+
+/** Οι γραμμές μιας έκδοσης (από το JSON της βάσης), με τη σειρά τους. */
+function versionRows(value: unknown): ({ id: string; order: number } & Record<string, unknown>)[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((row): row is Record<string, unknown> => typeof row === 'object' && row !== null && typeof (row as { id?: unknown }).id === 'string')
+    .map((row) => ({ ...row, id: row.id as string, order: Number(row.order ?? 0) || 0 }))
+    .sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
+}
+
+/** Μια λίστα ως γραμμές κειμένου, για να συγκρίνεται. */
+function lines(rows: ReturnType<typeof versionRows>, line: (row: Record<string, unknown>) => string): string {
+  return rows.map((row) => `- ${line(row)}`).join('\n');
+}
+
+export function presentItem(content: Record<string, unknown>): CollabVersionPart[] {
+  return [
+    { key: 'description', label: 'Προγραμματικό', text: text(content.description) },
+    { key: 'location', label: 'Χώρος', text: text(content.location) },
+    {
+      key: 'yliko',
+      label: 'Υλικό',
+      text: lines(versionRows(content.yliko), (row) => `${text(row.label)}${Number(row.qty) > 1 ? ` ×${Number(row.qty)}` : ''}${row.packed === true ? ' ✓' : ''}`),
+    },
+  ];
+}
+
+/** Το στοιχείο όπως ήταν στην έκδοση — ως νέα αλλαγή, με τις μικρότερες αλλαγές. */
+export function restoreItem(doc: Doc, content: Record<string, unknown>): void {
+  doc.transact(() => {
+    setText(doc.getText(ITEM_DOC.description), text(content.description));
+    const fields = doc.getMap<unknown>(COLLAB_SCALARS);
+    if (fields.get(ITEM_DOC.location) !== text(content.location)) fields.set(ITEM_DOC.location, text(content.location));
+    setRows(
+      doc.getMap(ITEM_DOC.yliko),
+      versionRows(content.yliko).map((row) => ({ id: row.id, order: row.order, label: text(row.label), qty: Number(row.qty ?? 1), packed: row.packed === true })),
+    );
+  });
+}
+
+export function presentMeal(content: Record<string, unknown>): CollabVersionPart[] {
+  return [
+    { key: 'recipe', label: 'Συνταγή', text: text(content.recipe) },
+    { key: 'menu', label: 'Μενού', text: text(content.menu) },
+    {
+      key: 'ingredients',
+      label: 'Ποσολόγιο',
+      text: lines(versionRows(content.ingredients), (row) => `${text(row.label)}${text(row.qty) ? ` — ${text(row.qty)}` : ''}${row.bought === true ? ' ✓' : ''}`),
+    },
+  ];
+}
+
+export function restoreMeal(doc: Doc, content: Record<string, unknown>): void {
+  doc.transact(() => {
+    setText(doc.getText(MEAL_DOC.recipe), text(content.recipe));
+    const fields = doc.getMap<unknown>(COLLAB_SCALARS);
+    if (fields.get(MEAL_DOC.menu) !== text(content.menu)) fields.set(MEAL_DOC.menu, text(content.menu));
+    setRows(
+      doc.getMap(MEAL_DOC.ingredients),
+      versionRows(content.ingredients).map((row) => ({ id: row.id, order: row.order, label: text(row.label), qty: text(row.qty), bought: row.bought === true })),
+    );
+  });
 }

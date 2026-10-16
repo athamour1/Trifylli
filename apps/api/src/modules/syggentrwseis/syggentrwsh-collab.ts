@@ -7,7 +7,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { hasCapabilityFor } from '../../common/util/klados-scope';
 import type { CollabAccess, CollabDocumentAbout } from '../collab/collab-documents';
 import { CollabService } from '../collab/collab.service';
-import { normalizePlan, readPlan, seedPlan } from './syggentrwsh-plan';
+import { normalizePlan, presentPlan, readPlan, restorePlan, seedPlan } from './syggentrwsh-plan';
 
 /**
  * Όλο το πρόγραμμα μιας συγκέντρωσης ως **ένα** κοινό έγγραφο (`syggentrwsh:<id>`):
@@ -32,6 +32,9 @@ export class SyggentrwshCollab implements OnModuleInit {
       access: (user, ids) => this.access(user, ids),
       seed: (doc, ids) => this.seed(doc, ids),
       project: (doc, ids) => this.project(doc, ids),
+      snapshot: (doc) => ({ ...readPlan(doc) }),
+      present: presentPlan,
+      restore: restorePlan,
       about: (ids) => this.about(ids),
       people: (ids) => this.people(ids),
     });
