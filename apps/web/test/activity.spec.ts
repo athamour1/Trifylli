@@ -18,12 +18,14 @@ describe('ροή δραστηριότητας — στη σελίδα', () => {
     expect(activityPhrase(event('groups', 'remove', '2026-10-16T10:00:00Z'))).toBe('Μαρία Π. αφαίρεσε από τις ομάδες');
     expect(activityPhrase(event('doc:meal', 'write', '2026-10-16T10:00:00Z', 'u-2', 3))).toBe('Μαρία Π. έγραψε σε γεύμα (3)');
     expect(activityPhrase(event('κάτι-νέο', 'change', '2026-10-16T10:00:00Z'))).toBe('Μαρία Π. άλλαξε τη δράση');
+    expect(activityPhrase(event('comment:item', 'add', '2026-10-16T10:00:00Z', 'u-2', 2))).toBe('Μαρία Π. πρόσθεσε σχόλιο σε προγραμματικό (2)');
   });
 
   it('κάθε σημείο ανήκει σε μια ενότητα της δράσης', () => {
     expect(sectionOfTopic('schedule')).toBe('programma');
     expect(sectionOfTopic('doc:item')).toBe('programma');
     expect(sectionOfTopic('doc:meal')).toBe('diatrofologio');
+    expect(sectionOfTopic('comment:meal')).toBe('diatrofologio');
     expect(sectionOfTopic('ledger')).toBe('tamio');
     expect(sectionOfTopic('άγνωστο')).toBeNull();
   });
