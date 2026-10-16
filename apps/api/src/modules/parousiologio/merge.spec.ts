@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mergeParousies } from './merge';
+import { incomingEntries, mergeParousies } from './merge';
 
 const t = (iso: string) => new Date(`2026-05-12T${iso}:00Z`);
 
@@ -57,5 +57,24 @@ describe('mergeParousies', () => {
     ]);
     expect(result.toWrite.map((e) => e.userId).sort()).toEqual(['b', 'c']);
     expect(result.stale.map((e) => e.userId)).toEqual(['a']);
+  });
+});
+
+describe('κάθε σήμανση με τη δική της ώρα', () => {
+  it('η ώρα της σήμανσης κερδίζει την ώρα της αποστολής', () => {
+    const sent = t('18:30');
+    expect(
+      incomingEntries([{ memberId: 'a', status: 'PAROUSIA', recordedAt: t('18:05') }, { memberId: 'b', status: 'APOUSIA' }], sent),
+    ).toEqual([
+      { userId: 'a', status: 'PAROUSIA', note: null, recordedAt: t('18:05') },
+      { userId: 'b', status: 'APOUSIA', note: null, recordedAt: sent },
+    ]);
+  });
+
+  it('δύο στελέχη σημειώνουν μαζί διαφορετικά παιδιά: δεν σβήνει το ένα τα παιδιά του άλλου', () => {
+    // Η Μαρία σημείωσε τον a στις 18:01· η Σοφία, με παλιό φύλλο, στέλνει μόνο τον b (18:02).
+    const existing = [{ userId: 'a', status: 'PAROUSIA', note: null, recordedAt: t('18:01') }];
+    const result = mergeParousies(existing, incomingEntries([{ memberId: 'b', status: 'APOUSIA', recordedAt: t('18:02') }], t('18:02')));
+    expect(result.toWrite.map((e) => e.userId)).toEqual(['b']);
   });
 });

@@ -4,7 +4,7 @@ import { PAROUSIA_LABEL, type KladosType } from '@trifylli/shared';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
 import { assertKladosAccess } from '../../common/util/klados-scope';
-import { mergeParousies } from './merge';
+import { incomingEntries, mergeParousies } from './merge';
 import type { SubmitParousiologioDto } from './dto/parousiologio.dto';
 
 @Injectable()
@@ -76,7 +76,8 @@ export class ParousiologioService {
   async submit(user: RequestUser, syggentrwshId: string, dto: SubmitParousiologioDto) {
     const syggentrwsh = await this.loadSyggentrwsh(user, syggentrwshId);
 
-    if (dto.recordedAt.getTime() > Date.now() + 5 * 60 * 1000) {
+    const incoming = incomingEntries(dto.entries, dto.recordedAt);
+    if (incoming.some((entry) => entry.recordedAt.getTime() > Date.now() + 5 * 60 * 1000)) {
       throw new BadRequestException('Το `recordedAt` είναι στο μέλλον — ελέγξτε το ρολόι της συσκευής.');
     }
 
@@ -98,15 +99,7 @@ export class ParousiologioService {
       select: { userId: true, status: true, note: true, recordedAt: true },
     });
 
-    const { toWrite, stale } = mergeParousies(
-      existing,
-      dto.entries.map((e) => ({
-        userId: e.memberId,
-        status: e.status,
-        note: e.note ?? null,
-        recordedAt: dto.recordedAt,
-      })),
-    );
+    const { toWrite, stale } = mergeParousies(existing, incoming);
 
     await this.prisma.$transaction(
       toWrite.map((entry) =>

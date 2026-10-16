@@ -25,6 +25,16 @@ export class ParousiaEntryDto {
   @IsOptional()
   @IsString()
   note?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    format: 'date-time',
+    description: 'Πότε πατήθηκε αυτή η σήμανση στη συσκευή — αλλιώς ισχύει το `recordedAt` της αποστολής.',
+  })
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  recordedAt?: Date;
 }
 
 export class SubmitParousiologioDto {

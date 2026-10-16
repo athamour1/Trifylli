@@ -65,3 +65,21 @@ export function mergeParousies(
 
   return { toWrite, stale };
 }
+
+/**
+ * Οι σημάνσεις όπως ήρθαν από τη σελίδα: η καθεμία με την ώρα που πατήθηκε
+ * (`recordedAt` της σήμανσης), αλλιώς με την ώρα της αποστολής. Η σελίδα
+ * στέλνει μόνο όσες άλλαξαν — έτσι δύο στελέχη που σημειώνουν μαζί δεν σβήνει
+ * το ένα τα παιδιά του άλλου με το (παλιό) φύλλο της οθόνης του.
+ */
+export function incomingEntries(
+  entries: readonly { memberId: string; status: string; note?: string | null; recordedAt?: Date }[],
+  sentAt: Date,
+): IncomingEntry[] {
+  return entries.map((entry) => ({
+    userId: entry.memberId,
+    status: entry.status,
+    note: entry.note ?? null,
+    recordedAt: entry.recordedAt ?? sentAt,
+  }));
+}
