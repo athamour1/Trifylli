@@ -31,6 +31,23 @@ import type { SaveState } from '../lib/save-state';
  */
 export type CollabStatus = 'loading' | 'connecting' | 'synced' | 'offline' | 'update-required' | 'forbidden';
 
+/**
+ * Όσοι ακούν τα «άλλαξε αυτό» ενός εγγράφου που το έχει ανοίξει άλλο κομμάτι της
+ * σελίδας (π.χ. τα σχόλια ενός πεδίου) — ανά όνομα εγγράφου.
+ */
+const documentListeners = new Map<string, Set<(change: CollabChange) => void>>();
+
+/** Ακούει τα «άλλαξε αυτό» ενός εγγράφου όσο είναι ανοιχτό εδώ. Επιστρέφει το «σταμάτα». */
+export function onDocumentChange(name: string, handler: (change: CollabChange) => void): () => void {
+  const handlers = documentListeners.get(name) ?? new Set();
+  handlers.add(handler);
+  documentListeners.set(name, handlers);
+  return () => {
+    handlers.delete(handler);
+    if (!handlers.size) documentListeners.delete(name);
+  };
+}
+
 /** Οι άλλοι στο έγγραφο — ένας ανά άτομο, όσα tabs κι αν έχει ανοιχτά. */
 function otherPeers(states: StatesArray, myClientId: number, myUserId: string | undefined): CollabPresenceUser[] {
   const byId = new Map<string, CollabPresenceUser>();
@@ -294,6 +311,7 @@ export function useCollabDoc(name: string, me: () => CollabPresenceUser | null, 
 
   function emitChange(change: CollabChange): void {
     for (const handler of changeHandlers) handler(change);
+    for (const handler of documentListeners.get(name) ?? []) handler(change);
   }
 
   /**
