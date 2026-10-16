@@ -24,7 +24,8 @@
           </div>
 
           <div class="col-12 col-sm-auto row items-center q-gutter-sm">
-            <SaveStatus v-if="editable" :status="saveStatus" @retry="saveNow" />
+            <CollabPresence :peers="peers" />
+            <SaveStatus v-if="editable" :status="worstSaveState(saveStatus, collabSaveState)" @retry="saveNow" />
             <q-btn
               v-if="viewOnly && auth.can('syggentrwsh:write')"
               outline
@@ -45,6 +46,18 @@
             </q-btn>
           </div>
           </div>
+        </div>
+
+        <q-banner v-if="collabStatus === 'update-required'" dense class="bg-orange-1 text-orange-10 q-mb-md">
+          <template #avatar><q-icon name="system_update" /></template>
+          Βγήκε νέα έκδοση της εφαρμογής — ανανέωσε τη σελίδα για να γράψεις στο πρόγραμμα.
+          <template #action>
+            <q-btn flat no-caps color="orange-10" label="Ανανέωση" @click="reloadPage" />
+          </template>
+        </q-banner>
+        <div v-else-if="editable && !collabReady && collabStatus === 'offline'" class="text-caption text-grey-7 q-mb-md">
+          <q-icon name="cloud_off" size="16px" class="q-mr-xs" />
+          Χωρίς σύνδεση: το πρόγραμμα φαίνεται μόνο για ανάγνωση σε αυτή τη συσκευή — η επεξεργασία ανοίγει μόλις συνδεθείς.
         </div>
 
         <div class="row q-col-gutter-md">
@@ -74,14 +87,15 @@
                 <div class="col-auto">
                   <q-input
                     v-if="!part.blocks.length"
-                    v-model.number="part.durationMin"
-                    :readonly="!editable"
+                    :model-value="part.durationMin"
+                    :readonly="!planEditable"
                     type="number"
                     min="0"
                     dense
                     outlined
                     suffix="λ"
                     style="width: 110px"
+                    @update:model-value="(value) => setPartMinutes(part.section, value)"
                   />
                   <span v-else class="text-caption text-grey-7">
                     {{ formatDuration(partDuration(part)) }}
@@ -92,13 +106,18 @@
 
               <!-- Ελεύθερο κείμενο του μέρους -->
               <q-card-section class="q-py-sm">
-                <MarkdownField
-                  v-model="part.notes"
+                <CollabMarkdownField
+                  v-if="collabReady"
+                  :doc="collabDoc"
+                  :text="sectionNotes(collabDoc, part.section)"
+                  :document-name="docName"
+                  :awareness="awareness"
                   :klados="data.klados.type"
-                  :readonly="!editable"
+                  :readonly="!planEditable"
                   :label="`Σημειώσεις — ${part.label}`"
                   :placeholder="SECTION_PLACEHOLDER[part.section]"
                 />
+                <MarkdownField v-else :model-value="part.notes" readonly :klados="data.klados.type" />
               </q-card-section>
 
               <!-- Κομμάτια: μόνο στο Κύριο Μέρος. Στο Άνοιγμα και στο Κλείσιμο
@@ -111,7 +130,7 @@
                     v-if="!part.blocks.length"
                     class="text-caption text-grey-6 q-py-sm"
                   >
-                    {{ editable ? 'Κανένα κομμάτι ακόμη.' : 'Δεν έχει σχεδιαστεί.' }}
+                    {{ planEditable ? 'Κανένα κομμάτι ακόμη.' : 'Δεν έχει σχεδιαστεί.' }}
                   </div>
 
                   <div
@@ -122,11 +141,12 @@
                     <div class="row items-center q-col-gutter-sm">
                       <div class="col">
                         <q-input
-                          v-model="block.title"
-                          :readonly="!editable"
+                          :model-value="block.title"
+                          :readonly="!planEditable"
                           dense
                           outlined
                           placeholder="Τίτλος κομματιού"
+                          @update:model-value="(value) => updateBlock(collabDoc, block.id, { title: String(value ?? '') })"
                         >
                           <template v-if="schedule.blockStart.get(block.key)" #prepend>
                             <span class="text-caption text-grey-7">
@@ -137,16 +157,17 @@
                       </div>
                       <div class="col-auto" style="width: 110px">
                         <q-input
-                          v-model.number="block.durationMin"
-                          :readonly="!editable"
+                          :model-value="block.durationMin"
+                          :readonly="!planEditable"
                           type="number"
                           min="1"
                           dense
                           outlined
                           suffix="λ"
+                          @update:model-value="(value) => setBlockMinutes(block.id, value)"
                         />
                       </div>
-                      <div v-if="editable" class="col-auto">
+                      <div v-if="planEditable" class="col-auto">
                         <q-btn
                           dense
                           flat
@@ -154,7 +175,7 @@
                           size="sm"
                           icon="keyboard_arrow_up"
                           :disable="index === 0"
-                          @click="move(part, index, -1)"
+                          @click="moveBlock(collabDoc, block.id, -1)"
                         />
                         <q-btn
                           dense
@@ -163,7 +184,7 @@
                           size="sm"
                           icon="keyboard_arrow_down"
                           :disable="index === part.blocks.length - 1"
-                          @click="move(part, index, 1)"
+                          @click="moveBlock(collabDoc, block.id, 1)"
                         />
                         <q-btn
                           dense
@@ -172,34 +193,40 @@
                           size="sm"
                           icon="close"
                           color="negative"
-                          @click="part.blocks.splice(index, 1)"
+                          @click="removeBlock(collabDoc, block.id)"
                         />
                       </div>
                     </div>
 
                     <div class="q-mt-sm">
-                      <MarkdownField
-                        v-model="block.description"
+                      <CollabMarkdownField
+                        v-if="collabReady"
+                        :doc="collabDoc"
+                        :text="blockDescription(collabDoc, block.id)"
+                        :document-name="docName"
+                        :awareness="awareness"
                         :klados="data.klados.type"
-                        :readonly="!editable"
+                        :readonly="!planEditable"
                         label="Περιγραφή"
                         placeholder="Markdown: οδηγίες, κανόνες, εναλλακτική…"
                         empty-text="Χωρίς περιγραφή."
                         :min-height="72"
                       />
+                      <MarkdownField v-else :model-value="block.description" readonly :klados="data.klados.type" empty-text="Χωρίς περιγραφή." />
                     </div>
 
                     <div class="q-mt-sm" style="max-width: 320px">
                       <q-select
-                        v-model="block.responsibleId"
+                        :model-value="block.responsibleId"
                         :options="stelexiOptions"
-                        :readonly="!editable"
+                        :readonly="!planEditable"
                         label="Υπεύθυνος"
                         dense
                         outlined
                         emit-value
                         map-options
                         clearable
+                        @update:model-value="(value) => updateBlock(collabDoc, block.id, { responsibleId: value ?? null })"
                       />
                     </div>
 
@@ -213,8 +240,8 @@
                         color="secondary"
                         text-color="white"
                         icon="inventory_2"
-                        :removable="editable"
-                        @remove="removeBlockYliko(block, use.id)"
+                        :removable="planEditable"
+                        @remove="removeBlockYliko(collabDoc, block.id, use.id)"
                       >
                         {{ use.name }} × {{ use.qty }}
                       </q-chip>
@@ -222,14 +249,14 @@
                   </div>
 
                   <q-btn
-                    v-if="editable && part.section === TimelineSection.KYRIO_MEROS"
+                    v-if="planEditable && part.section === TimelineSection.KYRIO_MEROS"
                     flat
                     dense
                     no-caps
                     color="klados"
                     icon="add"
                     label="Προσθήκη κομματιού"
-                    @click="addBlock(part)"
+                    @click="addBlock(collabDoc, part.section)"
                   />
                 </q-card-section>
               </template>
@@ -286,39 +313,47 @@
 
               <q-card-section class="q-py-sm">
                 <div v-if="!allYliko.length" class="text-caption text-grey-6 q-pb-sm">
-                  {{ editable ? 'Κενή λίστα.' : 'Δεν έχει δηλωθεί υλικό.' }}
+                  {{ planEditable ? 'Κενή λίστα.' : 'Δεν έχει δηλωθεί υλικό.' }}
                 </div>
 
                 <div
-                  v-for="(item, index) in yliko"
+                  v-for="item in yliko"
                   :key="item.key"
                   class="row items-center q-col-gutter-xs q-mb-xs"
                 >
                   <div class="col-auto">
-                    <q-checkbox v-model="item.packed" :disable="!editable" dense color="klados" />
+                    <q-checkbox
+                      :model-value="item.packed"
+                      :disable="!planEditable"
+                      dense
+                      color="klados"
+                      @update:model-value="(value) => updateYliko(collabDoc, item.id, { packed: value })"
+                    />
                   </div>
                   <div class="col">
                     <q-input
-                      v-model="item.label"
-                      :readonly="!editable"
+                      :model-value="item.label"
+                      :readonly="!planEditable"
                       dense
                       outlined
                       placeholder="π.χ. σπάγκος"
                       :class="item.packed ? 'text-grey-6' : ''"
-                      @keydown.enter.prevent="addYlikoAfter(index)"
+                      @update:model-value="(value) => updateYliko(collabDoc, item.id, { label: String(value ?? '') })"
+                      @keydown.enter.prevent="addYlikoAfter(collabDoc, item.id)"
                     />
                   </div>
                   <div class="col-auto" style="width: 76px">
                     <q-input
-                      v-model.number="item.qty"
-                      :readonly="!editable"
+                      :model-value="item.qty"
+                      :readonly="!planEditable"
                       type="number"
                       min="1"
                       dense
                       outlined
+                      @update:model-value="(value) => setYlikoQty(item.id, value)"
                     />
                   </div>
-                  <div v-if="editable" class="col-auto">
+                  <div v-if="planEditable" class="col-auto">
                     <q-btn
                       dense
                       flat
@@ -326,20 +361,20 @@
                       size="sm"
                       icon="close"
                       color="negative"
-                      @click="yliko.splice(index, 1)"
+                      @click="removeYliko(collabDoc, item.id)"
                     />
                   </div>
                 </div>
 
                 <q-btn
-                  v-if="editable"
+                  v-if="planEditable"
                   flat
                   dense
                   no-caps
                   color="klados"
                   icon="add"
                   label="Προσθήκη"
-                  @click="addYlikoAfter(yliko.length - 1)"
+                  @click="addYlikoAfter(collabDoc, yliko.at(-1)?.id ?? null)"
                 />
               </q-card-section>
 
@@ -397,15 +432,15 @@
                     :key="stelexos.id"
                     v-ripple
                     tag="label"
-                    :clickable="editable"
+                    :clickable="planEditable"
                   >
                     <q-item-section avatar>
                       <q-checkbox
-                        v-model="stelexosIds"
-                        :val="stelexos.id"
-                        :disable="!editable"
+                        :model-value="stelexosIds.includes(stelexos.id)"
+                        :disable="!planEditable"
                         dense
                         color="klados"
+                        @update:model-value="(value) => setStelexos(collabDoc, stelexos.id, value)"
                       />
                     </q-item-section>
                     <q-item-section>
@@ -425,7 +460,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, reactive, ref, shallowRef, watch } from 'vue';
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 import { useQuasar } from 'quasar';
 import {
@@ -434,9 +469,12 @@ import {
   TIMELINE_SECTION_LABEL,
   TIMELINE_SECTION_ORDER,
   TimelineSection,
+  collabDocument,
   type CheckoutStatus,
   type KladosType,
+  type PlanSnapshot,
 } from '@trifylli/shared';
+import CollabPresence from '../components/CollabPresence.vue';
 import MarkdownField from '../components/MarkdownField.vue';
 import PageState from '../components/PageState.vue';
 import SaveStatus from '../components/SaveStatus.vue';
@@ -444,16 +482,37 @@ import DateField from '../components/DateField.vue';
 import TimeField from '../components/TimeField.vue';
 import SyggentrwshPrint from '../components/SyggentrwshPrint.vue';
 import { useAsyncData } from '../composables/useAsyncData';
+import { useCollabDoc, useCollabMe } from '../composables/useCollabDoc';
 import { useKladosThemeStore } from '../stores/klados-theme';
-import { ApiError, OfflineError, get, patch, put } from '../lib/api';
+import { ApiError, OfflineError, get, patch } from '../lib/api';
 import { formatDate, formatDateLong, formatDuration } from '../lib/format';
 import type { PrintFact, PrintSheet } from '../lib/print-sheet';
 import { printElement } from '../lib/print';
-import type { SaveState } from '../lib/save-state';
+import { worstSaveState, type SaveState } from '../lib/save-state';
+import {
+  DEFAULT_BLOCK_MINUTES,
+  addBlock,
+  addYlikoAfter,
+  blockDescription,
+  moveBlock,
+  readPlan,
+  removeBlock,
+  removeBlockYliko,
+  removeYliko,
+  sectionNotes,
+  setSectionDuration,
+  setStelexos,
+  typedNumber,
+  updateBlock,
+  updateYliko,
+} from '../lib/syggentrwsh-plan';
 import { useAuthStore } from '../stores/auth';
 import { useOfflineStore } from '../stores/offline';
 
 const kladosTheme = useKladosThemeStore();
+
+// CodeMirror φορτώνεται μόνο όταν ανοίξει σελίδα με κείμενα για γράψιμο.
+const CollabMarkdownField = defineAsyncComponent(() => import('../components/CollabMarkdownField.vue'));
 
 /**
  * Σχεδιασμός συγκέντρωσης.
@@ -461,11 +520,13 @@ const kladosTheme = useKladosThemeStore();
  * Μία οθόνη, χωρίς «λειτουργία επεξεργασίας»: το πρόγραμμα γράφεται επί τόπου
  * και αποθηκεύεται μόνο του. Ο σχεδιασμός γίνεται συνήθως σε συμβούλιο με το
  * κινητό στο χέρι, όπου ένα κουμπί «Αποθήκευση» που ξεχάστηκε σημαίνει χαμένη
- * δουλειά.
+ * δουλειά — και πολλές φορές τον γράφουν δύο-τρία στελέχη μαζί: το πρόγραμμα
+ * είναι κοινό έγγραφο (`syggentrwsh:<id>`, βλ. lib/syggentrwsh-plan), ζωντανά,
+ * με κέρσορες. Η κεφαλίδα (τίτλος, ημερομηνία, ώρα, τόπος, ιδέα) σώζεται όπως πριν.
  */
 
 /** Προεπιλεγμένη διάρκεια νέου κομματιού — και εφεδρεία όταν το πεδίο μείνει κενό. */
-const DEFAULT_DURATION_MIN = 10;
+const DEFAULT_DURATION_MIN = DEFAULT_BLOCK_MINUTES;
 
 /** Πόσο περιμένουμε να σταματήσει η πληκτρολόγηση πριν στείλουμε. */
 const AUTOSAVE_DELAY_MS = 1200;
@@ -482,14 +543,11 @@ interface BlockYlikoUse {
   qty: number;
 }
 
-/** Τοπική μορφή κομματιού. */
+/** Ένα κομμάτι όπως το δείχνει η σελίδα. */
 interface PlanBlock {
-  /**
-   * Σταθερό κλειδί για το `v-for`. Δικό μας, όχι το id της βάσης: η αποθήκευση
-   * ξαναγράφει τα κομμάτια, οπότε τα id αλλάζουν και το Vue θα ξανάφτιαχνε όλα
-   * τα πεδία — χάνοντας τον δρομέα μέσα στο κείμενο που μόλις γραφόταν.
-   */
+  /** Το id του κομματιού στο κοινό έγγραφο — σταθερό, και κλειδί του `v-for`. */
   key: string;
+  id: string;
   title: string;
   description: string;
   durationMin: number;
@@ -508,6 +566,7 @@ interface PlanPart {
 
 interface PlanYlikoItem {
   key: string;
+  id: string;
   label: string;
   qty: number;
   packed: boolean;
@@ -602,15 +661,95 @@ const header = reactive({
   goal: '',
 });
 
-const plan = ref<PlanPart[]>([]);
-const yliko = ref<PlanYlikoItem[]>([]);
-const stelexosIds = ref<string[]>([]);
-
 /** Ο κατάλογος στελεχών του κλάδου — έρχεται ξεχωριστά από τον σχεδιασμό. */
 const fetchedStelexi = ref<Stelexos[]>([]);
 
-let keySeq = 0;
-const nextKey = (): string => `k${(keySeq += 1)}`;
+// ───────────────────────── Το πρόγραμμα: κοινό έγγραφο ─────────────────────────
+
+const docName = collabDocument.syggentrwsh(id);
+const {
+  doc: collabDoc,
+  awareness,
+  ready: collabReady,
+  readOnly: collabReadOnly,
+  status: collabStatus,
+  peers,
+  saveState: collabSaveState,
+} = useCollabDoc(docName, useCollabMe());
+
+/** Το πρόγραμμα όπως είναι τώρα στο έγγραφο — ξαναδιαβάζεται σε κάθε αλλαγή (δική μας ή άλλων). */
+const docPlan = shallowRef<PlanSnapshot | null>(null);
+let stopWatchingDoc: (() => void) | null = null;
+watch(
+  collabDoc,
+  (doc) => {
+    stopWatchingDoc?.();
+    const refresh = (): void => {
+      docPlan.value = readPlan(doc);
+    };
+    doc.on('update', refresh);
+    stopWatchingDoc = () => doc.off('update', refresh);
+    refresh();
+  },
+  { immediate: true },
+);
+onBeforeUnmount(() => stopWatchingDoc?.());
+
+/** Πριν ανοίξει το έγγραφο (ή χωρίς δίκτυο, σε συσκευή που δεν το έχει): ό,τι έφερε το `GET`, μόνο για ανάγνωση. */
+const restPlan = computed<PlanSnapshot | null>(() => (data.value ? planFromDetail(data.value) : null));
+const planSource = computed<PlanSnapshot | null>(() => (collabReady.value ? docPlan.value : restPlan.value));
+
+/** Το πρόγραμμα γράφεται όταν γράφεται η σελίδα **και** ο server το επιτρέπει. */
+const planEditable = computed(
+  () => editable.value && collabReady.value && !collabReadOnly.value && collabStatus.value !== 'update-required',
+);
+
+const plan = computed<PlanPart[]>(() => {
+  const source = planSource.value;
+  return TIMELINE_SECTION_ORDER.map((section) => ({
+    section,
+    label: TIMELINE_SECTION_LABEL[section],
+    notes: source?.sections[section]?.notes ?? '',
+    durationMin: source?.sections[section]?.durationMin ?? 0,
+    blocks: (source?.blocks ?? [])
+      .filter((block) => block.section === section)
+      .map((block) => ({
+        key: block.id,
+        id: block.id,
+        title: block.title,
+        description: block.description,
+        durationMin: block.durationMin,
+        responsibleId: block.responsibleId,
+        yliko: block.yliko,
+      })),
+  }));
+});
+
+const yliko = computed<PlanYlikoItem[]>(() =>
+  (planSource.value?.yliko ?? []).map((item) => ({ key: item.id, id: item.id, label: item.label, qty: item.qty, packed: item.packed })),
+);
+
+const stelexosIds = computed<string[]>(() => planSource.value?.stelexi ?? []);
+
+// Πεδία αριθμού: όσο είναι κενά δεν γράφεται τίποτα (βλ. `typedNumber`).
+function setPartMinutes(section: TimelineSection, value: string | number | null): void {
+  const minutes = typedNumber(value);
+  if (minutes !== null) setSectionDuration(collabDoc.value, section, minutes);
+}
+
+function setBlockMinutes(blockId: string, value: string | number | null): void {
+  const minutes = typedNumber(value);
+  if (minutes !== null) updateBlock(collabDoc.value, blockId, { durationMin: minutes });
+}
+
+function setYlikoQty(itemId: string, value: string | number | null): void {
+  const qty = typedNumber(value);
+  if (qty !== null) updateYliko(collabDoc.value, itemId, { qty });
+}
+
+function reloadPage(): void {
+  window.location.reload();
+}
 
 /**
  * Κατάσταση αποθήκευσης — δηλώνεται πριν από το `hydrate`, γιατί ο watcher που
@@ -637,44 +776,35 @@ function hydrate(value: Detail): void {
   header.location = value.location ?? '';
   header.goal = value.goal ?? '';
 
-  const bySection = new Map(value.sections.map((s) => [s.section, s]));
-  plan.value = TIMELINE_SECTION_ORDER.map((section) => {
-    const incoming = bySection.get(section);
-    return {
-      section,
-      label: TIMELINE_SECTION_LABEL[section],
-      notes: incoming?.notes ?? '',
-      durationMin: incoming?.ownDurationMin ?? 0,
-      blocks: (incoming?.blocks ?? []).map((block) => ({
-        key: nextKey(),
-        title: block.title,
-        description: block.description ?? '',
-        durationMin: block.durationMin,
-        responsibleId: block.responsible?.id ?? null,
-        yliko: block.yliko.map((use) => ({
-          id: use.yliko.id,
-          name: use.yliko.name,
-          qty: use.qty,
-        })),
-      })),
-    };
-  });
-
-  yliko.value = value.ylikoItems.map((item) => ({
-    key: nextKey(),
-    label: item.label,
-    qty: item.qty,
-    packed: item.packed,
-  }));
-
-  stelexosIds.value = value.stelexi.map((entry) => entry.userId);
-
-  // Μετά το τέλος του τρέχοντος tick: οι αλλαγές των refs ειδοποιούν τον
-  // watcher ασύγχρονα, οπότε ένα συγχρονο `hydrating = false` θα άνοιγε πολύ
-  // νωρίς και η ίδια η φόρτωση θα περνούσε για αλλαγή.
+  // Μετά το τέλος του τρέχοντος tick: οι αλλαγές ειδοποιούν τον watcher
+  // ασύγχρονα, οπότε ένα σύγχρονο `hydrating = false` θα άνοιγε πολύ νωρίς και
+  // η ίδια η φόρτωση θα περνούσε για αλλαγή.
   void Promise.resolve().then(() => {
     hydrating = false;
   });
+}
+
+/** Το πρόγραμμα από το `GET` στην ίδια μορφή με το έγγραφο — για όσο αυτό δεν είναι διαθέσιμο. */
+function planFromDetail(value: Detail): PlanSnapshot {
+  const sections: PlanSnapshot['sections'] = {};
+  for (const part of value.sections) sections[part.section] = { notes: part.notes, durationMin: part.ownDurationMin };
+  return {
+    sections,
+    blocks: value.sections.flatMap((part) =>
+      part.blocks.map((block, order) => ({
+        id: block.id,
+        section: part.section,
+        order,
+        title: block.title,
+        durationMin: block.durationMin,
+        responsibleId: block.responsible?.id ?? null,
+        yliko: block.yliko.map((use) => ({ id: use.yliko.id, name: use.yliko.name, qty: use.qty })),
+        description: block.description ?? '',
+      })),
+    ),
+    yliko: value.ylikoItems.map((item, order) => ({ id: item.id, order, label: item.label, qty: item.qty, packed: item.packed })),
+    stelexi: value.stelexi.map((entry) => entry.userId),
+  };
 }
 
 // Γεμίζουμε μόνο όσο δεν υπάρχουν αλλαγές σε εκκρεμότητα, ώστε μια ανανέωση
@@ -937,43 +1067,11 @@ function pdfFileName(): string {
   return date ? `${title} ${date}` : title;
 }
 
-// ───────────────────────── Επεξεργασία ─────────────────────────
-
-function addBlock(part: PlanPart): void {
-  part.blocks.push({
-    key: nextKey(),
-    title: '',
-    description: '',
-    durationMin: DEFAULT_DURATION_MIN,
-    responsibleId: null,
-    yliko: [],
-  });
-}
-
-function move(part: PlanPart, index: number, step: number): void {
-  const target = index + step;
-  if (target < 0 || target >= part.blocks.length) return;
-  const [block] = part.blocks.splice(index, 1);
-  if (block) part.blocks.splice(target, 0, block);
-}
-
-function removeBlockYliko(block: PlanBlock, ylikoId: string): void {
-  block.yliko = block.yliko.filter((use) => use.id !== ylikoId);
-}
-
-function addYlikoAfter(index: number): void {
-  yliko.value.splice(index + 1, 0, {
-    key: nextKey(),
-    label: '',
-    qty: 1,
-    packed: false,
-  });
-}
-
 // ───────────────────────── Αυτόματη αποθήκευση ─────────────────────────
 
+// Μόνο η κεφαλίδα: το πρόγραμμα σώζεται μόνο του, ως κοινό έγγραφο.
 watch(
-  [header, plan, yliko, stelexosIds],
+  header,
   () => {
     if (hydrating || !editable.value) return;
     dirty.value = true;
@@ -993,38 +1091,12 @@ async function saveNow(): Promise<void> {
 
   saveStatus.value = 'saving';
   try {
-    // Η κεφαλίδα πρώτη: αν σκάσει η ημερομηνία, δεν θέλουμε να έχει γραφτεί
-    // μισό πρόγραμμα κάτω από λάθος στοιχεία.
     await patch(`/syggentrwseis/${id}`, {
       title: header.title.trim() || null,
       date: dayToIso(header.date),
       startTime: header.startTime ? combineDateTime(header.date, header.startTime) : null,
       location: header.location.trim() || null,
       goal: header.goal.trim() || null,
-    });
-
-    await put(`/syggentrwseis/${id}/plan`, {
-      blocks: plan.value.flatMap((part) =>
-        part.blocks.map((block) => ({
-          section: part.section,
-          title: block.title,
-          description: block.description || undefined,
-          durationMin: clampDuration(block.durationMin),
-          responsibleId: block.responsibleId ?? undefined,
-          ylikoIds: block.yliko.length ? block.yliko.map((use) => use.id) : undefined,
-        })),
-      ),
-      sections: plan.value.map((part) => ({
-        section: part.section,
-        notes: part.notes,
-        durationMin: clampSectionDuration(part.durationMin),
-      })),
-      yliko: yliko.value.map((item) => ({
-        label: item.label,
-        qty: clampQty(item.qty),
-        packed: item.packed,
-      })),
-      stelexosIds: stelexosIds.value,
     });
 
     dirty.value = false;
