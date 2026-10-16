@@ -98,7 +98,23 @@ export class DrasiCollab implements OnModuleInit {
         },
       },
     ];
-    return [...specs.map(textDocument), this.itemType(), this.mealType()];
+    return [...specs.map(textDocument), this.itemType(), this.mealType(), this.roomType()];
+  }
+
+  /**
+   * Το δωμάτιο της δράσης (`drasi:<id>:room`): ποιος είναι μέσα και «άλλαξε αυτό»
+   * για τις καρτέλες που δεν είναι κοινά έγγραφα (ωρολόγιο, ομάδες, συμμετέχοντες…).
+   * Μπαίνει όποιος βλέπει τη δράση.
+   */
+  private roomType(): CollabDocumentType {
+    return {
+      kind: 'drasi:room',
+      arity: 1,
+      room: true,
+      access: async (user, [drasiId]) => ((await this.access.accessFor(user, drasiId!).catch(() => null)) ? 'read' : null),
+      seed: async () => true,
+      project: async () => undefined,
+    };
   }
 
   /**
