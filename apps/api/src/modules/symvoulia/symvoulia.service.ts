@@ -66,6 +66,8 @@ export class SymvouliaService {
   }
 
   async findOne(user: RequestUser, id: string) {
+    // Ατζέντα και πρακτικά που γράφονται αυτή τη στιγμή: πρώτα στη βάση.
+    await this.collab.flushPending(collabDocument.symvoulio(id));
     const symvoulio = await this.prisma.symvoulio.findFirst({
       where: { id, topikoId: user.topikoId },
       include: {

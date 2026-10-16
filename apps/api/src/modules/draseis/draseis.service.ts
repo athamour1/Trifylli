@@ -167,6 +167,8 @@ export class DraseisService {
   }
 
   async findOne(user: RequestUser, id: string) {
+    // Η περιγραφή που γράφεται αυτή τη στιγμή: πρώτα στη βάση.
+    await this.collab.flushPending(collabDocument.drasiSettings(id));
     const drasi = await this.prisma.drasi.findFirst({
       where: { id, topikoId: user.topikoId },
       include: {

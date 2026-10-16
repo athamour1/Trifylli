@@ -66,6 +66,8 @@ export class DraseisPlanService {
    */
   async scheduleView(user: RequestUser, id: string): Promise<DrasiScheduleView> {
     const drasi = await this.access.load(user, id, 'read');
+    // Προγραμματικά και συνταγές που γράφονται αυτή τη στιγμή: πρώτα στη βάση.
+    await this.collab.flushPending(collabDocument.drasiPrefix(id));
     const tz = await this.timezone(user);
     const rows = await this.prisma.drasiScheduleItem.findMany({
       where: { drasiId: id },

@@ -35,6 +35,8 @@ export class DraseisMythosService {
   ) {}
 
   async view(user: RequestUser, id: string): Promise<DrasiMythosView> {
+    // Ιστορία και lore που γράφονται αυτή τη στιγμή: πρώτα στη βάση.
+    await this.collab.flushPending(collabDocument.drasiPrefix(id));
     const drasi = await this.access.load(user, id, 'read');
     const [characters, stelexi] = await Promise.all([
       this.characters(id),
