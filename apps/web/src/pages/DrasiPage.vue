@@ -41,7 +41,7 @@
 
         <div class="col drasi-content q-pa-md">
           <div class="row items-start justify-between q-gutter-sm q-mb-sm">
-            <div>
+            <div class="col">
               <div class="page-title">{{ data.title }}</div>
               <div class="text-caption text-grey-7">
                 {{ DRASI_TYPE_LABEL[data.type] }} · {{ formatDateRange(data.dateStart, data.dateEnd) }}
@@ -50,6 +50,8 @@
                 <q-badge v-if="data.status !== 'ENERGI'" :color="data.status === 'KLEISTI' ? 'grey-8' : 'orange-7'" :label="DRASI_STATUS_LABEL[data.status]" class="q-ml-xs" />
               </div>
             </div>
+            <!-- Ποιος άλλος είναι τώρα στη δράση (σε οποιαδήποτε ενότητα). -->
+            <CollabPresence :peers="roomPeers" class="q-mt-xs" />
             <q-btn
               v-if="canWrite && wizardRoute && data.status === 'PROSXEDIO'"
               flat
@@ -379,6 +381,7 @@ import {
   DRASI_TYPE_LABEL,
   KLADOS_LABEL,
   KLADOS_META,
+  collabDocument,
   type DrasiGuestTopikoView,
   type DrasiRoleKind,
   type DrasiRoleView,
@@ -388,6 +391,7 @@ import {
   type KladosType,
   type MemberKind,
 } from '@trifylli/shared';
+import CollabPresence from '../components/CollabPresence.vue';
 import PageState from '../components/PageState.vue';
 import DrasiAxiologisi from '../components/drasi/DrasiAxiologisi.vue';
 import DrasiArxigeio from '../components/drasi/DrasiArxigeio.vue';
@@ -405,6 +409,8 @@ import DrasiYliko from '../components/drasi/DrasiYliko.vue';
 import DrasiSymmetexontes from '../components/drasi/DrasiSymmetexontes.vue';
 import DrasiTamio from '../components/drasi/DrasiTamio.vue';
 import { useAsyncData } from '../composables/useAsyncData';
+import { useCollabDoc, useCollabMe } from '../composables/useCollabDoc';
+import { provideLiveChanges, useLiveReload } from '../composables/useLiveChanges';
 import { useSlidingThumb } from '../composables/useSlidingThumb';
 import { kladosVars } from '../lib/klados-theme';
 import { useKladosThemeStore } from '../stores/klados-theme';
@@ -526,6 +532,15 @@ const { data, loading, error, stale, reload } = useAsyncData(
   () => get<DrasiDetail>(`/draseis/${id}`),
   { forbiddenPage: true, cacheKey: `drasi:${id}` },
 );
+
+// ── Το δωμάτιο της δράσης: ποιος είναι εδώ, και «άλλαξε αυτό» για κάθε ενότητα ──
+const room = useCollabDoc(collabDocument.drasiRoom(id), useCollabMe(), { persist: false });
+const roomPeers = room.peers;
+provideLiveChanges(room.onChange);
+// Η ίδια η δράση: κεφαλίδα, επισκόπηση, αρχηγείο, ρυθμίσεις.
+useLiveReload(['drasi', 'roles', 'kladoi', 'guest-topika', 'closed', 'settings', 'slots', 'rotate', 'participants', 'guests', 'ypiresies'], reload, {
+  subscribe: room.onChange,
+});
 
 // Η σελίδα ζει εκτός `/k/:klados`, οπότε το layout δεν ξέρει τον κλάδο της· τον
 // δηλώνει μόνη της ώστε τα κουμπιά της να πάρουν το χρώμα του.

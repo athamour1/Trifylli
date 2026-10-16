@@ -393,6 +393,7 @@ import DateField from '../DateField.vue';
 import StelexosPicker from '../StelexosPicker.vue';
 import { ApiError, del, downloadFile, get, getBlob, patch, post, put, upload } from '../../lib/api';
 import { formatDate, formatEuro, toISODate } from '../../lib/format';
+import { useLiveReload } from '../../composables/useLiveChanges';
 
 const props = defineProps<{
   drasiId: string;
@@ -450,6 +451,8 @@ const stelexiOptions = computed(() =>
   stelexi.value.map((s) => ({ label: `${s.lastName} ${s.firstName}`.trim(), value: s.id, caption: s.leaderTitle ?? '' })),
 );
 
+// Ζωντανά: ό,τι αλλάζουν οι άλλοι εμφανίζεται χωρίς ανανέωση της σελίδας.
+useLiveReload(['treasury', 'ledger', 'budget', 'payments', 'participants'], reload);
 onMounted(async () => {
   await reload();
   try {

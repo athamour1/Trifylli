@@ -162,6 +162,7 @@ import StelexosPicker from '../StelexosPicker.vue';
 import { ApiError, del, get, patch, post, put } from '../../lib/api';
 import { formatDate } from '../../lib/format';
 import { externalStelexosOption } from './types';
+import { useLiveReload } from '../../composables/useLiveChanges';
 
 const props = defineProps<{ drasiId: string; canEdit: boolean }>();
 const emit = defineEmits<{ changed: [] }>();
@@ -336,6 +337,8 @@ function removeService(s: DrasiYpiresiaView): void {
   });
 }
 
+// Ζωντανά: ό,τι αλλάζουν οι άλλοι εμφανίζεται χωρίς ανανέωση της σελίδας.
+useLiveReload(['ypiresies', 'participants', 'externals'], load);
 onMounted(async () => {
   await load();
   if (!props.canEdit) return;

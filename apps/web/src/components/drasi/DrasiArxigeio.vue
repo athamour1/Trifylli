@@ -175,6 +175,7 @@ import {
 import DrasiRolesEditor from './DrasiRolesEditor.vue';
 import { emptyRoles, externalStelexosOption, looksLikeEmail, type RolesMap } from './types';
 import { ApiError, del, get, post, put } from '../../lib/api';
+import { useLiveReload } from '../../composables/useLiveChanges';
 
 const props = defineProps<{
   drasiId: string;
@@ -226,6 +227,8 @@ const stelexiOptions = computed(() => [
   ...stelexi.value.map((s) => ({ label: `${s.lastName} ${s.firstName}`.trim(), value: s.id, caption: s.leaderTitle ?? '' })),
   ...externals.value.map(externalStelexosOption),
 ]);
+// Ζωντανά: ό,τι αλλάζουν οι άλλοι εμφανίζεται χωρίς ανανέωση της σελίδας.
+useLiveReload(['externals'], loadExternals);
 onMounted(async () => {
   if (!props.canEdit) return;
   await loadExternals();

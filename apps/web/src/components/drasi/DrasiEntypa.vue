@@ -151,6 +151,7 @@ import {
 } from '@trifylli/shared';
 import { ApiError, del, downloadFile, get, getBlob, post } from '../../lib/api';
 import { formatDate, formatDateTime } from '../../lib/format';
+import { useLiveReload } from '../../composables/useLiveChanges';
 
 const props = defineProps<{ drasiId: string; canWrite: boolean }>();
 const $q = useQuasar();
@@ -201,6 +202,8 @@ async function reload(): Promise<void> {
   }
 }
 onMounted(reload);
+// Ζωντανά: ό,τι αλλάζουν οι άλλοι εμφανίζεται χωρίς ανανέωση της σελίδας.
+useLiveReload(['forms', 'participants'], reload);
 
 // ── Έκδοση ──
 const links = ref<IssuedFormLink[]>([]);

@@ -211,6 +211,7 @@ import { ApiError, del, get, patch, post, upload } from '../../lib/api';
 import { formatDate, formatEuro } from '../../lib/format';
 import { kladosVars } from '../../lib/klados-theme';
 import { printElement } from '../../lib/print';
+import { useLiveReload } from '../../composables/useLiveChanges';
 
 const props = defineProps<{
   drasiId: string;
@@ -243,6 +244,8 @@ async function reload(): Promise<void> {
 
 const stelexi = ref<MemberSummary[]>([]);
 const stelexiOptions = computed(() => stelexi.value.map((s) => ({ label: `${s.lastName} ${s.firstName}`.trim(), value: s.id, caption: s.leaderTitle ?? '' })));
+// Ζωντανά: ό,τι αλλάζουν οι άλλοι εμφανίζεται χωρίς ανανέωση της σελίδας.
+useLiveReload(['yliko'], reload);
 onMounted(async () => {
   await reload();
   try {

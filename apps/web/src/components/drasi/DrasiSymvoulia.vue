@@ -36,6 +36,7 @@ import { useRouter } from 'vue-router';
 import { SYMVOULIO_TYPE_LABEL, type DrasiSymvoulioView } from '@trifylli/shared';
 import { ApiError, get, post } from '../../lib/api';
 import { formatDate } from '../../lib/format';
+import { useLiveReload } from '../../composables/useLiveChanges';
 
 const props = defineProps<{ drasiId: string; canWrite: boolean }>();
 const $q = useQuasar();
@@ -55,6 +56,8 @@ async function reload(): Promise<void> {
   }
 }
 onMounted(reload);
+// Ζωντανά: ό,τι αλλάζουν οι άλλοι εμφανίζεται χωρίς ανανέωση της σελίδας.
+useLiveReload(['symvoulia'], reload);
 
 /** Γεννιέται και ανοίγει αμέσως — η ατζέντα γράφεται εκεί που γράφονται και τα πρακτικά. */
 async function create(): Promise<void> {

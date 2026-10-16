@@ -179,7 +179,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue';
 import { useQuasar } from 'quasar';
 import { useRouter } from 'vue-router';
 import {
@@ -380,20 +380,45 @@ async function remove(): Promise<void> {
 }
 
 // ── Φόρτωση από τα δεδομένα της δράσης ──
+type Section = 'basic' | 'who' | 'costs';
+const sectionState: Record<Section, () => string> = {
+  basic: () => JSON.stringify(basic),
+  who: () => JSON.stringify({ kladoi: kladoi.value, guests: guests.value }),
+  costs: () => JSON.stringify(costs),
+};
+/** Τι έγραψε τελευταίο η φόρτωση σε κάθε ενότητα — αν η φόρμα διαφέρει, ο χρήστης γράφει. */
+const loaded: Record<Section, string | null> = { basic: null, who: null, costs: null };
+const untouched = (section: Section): boolean => loaded[section] === null || sectionState[section]() === loaded[section];
+
+/**
+ * Γεμίζει τις ενότητες από τη δράση. Η δράση ξαναφορτώνεται και όταν αλλάζει
+ * κάτι κάποιος άλλος (ζωντανά): μια ενότητα που ο χρήστης έχει αλλάξει και δεν
+ * έχει σώσει μένει όπως την έγραψε.
+ */
 function fill(d: DrasiSettingsData): void {
-  Object.assign(basic, {
-    title: d.title,
-    type: d.type,
-    dateStart: toISODate(new Date(d.dateStart)),
-    timeStart: hm(d.dateStart),
-    dateEnd: toISODate(new Date(d.dateEnd)),
-    timeEnd: hm(d.dateEnd),
-    location: d.location ?? '',
-    hasSkines: d.hasSkines,
+  if (untouched('basic')) {
+    Object.assign(basic, {
+      title: d.title,
+      type: d.type,
+      dateStart: toISODate(new Date(d.dateStart)),
+      timeStart: hm(d.dateStart),
+      dateEnd: toISODate(new Date(d.dateEnd)),
+      timeEnd: hm(d.dateEnd),
+      location: d.location ?? '',
+      hasSkines: d.hasSkines,
+    });
+  }
+  if (untouched('who')) {
+    kladoi.value = d.kladoi;
+    guests.value = d.guestTopika.map(toGuestTopikoForm);
+  }
+  if (untouched('costs')) {
+    Object.assign(costs, { costPerPerson: toNum(d.costPerPerson), costReduced: toNum(d.costReduced), costStelexos: toNum(d.costStelexos), transportCost: toNum(d.transportCost) });
+  }
+  // Μετά τους watchers της φόρμας (π.χ. η λήξη της μονοήμερης ακολουθεί την έναρξη).
+  void nextTick(() => {
+    for (const section of Object.keys(loaded) as Section[]) if (untouched(section)) loaded[section] = sectionState[section]();
   });
-  kladoi.value = d.kladoi;
-  guests.value = d.guestTopika.map(toGuestTopikoForm);
-  Object.assign(costs, { costPerPerson: toNum(d.costPerPerson), costReduced: toNum(d.costReduced), costStelexos: toNum(d.costStelexos), transportCost: toNum(d.transportCost) });
 }
 watch(() => props.data, fill, { immediate: true });
 
@@ -402,6 +427,8 @@ async function run(what: string, action: () => Promise<void>): Promise<void> {
   busy.value = what;
   try {
     await action();
+    // Σώθηκε: η επόμενη φόρτωση ξαναγράφει την ενότητα (με ό,τι κράτησε ο server).
+    if (what in loaded) loaded[what as Section] = sectionState[what as Section]();
     emit('changed');
     $q.notify({ type: 'positive', message: 'Αποθηκεύτηκε.' });
   } catch (err) {

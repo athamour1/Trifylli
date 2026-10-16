@@ -378,6 +378,7 @@ import ReviewQuestionsForm, { type ReviewAnswerPayload } from './ReviewQuestions
 import { ApiError, OfflineError, del, downloadFile, get, patch, post, put } from '../../lib/api';
 import { formatDate, formatDateTime } from '../../lib/format';
 import type { SaveState } from '../../lib/save-state';
+import { useLiveReload } from '../../composables/useLiveChanges';
 
 const props = defineProps<{ drasiId: string; canWrite: boolean; drasiTitle?: string }>();
 const $q = useQuasar();
@@ -421,6 +422,29 @@ function apply(v: DrasiReviewView): void {
   lastSaved.settings = JSON.stringify(settings);
 }
 onMounted(reload);
+
+/**
+ * Ζωντανά: ό,τι αλλάζουν οι άλλοι εμφανίζεται εδώ. Περιμένει όσο υπάρχουν δικές
+ * μας αλλαγές που δεν σώθηκαν, και κρατά ανοιχτή την ερώτηση που επεξεργάζεσαι.
+ */
+async function reloadLive(): Promise<void> {
+  let v: DrasiReviewView;
+  try {
+    v = await get<DrasiReviewView>(`/draseis/${props.drasiId}/review`);
+  } catch {
+    return; // Η επόμενη αλλαγή θα ξαναδοκιμάσει.
+  }
+  if (hasUnsaved()) return;
+  view.value = v;
+  Object.assign(settings, v.settings);
+  const keys = new Map(editor.filter((q) => q.id).map((q) => [q.id!, q.key]));
+  editor.splice(0, editor.length, ...v.questions.map((q) => ({ ...toEditorRow(q), key: keys.get(q.id) ?? nextKey++ })));
+  lastSaved.questions = serializeQuestions();
+  lastSaved.settings = JSON.stringify(settings);
+}
+const hasUnsaved = (): boolean =>
+  timer !== null || saveStatus.value === 'saving' || serializeQuestions() !== lastSaved.questions || JSON.stringify(settings) !== lastSaved.settings;
+useLiveReload(['review'], reloadLive, { busy: hasUnsaved });
 
 // ── Ρυθμίσεις (αυτόματη αποθήκευση) ──
 const settings = reactive<DrasiReviewSettings>({ ...DEFAULT_REVIEW_SETTINGS });

@@ -61,6 +61,7 @@ import { useQuasar } from 'quasar';
 import { DRASI_SNACK_LABEL, type DrasiDiatrofologioView } from '@trifylli/shared';
 import { ApiError, get } from '../../lib/api';
 import { formatDate } from '../../lib/format';
+import { useLiveReload } from '../../composables/useLiveChanges';
 
 const props = defineProps<{ drasiId: string }>();
 const $q = useQuasar();
@@ -79,6 +80,8 @@ async function load(): Promise<void> {
   }
 }
 onMounted(load);
+// Ζωντανά: ό,τι αλλάζουν οι άλλοι εμφανίζεται χωρίς ανανέωση της σελίδας.
+useLiveReload(['schedule', 'diatrofologio'], load);
 
 const dayOptions = computed(() => (view.value?.days ?? []).map((d) => ({ label: formatDate(d.date), value: d.date })));
 const dayKey = ref('');

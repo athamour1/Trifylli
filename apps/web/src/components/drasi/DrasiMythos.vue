@@ -218,6 +218,7 @@ import CollabTextField from '../CollabTextField.vue';
 import MarkdownField from '../MarkdownField.vue';
 import { ApiError, del, get, patch, post, put } from '../../lib/api';
 import { useAuthStore } from '../../stores/auth';
+import { useLiveReload } from '../../composables/useLiveChanges';
 
 const props = defineProps<{ drasiId: string; organiser: KladosType | null; access: DrasiAccess; closed: boolean }>();
 const $q = useQuasar();
@@ -244,6 +245,8 @@ async function load(): Promise<void> {
   }
 }
 onMounted(load);
+// Ζωντανά: ό,τι αλλάζουν οι άλλοι εμφανίζεται χωρίς ανανέωση της σελίδας.
+useLiveReload(['mythos', 'characters', 'participants'], load);
 
 function fail(err: unknown, fallback: string): void {
   $q.notify({ type: 'negative', message: err instanceof ApiError ? err.message : fallback });

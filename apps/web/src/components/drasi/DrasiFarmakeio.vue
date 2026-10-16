@@ -118,6 +118,7 @@ import { ApiError, get, put } from '../../lib/api';
 import { kladosVars } from '../../lib/klados-theme';
 import { printElement } from '../../lib/print';
 import { OUCHTRACKER_URL } from '../../lib/runtime-config';
+import { useLiveReload } from '../../composables/useLiveChanges';
 
 const ouchBase = OUCHTRACKER_URL.replace(/\/$/, '');
 
@@ -157,6 +158,8 @@ async function reload(): Promise<void> {
   }
 }
 onMounted(reload);
+// Ζωντανά: ό,τι αλλάζουν οι άλλοι εμφανίζεται χωρίς ανανέωση της σελίδας.
+useLiveReload(['pharmacy', 'forms', 'participants'], reload);
 
 const pickDialog = ref(false);
 const picked = ref<string[]>([]);
