@@ -57,6 +57,7 @@ describe('CollabService', () => {
 
   const noteType: CollabDocumentType = {
     kind: 'note',
+    arity: 1,
     fields: ['text'],
     access: async (u) => access[u.id] ?? null,
     load: async () => ({ ...entity }),

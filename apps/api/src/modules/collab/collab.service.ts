@@ -74,7 +74,7 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
   readonly registry = new CollabDocumentRegistry();
   readonly hocuspocus: Hocuspocus<CollabContext>;
   private readonly wss = new WebSocketServer({ noServer: true, maxPayload: MAX_MESSAGE_BYTES });
-  /** Έγγραφα οντοτήτων που σβήστηκαν: δεν ξαναγράφονται από αποθήκευση που εκκρεμούσε. */
+  /** Έγγραφα (ή προθέματα, π.χ. όλη μια δράση) οντοτήτων που σβήστηκαν: δεν ξαναγράφονται από αποθήκευση που εκκρεμούσε. */
   private readonly removed = new Set<string>();
   /** Έγγραφα όπου κανείς δεν γράφει ώσπου να κληθεί `revoke` (π.χ. κατά την οριστικοποίηση). */
   private readonly frozen = new Set<string>();
@@ -166,12 +166,12 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
     if (token.p !== COLLAB_PROTOCOL) throw refuse(CollabRejection.UPDATE_REQUIRED);
 
     const target = this.registry.resolve(data.documentName);
-    if (!target || this.removed.has(data.documentName)) throw refuse(CollabRejection.FORBIDDEN);
+    if (!target || this.isRemoved(data.documentName)) throw refuse(CollabRejection.FORBIDDEN);
 
     const identity = await this.auth.verify(token.t);
     if (identity === 'no-access') throw refuse(CollabRejection.FORBIDDEN);
     if (identity === 'invalid') throw refuse(CollabRejection.UNAUTHENTICATED);
-    const access = await target.type.access(identity.user, target.id);
+    const access = await target.type.access(identity.user, target.ids);
     if (!access) throw refuse(CollabRejection.FORBIDDEN, identity.user.id);
 
     // Το αντίγραφο της συσκευής ενώνεται μόνο με την ίδια γενιά. Αλλιώς (ο server
@@ -269,7 +269,7 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
 
     // Πρώτο άνοιγμα: γεμίζει από τα σημερινά πεδία και σώζεται αμέσως, ώστε η
     // γενιά να είναι γνωστή πριν συνδεθεί δεύτερος.
-    const values = await target.type.load(target.id);
+    const values = await target.type.load(target.ids);
     if (!values) throw reject(CollabRejection.FORBIDDEN);
     const generation = randomUUID();
     seedDocument(document, values, generation);
@@ -279,7 +279,7 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
   }
 
   async storeDocument({ document, documentName, lastContext }: Pick<onStoreDocumentPayload<CollabContext>, 'document' | 'documentName' | 'lastContext'>): Promise<void> {
-    if (this.removed.has(documentName)) return;
+    if (this.isRemoved(documentName)) return;
     const target = this.registry.resolve(documentName);
     if (!target) return;
     const generation = document.getMap(COLLAB_META).get(COLLAB_GENERATION_KEY) as string | undefined;
@@ -292,7 +292,7 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
         create: { name: documentName, state, generation },
         update: { state },
       });
-      await target.type.project(target.id, readFields(document, target.type.fields));
+      await target.type.project(target.ids, readFields(document, target.type.fields));
     } catch (error) {
       // Το έγγραφο μένει στη μνήμη και ξαναδοκιμάζει στην επόμενη αλλαγή.
       this.logger.error({ event: 'collab-store-failed', document: documentName, message: (error as Error).message });
@@ -326,12 +326,34 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
     this.hocuspocus.closeConnections(name);
   }
 
+  /**
+   * Το ίδιο για όλα τα ανοιχτά έγγραφα με αυτό το πρόθεμα — π.χ. όταν αλλάζουν οι
+   * ρόλοι ή οι συμμετέχοντες μιας δράσης (`collabDocument.drasiPrefix`).
+   */
+  revokeAll(prefix: string): void {
+    for (const name of this.hocuspocus.documents.keys()) if (name.startsWith(prefix)) this.revoke(name);
+  }
+
   /** Η οντότητα έφυγε: σώζει ό,τι εκκρεμεί, κλείνει τις συνδέσεις και σβήνει το έγγραφο. */
   async remove(name: string): Promise<void> {
     await this.flush(name);
     this.removed.add(name);
     this.revoke(name);
     await this.prisma.collabDocument.deleteMany({ where: { name } });
+  }
+
+  /** Το ίδιο για όλα τα έγγραφα με αυτό το πρόθεμα — π.χ. μια δράση που σβήνεται. */
+  async removeAll(prefix: string): Promise<void> {
+    const loaded = [...this.hocuspocus.documents.keys()].filter((name) => name.startsWith(prefix));
+    await Promise.all(loaded.map((name) => this.flush(name)));
+    this.removed.add(prefix);
+    for (const name of loaded) this.revoke(name);
+    await this.prisma.collabDocument.deleteMany({ where: { name: { startsWith: prefix } } });
+  }
+
+  private isRemoved(name: string): boolean {
+    for (const removed of this.removed) if (name === removed || (removed.endsWith(':') && name.startsWith(removed))) return true;
+    return false;
   }
 
   async beforeApplicationShutdown(): Promise<void> {

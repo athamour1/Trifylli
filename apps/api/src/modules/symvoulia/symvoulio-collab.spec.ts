@@ -50,21 +50,21 @@ describe('πρακτικά συμβουλίου — ποιος γράφει κα
     ['γραμματέας του κλάδου', stelexos([...STELEXOS_BASE_CAPABILITIES, 'symvoulio:klados:write']), 'write'],
     ['εξωτερικό στέλεχος', external, null],
   ] as const)('συμβούλιο κλάδου: %s → %s', async (_label, user, expected) => {
-    expect(await collab(kladou).access(user, ID)).toBe(expected);
+    expect(await collab(kladou).access(user, [ID])).toBe(expected);
   });
 
   it.each([
     ['υπερδιαχειριστής', superAdmin, 'write'],
     ['διαχειριστής κλάδου', odigoiAdmin, 'read'],
   ] as const)('συμβούλιο Τοπικού: %s → %s', async (_label, user, expected) => {
-    expect(await collab(topikou).access(user, ID)).toBe(expected);
+    expect(await collab(topikou).access(user, [ID])).toBe(expected);
   });
 
   it('μετά την οριστικοποίηση κανείς δεν γράφει', async () => {
-    expect(await collab({ ...kladou, finalizedAt: new Date() }).access(superAdmin, ID)).toBe('read');
+    expect(await collab({ ...kladou, finalizedAt: new Date() }).access(superAdmin, [ID])).toBe('read');
   });
 
   it('συμβούλιο που δεν υπάρχει (ή αρχειοθετήθηκε) = καμία σύνδεση', async () => {
-    expect(await collab(null).access(superAdmin, ID)).toBeNull();
+    expect(await collab(null).access(superAdmin, [ID])).toBeNull();
   });
 });

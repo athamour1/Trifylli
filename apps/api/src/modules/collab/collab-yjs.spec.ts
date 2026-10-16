@@ -6,8 +6,8 @@ import { parseCollabToken, readFields, seedDocument } from './collab-yjs';
 
 const ID = '3f2b8c1e-9a4d-4f6b-8e2a-1c5d7e9f0a3b';
 
-function fakeType(kind: string): CollabDocumentType {
-  return { kind, fields: ['text'], access: async () => 'write', load: async () => ({ text: '' }), project: async () => undefined };
+function fakeType(kind: string, arity: 1 | 2 = 1): CollabDocumentType {
+  return { kind, arity, fields: ['text'], access: async () => 'write', load: async () => ({ text: '' }), project: async () => undefined };
 }
 
 describe('γέμισμα εγγράφου', () => {
@@ -49,11 +49,16 @@ describe('token του client', () => {
 });
 
 describe('ονόματα εγγράφων', () => {
+  const ITEM = '9a0b1c2d-3e4f-4a5b-8c6d-7e8f9a0b1c2d';
   const registry = new CollabDocumentRegistry();
   registry.register(fakeType('symvoulio'));
+  registry.register(fakeType('drasi:mythos'));
+  registry.register(fakeType('drasi:item', 2));
 
-  it('βρίσκει το είδος και το id', () => {
-    expect(registry.resolve(`symvoulio:${ID}`)?.id).toBe(ID);
+  it('βρίσκει το είδος και τα ids', () => {
+    expect(registry.resolve(`symvoulio:${ID}`)?.ids).toEqual([ID]);
+    expect(registry.resolve(`drasi:${ID}:mythos`)?.type.kind).toBe('drasi:mythos');
+    expect(registry.resolve(`drasi:${ID}:item:${ITEM}`)?.ids).toEqual([ID, ITEM]);
   });
 
   it.each([
@@ -61,8 +66,11 @@ describe('ονόματα εγγράφων', () => {
     ['χωρίς id', 'symvoulio:'],
     ['όχι UUID', 'symvoulio:../../etc'],
     ['κεφαλαία', `symvoulio:${ID.toUpperCase()}`],
-    ['παραπάνω κομμάτια', `symvoulio:${ID}:x`],
+    ['άγνωστο υποείδος', `symvoulio:${ID}:x`],
     ['χωρίς είδος', ID],
+    ['λείπει το δεύτερο id', `drasi:${ID}:item`],
+    ['περισσότερο id απ’ όσα θέλει', `drasi:${ID}:mythos:${ITEM}`],
+    ['παραπάνω κομμάτια', `drasi:${ID}:item:${ITEM}:x`],
   ])('απορρίπτει %s', (_label, name) => {
     expect(registry.resolve(name)).toBeNull();
   });

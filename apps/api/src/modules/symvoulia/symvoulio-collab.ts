@@ -15,6 +15,7 @@ import { CollabService } from '../collab/collab.service';
 @Injectable()
 export class SymvoulioCollab implements CollabDocumentType, OnModuleInit {
   readonly kind = 'symvoulio';
+  readonly arity = 1;
   readonly fields = COLLAB_FIELDS.symvoulio;
 
   constructor(
@@ -26,7 +27,7 @@ export class SymvoulioCollab implements CollabDocumentType, OnModuleInit {
     this.collab.registry.register(this);
   }
 
-  async access(user: RequestUser, id: string): Promise<CollabAccess | null> {
+  async access(user: RequestUser, [id]: readonly string[]): Promise<CollabAccess | null> {
     const symvoulio = await this.prisma.symvoulio.findFirst({
       where: { id, topikoId: user.topikoId, archivedAt: null },
       select: { type: true, finalizedAt: true, klados: { select: { type: true } } },
@@ -45,12 +46,12 @@ export class SymvoulioCollab implements CollabDocumentType, OnModuleInit {
     return writes ? 'write' : 'read';
   }
 
-  async load(id: string): Promise<Record<string, string> | null> {
+  async load([id]: readonly string[]): Promise<Record<string, string> | null> {
     const symvoulio = await this.prisma.symvoulio.findUnique({ where: { id }, select: { agenda: true, minutes: true } });
     return symvoulio ? { agenda: symvoulio.agenda ?? '', minutes: symvoulio.minutes ?? '' } : null;
   }
 
-  async project(id: string, values: Record<string, string>): Promise<void> {
+  async project([id]: readonly string[], values: Record<string, string>): Promise<void> {
     await this.prisma.symvoulio.update({ where: { id }, data: { agenda: values.agenda, minutes: values.minutes } });
   }
 }
