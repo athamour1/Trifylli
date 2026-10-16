@@ -63,6 +63,9 @@
       </q-card-section>
     </q-card>
 
+    <!-- ── Ειδοποιήσεις ── -->
+    <NotificationSettings />
+
     <!-- ── Λογαριασμός ── -->
     <q-card flat bordered class="q-mb-md">
       <q-card-section class="q-pb-sm">
@@ -174,6 +177,7 @@
 </template>
 
 <script setup lang="ts">
+import NotificationSettings from '../components/NotificationSettings.vue';
 import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useQuasar } from 'quasar';

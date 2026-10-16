@@ -3,6 +3,7 @@ import { Notify } from 'quasar';
 import type { User } from 'oidc-client-ts';
 import { setAccessToken, setUnauthorizedHandler } from '../lib/api';
 import { setReportingUser } from '../lib/reporting-user';
+import { disablePush } from '../lib/push';
 import { useOfflineStore } from './offline';
 import {
   clearLocalSession,
@@ -178,6 +179,8 @@ export const useSessionStore = defineStore('session', {
     },
 
     async signOut(): Promise<void> {
+      // Κοινή συσκευή: όποιος αποσυνδέεται δεν συνεχίζει να παίρνει push εδώ.
+      await disablePush();
       setAccessToken(null);
       this.user = null;
       // Πρώτα τα δεδομένα, μετά η ανακατεύθυνση: αν φύγουμε πριν τελειώσει το
