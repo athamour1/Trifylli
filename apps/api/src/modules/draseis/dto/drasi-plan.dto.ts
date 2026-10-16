@@ -160,6 +160,20 @@ export class DayStartDto {
   time?: string | null;
 }
 
+/** «Το παίρνω εγώ» (`true`) ή «δεν το παίρνω» (`false`). */
+export class ClaimShoppingDto {
+  @ApiProperty()
+  @IsBoolean()
+  claim!: boolean;
+}
+
+/** «Μπήκε» στη φόρτωση (`true`) ή όχι ακόμα. */
+export class LoadedDto {
+  @ApiProperty()
+  @IsBoolean()
+  loaded!: boolean;
+}
+
 /** «Καθυστερούμε N΄ από εδώ και πέρα» — αρνητικά λεπτά = κερδίσαμε χρόνο. */
 export class AddDelayDto {
   @ApiProperty({ description: 'Από αυτό το στοιχείο του ωρολογίου (και όσα ακολουθούν την ίδια ημέρα)' })

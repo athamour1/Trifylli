@@ -8,11 +8,13 @@ import type { RequestUser } from '../../common/auth/types';
 import { DraseisPlanService } from './draseis-plan.service';
 import {
   AddDelayDto,
+  ClaimShoppingDto,
   CopyDayDto,
   CreateDrasiSymvoulioDto,
   CreateScheduleItemDto,
   DayStartDto,
   ExternalYlikoDto,
+  LoadedDto,
   MoveScheduleItemDto,
   ReorderScheduleDto,
   PurchaseShoppingItemDto,
@@ -176,6 +178,45 @@ export class DraseisPlanController {
       shoppingItemId: itemId,
     });
     return result;
+  }
+
+  @Post('yliko/shopping/:itemId/claim')
+  @RequireDrasi('yliko')
+  @ApiOperation({ summary: '«Το παίρνω εγώ» — ή «δεν το παίρνω»' })
+  async claimShopping(
+    @CurrentUser() user: RequestUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('itemId', ParseUUIDPipe) itemId: string,
+    @Body() dto: ClaimShoppingDto,
+  ) {
+    await this.plan.claimShopping(user, id, itemId, dto.claim);
+    return { ok: true };
+  }
+
+  @Post('yliko/checkouts/:checkoutId/loaded')
+  @RequireDrasi('yliko')
+  @ApiOperation({ summary: '«Μπήκε» στη φόρτωση — υλικό από τις αποθήκες' })
+  async checkoutLoaded(
+    @CurrentUser() user: RequestUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('checkoutId', ParseUUIDPipe) checkoutId: string,
+    @Body() dto: LoadedDto,
+  ) {
+    await this.plan.setLoaded(user, id, 'checkout', checkoutId, dto.loaded);
+    return { ok: true };
+  }
+
+  @Post('yliko/external/:itemId/loaded')
+  @RequireDrasi('yliko')
+  @ApiOperation({ summary: '«Μπήκε» στη φόρτωση — υλικό που φέρνουν άλλοι' })
+  async externalLoaded(
+    @CurrentUser() user: RequestUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('itemId', ParseUUIDPipe) itemId: string,
+    @Body() dto: LoadedDto,
+  ) {
+    await this.plan.setLoaded(user, id, 'external', itemId, dto.loaded);
+    return { ok: true };
   }
 
   @Delete('yliko/shopping/:itemId')

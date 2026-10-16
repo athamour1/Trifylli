@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { CheckoutStatus, MemberKind, Prisma, SymvoulioType, YlikoCategory } from '@prisma/client';
 import {
   COLLAB_FIELDS,
@@ -422,13 +422,29 @@ export class DraseisPlanService {
     const rows = await this.prisma.drasiShoppingItem.findMany({
       where: { drasiId: id },
       orderBy: [{ purchasedAt: 'asc' }, { order: 'asc' }, { createdAt: 'asc' }],
-      include: {
-        assignee: { select: { id: true, firstName: true, lastName: true } },
-        treasuryEntry: { select: { id: true, amount: true, category: true } },
-        yliko: { select: { id: true, name: true } },
-      },
+      include: SHOPPING_INCLUDE,
     });
     return rows.map(toShoppingView);
+  }
+
+  /**
+   * «Το παίρνω εγώ» (ή «δεν το παίρνω»): όποιος το πήρε το κλείνει για τους
+   * άλλους. Το κάνει κάθε στέλεχος που βλέπει τη λίστα — εθελοντικά, όχι ανάθεση.
+   */
+  async claimShopping(user: RequestUser, id: string, itemId: string, claim: boolean): Promise<void> {
+    await this.access.load(user, id, 'read');
+    const item = await this.shoppingItem(id, itemId);
+    if (item.purchasedAt) throw new BadRequestException('Έχει ήδη αγοραστεί.');
+    if (!claim) {
+      await this.prisma.drasiShoppingItem.updateMany({ where: { id: itemId, drasiId: id, assigneeId: user.id, purchasedAt: null }, data: { assigneeId: null } });
+      return;
+    }
+    // Μία κίνηση: αν δύο πατήσουν μαζί, το παίρνει ένας.
+    const { count } = await this.prisma.drasiShoppingItem.updateMany({
+      where: { id: itemId, drasiId: id, purchasedAt: null, OR: [{ assigneeId: null }, { assigneeId: user.id }] },
+      data: { assigneeId: user.id },
+    });
+    if (!count) throw new ConflictException('Το παίρνει ήδη κάποιος άλλος.');
   }
 
   async addShopping(user: RequestUser, id: string, dto: ShoppingItemDto): Promise<DrasiShoppingItemView> {
@@ -445,11 +461,7 @@ export class DraseisPlanService {
         note: dto.note?.trim() || null,
         order: (last?.order ?? -1) + 1,
       },
-      include: {
-        assignee: { select: { id: true, firstName: true, lastName: true } },
-        treasuryEntry: { select: { id: true, amount: true, category: true } },
-        yliko: { select: { id: true, name: true } },
-      },
+      include: SHOPPING_INCLUDE,
     });
     return toShoppingView(row);
   }
@@ -521,7 +533,7 @@ export class DraseisPlanService {
       }
       return tx.drasiShoppingItem.update({
         where: { id: item.id },
-        data: { purchasedAt: new Date(), treasuryEntryId: entry.id, ylikoId },
+        data: { purchasedAt: new Date(), purchasedById: user.id, treasuryEntryId: entry.id, ylikoId },
       });
     });
   }
@@ -533,13 +545,20 @@ export class DraseisPlanService {
     const rows = await this.prisma.drasiExternalYliko.findMany({
       where: { drasiId: id },
       orderBy: [{ returnedAt: 'asc' }, { createdAt: 'asc' }],
-      include: {
-        klados: { select: { type: true } },
-        guestTopiko: { select: { id: true, topikoName: true } },
-        responsible: { select: { id: true, firstName: true, lastName: true } },
-      },
+      include: EXTERNAL_INCLUDE,
     });
     return rows.map(toExternalView);
+  }
+
+  /** «Μπήκε» στη φόρτωση (ή όχι ακόμα) — ποιος και πότε. Το κάνει όποιος φορτώνει. */
+  async setLoaded(user: RequestUser, id: string, what: 'checkout' | 'external', rowId: string, loaded: boolean): Promise<void> {
+    await this.access.load(user, id, 'read');
+    const data = loaded ? { loadedAt: new Date(), loadedById: user.id } : { loadedAt: null, loadedById: null };
+    const { count } =
+      what === 'checkout'
+        ? await this.prisma.ylikoCheckout.updateMany({ where: { id: rowId, drasiId: id }, data })
+        : await this.prisma.drasiExternalYliko.updateMany({ where: { id: rowId, drasiId: id }, data });
+    if (!count) throw new NotFoundException('Το είδος δεν βρέθηκε.');
   }
 
   async addExternal(user: RequestUser, id: string, dto: ExternalYlikoDto): Promise<DrasiExternalYlikoView> {
@@ -560,11 +579,7 @@ export class DraseisPlanService {
         responsibleId: dto.responsibleId ?? null,
         note: dto.note?.trim() || null,
       },
-      include: {
-        klados: { select: { type: true } },
-        guestTopiko: { select: { id: true, topikoName: true } },
-        responsible: { select: { id: true, firstName: true, lastName: true } },
-      },
+      include: EXTERNAL_INCLUDE,
     });
     return toExternalView(row);
   }
@@ -591,7 +606,7 @@ export class DraseisPlanService {
       this.external(user, id),
       this.prisma.ylikoCheckout.findMany({
         where: { drasiId: id, status: { not: CheckoutStatus.AKYROSI } },
-        include: { yliko: { select: { name: true, unit: true } } },
+        include: { yliko: { select: { name: true, unit: true } }, loadedBy: { select: { id: true, firstName: true, lastName: true } } },
         orderBy: { createdAt: 'asc' },
       }),
       this.prisma.klados.findMany({ where: { topikoId: user.topikoId }, select: { id: true, type: true } }),
@@ -607,6 +622,7 @@ export class DraseisPlanService {
         unit: c.yliko.unit,
         status: c.status,
         kladosType: c.kladosId ? (typeById.get(c.kladosId) ?? null) : null,
+        loaded: c.loadedAt ? { at: c.loadedAt.toISOString(), by: c.loadedBy } : null,
       })),
     };
   }
@@ -631,6 +647,20 @@ export class DraseisPlanService {
   }
 }
 
+const PERSON = { select: { id: true, firstName: true, lastName: true } } as const;
+const SHOPPING_INCLUDE = {
+  assignee: PERSON,
+  purchasedBy: PERSON,
+  treasuryEntry: { select: { id: true, amount: true, category: true } },
+  yliko: { select: { id: true, name: true } },
+} as const;
+const EXTERNAL_INCLUDE = {
+  klados: { select: { type: true } },
+  guestTopiko: { select: { id: true, topikoName: true } },
+  responsible: PERSON,
+  loadedBy: PERSON,
+} as const;
+
 function toShoppingView(r: {
   id: string;
   name: string;
@@ -638,6 +668,7 @@ function toShoppingView(r: {
   estimatedCost: Prisma.Decimal | null;
   assignee: { id: string; firstName: string; lastName: string } | null;
   purchasedAt: Date | null;
+  purchasedBy: { id: string; firstName: string; lastName: string } | null;
   treasuryEntry: { id: string; amount: Prisma.Decimal; category: string } | null;
   yliko: { id: string; name: string } | null;
   note: string | null;
@@ -650,6 +681,7 @@ function toShoppingView(r: {
     estimatedCost: r.estimatedCost === null ? null : Number(r.estimatedCost),
     assignee: r.assignee,
     purchasedAt: r.purchasedAt?.toISOString() ?? null,
+    purchasedBy: r.purchasedBy,
     treasuryEntry: r.treasuryEntry ? { id: r.treasuryEntry.id, amount: Number(r.treasuryEntry.amount), category: r.treasuryEntry.category } : null,
     yliko: r.yliko,
     note: r.note,
@@ -664,6 +696,8 @@ function toExternalView(r: {
   klados: { type: string } | null;
   guestTopiko: { id: string; topikoName: string } | null;
   responsible: { id: string; firstName: string; lastName: string } | null;
+  loadedAt: Date | null;
+  loadedBy: { id: string; firstName: string; lastName: string } | null;
   returnedAt: Date | null;
   note: string | null;
 }): DrasiExternalYlikoView {
@@ -678,6 +712,7 @@ function toExternalView(r: {
     responsible: r.responsible,
     returnedAt: r.returnedAt?.toISOString() ?? null,
     note: r.note,
+    loaded: r.loadedAt ? { at: r.loadedAt.toISOString(), by: r.loadedBy } : null,
   };
 }
 

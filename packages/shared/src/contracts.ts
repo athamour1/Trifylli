@@ -649,8 +649,11 @@ export interface DrasiShoppingItemView {
   name: string;
   qty: number;
   estimatedCost: number | null;
+  /** Όποιος το αγοράζει — και όποιος είπε «το παίρνω εγώ» (το κλείνει για τους άλλους). */
   assignee: { id: string; firstName: string; lastName: string } | null;
   purchasedAt: string | null;
+  /** Όποιος το σημείωσε «αγοράστηκε». */
+  purchasedBy: { id: string; firstName: string; lastName: string } | null;
   treasuryEntry: { id: string; amount: number; category: string } | null;
   yliko: { id: string; name: string } | null;
   note: string | null;
@@ -666,12 +669,28 @@ export interface DrasiExternalYlikoView {
   responsible: { id: string; firstName: string; lastName: string } | null;
   returnedAt: string | null;
   note: string | null;
+  /** «Μπήκε» στη φόρτωση — ποιος και πότε. */
+  loaded: DrasiLoadedTick | null;
+}
+
+/** Ένα τικ «μπήκε» της φόρτωσης. */
+export interface DrasiLoadedTick {
+  at: string;
+  by: { id: string; firstName: string; lastName: string } | null;
 }
 
 /** Η λίστα φόρτωσης: τα πάντα, και τα ξένα, σε ένα χαρτί. */
 export interface DrasiLoadingList {
   shopping: DrasiShoppingItemView[];
-  checkouts: { id: string; name: string; qty: number; unit: string | null; status: CheckoutStatus; kladosType: KladosType | null }[];
+  checkouts: {
+    id: string;
+    name: string;
+    qty: number;
+    unit: string | null;
+    status: CheckoutStatus;
+    kladosType: KladosType | null;
+    loaded: DrasiLoadedTick | null;
+  }[];
   external: DrasiExternalYlikoView[];
 }
 
