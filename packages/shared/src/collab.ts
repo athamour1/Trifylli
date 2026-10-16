@@ -74,6 +74,8 @@ export const collabDocument = {
   drasiMeal: (drasiId: string, itemId: string) => `drasi:${drasiId}:meal:${itemId}`,
   /** Το πρόθεμα όλων των εγγράφων μιας δράσης. */
   drasiPrefix: (drasiId: string) => `drasi:${drasiId}:`,
+  /** Συγκέντρωση: όλο το πρόγραμμα — μέρη, κομμάτια, υλικό, στελέχη. */
+  syggentrwsh: (id: string) => `syggentrwsh:${id}`,
 } as const;
 
 /** Τα πεδία κάθε εγγράφου (ένα `Y.Text` ανά πεδίο). */
@@ -97,4 +99,69 @@ export function collabColor(userId: string): string {
   let hash = 0;
   for (const char of userId) hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
   return COLLAB_COLORS[hash % COLLAB_COLORS.length] as string;
+}
+
+// ───────────────────────── Πρόγραμμα συγκέντρωσης ─────────────────────────
+
+/**
+ * Η δομή του εγγράφου `syggentrwsh:<id>`. Όλα είναι χάρτες με id ως κλειδί και
+ * η σειρά ένας αριθμός (`order`): μια μετακίνηση αλλάζει μόνο τον αριθμό, οπότε
+ * δεν σβήνει ό,τι γράφει κάποιος άλλος στο ίδιο κομμάτι εκείνη τη στιγμή.
+ *
+ *  - `sections`: μέρος → `{ notes: Y.Text, durationMin }`
+ *  - `blocks`:   id → `{ section, order, title, durationMin, responsibleId, yliko, description: Y.Text }`
+ *  - `yliko`:    id → `{ order, label, qty, packed }`
+ *  - `stelexi`:  userId → `true`
+ */
+export const PLAN_KEYS = {
+  sections: 'sections',
+  blocks: 'blocks',
+  yliko: 'yliko',
+  stelexi: 'stelexi',
+} as const;
+
+/** Όρια του προγράμματος — ο server διορθώνει ό,τι βγαίνει έξω (δεν απορρίπτει). */
+export const PLAN_LIMITS = {
+  blockMinutes: { min: 1, max: 600 },
+  sectionMinutes: { min: 0, max: 600 },
+  qty: { min: 1, max: 999 },
+  title: 200,
+  label: 200,
+} as const;
+
+export interface PlanBlockSnapshot {
+  id: string;
+  section: string;
+  order: number;
+  title: string;
+  durationMin: number;
+  responsibleId: string | null;
+  /** Υλικό της αποθήκης δηλωμένο στο κομμάτι (με το όνομα, για προβολή). */
+  yliko: { id: string; name: string; qty: number }[];
+  description: string;
+}
+
+export interface PlanYlikoSnapshot {
+  id: string;
+  order: number;
+  label: string;
+  qty: number;
+  packed: boolean;
+}
+
+/** Η απλή μορφή του προγράμματος — ό,τι γράφεται στη βάση και ό,τι δείχνει η σελίδα. */
+export interface PlanSnapshot {
+  sections: Record<string, { notes: string; durationMin: number }>;
+  /** Ταξινομημένα ανά μέρος (με τη σειρά των μερών) και `order`. */
+  blocks: PlanBlockSnapshot[];
+  /** Ταξινομημένα κατά `order`. */
+  yliko: PlanYlikoSnapshot[];
+  stelexi: string[];
+}
+
+/** Ακέραιος μέσα στα όρια — ό,τι δεν είναι αριθμός παίρνει το `fallback`. */
+export function clampInt(value: unknown, limits: { min: number; max: number }, fallback: number): number {
+  const n = Math.round(Number(value));
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(limits.max, Math.max(limits.min, n));
 }
