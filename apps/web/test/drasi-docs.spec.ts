@@ -71,15 +71,19 @@ describe('γεύμα — οι αλλαγές της σελίδας', () => {
     const pasta = addIngredientAfter(doc, null);
     updateIngredient(doc, pasta, { label: 'Μακαρόνια', qty: '4 kg' });
     const salt = addIngredientAfter(doc, pasta);
-    updateIngredient(doc, salt, { label: 'Αλάτι', bought: true });
+    updateIngredient(doc, salt, { label: 'Αλάτι', bought: true }, 'u-maria');
 
     expect(readMealDoc(doc)).toEqual({
       menu: 'Μακαρόνια με κιμά',
       ingredients: [
-        { id: pasta, order: 1, label: 'Μακαρόνια', qty: '4 kg', bought: false },
-        { id: salt, order: 2, label: 'Αλάτι', qty: '', bought: true },
+        { id: pasta, order: 1, label: 'Μακαρόνια', qty: '4 kg', bought: false, boughtBy: null, boughtAt: null },
+        { id: salt, order: 2, label: 'Αλάτι', qty: '', bought: true, boughtBy: 'u-maria', boughtAt: expect.any(String) },
       ],
     });
+
+    // Ξε-τικ: φεύγουν και το ποιος και το πότε.
+    updateIngredient(doc, salt, { bought: false }, 'u-maria');
+    expect(readMealDoc(doc).ingredients[1]).toMatchObject({ bought: false, boughtBy: null, boughtAt: null });
 
     removeIngredient(doc, pasta);
     expect(readMealDoc(doc).ingredients.map((y) => y.label)).toEqual(['Αλάτι']);

@@ -7,7 +7,7 @@ import {
   ROW_LIMITS,
   clampInt,
   type IngredientSnapshot,
-  type PlanYlikoSnapshot,
+  type ItemYlikoSnapshot,
 } from '@trifylli/shared';
 import { Map as YMap, type Doc } from 'yjs';
 
@@ -63,11 +63,18 @@ function updateRow(doc: Doc, key: string, id: string, change: Record<string, unk
 }
 
 const text = (value: unknown): string => (typeof value === 'string' ? value : '');
+const textOrNull = (value: unknown): string | null => (typeof value === 'string' && value ? value : null);
+
+/** Ένα τικ γράφει και ποιος και πότε· το ξε-τικ τα σβήνει. */
+function tick(on: boolean | undefined, by: string | null): { by: string | null | undefined; at: string | null | undefined } {
+  if (on === undefined) return { by: undefined, at: undefined };
+  return on ? { by, at: new Date().toISOString() } : { by: null, at: null };
+}
 const scalars = (doc: Doc) => doc.getMap<unknown>(COLLAB_SCALARS);
 
 // ───────────────────────── Στοιχείο του ωρολογίου ─────────────────────────
 
-export function readItemDoc(doc: Doc): { location: string; yliko: PlanYlikoSnapshot[] } {
+export function readItemDoc(doc: Doc): { location: string; yliko: ItemYlikoSnapshot[] } {
   return {
     location: text(scalars(doc).get(ITEM_DOC.location)),
     yliko: rowsOf(doc, ITEM_DOC.yliko).map(({ id, order, row }) => ({
@@ -76,6 +83,8 @@ export function readItemDoc(doc: Doc): { location: string; yliko: PlanYlikoSnaps
       label: text(row.get('label')),
       qty: Number(row.get('qty') ?? 1),
       packed: row.get('packed') === true,
+      packedBy: textOrNull(row.get('packedBy')),
+      packedAt: textOrNull(row.get('packedAt')),
     })),
   };
 }
@@ -88,11 +97,15 @@ export function addItemYlikoAfter(doc: Doc, afterId: string | null): string {
   return addRowAfter(doc, ITEM_DOC.yliko, afterId, { label: '', qty: 1, packed: false });
 }
 
-export function updateItemYliko(doc: Doc, id: string, change: { label?: string; qty?: number; packed?: boolean }): void {
+/** `by`: όποιος τσεκάρει — μένει δίπλα στο τικ μαζί με την ώρα. */
+export function updateItemYliko(doc: Doc, id: string, change: { label?: string; qty?: number; packed?: boolean }, by: string | null = null): void {
+  const ticked = tick(change.packed, by);
   updateRow(doc, ITEM_DOC.yliko, id, {
     label: change.label?.slice(0, ROW_LIMITS.label),
     qty: change.qty === undefined ? undefined : clampInt(change.qty, ROW_LIMITS.ylikoQty, 1),
     packed: change.packed,
+    packedBy: ticked.by,
+    packedAt: ticked.at,
   });
 }
 
@@ -111,6 +124,8 @@ export function readMealDoc(doc: Doc): { menu: string; ingredients: IngredientSn
       label: text(row.get('label')),
       qty: text(row.get('qty')),
       bought: row.get('bought') === true,
+      boughtBy: textOrNull(row.get('boughtBy')),
+      boughtAt: textOrNull(row.get('boughtAt')),
     })),
   };
 }
@@ -123,11 +138,14 @@ export function addIngredientAfter(doc: Doc, afterId: string | null): string {
   return addRowAfter(doc, MEAL_DOC.ingredients, afterId, { label: '', qty: '', bought: false });
 }
 
-export function updateIngredient(doc: Doc, id: string, change: { label?: string; qty?: string; bought?: boolean }): void {
+export function updateIngredient(doc: Doc, id: string, change: { label?: string; qty?: string; bought?: boolean }, by: string | null = null): void {
+  const ticked = tick(change.bought, by);
   updateRow(doc, MEAL_DOC.ingredients, id, {
     label: change.label?.slice(0, ROW_LIMITS.label),
     qty: change.qty?.slice(0, ROW_LIMITS.ingredientQty),
     bought: change.bought,
+    boughtBy: ticked.by,
+    boughtAt: ticked.at,
   });
 }
 

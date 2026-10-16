@@ -100,9 +100,9 @@
                     :disable="!fieldsEditable"
                     dense
                     color="klados"
-                    @update:model-value="(value) => updateIngredient(doc, row.id, { bought: value })"
+                    @update:model-value="(value) => updateIngredient(doc, row.id, { bought: value }, auth.user?.id ?? null)"
                   >
-                    <q-tooltip>Αγοράστηκε</q-tooltip>
+                    <q-tooltip>{{ row.bought && row.boughtAt ? `Αγοράστηκε · ${tickWho(row.boughtBy, row.boughtAt)}` : 'Αγοράστηκε' }}</q-tooltip>
                   </q-checkbox>
                 </div>
                 <div class="col">
@@ -176,10 +176,12 @@ import PageState from '../components/PageState.vue';
 import SaveStatus from '../components/SaveStatus.vue';
 import { useAsyncData } from '../composables/useAsyncData';
 import { useCollabDoc, useCollabMe } from '../composables/useCollabDoc';
+import { useComments } from '../composables/useComments';
 import { get } from '../lib/api';
 import { addIngredientAfter, hasSchema, readMealDoc, removeIngredient, setMenu, updateIngredient } from '../lib/drasi-docs';
 import { formatDateLong } from '../lib/format';
 import { keepFocus } from '../lib/keep-focus';
+import { useAuthStore } from '../stores/auth';
 import { useKladosThemeStore } from '../stores/klados-theme';
 
 // CodeMirror φορτώνεται μόνο όταν ανοίξει σελίδα με κείμενα για γράψιμο.
@@ -230,6 +232,7 @@ const editable = computed(() => !!drasi.value && drasi.value.status !== 'KLEISTI
 
 // ── Το γεύμα: κοινό έγγραφο, σώζει μόνο του ──
 const docName = collabDocument.drasiMeal(drasiId, itemId);
+const auth = useAuthStore();
 const { doc, awareness, ready, writable, status, peers, saveState } = useCollabDoc(docName, useCollabMe());
 
 /** Το γεύμα όπως είναι τώρα στο έγγραφο — ξαναδιαβάζεται σε κάθε αλλαγή, δική μας ή άλλων. */
@@ -266,11 +269,21 @@ const view = computed<{ menu: string; ingredients: IngredientSnapshot[] }>(() =>
   if (ready.value && schemaOk.value && docMeal.value) return docMeal.value;
   return {
     menu: meal.value?.menu ?? '',
-    ingredients: (meal.value?.ingredients ?? []).map((y, order) => ({ ...y, order })),
+    ingredients: (meal.value?.ingredients ?? []).map((y, order) => ({ ...y, order, boughtBy: null, boughtAt: null })),
   };
 });
 
 // ── Ποσολόγιο ──
+// Τα ονόματα των στελεχών της δράσης — για το «ποιος το αγόρασε» δίπλα σε κάθε τικ.
+const { people, loadPeople } = useComments(docName);
+void loadPeople();
+/** «Μαρία Π. · Παρ 18:30» — ποιος και πότε τσέκαρε. */
+function tickWho(by: string | null, at: string | null): string {
+  const person = by ? people.value?.find((p) => p.id === by) : null;
+  const name = by === auth.user?.id ? 'εσύ' : person ? `${person.firstName} ${person.lastName.charAt(0)}.` : '';
+  const when = at ? new Date(at).toLocaleString('el-GR', { weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false }) : '';
+  return [name, when].filter(Boolean).join(' · ');
+}
 const filled = computed(() => view.value.ingredients.filter((y) => y.label.trim()));
 const ingredientCount = computed(() => filled.value.length);
 const boughtCount = computed(() => filled.value.filter((y) => y.bought).length);

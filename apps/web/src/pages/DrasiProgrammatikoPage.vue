@@ -107,8 +107,10 @@
                     :disable="!fieldsEditable"
                     dense
                     color="klados"
-                    @update:model-value="(value) => updateItemYliko(doc, row.id, { packed: value })"
-                  />
+                    @update:model-value="(value) => updateItemYliko(doc, row.id, { packed: value }, auth.user?.id ?? null)"
+                  >
+                    <q-tooltip v-if="row.packed && row.packedAt">{{ tickWho(row.packedBy, row.packedAt) }}</q-tooltip>
+                  </q-checkbox>
                 </div>
                 <div class="col">
                   <q-input
@@ -173,7 +175,7 @@ import {
   type DrasiScheduleView,
   type DrasiStatus,
   type KladosType,
-  type PlanYlikoSnapshot,
+  type ItemYlikoSnapshot,
 } from '@trifylli/shared';
 import CollabBanner from '../components/CollabBanner.vue';
 import CollabPresence from '../components/CollabPresence.vue';
@@ -279,6 +281,13 @@ const editAll = computed(() => scope.value === 'all');
 
 // ── Στελέχη για τον picker ──
 /** Μόνο τα στελέχη της δράσης (δικά μας, φιλοξενούμενα, εξωτερικά). */
+/** «Μαρία Π. · 18:30» — ποιος και πότε τσέκαρε. */
+function tickWho(by: string | null, at: string | null): string {
+  const name = by ? (by === auth.user?.id ? 'Εσύ' : (stelexiOptions.value.find((o) => o.value === by)?.label ?? '')) : '';
+  const when = at ? new Date(at).toLocaleString('el-GR', { weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false }) : '';
+  return [name, when].filter(Boolean).join(' · ');
+}
+
 const stelexiOptions = computed(() => {
   const options = (data.value?.schedule.stelexi ?? []).map((s) => ({
     label: `${s.lastName} ${s.firstName}`.trim(),
@@ -343,11 +352,11 @@ const textEditable = computed(() => editable.value && ready.value && writable.va
 const fieldsEditable = computed(() => textEditable.value && schemaOk.value);
 
 /** Ό,τι δείχνει η σελίδα: το έγγραφο όταν έχει τα πεδία, αλλιώς ό,τι έφερε το `GET`. */
-const view = computed<{ location: string; yliko: PlanYlikoSnapshot[] }>(() => {
+const view = computed<{ location: string; yliko: ItemYlikoSnapshot[] }>(() => {
   if (ready.value && schemaOk.value && docItem.value) return docItem.value;
   return {
     location: item.value?.location ?? '',
-    yliko: (item.value?.yliko ?? []).map((y, order) => ({ ...y, order })),
+    yliko: (item.value?.yliko ?? []).map((y, order) => ({ ...y, order, packedBy: null, packedAt: null })),
   };
 });
 
