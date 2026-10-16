@@ -210,6 +210,11 @@ services:
       ESEO_REFRESH_TOKEN: ${ESEO_REFRESH_TOKEN:-}
       ESEO_WEBHOOK_SECRET: ${ESEO_WEBHOOK_SECRET:-}
       SYNC_ENABLED: ${SYNC_ENABLED:-true}
+      # Web Push: κλειδιά VAPID στο .env (ένα ζεύγος βγάζει το
+      # `docker run --rm …/config gen-env`, ή `npx web-push generate-vapid-keys`).
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-mailto:dev@trifylli.local}
       # Object storage — εσωτερικό όνομα υπηρεσίας (όχι localhost).
       S3_ENDPOINT: http://garage:3900
       S3_REGION: ${S3_REGION:-garage}
