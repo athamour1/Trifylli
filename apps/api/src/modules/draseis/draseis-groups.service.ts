@@ -248,6 +248,49 @@ export class DraseisGroupsService {
     return { members: ids.length };
   }
 
+  /**
+   * Ένα μέλος μπαίνει στην ομάδα — χωρίς να σταλεί όλη η λίστα, ώστε δύο που
+   * μοιράζουν παιδιά μαζί να μη σβήνουν ο ένας τον άλλον. Όποιος ήταν σε άλλη
+   * ομάδα του ίδιου είδους μεταφέρεται, και αν ήταν ομαδάρχης εκεί, παύει να είναι.
+   */
+  async addMember(user: RequestUser, id: string, groupId: string, participantId: string) {
+    await this.access.load(user, id, 'write');
+    const group = await this.group(id, groupId);
+    const participant = await this.prisma.drasiParticipant.findFirst({ where: { id: participantId, drasiId: id }, select: { id: true, kind: true } });
+    if (!participant) throw new BadRequestException('Ο συμμετέχων δεν ανήκει στη δράση.');
+    if (group.kind === DrasiGroupKind.OE && participant.kind !== MemberKind.MELOS) {
+      throw new BadRequestException('Μέλη μιας ΟΕ είναι μόνο παιδιά — το στέλεχος ορίζεται ως υπεύθυνο.');
+    }
+    await this.prisma.$transaction(async (tx) => {
+      await tx.drasiGroupMember.deleteMany({ where: { kind: group.kind, participantId } });
+      await tx.drasiGroupMember.create({ data: { groupId, participantId, kind: group.kind } });
+      // Στις ΟΕ ο υπεύθυνος δεν είναι μέλος· αλλού, ο ομαδάρχης που έφυγε παύει να είναι.
+      if (group.kind !== DrasiGroupKind.OE) {
+        await tx.drasiGroup.updateMany({
+          where: { drasiId: id, kind: group.kind, id: { not: groupId }, leaderParticipantId: participantId },
+          data: { leaderParticipantId: null },
+        });
+      }
+    });
+    return { added: true };
+  }
+
+  /** Ένα μέλος βγαίνει από την ομάδα· αν ήταν ο ομαδάρχης της, η ομάδα μένει χωρίς. */
+  async removeMember(user: RequestUser, id: string, groupId: string, participantId: string) {
+    await this.access.load(user, id, 'write');
+    const group = await this.group(id, groupId);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.drasiGroupMember.deleteMany({ where: { kind: group.kind, participantId, groupId } });
+      if (group.kind !== DrasiGroupKind.OE) {
+        await tx.drasiGroup.updateMany({
+          where: { drasiId: id, kind: group.kind, id: groupId, leaderParticipantId: participantId },
+          data: { leaderParticipantId: null },
+        });
+      }
+    });
+    return { removed: true };
+  }
+
   // ───────────────────────── Εσωτερικά ─────────────────────────
 
   /** Σκηνές μόνο όπου η δράση έχει (όχι μονοήμερες, όχι με τη ρύθμιση κλειστή). */

@@ -62,6 +62,30 @@ export class DraseisGroupsController {
     return this.groups.deleteGroup(user, id, groupId);
   }
 
+  @Post('groups/:groupId/members/:participantId')
+  @RequireDrasi('omades', 'edit')
+  @ApiOperation({ summary: 'Ένα μέλος μπαίνει στην ομάδα· μεταφέρεται από άλλη του ίδιου είδους' })
+  addMember(
+    @CurrentUser() user: RequestUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Param('participantId', ParseUUIDPipe) participantId: string,
+  ) {
+    return this.groups.addMember(user, id, groupId, participantId);
+  }
+
+  @Delete('groups/:groupId/members/:participantId')
+  @RequireDrasi('omades', 'edit')
+  @ApiOperation({ summary: 'Ένα μέλος βγαίνει από την ομάδα' })
+  removeMember(
+    @CurrentUser() user: RequestUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('groupId', ParseUUIDPipe) groupId: string,
+    @Param('participantId', ParseUUIDPipe) participantId: string,
+  ) {
+    return this.groups.removeMember(user, id, groupId, participantId);
+  }
+
   @Put('groups/:groupId/members')
   @RequireDrasi('omades', 'edit')
   @ApiOperation({ summary: 'Τα μέλη της ομάδας (αντικατάσταση)· μεταφέρει όποιον ήταν σε άλλη του ίδιου είδους' })
