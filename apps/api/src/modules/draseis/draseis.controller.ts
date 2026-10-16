@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   Param,
+  ParseEnumPipe,
   ParseUUIDPipe,
   Patch,
   Post,
@@ -21,7 +22,9 @@ import { CheckoutService } from '../yliko/checkout.service';
 import { DraseisGroupsService } from './draseis-groups.service';
 import { DraseisService } from './draseis.service';
 import { QueryGuestsDto } from './dto/drasi-groups.dto';
+import { DrasiRoleKind } from '@trifylli/shared';
 import {
+  AddDrasiRoleDto,
   AddParticipantsDto,
   CreateDrasiDto,
   DeleteDrasiDto,
@@ -182,6 +185,31 @@ export class DraseisController {
     @Body() dto: SetGuestTopikaDto,
   ) {
     return this.draseis.setGuestTopika(user, id, dto);
+  }
+
+  @Post(':id/roles/:kind/:userId')
+  @RequireDrasi('arxigeio', 'edit')
+  @ApiOperation({ summary: 'Ένας ρόλος σε ένα στέλεχος (χωρίς να σταλεί όλο το αρχηγείο)' })
+  addRole(
+    @CurrentUser() user: RequestUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('kind', new ParseEnumPipe(DrasiRoleKind)) kind: DrasiRoleKind,
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Body() dto: AddDrasiRoleDto,
+  ) {
+    return this.draseis.addRole(user, id, kind, userId, dto.note);
+  }
+
+  @Delete(':id/roles/:kind/:userId')
+  @RequireDrasi('arxigeio', 'edit')
+  @ApiOperation({ summary: 'Ένας ρόλος φεύγει από ένα στέλεχος' })
+  removeRole(
+    @CurrentUser() user: RequestUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('kind', new ParseEnumPipe(DrasiRoleKind)) kind: DrasiRoleKind,
+    @Param('userId', ParseUUIDPipe) userId: string,
+  ) {
+    return this.draseis.removeRole(user, id, kind, userId);
   }
 
   @Put(':id/roles')

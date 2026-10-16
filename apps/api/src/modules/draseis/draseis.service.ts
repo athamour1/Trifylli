@@ -436,6 +436,31 @@ export class DraseisService {
     });
   }
 
+  /**
+   * Ένας ρόλος σε ένα στέλεχος — χωρίς να σταλεί όλο το αρχηγείο: δύο που ορίζουν
+   * ρόλους μαζί δεν σβήνουν ο ένας τον άλλον. Ήδη υπάρχει: μένει (με τη νέα σημείωση, αν δόθηκε).
+   */
+  async addRole(user: RequestUser, id: string, kind: DrasiRoleKind, userId: string, note?: string | null) {
+    await this.assertAccess(user, id);
+    const known = await this.prisma.user.findFirst({ where: { id: userId, topikoId: user.topikoId, archivedAt: null }, select: { id: true } });
+    if (!known) throw new BadRequestException('Άγνωστο στέλεχος.');
+    await this.prisma.drasiRole.upsert({
+      where: { drasiId_kind_userId: { drasiId: id, kind, userId } },
+      create: { drasiId: id, kind, userId, note: note?.trim() || null },
+      update: note === undefined ? {} : { note: note?.trim() || null },
+    });
+    this.accessChanged(id);
+    return { added: true };
+  }
+
+  /** Ένας ρόλος φεύγει από ένα στέλεχος — οι υπόλοιποι μένουν όπως είναι. */
+  async removeRole(user: RequestUser, id: string, kind: DrasiRoleKind, userId: string) {
+    await this.assertAccess(user, id);
+    await this.prisma.drasiRole.deleteMany({ where: { drasiId: id, kind, userId } });
+    this.accessChanged(id);
+    return { removed: true };
+  }
+
   async addParticipants(user: RequestUser, id: string, dto: AddParticipantsDto) {
     const drasi = await this.assertAccess(user, id);
 

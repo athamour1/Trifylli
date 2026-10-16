@@ -314,6 +314,15 @@ export class DrasiRoleDto {
   note?: string;
 }
 
+/** Ένας ρόλος σε ένα στέλεχος (`POST …/roles/:kind/:userId`) — προαιρετικά με σημείωση. */
+export class AddDrasiRoleDto {
+  @ApiPropertyOptional({ nullable: true })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  note?: string | null;
+}
+
 /**
  * Αντικαθιστά ΟΛΕΣ τις ευθύνες της δράσης (αρχηγείο + υπηρεσίες). Υπηρεσία που
  * δεν ισχύει = δεν στέλνεται καμία γραμμή της.
