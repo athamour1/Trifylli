@@ -48,18 +48,7 @@
           </div>
         </div>
 
-        <q-banner v-if="collabStatus === 'update-required'" dense class="bg-orange-1 text-orange-10 q-mb-md">
-          <template #avatar><q-icon name="system_update" /></template>
-          Βγήκε νέα έκδοση της εφαρμογής — ανανέωσε τη σελίδα για να γράψεις στα κείμενα.
-          <template #action>
-            <q-btn flat no-caps color="orange-10" label="Ανανέωση" @click="reloadPage" />
-          </template>
-        </q-banner>
-
-        <q-banner v-else-if="editable && collabStatus === 'forbidden'" dense class="bg-grey-3 text-grey-9 q-mb-md">
-          <template #avatar><q-icon name="lock" /></template>
-          Δεν έχεις πια πρόσβαση για αλλαγές στα κείμενα — φαίνεται η τελευταία εκδοχή που έφτασε.
-        </q-banner>
+        <CollabBanner :status="collabStatus" :ready="collabReady" :editable="editable" target="στα κείμενα" />
 
         <q-banner v-if="data.finalized" dense class="bg-grey-3 text-grey-9 q-mb-md">
           <template #avatar><q-icon name="lock" /></template>
@@ -232,6 +221,7 @@ import {
   type KladosType,
   type SymvoulioType,
 } from '@trifylli/shared';
+import CollabBanner from '../components/CollabBanner.vue';
 import CollabPresence from '../components/CollabPresence.vue';
 import DateField from '../components/DateField.vue';
 import MarkdownField from '../components/MarkdownField.vue';
@@ -353,10 +343,6 @@ const {
 const textsEditable = computed(() => editable.value && collabWritable.value);
 
 const combinedSave = computed(() => worstSaveState(saveStatus.value, collabSaveState.value));
-
-function reloadPage(): void {
-  window.location.reload();
-}
 
 function startEditing(): void {
   const query = { ...route.query };

@@ -48,21 +48,7 @@
           </div>
         </div>
 
-        <q-banner v-if="collabStatus === 'update-required'" dense class="bg-orange-1 text-orange-10 q-mb-md">
-          <template #avatar><q-icon name="system_update" /></template>
-          Βγήκε νέα έκδοση της εφαρμογής — ανανέωσε τη σελίδα για να γράψεις στο πρόγραμμα.
-          <template #action>
-            <q-btn flat no-caps color="orange-10" label="Ανανέωση" @click="reloadPage" />
-          </template>
-        </q-banner>
-        <q-banner v-else-if="editable && collabStatus === 'forbidden'" dense class="bg-grey-3 text-grey-9 q-mb-md">
-          <template #avatar><q-icon name="lock" /></template>
-          Δεν έχεις πια πρόσβαση για αλλαγές στο πρόγραμμα — φαίνεται η τελευταία εκδοχή που έφτασε.
-        </q-banner>
-        <div v-else-if="editable && !collabReady && collabStatus === 'offline'" class="text-caption text-grey-7 q-mb-md">
-          <q-icon name="cloud_off" size="16px" class="q-mr-xs" />
-          Χωρίς σύνδεση: το πρόγραμμα φαίνεται μόνο για ανάγνωση σε αυτή τη συσκευή — η επεξεργασία ανοίγει μόλις συνδεθείς.
-        </div>
+        <CollabBanner :status="collabStatus" :ready="collabReady" :editable="editable" target="στο πρόγραμμα" />
 
         <div class="row q-col-gutter-md">
           <!-- ── Πρόγραμμα ── -->
@@ -479,6 +465,7 @@ import {
   type KladosType,
   type PlanSnapshot,
 } from '@trifylli/shared';
+import CollabBanner from '../components/CollabBanner.vue';
 import CollabPresence from '../components/CollabPresence.vue';
 import MarkdownField from '../components/MarkdownField.vue';
 import PageState from '../components/PageState.vue';
@@ -757,10 +744,6 @@ function addYlikoRow(afterId: string | null): void {
 function setYlikoQty(itemId: string, value: string | number | null): void {
   const qty = typedNumber(value);
   if (qty !== null) updateYliko(collabDoc.value, itemId, { qty });
-}
-
-function reloadPage(): void {
-  window.location.reload();
 }
 
 /**
