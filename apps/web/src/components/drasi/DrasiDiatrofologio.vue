@@ -38,6 +38,16 @@
             </q-item-section>
             <q-item-section side>
               <div class="row items-center no-wrap q-gutter-sm">
+                <q-icon
+                  v-if="mealApprovals.get(m.itemId) && mealApprovals.get(m.itemId)!.status !== 'PROXEIRO'"
+                  :name="mealApprovals.get(m.itemId)!.changedAfter ? 'published_with_changes' : APPROVAL_META[mealApprovals.get(m.itemId)!.status].icon"
+                  :color="mealApprovals.get(m.itemId)!.changedAfter ? 'orange-8' : APPROVAL_META[mealApprovals.get(m.itemId)!.status].color"
+                  size="20px"
+                >
+                  <q-tooltip>
+                    {{ mealApprovals.get(m.itemId)!.changedAfter ? 'Εγκρίθηκε — άλλαξε μετά την έγκριση' : APPROVAL_META[mealApprovals.get(m.itemId)!.status].label }}
+                  </q-tooltip>
+                </q-icon>
                 <span v-if="m.ingredients" class="text-caption">{{ m.bought }}/{{ m.ingredients }} υλικά</span>
                 <q-icon :name="m.hasRecipe ? 'menu_book' : 'note_add'" :color="m.hasRecipe ? 'klados' : 'grey-5'" size="20px">
                   <q-tooltip>{{ m.hasRecipe ? 'Έχει συνταγή' : 'Χωρίς συνταγή ακόμα' }}</q-tooltip>
@@ -58,8 +68,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 import { useQuasar } from 'quasar';
-import { DRASI_SNACK_LABEL, type DrasiDiatrofologioView } from '@trifylli/shared';
+import { DRASI_SNACK_LABEL, type ApprovalSummaryRow, type DrasiDiatrofologioView } from '@trifylli/shared';
 import { ApiError, get } from '../../lib/api';
+import { APPROVAL_META, approvalsByItem } from '../../lib/approvals';
 import { formatDate } from '../../lib/format';
 import { useLiveReload } from '../../composables/useLiveChanges';
 
@@ -68,6 +79,19 @@ const $q = useQuasar();
 
 const view = ref<DrasiDiatrofologioView | null>(null);
 const loading = ref(false);
+
+// Η έγκριση κάθε γεύματος — σήμα δίπλα στη συνταγή.
+const approvalRows = ref<ApprovalSummaryRow[]>([]);
+const mealApprovals = computed(() => approvalsByItem(approvalRows.value, props.drasiId).meal);
+async function loadApprovals(): Promise<void> {
+  try {
+    approvalRows.value = await get<ApprovalSummaryRow[]>('/approvals', { params: { drasi: props.drasiId } });
+  } catch {
+    // Χωρίς τις εγκρίσεις η λίστα δουλεύει όπως πριν.
+  }
+}
+onMounted(loadApprovals);
+useLiveReload(['approvals'], loadApprovals);
 
 async function load(): Promise<void> {
   loading.value = true;

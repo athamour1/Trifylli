@@ -9,6 +9,7 @@ import { collabShortName, type DrasiActivityEvent } from '@trifylli/shared';
 /** Κάθε σημείο: το άρθρο του («το ωρολόγιο»), η πρόθεση («στο ωρολόγιο») και η ενότητά του. */
 const TOPICS: Record<string, { the: string; in: string; section: string }> = {
   schedule: { the: 'το ωρολόγιο', in: 'στο ωρολόγιο', section: 'programma' },
+  approvals: { the: 'τις εγκρίσεις', in: 'στις εγκρίσεις', section: 'programma' },
   'doc:item': { the: 'ένα προγραμματικό', in: 'σε προγραμματικό', section: 'programma' },
   'comment:item': { the: 'ένα σχόλιο σε προγραμματικό', in: 'σχόλιο σε προγραμματικό', section: 'programma' },
   diatrofologio: { the: 'το διατροφολόγιο', in: 'στο διατροφολόγιο', section: 'diatrofologio' },

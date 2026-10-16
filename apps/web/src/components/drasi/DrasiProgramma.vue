@@ -9,6 +9,19 @@
     <div class="row items-center q-mb-sm q-gutter-sm">
       <SegmentedToggle v-model="dayKey" dense unelevated toggle-color="klados" toggle-text-color="klados-on" :options="dayOptions" />
       <q-space />
+      <q-select
+        v-if="approvalRows.length || approvalFilter !== 'all'"
+        v-model="approvalFilter"
+        :options="approvalFilterOptions"
+        dense
+        outlined
+        emit-value
+        map-options
+        options-dense
+        color="klados"
+        label="Έγκριση"
+        style="min-width: 170px"
+      />
       <SaveStatus v-if="canWrite && saveStatus !== 'clean'" :status="saveStatus" @retry="saveNow" />
       <q-btn v-if="canWrite && current?.items.length && dayOptions.length > 1" flat color="klados" icon="content_copy" label="Αντιγραφή ημέρας σε…" @click="copyDialog = true" />
     </div>
@@ -61,6 +74,7 @@
       <div
         v-for="(row, idx) in rows"
         :key="row.id"
+        v-show="matchesFilter(row.id)"
         class="schedule-row"
         :class="{ 'schedule-row--over': overId === row.id && dragId !== row.id, 'schedule-row--dragging': dragId === row.id }"
         :draggable="dragArmed === row.id"
@@ -74,7 +88,7 @@
       >
         <q-separator v-if="idx > 0" />
         <div class="schedule-item">
-          <div v-if="canWrite" class="si-drag" @mousedown="dragArmed = row.id" @touchstart.passive="dragArmed = row.id">
+          <div v-if="canWrite && approvalFilter === 'all'" class="si-drag" @mousedown="dragArmed = row.id" @touchstart.passive="dragArmed = row.id">
             <q-icon name="drag_indicator" color="grey-5" size="24px" />
           </div>
           <div class="si-start text-weight-medium">{{ times[idx]?.start }}</div>
@@ -163,12 +177,12 @@
             dense
             round
             size="sm"
-            :icon="row.hasProgramma ? 'description' : 'note_add'"
-            :color="row.hasProgramma ? 'klados' : 'grey-5'"
+            :icon="docIcon(row).icon"
+            :color="docIcon(row).color"
             :to="{ name: 'drasi-programmatiko', params: { id: drasiId, itemId: row.id } }"
-            :aria-label="row.hasProgramma ? 'Άνοιγμα προγραμματικού' : 'Χωρίς προγραμματικό — γράψε'"
+            :aria-label="docIcon(row).label"
           >
-            <q-tooltip>{{ row.hasProgramma ? 'Άνοιγμα προγραμματικού' : 'Χωρίς προγραμματικό — γράψε' }}</q-tooltip>
+            <q-tooltip>{{ docIcon(row).label }}</q-tooltip>
           </q-btn>
         </div>
       </div>
@@ -199,6 +213,7 @@ import {
   DRASI_SNACK_LABEL,
   DrasiScheduleKind,
   DrasiSnack,
+  type ApprovalSummaryRow,
   type DrasiScheduleItemView,
   type DrasiScheduleView,
   type KladosType,
@@ -211,6 +226,7 @@ import { formatDate, formatDuration } from '../../lib/format';
 import { scheduleCaption } from './types';
 import type { SaveState } from '../../lib/save-state';
 import { useLiveReload, useRowPresence } from '../../composables/useLiveChanges';
+import { APPROVAL_META, approvalsByItem, type ItemApproval } from '../../lib/approvals';
 
 const props = defineProps<{
   drasiId: string;
@@ -265,6 +281,56 @@ async function reload(): Promise<void> {
 }
 
 onMounted(reload);
+
+// ── Εγκρίσεις των προγραμματικών: σήμα στο κουμπί του καθενός και φίλτρο ──
+const approvalRows = ref<ApprovalSummaryRow[]>([]);
+const itemApprovals = computed(() => approvalsByItem(approvalRows.value, props.drasiId).item);
+async function loadApprovals(): Promise<void> {
+  try {
+    approvalRows.value = await get<ApprovalSummaryRow[]>('/approvals', { params: { drasi: props.drasiId } });
+  } catch {
+    // Χωρίς τις εγκρίσεις το ωρολόγιο δουλεύει όπως πριν.
+  }
+}
+onMounted(loadApprovals);
+useLiveReload(['approvals'], loadApprovals);
+
+type ApprovalFilter = 'all' | 'PROXEIRO' | 'ELEGXOS' | 'EGKRITHIKE' | 'changed';
+const approvalFilter = ref<ApprovalFilter>('all');
+const approvalFilterOptions: { label: string; value: ApprovalFilter }[] = [
+  { label: 'Όλα', value: 'all' },
+  { label: 'Πρόχειρα', value: 'PROXEIRO' },
+  { label: 'Για έλεγχο', value: 'ELEGXOS' },
+  { label: 'Εγκρίθηκαν', value: 'EGKRITHIKE' },
+  { label: 'Άλλαξαν μετά την έγκριση', value: 'changed' },
+];
+function matchesFilter(itemId: string): boolean {
+  const approval: ItemApproval | undefined = itemApprovals.value.get(itemId);
+  switch (approvalFilter.value) {
+    case 'all':
+      return true;
+    case 'changed':
+      return !!approval?.changedAfter;
+    case 'PROXEIRO':
+      return !approval || approval.status === 'PROXEIRO';
+    default:
+      return approval?.status === approvalFilter.value;
+  }
+}
+
+/** Το κουμπί του προγραμματικού λέει και πού είναι η έγκρισή του. */
+function docIcon(row: { id: string; hasProgramma: boolean }): { icon: string; color: string; label: string } {
+  const approval = itemApprovals.value.get(row.id);
+  if (approval && approval.status !== 'PROXEIRO') {
+    const meta = APPROVAL_META[approval.status];
+    return approval.changedAfter
+      ? { icon: 'published_with_changes', color: 'orange-8', label: 'Εγκρίθηκε — άλλαξε μετά την έγκριση' }
+      : { icon: meta.icon, color: meta.color, label: `Προγραμματικό: ${meta.label.toLocaleLowerCase('el')}` };
+  }
+  return row.hasProgramma
+    ? { icon: 'description', color: 'klados', label: 'Άνοιγμα προγραμματικού' }
+    : { icon: 'note_add', color: 'grey-5', label: 'Χωρίς προγραμματικό — γράψε' };
+}
 
 // ── Έναρξη ημέρας ──
 async function setDayStart(time: string | null): Promise<void> {

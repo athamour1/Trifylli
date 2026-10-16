@@ -155,6 +155,8 @@
         </span>
               </div>
 
+              <DrasiApprovals :drasi-id="id" />
+
               <!-- Τι άλλαξε: η ροή δραστηριότητας, με όσα έγιναν από την τελευταία σου επίσκεψη τονισμένα. -->
               <q-card v-if="feed.length" flat bordered class="q-mb-md">
                 <q-card-section class="text-subtitle2 q-pb-xs">Τι άλλαξε</q-card-section>
@@ -413,6 +415,7 @@ import {
 } from '@trifylli/shared';
 import CollabPresence from '../components/CollabPresence.vue';
 import PageState from '../components/PageState.vue';
+import DrasiApprovals from '../components/drasi/DrasiApprovals.vue';
 import DrasiAxiologisi from '../components/drasi/DrasiAxiologisi.vue';
 import DrasiArxigeio from '../components/drasi/DrasiArxigeio.vue';
 import DrasiEktyposi from '../components/drasi/DrasiEktyposi.vue';
