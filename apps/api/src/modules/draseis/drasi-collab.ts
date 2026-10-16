@@ -295,15 +295,21 @@ export class DrasiCollab implements OnModuleInit {
    */
   private itemType(): CollabDocumentType {
     const prisma = this.prisma;
-    const load = (drasiId: string, itemId: string) =>
-      prisma.drasiScheduleItem.findFirst({
+    const load = async (drasiId: string, itemId: string) => {
+      const item = await prisma.drasiScheduleItem.findFirst({
         where: { id: itemId, drasiId },
         select: {
           description: true,
           location: true,
-          yliko: { orderBy: { order: 'asc' }, select: { id: true, order: true, label: true, qty: true, packed: true } },
+          yliko: { orderBy: { order: 'asc' }, select: { id: true, order: true, label: true, qty: true, packed: true, packedById: true, packedAt: true } },
         },
       });
+      if (!item) return null;
+      return {
+        ...item,
+        yliko: item.yliko.map(({ packedById, packedAt, ...row }) => ({ ...row, packedBy: packedById, packedAt: packedAt?.toISOString() ?? null })),
+      };
+    };
     return {
       kind: 'drasi:item',
       arity: 2,
@@ -378,13 +384,20 @@ export class DrasiCollab implements OnModuleInit {
             select: {
               recipe: true,
               menu: true,
-              ingredients: { orderBy: { order: 'asc' }, select: { id: true, order: true, label: true, qty: true, bought: true } },
+              ingredients: {
+                orderBy: { order: 'asc' },
+                select: { id: true, order: true, label: true, qty: true, bought: true, boughtById: true, boughtAt: true },
+              },
             },
           },
         },
       });
       if (!item || !isMeal(item)) return null;
-      return { recipe: item.meal?.recipe ?? null, menu: item.meal?.menu ?? null, ingredients: item.meal?.ingredients ?? [] };
+      return {
+        recipe: item.meal?.recipe ?? null,
+        menu: item.meal?.menu ?? null,
+        ingredients: (item.meal?.ingredients ?? []).map(({ boughtById, boughtAt, ...row }) => ({ ...row, boughtBy: boughtById, boughtAt: boughtAt?.toISOString() ?? null })),
+      };
     };
     return {
       kind: 'drasi:meal',

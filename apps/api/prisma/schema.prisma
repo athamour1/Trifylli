@@ -364,6 +364,9 @@ model User {
   comments                Comment[]                  @relation("CommentAuthor")
   docReads                DocRead[]
   drasiDelays             DrasiDelay[]               @relation("DrasiDelayAuthor")
+  shoppingPurchased       DrasiShoppingItem[]        @relation("ShoppingPurchaser")
+  checkoutsLoaded         YlikoCheckout[]            @relation("CheckoutLoadedBy")
+  externalLoaded          DrasiExternalYliko[]       @relation("ExternalLoadedBy")
   approvalsRequested      DocApproval[]              @relation("ApprovalRequester")
   approvalsDecided        DocApproval[]              @relation("ApprovalDecider")
   commentsResolved        Comment[]                  @relation("CommentResolver")
@@ -732,13 +735,16 @@ model DrasiMeal {
 
 /// Γραμμή του ποσολογίου: υλικό, συνολική ποσότητα (κείμενο, π.χ. «2 kg») και αν αγοράστηκε.
 model DrasiMealIngredient {
-  id     String  @id @default(uuid()) @db.Uuid
-  itemId String  @db.Uuid
+  id         String    @id @default(uuid()) @db.Uuid
+  itemId     String    @db.Uuid
   /// Σειρά εμφάνισης· χωρίς unique, γιατί η λίστα γράφεται ολόκληρη κάθε φορά.
-  order  Int
-  label  String
-  qty    String  @default("")
-  bought Boolean @default(false)
+  order      Int
+  label      String
+  qty        String    @default("")
+  bought     Boolean   @default(false)
+  /// Ποιος και πότε το αγόρασε (από το κοινό έγγραφο — χωρίς FK: το γράφει ο client).
+  boughtById String?   @db.Uuid
+  boughtAt   DateTime?
 
   meal DrasiMeal @relation(fields: [itemId], references: [itemId], onDelete: Cascade)
 
@@ -749,14 +755,17 @@ model DrasiMealIngredient {
 /// Το υλικό ενός στοιχείου του ωρολογίου: λίστα όπως στις συγκεντρώσεις (όνομα,
 /// ποσότητα, «μπήκε στο σακίδιο»). Ελεύθερο κείμενο — δεν δείχνει στην αποθήκη.
 model DrasiScheduleYlikoItem {
-  id     String  @id @default(uuid()) @db.Uuid
-  itemId String  @db.Uuid
+  id         String    @id @default(uuid()) @db.Uuid
+  itemId     String    @db.Uuid
   /// Σειρά εμφάνισης· χωρίς unique, γιατί η λίστα γράφεται ολόκληρη κάθε φορά.
-  order  Int
-  label  String
-  qty    Int     @default(1)
+  order      Int
+  label      String
+  qty        Int       @default(1)
   /// Τσεκαρισμένο όταν μπήκε στο σακίδιο.
-  packed Boolean @default(false)
+  packed     Boolean   @default(false)
+  /// Ποιος και πότε το τσέκαρε (από το κοινό έγγραφο — χωρίς FK: το γράφει ο client).
+  packedById String?   @db.Uuid
+  packedAt   DateTime?
 
   item DrasiScheduleItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
@@ -859,6 +868,8 @@ model DrasiShoppingItem {
   estimatedCost   Decimal?  @db.Decimal(10, 2)
   assigneeId      String?   @db.Uuid
   purchasedAt     DateTime?
+  /// Όποιος το σημείωσε «αγοράστηκε».
+  purchasedById   String?   @db.Uuid
   treasuryEntryId String?   @unique @db.Uuid
   ylikoId         String?   @db.Uuid
   note            String?
@@ -867,6 +878,7 @@ model DrasiShoppingItem {
 
   drasi         Drasi          @relation(fields: [drasiId], references: [id], onDelete: Cascade)
   assignee      User?          @relation("ShoppingAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  purchasedBy   User?          @relation("ShoppingPurchaser", fields: [purchasedById], references: [id], onDelete: SetNull)
   treasuryEntry TreasuryEntry? @relation(fields: [treasuryEntryId], references: [id], onDelete: SetNull)
   yliko         Yliko?         @relation(fields: [ylikoId], references: [id], onDelete: SetNull)
 
@@ -884,10 +896,14 @@ model DrasiExternalYliko {
   kladosId      String?   @db.Uuid
   guestTopikoId String?   @db.Uuid
   responsibleId String?   @db.Uuid
+  /// «Μπήκε» στη φόρτωση — ποιος και πότε.
+  loadedAt      DateTime?
+  loadedById    String?   @db.Uuid
   returnedAt    DateTime?
   note          String?
   createdAt     DateTime  @default(now())
 
+  loadedBy    User?             @relation("ExternalLoadedBy", fields: [loadedById], references: [id], onDelete: SetNull)
   drasi       Drasi             @relation(fields: [drasiId], references: [id], onDelete: Cascade)
   klados      Klados?           @relation(fields: [kladosId], references: [id], onDelete: SetNull)
   guestTopiko DrasiGuestTopiko? @relation(fields: [guestTopikoId], references: [id], onDelete: SetNull)
@@ -1557,9 +1573,13 @@ model YlikoCheckout {
   /// Σύντομη απογραφή κατάστασης κατά την επιστροφή (KALI/FTHORA/VLAVI/APOLEIA).
   returnCondition String?
   note            String?
+  /// «Μπήκε» στη φόρτωση της δράσης — ποιος και πότε.
+  loadedAt        DateTime?
+  loadedById      String?        @db.Uuid
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
+  loadedBy    User?        @relation("CheckoutLoadedBy", fields: [loadedById], references: [id], onDelete: SetNull)
   yliko       Yliko        @relation(fields: [ylikoId], references: [id], onDelete: Cascade)
   klados      Klados?      @relation(fields: [kladosId], references: [id], onDelete: SetNull)
   drasi       Drasi?       @relation(fields: [drasiId], references: [id], onDelete: Cascade)

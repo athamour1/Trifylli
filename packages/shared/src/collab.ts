@@ -227,13 +227,23 @@ export const ROW_LIMITS = {
   rows: 200,
 } as const;
 
-/** Γραμμή του ποσολογίου όπως είναι στο έγγραφο. */
+/** Γραμμή του ποσολογίου όπως είναι στο έγγραφο — με το ποιος και πότε την αγόρασε. */
 export interface IngredientSnapshot {
   id: string;
   order: number;
   label: string;
   qty: string;
   bought: boolean;
+  boughtBy: string | null;
+  /** ISO. */
+  boughtAt: string | null;
+}
+
+/** Γραμμή του υλικού ενός στοιχείου του ωρολογίου — με το ποιος και πότε την τσέκαρε. */
+export interface ItemYlikoSnapshot extends PlanYlikoSnapshot {
+  packedBy: string | null;
+  /** ISO. */
+  packedAt: string | null;
 }
 
 /** Ακέραιος μέσα στα όρια — ό,τι δεν είναι αριθμός παίρνει το `fallback`. */

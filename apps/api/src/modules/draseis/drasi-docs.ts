@@ -6,7 +6,7 @@ import {
   clampInt,
   type CollabVersionPart,
   type IngredientSnapshot,
-  type PlanYlikoSnapshot,
+  type ItemYlikoSnapshot,
 } from '@trifylli/shared';
 import { Map as YMap, type Doc } from 'yjs';
 import { projectedText } from '../collab/collab-fields';
@@ -43,6 +43,16 @@ function readRows(doc: Doc, key: string): { id: string; order: number; row: YMap
 }
 
 const text = (value: unknown): string => (typeof value === 'string' ? value : '');
+const textOrNull = (value: unknown): string | null => (typeof value === 'string' && value ? value : null);
+
+/** Το «ποιος» ενός τικ — μόνο μορφή id· το γράφει ο client, δεν δένεται με λογαριασμό. */
+const tickBy = (value: unknown, ticked: boolean): string | null => (ticked && typeof value === 'string' && UUID.test(value) ? value : null);
+/** Το «πότε» ενός τικ — μόνο έγκυρη ώρα, όχι στο μέλλον. */
+function tickAt(value: unknown, ticked: boolean): Date | null {
+  if (!ticked || typeof value !== 'string') return null;
+  const at = new Date(value);
+  return Number.isNaN(at.getTime()) || at.getTime() > Date.now() + 60_000 ? null : at;
+}
 
 /** Γραμμές που γράφονται: έγκυρο id, όνομα, όχι πάνω από το όριο — με ακέραια σειρά. */
 function keptRows<T extends { id: string; label: string }>(rows: readonly T[]): T[] {
@@ -54,20 +64,20 @@ function keptRows<T extends { id: string; label: string }>(rows: readonly T[]): 
 export interface ItemRows {
   description: string | null;
   location: string | null;
-  yliko: PlanYlikoSnapshot[];
+  yliko: ItemYlikoSnapshot[];
 }
 
 export interface ItemSnapshot {
   description: string;
   location: string;
-  yliko: PlanYlikoSnapshot[];
+  yliko: ItemYlikoSnapshot[];
 }
 
 /** Ό,τι γράφεται στη βάση. */
 export interface ItemWrite {
   description: string | null;
   location: string | null;
-  yliko: PlanYlikoSnapshot[];
+  yliko: { id: string; order: number; label: string; qty: number; packed: boolean; packedById: string | null; packedAt: Date | null }[];
 }
 
 /** Πρώτο γέμισμα — **μόνο** ο server (βλ. `seedTexts`). */
@@ -97,6 +107,8 @@ export function readItem(doc: Doc): ItemSnapshot {
       label: text(row.get('label')),
       qty: Number(row.get('qty') ?? 1),
       packed: row.get('packed') === true,
+      packedBy: textOrNull(row.get('packedBy')),
+      packedAt: textOrNull(row.get('packedAt')),
     })),
   };
 }
@@ -112,6 +124,8 @@ export function normalizeItem(item: ItemSnapshot): ItemWrite {
       label: y.label.trim().slice(0, ROW_LIMITS.label),
       qty: clampInt(y.qty, ROW_LIMITS.ylikoQty, 1),
       packed: y.packed === true,
+      packedById: tickBy(y.packedBy, y.packed === true),
+      packedAt: tickAt(y.packedAt, y.packed === true),
     })),
   };
 }
@@ -133,7 +147,7 @@ export interface MealSnapshot {
 export interface MealWrite {
   recipe: string | null;
   menu: string | null;
-  ingredients: IngredientSnapshot[];
+  ingredients: { id: string; order: number; label: string; qty: string; bought: boolean; boughtById: string | null; boughtAt: Date | null }[];
 }
 
 export function seedMeal(doc: Doc, rows: MealRows): void {
@@ -162,6 +176,8 @@ export function readMeal(doc: Doc): MealSnapshot {
       label: text(row.get('label')),
       qty: text(row.get('qty')),
       bought: row.get('bought') === true,
+      boughtBy: textOrNull(row.get('boughtBy')),
+      boughtAt: textOrNull(row.get('boughtAt')),
     })),
   };
 }
@@ -176,6 +192,8 @@ export function normalizeMeal(meal: MealSnapshot): MealWrite {
       label: y.label.trim().slice(0, ROW_LIMITS.label),
       qty: y.qty.trim().slice(0, ROW_LIMITS.ingredientQty),
       bought: y.bought === true,
+      boughtById: tickBy(y.boughtBy, y.bought === true),
+      boughtAt: tickAt(y.boughtAt, y.bought === true),
     })),
   };
 }
@@ -216,7 +234,15 @@ export function restoreItem(doc: Doc, content: Record<string, unknown>): void {
     if (fields.get(ITEM_DOC.location) !== text(content.location)) fields.set(ITEM_DOC.location, text(content.location));
     setRows(
       doc.getMap(ITEM_DOC.yliko),
-      versionRows(content.yliko).map((row) => ({ id: row.id, order: row.order, label: text(row.label), qty: Number(row.qty ?? 1), packed: row.packed === true })),
+      versionRows(content.yliko).map((row) => ({
+        id: row.id,
+        order: row.order,
+        label: text(row.label),
+        qty: Number(row.qty ?? 1),
+        packed: row.packed === true,
+        packedBy: textOrNull(row.packedBy),
+        packedAt: textOrNull(row.packedAt),
+      })),
     );
   });
 }
@@ -240,7 +266,15 @@ export function restoreMeal(doc: Doc, content: Record<string, unknown>): void {
     if (fields.get(MEAL_DOC.menu) !== text(content.menu)) fields.set(MEAL_DOC.menu, text(content.menu));
     setRows(
       doc.getMap(MEAL_DOC.ingredients),
-      versionRows(content.ingredients).map((row) => ({ id: row.id, order: row.order, label: text(row.label), qty: text(row.qty), bought: row.bought === true })),
+      versionRows(content.ingredients).map((row) => ({
+        id: row.id,
+        order: row.order,
+        label: text(row.label),
+        qty: text(row.qty),
+        bought: row.bought === true,
+        boughtBy: textOrNull(row.boughtBy),
+        boughtAt: textOrNull(row.boughtAt),
+      })),
     );
   });
 }

@@ -124,28 +124,28 @@ describe('στοιχείο και γεύμα — τι γράφεται στη β
   it('στοιχείο: προγραμματικό και χώρος στη γραμμή του, το υλικό με τα id του εγγράφου', async () => {
     const { calls, type } = recorder();
     const doc = new Doc();
-    seedItem(doc, { description: ' Πορεία ', location: ' Ξέφωτο ', yliko: [{ id: Y1, order: 0, label: ' Σχοινί ', qty: 2, packed: false }] });
+    seedItem(doc, { description: ' Πορεία ', location: ' Ξέφωτο ', yliko: [{ id: Y1, order: 0, label: ' Σχοινί ', qty: 2, packed: false, packedBy: null, packedAt: null }] });
 
     await type('drasi:item').project(doc, [DRASI, ITEM]);
 
     expect(calls).toEqual([
       ['item.updateMany', { where: { id: ITEM, drasiId: DRASI }, data: { description: 'Πορεία', location: 'Ξέφωτο' } }],
       ['yliko.deleteMany', { where: { itemId: ITEM } }],
-      ['yliko.createMany', { data: [{ id: Y1, order: 0, label: 'Σχοινί', qty: 2, packed: false, itemId: ITEM }] }],
+      ['yliko.createMany', { data: [{ id: Y1, order: 0, label: 'Σχοινί', qty: 2, packed: false, packedById: null, packedAt: null, itemId: ITEM }] }],
     ]);
   });
 
   it('γεύμα: συνταγή και μενού στο γεύμα, το ποσολόγιο με τα id του εγγράφου', async () => {
     const { calls, type } = recorder();
     const doc = new Doc();
-    seedMeal(doc, { recipe: 'Βράζουμε', menu: 'Μακαρόνια', ingredients: [{ id: Y1, order: 0, label: 'Μακαρόνια', qty: '4 kg', bought: true }] });
+    seedMeal(doc, { recipe: 'Βράζουμε', menu: 'Μακαρόνια', ingredients: [{ id: Y1, order: 0, label: 'Μακαρόνια', qty: '4 kg', bought: true, boughtBy: null, boughtAt: null }] });
 
     await type('drasi:meal').project(doc, [DRASI, ITEM]);
 
     expect(calls).toEqual([
       ['meal.upsert', { where: { itemId: ITEM }, create: { itemId: ITEM, recipe: 'Βράζουμε', menu: 'Μακαρόνια' }, update: { recipe: 'Βράζουμε', menu: 'Μακαρόνια' } }],
       ['ingredient.deleteMany', { where: { itemId: ITEM } }],
-      ['ingredient.createMany', { data: [{ id: Y1, order: 0, label: 'Μακαρόνια', qty: '4 kg', bought: true, itemId: ITEM }] }],
+      ['ingredient.createMany', { data: [{ id: Y1, order: 0, label: 'Μακαρόνια', qty: '4 kg', bought: true, boughtById: null, boughtAt: null, itemId: ITEM }] }],
     ]);
   });
 });
