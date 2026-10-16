@@ -26,6 +26,7 @@
             <div class="col-12 col-sm-auto row items-center q-gutter-sm">
               <CollabPresence :peers="peers" />
               <SaveStatus v-if="editable" :status="saveState" />
+              <DocumentHistory :document="docName" :writable="textEditable" />
             </div>
           </div>
         </div>
@@ -167,6 +168,7 @@ import {
 } from '@trifylli/shared';
 import CollabBanner from '../components/CollabBanner.vue';
 import CollabPresence from '../components/CollabPresence.vue';
+import DocumentHistory from '../components/collab/DocumentHistory.vue';
 import MarkdownField from '../components/MarkdownField.vue';
 import PageState from '../components/PageState.vue';
 import SaveStatus from '../components/SaveStatus.vue';

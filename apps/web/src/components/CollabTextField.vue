@@ -8,7 +8,11 @@
       :document-name="name"
       :awareness="awareness"
       :readonly="readonly || !writable"
-    />
+    >
+      <template #actions>
+        <DocumentHistory :document="name" :writable="!readonly && writable" compact />
+      </template>
+    </CollabMarkdownField>
     <template v-else>
       <!-- Δεν έχει ανοίξει ποτέ σε αυτή τη συσκευή: το κείμενο από το cache, μόνο για ανάγνωση. -->
       <MarkdownField v-bind="fallbackView" />
@@ -29,6 +33,7 @@
 import { computed, defineAsyncComponent, watch } from 'vue';
 import type { CollabPresenceUser, KladosType } from '@trifylli/shared';
 import MarkdownField from './MarkdownField.vue';
+import DocumentHistory from './collab/DocumentHistory.vue';
 import { useCollabDoc, useCollabMe } from '../composables/useCollabDoc';
 import type { SaveState } from '../lib/save-state';
 

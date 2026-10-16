@@ -26,6 +26,7 @@
           <div class="col-12 col-sm-auto row items-center q-gutter-sm">
             <CollabPresence :peers="peers" />
             <SaveStatus v-if="editable" :status="combinedSave" @retry="saveNow" />
+            <DocumentHistory :document="collabDocument.symvoulio(id)" :writable="textsEditable" />
             <q-btn
               v-if="viewOnly && !data.finalized && canWrite"
               outline
@@ -223,6 +224,7 @@ import {
 } from '@trifylli/shared';
 import CollabBanner from '../components/CollabBanner.vue';
 import CollabPresence from '../components/CollabPresence.vue';
+import DocumentHistory from '../components/collab/DocumentHistory.vue';
 import DateField from '../components/DateField.vue';
 import MarkdownField from '../components/MarkdownField.vue';
 import PageState from '../components/PageState.vue';

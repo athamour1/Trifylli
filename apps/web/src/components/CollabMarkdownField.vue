@@ -9,8 +9,9 @@
   >
     <!-- Μόνο ανάγνωση: το κείμενο, ζωντανά καθώς γράφουν οι άλλοι — σχολιάζεται κι έτσι. -->
     <template v-if="readonly">
-      <div v-if="comments" class="row items-center justify-end q-mb-xs">
-        <q-btn flat dense no-caps size="sm" icon="add_comment" color="klados" label="Σχόλιο" @mousedown.prevent @click="startComment">
+      <div v-if="comments || $slots.actions" class="row items-center justify-end q-mb-xs q-gutter-xs">
+        <slot name="actions" />
+        <q-btn v-if="comments" flat dense no-caps size="sm" icon="add_comment" color="klados" label="Σχόλιο" @mousedown.prevent @click="startComment">
           <q-tooltip>Σχόλιο στη φράση που επέλεξες — ή σε όλο το κείμενο</q-tooltip>
         </q-btn>
       </div>
@@ -24,6 +25,7 @@
       <div class="row items-center justify-between q-mb-xs">
         <div class="text-caption text-grey-7">{{ label }}</div>
         <div class="row items-center q-gutter-xs">
+          <slot name="actions" />
           <q-btn
             v-if="mode === 'edit'"
             flat dense no-caps size="sm" icon="image"
