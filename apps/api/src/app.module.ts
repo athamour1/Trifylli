@@ -13,6 +13,7 @@ import { HealthController } from './health.controller';
 import { AccountsModule } from './modules/accounts/accounts.module';
 import { CalendarModule } from './modules/calendar/calendar.module';
 import { CollabModule } from './modules/collab/collab.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import { ArxigeioModule } from './modules/arxigeio/arxigeio.module';
 import { DraseisModule } from './modules/draseis/draseis.module';
 import { FarmakeioModule } from './modules/farmakeio/farmakeio.module';
@@ -39,6 +40,7 @@ import { YlikoModule } from './modules/yliko/yliko.module';
     ScheduleModule.forRoot(),
     JobsModule,
     CollabModule,
+    NotificationsModule,
     // Η PWA συγχρονίζει ουρές μαζικά μετά από offline· το όριο είναι γενναιόδωρο
     // ώστε ένα κανονικό flush να μη χτυπά 429, αλλά κόβει runaway loops.
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 300 }]),
