@@ -363,6 +363,7 @@ model User {
   notificationSettings    NotificationSetting[]
   comments                Comment[]                  @relation("CommentAuthor")
   docReads                DocRead[]
+  drasiDelays             DrasiDelay[]               @relation("DrasiDelayAuthor")
   approvalsRequested      DocApproval[]              @relation("ApprovalRequester")
   approvalsDecided        DocApproval[]              @relation("ApprovalDecider")
   commentsResolved        Comment[]                  @relation("CommentResolver")
@@ -583,6 +584,7 @@ model Drasi {
   schedule        DrasiScheduleItem[]
   activity        DrasiActivity[]
   visits          DrasiVisit[]
+  delays          DrasiDelay[]
 
   @@index([topikoId, dateStart])
   @@index([kladosId, dateStart])
@@ -653,6 +655,8 @@ model DrasiScheduleItem {
   yliko     DrasiScheduleYlikoItem[]
   /// Το μενού του, αν είναι γεύμα — βλ. `DrasiMeal`.
   meal      DrasiMeal?
+  delays    DrasiDelay[]
+  reminders DrasiReminder[]
   epitropi  DrasiGroup?
 
   @@index([drasiId, date, order])
@@ -663,6 +667,39 @@ model DrasiScheduleItem {
 /// φιλοξενούμενα, εξωτερικά)· γράφουν το προγραμματικό του στοιχείου τους
 /// (κείμενο, χώρο, υλικό), βλ. `SCHEDULE_ITEM_OWN_FIELDS`. Όποιος βγει από τη
 /// δράση φεύγει και από εδώ.
+/// «Καθυστερούμε 15΄ από εδώ και πέρα» (συνεργασία, Φ12): οι ώρες από αυτό το
+/// στοιχείο και μετά (την ίδια ημέρα) μετακινούνται για όλους. Οι
+/// προγραμματισμένες ώρες και οι διάρκειες δεν αλλάζουν — για το ντοσιέ και την
+/// αξιολόγηση. Αρνητικά λεπτά = κερδίσαμε χρόνο.
+model DrasiDelay {
+  id          String   @id @default(uuid()) @db.Uuid
+  drasiId     String   @db.Uuid
+  itemId      String   @db.Uuid
+  minutes     Int
+  createdById String?  @db.Uuid
+  createdAt   DateTime @default(now())
+
+  drasi     Drasi             @relation(fields: [drasiId], references: [id], onDelete: Cascade)
+  item      DrasiScheduleItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  createdBy User?             @relation("DrasiDelayAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([drasiId])
+  @@map("drasi_delay")
+}
+
+/// Υπενθυμίσεις «σε 10΄ αρχίζει» που στάλθηκαν — μία ανά στοιχείο και ώρα
+/// έναρξης: μια καθυστέρηση φέρνει νέα ώρα, άρα και νέα υπενθύμιση.
+model DrasiReminder {
+  itemId   String   @db.Uuid
+  startsAt DateTime
+  sentAt   DateTime @default(now())
+
+  item DrasiScheduleItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@id([itemId, startsAt])
+  @@map("drasi_reminder")
+}
+
 model DrasiScheduleAssignee {
   itemId String @db.Uuid
   userId String @db.Uuid

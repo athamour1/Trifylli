@@ -619,6 +619,20 @@ export interface DrasiScheduleItemView {
   yliko: { id: string; label: string; qty: number; packed: boolean }[];
   /** Έχει γραφτεί προγραμματικό (περιγραφή ή υπεύθυνος ή υλικό). */
   hasProgramma: boolean;
+  /**
+   * Πόσα λεπτά μετακινείται λόγω καθυστέρησης («καθυστερούμε 15΄ από εδώ») — οι
+   * ώρες `startsAt`/`endsAt` μένουν οι προγραμματισμένες.
+   */
+  delayMin: number;
+}
+
+/** Μια δηλωμένη καθυστέρηση: από ποιο στοιχείο, πόσα λεπτά (αρνητικά = κερδίσαμε), ποιος. */
+export interface DrasiDelayView {
+  id: string;
+  itemId: string;
+  minutes: number;
+  by: { id: string; firstName: string; lastName: string } | null;
+  at: string;
 }
 
 export interface DrasiSymvoulioView {
@@ -805,7 +819,7 @@ export interface DrasiDossier {
 
 /** Το ωρολόγιο όπως το βλέπει η καρτέλα: ημέρες με ώρα έναρξης και στοιχεία. */
 export interface DrasiScheduleView {
-  days: { date: string; startTime: string; overridden: boolean; items: DrasiScheduleItemView[] }[];
+  days: { date: string; startTime: string; overridden: boolean; items: DrasiScheduleItemView[]; delays: DrasiDelayView[] }[];
   /** Τα στελέχη της δράσης (δικά μας, φιλοξενούμενα, εξωτερικά) — οι επιλογές για τους υπεύθυνους. */
   stelexi: DrasiScheduleStelexos[];
 }

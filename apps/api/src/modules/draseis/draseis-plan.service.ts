@@ -25,6 +25,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { DrasiAccessService } from './drasi-access.service';
 import { planResponsibles } from './schedule-assignees';
 import { moveAfter } from './schedule-order';
+import { delaysOf } from './schedule-delays';
 import { ylikoRows } from './schedule-yliko';
 import type {
   CopyDayDto,
@@ -82,12 +83,30 @@ export class DraseisPlanService {
     const drasi = await this.access.load(user, id, 'read');
     // Προγραμματικά και συνταγές που γράφονται αυτή τη στιγμή: πρώτα στη βάση.
     await this.collab.flushPending(collabDocument.drasiPrefix(id));
-    const tz = await this.timezone(user);
-    const rows = await this.prisma.drasiScheduleItem.findMany({
-      where: { drasiId: id },
-      orderBy: [{ date: 'asc' }, { order: 'asc' }, { createdAt: 'asc' }],
-      include: scheduleInclude,
-    });
+    return { days: await this.days(drasi, await this.timezone(user)), stelexi: await this.stelexi(id) };
+  }
+
+  /**
+   * Οι ημέρες του ωρολογίου με τις ώρες τους (και τις καθυστερήσεις) — χωρίς
+   * έλεγχο πρόσβασης: για το `scheduleView` και για τις υπενθυμίσεις.
+   */
+  async days(
+    drasi: { id: string; dateStart: Date; dateEnd: Date; dayStartTimes: Prisma.JsonValue | null },
+    tz: string,
+  ): Promise<DrasiScheduleView['days']> {
+    const id = drasi.id;
+    const [rows, delayRows] = await Promise.all([
+      this.prisma.drasiScheduleItem.findMany({
+        where: { drasiId: id },
+        orderBy: [{ date: 'asc' }, { order: 'asc' }, { createdAt: 'asc' }],
+        include: scheduleInclude,
+      }),
+      this.prisma.drasiDelay.findMany({
+        where: { drasiId: id },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, itemId: true, minutes: true, createdAt: true, createdBy: { select: { id: true, firstName: true, lastName: true } } },
+      }),
+    ]);
 
     const baseTime = timeOfDay(drasi.dateStart, tz);
     const overrides = (drasi.dayStartTimes as Record<string, string> | null) ?? {};
@@ -99,21 +118,40 @@ export class DraseisPlanService {
     }
     for (const r of rows) dates.add(dayKey(r.date));
 
-    const days = [...dates].sort().map((date) => {
+    return [...dates].sort().map((date) => {
       const overridden = date !== firstDay && typeof overrides[date] === 'string';
       const startTime = date === firstDay ? baseTime : (overrides[date] ?? baseTime);
       let cursor = atZone(date, startTime, tz);
-      const items = rows
-        .filter((r) => dayKey(r.date) === date)
-        .map((r) => {
-          const startsAt = cursor;
-          const endsAt = new Date(cursor.getTime() + r.durationMin * 60_000);
-          cursor = endsAt;
-          return toScheduleView(r, startsAt, endsAt);
-        });
-      return { date, startTime, overridden, items };
+      const dayRows = rows.filter((r) => dayKey(r.date) === date);
+      const dayIds = new Set(dayRows.map((r) => r.id));
+      const dayDelays = delayRows.filter((delay) => dayIds.has(delay.itemId));
+      const delayMin = delaysOf(dayRows.map((r) => r.id), dayDelays);
+      const items = dayRows.map((r) => {
+        const startsAt = cursor;
+        const endsAt = new Date(cursor.getTime() + r.durationMin * 60_000);
+        cursor = endsAt;
+        return toScheduleView(r, startsAt, endsAt, delayMin.get(r.id) ?? 0);
+      });
+      const delays = dayDelays.map((delay) => ({ id: delay.id, itemId: delay.itemId, minutes: delay.minutes, by: delay.createdBy, at: delay.createdAt.toISOString() }));
+      return { date, startTime, overridden, items, delays };
     });
-    return { days, stelexi: await this.stelexi(id) };
+  }
+
+  /** «Καθυστερούμε N΄ από εδώ και πέρα» — από αυτό το στοιχείο, για όλους (αρνητικά = κερδίσαμε). */
+  async addDelay(user: RequestUser, id: string, itemId: string, minutes: number): Promise<{ id: string }> {
+    await this.access.load(user, id, 'write');
+    const item = await this.prisma.drasiScheduleItem.findFirst({ where: { id: itemId, drasiId: id }, select: { id: true } });
+    if (!item) throw new NotFoundException('Το στοιχείο του ωρολογίου δεν βρέθηκε.');
+    if (!Number.isInteger(minutes) || minutes === 0 || Math.abs(minutes) > 240) {
+      throw new BadRequestException('Η καθυστέρηση είναι λεπτά, ως 4 ώρες.');
+    }
+    return this.prisma.drasiDelay.create({ data: { drasiId: id, itemId, minutes, createdById: user.id }, select: { id: true } });
+  }
+
+  /** Η καθυστέρηση αναιρείται (λάθος, ή ξαναμπήκαμε στην ώρα μας). */
+  async removeDelay(user: RequestUser, id: string, delayId: string): Promise<void> {
+    await this.access.load(user, id, 'write');
+    await this.prisma.drasiDelay.deleteMany({ where: { id: delayId, drasiId: id } });
   }
 
   /** Τα στελέχη της δράσης — δικά μας, φιλοξενούμενα και εξωτερικά. Μόνο αυτά γίνονται υπεύθυνοι. */
@@ -659,6 +697,7 @@ export function toScheduleView(
   },
   startsAt: Date,
   endsAt: Date,
+  delayMin = 0,
 ): DrasiScheduleItemView {
   const responsibles = r.assignees
     .map((a) => a.user)
@@ -678,6 +717,7 @@ export function toScheduleView(
     responsibles,
     yliko: r.yliko.map((y) => ({ id: y.id, label: y.label, qty: y.qty, packed: y.packed })),
     hasProgramma: Boolean(r.description || responsibles.length || r.yliko.length),
+    delayMin,
   };
 }
 

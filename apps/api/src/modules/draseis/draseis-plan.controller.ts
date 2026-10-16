@@ -7,6 +7,7 @@ import { CurrentUser, RequireDrasi } from '../../common/auth/decorators';
 import type { RequestUser } from '../../common/auth/types';
 import { DraseisPlanService } from './draseis-plan.service';
 import {
+  AddDelayDto,
   CopyDayDto,
   CreateDrasiSymvoulioDto,
   CreateScheduleItemDto,
@@ -56,6 +57,25 @@ export class DraseisPlanController {
     @Body() dto: MoveScheduleItemDto,
   ) {
     return this.plan.moveScheduleItem(user, id, itemId, dto.afterId ?? null);
+  }
+
+  @Post('schedule/delays')
+  @RequireDrasi('programma', 'edit')
+  @ApiOperation({ summary: '«Καθυστερούμε N΄ από εδώ και πέρα» — οι επόμενες ώρες μετακινούνται για όλους' })
+  addDelay(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: AddDelayDto) {
+    return this.plan.addDelay(user, id, dto.itemId, dto.minutes);
+  }
+
+  @Delete('schedule/delays/:delayId')
+  @RequireDrasi('programma', 'edit')
+  @ApiOperation({ summary: 'Αναίρεση μιας καθυστέρησης' })
+  async removeDelay(
+    @CurrentUser() user: RequestUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('delayId', ParseUUIDPipe) delayId: string,
+  ) {
+    await this.plan.removeDelay(user, id, delayId);
+    return { ok: true };
   }
 
   @Patch('schedule/day-start')

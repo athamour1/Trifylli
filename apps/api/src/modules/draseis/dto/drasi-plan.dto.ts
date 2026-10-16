@@ -160,6 +160,19 @@ export class DayStartDto {
   time?: string | null;
 }
 
+/** «Καθυστερούμε N΄ από εδώ και πέρα» — αρνητικά λεπτά = κερδίσαμε χρόνο. */
+export class AddDelayDto {
+  @ApiProperty({ description: 'Από αυτό το στοιχείο του ωρολογίου (και όσα ακολουθούν την ίδια ημέρα)' })
+  @IsUUID()
+  itemId!: string;
+
+  @ApiProperty({ minimum: -240, maximum: 240 })
+  @IsInt()
+  @Min(-240)
+  @Max(240)
+  minutes!: number;
+}
+
 /** Αντιγραφή ολόκληρης ημέρας σε άλλη — η κατασκήνωση έχει ίδιο σκελετό κάθε μέρα. */
 export class CopyDayDto {
   @ApiProperty({ description: 'YYYY-MM-DD' })
