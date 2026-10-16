@@ -94,6 +94,8 @@ export const collabDocument = {
   drasiPrefix: (drasiId: string) => `drasi:${drasiId}:`,
   /** Συγκέντρωση: όλο το πρόγραμμα — μέρη, κομμάτια, υλικό, στελέχη. */
   syggentrwsh: (id: string) => `syggentrwsh:${id}`,
+  /** Το δωμάτιο ενός χρήστη: εκεί φτάνουν αμέσως οι ειδοποιήσεις του (μόνο ο ίδιος μπαίνει). */
+  user: (userId: string) => `user:${userId}`,
 } as const;
 
 /**
@@ -239,4 +241,38 @@ export function clampInt(value: unknown, limits: { min: number; max: number }, f
   const n = Math.round(Number(value));
   if (!Number.isFinite(n)) return fallback;
   return Math.min(limits.max, Math.max(limits.min, n));
+}
+
+// ───────────────────────── Ειδοποιήσεις ─────────────────────────
+
+/**
+ * Τα είδη ειδοποιήσεων — καθένα κλείνει χωριστά από τη σελίδα /settings. Το push
+ * λέει μόνο **τι** και **πού**, ποτέ ονόματα παιδιών ή υγεία (ερώτημα 17).
+ */
+export const NOTIFICATION_KINDS = {
+  role: 'Νέος ρόλος σε δράση',
+  responsible: 'Υπεύθυνος σε στοιχείο του προγράμματος',
+  mention: 'Αναφορά σε σχόλιο',
+  comment: 'Απαντήσεις σε σχόλια',
+  approval: 'Εγκρίσεις προγραμματικών και γευμάτων',
+  reminder: 'Υπενθυμίσεις προγράμματος',
+  announcement: 'Ανακοινώσεις δράσεων',
+  headcount: 'Καταμετρήσεις',
+  poll: 'Ψηφοφορίες συμβουλίων',
+} as const;
+export type NotificationKind = keyof typeof NOTIFICATION_KINDS;
+
+export interface NotificationView {
+  id: string;
+  kind: string;
+  title: string;
+  body: string | null;
+  link: string | null;
+  readAt: string | null;
+  createdAt: string;
+}
+
+export interface NotificationsView {
+  unread: number;
+  items: NotificationView[];
 }

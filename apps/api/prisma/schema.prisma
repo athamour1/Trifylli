@@ -358,6 +358,9 @@ model User {
   drasiRoles              DrasiRole[]                @relation("DrasiRoleUser")
   drasiActivity           DrasiActivity[]            @relation("DrasiActivityActor")
   drasiVisits             DrasiVisit[]               @relation("DrasiVisitUser")
+  notifications           Notification[]
+  pushSubscriptions       PushSubscription[]
+  notificationSettings    NotificationSetting[]
   ypiresiesResponsible    DrasiYpiresiaResponsible[]
   drasiFeesCollected      DrasiParticipant[]         @relation("DrasiFeeCollector")
   drasiPaymentsCollected  DrasiPayment[]             @relation("DrasiPaymentCollector")
@@ -1578,6 +1581,56 @@ model SyncRun {
 
   @@index([topikoId, source, startedAt])
   @@map("sync_run")
+}
+
+/// Ειδοποίηση στο καμπανάκι (συνεργασία, Φ8): τίτλος, σύνδεσμος στο σημείο που
+/// αφορά, «διαβάστηκε». Φτάνει αμέσως αν η εφαρμογή είναι ανοιχτή (δωμάτιο
+/// `user:<id>`) και, αν το θέλει ο χρήστης, ως push στο κινητό.
+model Notification {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  /// Το είδος (`role`, `responsible`, `mention`…) — για τις ρυθμίσεις ανά είδος.
+  kind      String
+  title     String
+  body      String?
+  /// Πού οδηγεί (διαδρομή της εφαρμογής, π.χ. `/draseis/<id>/programma`).
+  link      String?
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("notification")
+}
+
+/// Συσκευή γραμμένη για push (Web Push). Μόνο με ρητό «ναι» του χρήστη· στο logout
+/// απεγγράφεται (κοινές συσκευές).
+model PushSubscription {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid
+  endpoint   String   @unique
+  p256dh     String
+  auth       String
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_subscription")
+}
+
+/// Είδη ειδοποιήσεων που ο χρήστης έκλεισε (σελίδα /settings) — καμία γραμμή = όλα ανοιχτά.
+model NotificationSetting {
+  userId  String  @db.Uuid
+  kind    String
+  enabled Boolean
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, kind])
+  @@map("notification_setting")
 }
 
 model AuditLog {
