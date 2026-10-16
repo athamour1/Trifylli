@@ -182,6 +182,7 @@ import StelexosPicker from '../components/StelexosPicker.vue';
 import { responsiblesLabel } from '../components/drasi/types';
 import { useAsyncData } from '../composables/useAsyncData';
 import { useCollabDoc, useCollabMe } from '../composables/useCollabDoc';
+import { useLiveReload } from '../composables/useLiveChanges';
 import { ApiError, OfflineError, del, get, patch } from '../lib/api';
 import { addItemYlikoAfter, hasSchema, readItemDoc, removeItemYliko, setLocation, updateItemYliko } from '../lib/drasi-docs';
 import { formatDateLong, formatDuration } from '../lib/format';
@@ -324,6 +325,11 @@ watch(
 );
 onBeforeUnmount(() => stopWatchingDoc?.());
 
+// Η γραμμή του στοιχείου στο ωρολόγιο (τίτλος, λεπτά, είδος, υπεύθυνοι) αλλάζει
+// και από αλλού — ζωντανά, μέσα από το δωμάτιο της δράσης.
+const room = useCollabDoc(collabDocument.drasiRoom(drasiId), useCollabMe(), { persist: false });
+useLiveReload(['schedule', 'participants', 'roles'], reload, { subscribe: room.onChange, busy: () => dirty.value });
+
 /** Το προγραμματικό γράφεται όταν γράφεται το στοιχείο **και** ο server το επιτρέπει. */
 const textEditable = computed(() => editable.value && ready.value && writable.value);
 /**
@@ -397,13 +403,20 @@ async function saveNow(): Promise<void> {
   }
   if (!dirty.value || !editAll.value) return;
   saveStatus.value = 'saving';
+  // Μόνο ό,τι άλλαξε, και οι υπεύθυνοι ως «πρόσθεσε / αφαίρεσε»: δύο που αλλάζουν
+  // μαζί το ίδιο στοιχείο (π.χ. από το ωρολόγιο) δεν σβήνουν ο ένας τον άλλον.
+  const server = item.value;
+  const before = new Set(server?.responsibles.map((p) => p.id) ?? []);
+  const after = new Set(form.responsible);
+  const body = {
+    ...(form.title.trim() && form.title.trim() !== server?.title ? { title: form.title.trim() } : {}),
+    ...(clampMin(form.durationMin) !== server?.durationMin ? { durationMin: clampMin(form.durationMin) } : {}),
+    ...(form.kind !== server?.kind ? { kind: form.kind } : {}),
+    ...([...after].some((id) => !before.has(id)) ? { addResponsibleIds: [...after].filter((id) => !before.has(id)) } : {}),
+    ...([...before].some((id) => !after.has(id)) ? { removeResponsibleIds: [...before].filter((id) => !after.has(id)) } : {}),
+  };
   try {
-    await patch(`/draseis/${drasiId}/schedule/${itemId}`, {
-      ...(form.title.trim() ? { title: form.title.trim() } : {}),
-      durationMin: clampMin(form.durationMin),
-      kind: form.kind,
-      responsibleIds: form.responsible,
-    });
+    if (Object.keys(body).length) await patch(`/draseis/${drasiId}/schedule/${itemId}`, body);
     dirty.value = false;
     saveStatus.value = 'saved';
     // Οι ώρες στην κεφαλίδα ξαναβγαίνουν από τον server (άλλαξαν αν άλλαξαν τα λεπτά).
