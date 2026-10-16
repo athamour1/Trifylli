@@ -90,6 +90,20 @@ export class CreateScheduleItemDto {
   @IsUUID(undefined, { each: true })
   responsibleIds?: string[] | null;
 
+  @ApiPropertyOptional({ type: [String], format: 'uuid', description: 'Νέοι υπεύθυνοι — χωρίς να σταλεί όλη η λίστα (δύο που αλλάζουν μαζί δεν σβήνουν ο ένας τον άλλον).' })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @IsUUID(undefined, { each: true })
+  addResponsibleIds?: string[];
+
+  @ApiPropertyOptional({ type: [String], format: 'uuid', description: 'Υπεύθυνοι που βγαίνουν.' })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @IsUUID(undefined, { each: true })
+  removeResponsibleIds?: string[];
+
   @ApiPropertyOptional({ type: [ScheduleYlikoItemDto], description: 'Η λίστα υλικού — αντικαθιστά ολόκληρη τη λίστα όταν δίνεται.' })
   @IsOptional()
   @IsArray()

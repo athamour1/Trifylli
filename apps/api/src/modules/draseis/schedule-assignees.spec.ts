@@ -19,4 +19,15 @@ describe('planResponsibles', () => {
   it('διπλό όνομα στη λίστα μετράει μία φορά', () => {
     expect(planResponsibles([], ['c', 'c'])).toEqual({ create: ['c'], remove: [] });
   });
+
+  it('«πρόσθεσε / αφαίρεσε έναν»: δύο που αλλάζουν μαζί δεν σβήνουν ο ένας τον άλλον', () => {
+    // Η Μαρία προσθέτει τον c, η Σοφία τον d — καμία δεν στέλνει όλη τη λίστα.
+    expect(planResponsibles(['a'], undefined, { add: ['c'] })).toEqual({ create: ['c'], remove: [] });
+    expect(planResponsibles(['a', 'c'], undefined, { add: ['d'] })).toEqual({ create: ['d'], remove: [] });
+    expect(planResponsibles(['a', 'c', 'd'], undefined, { remove: ['a', 'x'] })).toEqual({ create: [], remove: ['a'] });
+  });
+
+  it('προσθήκη όποιου είναι ήδη μέσα: τίποτα', () => {
+    expect(planResponsibles(['a'], undefined, { add: ['a'], remove: [] })).toEqual({ create: [], remove: [] });
+  });
 });

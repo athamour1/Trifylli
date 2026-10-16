@@ -163,10 +163,10 @@ export class DraseisPlanService {
     if (scope === 'own' && fieldsOutside(dto, SCHEDULE_ITEM_OWN_FIELDS).length) {
       throw new ForbiddenException('Ως υπεύθυνος αλλάζεις το προγραμματικό, τον χώρο και το υλικό — τα υπόλοιπα τα ορίζει το Πρόγραμμα.');
     }
-    const responsibles = planResponsibles(
-      item.assignees.map((a) => a.userId),
-      dto.responsibleIds,
-    );
+    const responsibles = planResponsibles(item.assignees.map((a) => a.userId), dto.responsibleIds, {
+      add: dto.addResponsibleIds,
+      remove: dto.removeResponsibleIds,
+    });
     await this.assertDrasiStelexi(id, responsibles.create);
 
     // Μεταφορά σε άλλη ημέρα: πάει στο τέλος της.
