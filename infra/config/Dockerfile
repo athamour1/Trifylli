@@ -5,6 +5,7 @@
 #   config-sync   (default) γράφει τα αρχεία στα named volumes της στοίβας
 #   garage-init   idempotent bootstrap του Garage (layout, bucket, key)
 #   gen-env       τυπώνει έτοιμο .env.prod με τυχαία μυστικά
+#   setup-env     οδηγός με ερωτήσεις → έτοιμο .env.prod (πάνω στο gen-env)
 #   predeploy-backup  dump όλων των βάσεων πριν από τα migrations
 #   offsite-backup    κρυπτογραφημένα αντίγραφα εκτός server (restic)
 #   restore-db        επαναφορά μιας βάσης από dump (βλ. docs/restore.md)
@@ -35,6 +36,7 @@ COPY infra/garage/bootstrap.sh /usr/local/bin/garage-init
 COPY .env.prod.example /config/env.example
 COPY infra/config/config-sync.sh /usr/local/bin/config-sync
 COPY infra/config/gen-env.sh /usr/local/bin/gen-env
+COPY infra/config/setup-env.sh /usr/local/bin/setup-env
 COPY infra/config/predeploy-backup.sh /usr/local/bin/predeploy-backup
 COPY infra/config/offsite-backup.sh /usr/local/bin/offsite-backup
 COPY infra/config/restore-db.sh /usr/local/bin/restore-db
@@ -46,7 +48,7 @@ COPY infra/config/heartbeat.sh /usr/local/lib/heartbeat.sh
 COPY infra/config/heartbeat.sh /config/backup-hooks/heartbeat.sh
 COPY infra/backup-hooks/50-heartbeat /config/backup-hooks/50-heartbeat
 
-RUN chmod +x /usr/local/bin/config-sync /usr/local/bin/garage-init /usr/local/bin/gen-env /usr/local/bin/predeploy-backup /usr/local/bin/offsite-backup /usr/local/bin/restore-db /usr/local/bin/ensure-db /usr/local/bin/watchdog \
+RUN chmod +x /usr/local/bin/config-sync /usr/local/bin/garage-init /usr/local/bin/gen-env /usr/local/bin/setup-env /usr/local/bin/predeploy-backup /usr/local/bin/offsite-backup /usr/local/bin/restore-db /usr/local/bin/ensure-db /usr/local/bin/watchdog \
  && chmod +x /config/backup-hooks/50-heartbeat \
  && chmod +x /config/postgres-init/*.sh
 
