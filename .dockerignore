@@ -4,4 +4,8 @@
 **/.git
 **/*.log
 **/.env
+# Και τα .env.prod κ.λπ.: κανένα image δεν τα χρειάζεται, ούτε στο build context.
+**/.env.*
 !**/.env.example
+# Το πρότυπο του gen-env, μέσα στο config image.
+!.env.prod.example
