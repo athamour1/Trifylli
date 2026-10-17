@@ -91,11 +91,14 @@ flowchart LR
 
     eseo["e-SEO — μητρώο Σ.Ε.Ο."]
     smtp["SMTP παρόχου<br/>ΜΟΝΟ σε παραγωγή"]
+    push["Web Push<br/>Apple · Google · Mozilla"]
+    gt["glitchtip<br/>προαιρετικό"]
 
     web -. "σερβίρει" .-> pwa
     otf -. "σερβίρει" .-> otui
 
     pwa -->|"REST + Bearer"| api
+    pwa <-->|"WebSocket /api/collab<br/>κοινά κείμενα, ζωντανά"| api
     pwa -->|"OIDC · PKCE"| ak
     pwa -->|"deep-link φαρμακείων"| otui
     otui -->|"OIDC"| ak
@@ -106,6 +109,10 @@ flowchart LR
     api -->|"πρόσκληση & επαναφορά κωδικού"| ak
     api -->|"δανεισμός kit"| otb
     api <-->|"cron + webhook"| eseo
+    api -->|"ειδοποιήσεις"| push
+    push -.-> pwa
+    api -.->|"σφάλματα"| gt
+    pwa -.->|"σφάλματα"| gt
 
     otb --> pg
     ak --> pg
@@ -121,7 +128,10 @@ flowchart LR
 
 Σε **development** τα email πάνε στο Mailpit και δεν φεύγει τίποτα προς τα έξω·
 σε **παραγωγή** τη θέση του παίρνει ο πραγματικός SMTP (`SMTP_*`) και το
-`migrate` service τρέχει τα Prisma migrations πριν ξεκινήσει το API.
+`migrate` service τρέχει τα Prisma migrations πριν ξεκινήσει το API. Τα κοινά
+κείμενα (πρακτικά, προγραμματικά, συγκεντρώσεις, γεύματα…) συγχρονίζονται ζωντανά
+μέσα από το API — [`docs/synergasia.md`](docs/synergasia.md). Τα backups, ο
+watchdog και το GlitchTip: [Παραγωγή](#παραγωγή).
 
 ---
 
@@ -129,22 +139,35 @@ flowchart LR
 
 ```
 apps/
-  api/            NestJS + Prisma — REST API, RBAC, ενσωματώσεις
+  api/            NestJS + Prisma — REST API, RBAC, ενσωματώσεις, συνεργασία (WebSocket)
+    scripts/      Δοκιμή φόρτου της συνεργασίας, εργαλεία e-SEO
   web/            Quasar (Vue 3) PWA — offline-first client
 packages/
   shared/         Enums, ελληνικές ετικέτες, κανόνες πρόσβασης — κοινά σε API & PWA
 infra/
   authentik/
     trifylli-oidc.yaml       Blueprint: provider, εφαρμογή, ροές σύνδεσης/αποσύνδεσης
+    trifylli-login.yaml      Blueprint: email και κωδικός σε μία οθόνη, «Ξέχασα τον κωδικό»
     trifylli-recovery.yaml   Blueprint: ροή «ορισμός & επαναφορά κωδικού»
     trifylli-password-change.yaml  Blueprint: ροή «αλλαγή κωδικού» από τις Ρυθμίσεις (επιστρέφει στην εφαρμογή)
+    trifylli-security.yaml   Blueprint: brute force, κωδικοί, MFA, service account του API
     trifylli-branding.yaml   Blueprint: λογότυπο, φόντο και ΟΛΟ το custom CSS
     ouchtracker-oidc.yaml    Blueprint: η δεύτερη OIDC εφαρμογή (SSO)
     branding/                logo.svg, favicon.svg, login-scene.svg (το τοπίο της οθόνης σύνδεσης)
     email-templates/         Ελληνικά πρότυπα email (mount στο /templates)
-    setup.sh                 Εφαρμογή blueprints + χρήστες ανάπτυξης
+    setup.sh                 Εφαρμογή blueprints + χρήστες ανάπτυξης (μόνο dev)
+  config/         Το «config» image της παραγωγής: setup-env/gen-env, backups,
+                  επαναφορά, watchdog, heartbeats
+  backup-hooks/   Heartbeat μετά από κάθε ημερήσιο backup
   garage/         Ρυθμίσεις και αρχικοποίηση του S3 (layout, bucket, key)
   postgres/init/  Δημιουργία των βάσεων Authentik/OuchTracker στο πρώτο boot
+docs/
+  draseis.md      Οι δράσεις: προδιαγραφές και αποφάσεις
+  synergasia.md   Συνεργασία σε πραγματικό χρόνο, ειδοποιήσεις, ψηφοφορίες
+  upgrade.md      Αναβάθμιση (και από τη v1.0.2)
+  restore.md      Επαναφορά: rollback, μία βάση, νέος server
+  monitoring.md   Heartbeats, έλεγχοι απ' έξω, GlitchTip, logs
+  brand/          Λογότυπα και εικονίδια
 ```
 
 Το `packages/shared` είναι ο λόγος που το UI δεν δείχνει ποτέ κουμπί που ο
