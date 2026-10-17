@@ -550,12 +550,17 @@ frontend) και τις κοινές υποδομές (Postgres, Redis, Authenti
 το [`docker-compose.prod.yml`](docker-compose.prod.yml):
 
 ```bash
-# 1. .env.prod με τυχαία μυστικά και την έκδοση (TAG)· μετά συμπλήρωσε domains, SMTP, Τοπικό.
-docker run --rm -e DOMAIN=example.gr ghcr.io/athamour1/trifylli/config gen-env > .env.prod
+# 1. .env.prod: ερωτήσεις για υποτομείς, email, SMTP, Τοπικό και αντίγραφα· τα
+#    μυστικά, τα κλειδιά VAPID και το TAG βγαίνουν μόνα τους. Γράφει στον τρέχοντα φάκελο.
+docker run --rm -it -v "$PWD:/out" ghcr.io/athamour1/trifylli/config:<TAG> setup-env
 # 2. Σήκωμα — τα images έρχονται έτοιμα από το GHCR (τα χτίζει το ./release.sh).
 docker compose -f docker-compose.prod.yml --env-file .env.prod pull
 docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
 ```
+
+Χωρίς ερωτήσεις, το `gen-env` (`docker run --rm -e DOMAIN=example.gr …config:<TAG>
+gen-env > .env.prod`) τυπώνει το πρότυπο με τα μυστικά, και τα υπόλοιπα τα
+συμπληρώνεις με το χέρι. Το `setup-env` δεν αντικαθιστά ποτέ υπάρχον αρχείο.
 
 Το `TAG` είναι υποχρεωτικό (π.χ. `v1.0.3`) — όχι `latest`, ώστε ένα `pull` να μη
 φέρνει ό,τι βγήκε τελευταίο. **Αναβάθμιση:** άλλαξε το `TAG` και ξανά `pull` +

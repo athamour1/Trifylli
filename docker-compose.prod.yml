@@ -7,8 +7,8 @@
 # του LAN. Postgres/Redis/Garage δεν εκτίθενται καθόλου.
 #
 # Χρήση — χρειάζεται ΜΟΝΟ αυτό το αρχείο, κανένα clone του repo:
-#   # 1. .env.prod με τυχαία μυστικά· μετά συμπλήρωσε domains, SMTP, Τοπικό.
-#   docker run --rm -e DOMAIN=example.gr ghcr.io/athamour1/trifylli/config gen-env > .env.prod
+#   # 1. .env.prod: ερωτήσεις για domains, SMTP, Τοπικό· τα μυστικά βγαίνουν μόνα τους.
+#   docker run --rm -it -v "$PWD:/out" ghcr.io/athamour1/trifylli/config:<TAG> setup-env
 #   # 2. Σήκωμα.
 #   docker compose -f docker-compose.prod.yml --env-file .env.prod pull
 #   docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
