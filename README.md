@@ -559,7 +559,9 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
 
 Το `TAG` είναι υποχρεωτικό (π.χ. `v1.0.3`) — όχι `latest`, ώστε ένα `pull` να μη
 φέρνει ό,τι βγήκε τελευταίο. **Αναβάθμιση:** άλλαξε το `TAG` και ξανά `pull` +
-`up -d`. Το `./release.sh` δεν βγάζει έκδοση αν δεν περνούν typecheck και tests.
+`up -d` — βήματα, έλεγχοι και τι αλλάζει από τη v1.0.2:
+[`docs/upgrade.md`](docs/upgrade.md). Το `./release.sh` δεν βγάζει έκδοση αν δεν
+περνούν typecheck και tests.
 
 Όλα τα μυστικά είναι υποχρεωτικά (`${VAR:?}`): αν λείπει κάποιο, το compose
 σταματά αντί να σηκώσει στοίβα με αδύναμα defaults. Το `migrate` service τρέχει
