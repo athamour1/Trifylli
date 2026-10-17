@@ -768,8 +768,11 @@ layout + bucket + key (idempotent) στο πρώτο boot.
 
 * JWT RS256 με `iss`/`aud`, JWKS με όριο· RBAC κοινός με το UI· `ValidationPipe`
   με `forbidNonWhitelisted`· `helmet`· CORS allowlist χωρίς credentials.
-* Rate limiting: 300/λεπτό ανά IP καθολικά, 10/λεπτό προσκλήσεις, 30/λεπτό
-  uploads και webhook.
+* Rate limiting: 300/λεπτό ανά IP καθολικά· ό,τι στέλνει email σε τρίτο πιο
+  αυστηρά — 10/λεπτό η επαναποστολή πρόσκλησης και τα εξωτερικά στελέχη μιας
+  δράσης, 5/λεπτό η μαζική ενεργοποίηση στελεχών και ο σύνδεσμος κωδικού στο
+  email μου· 30/λεπτό uploads και webhook. Οι δημόσιοι σύνδεσμοι (έντυπο γονέα,
+  αξιολόγηση): 30/λεπτό ανάγνωση, 10/λεπτό υποβολή.
 * Uploads: τύπος από τα **πρώτα bytes** ([`sniff.ts`](apps/api/src/modules/files/sniff.ts)),
   όχι από ό,τι δηλώνει ο client· τα αρχεία σερβίρονται με `CSP: sandbox`.
 * Webhook e-SEO: HMAC πάνω στα raw bytes, αγνόηση επαναλαμβανόμενης υπογραφής
@@ -807,8 +810,9 @@ layout + bucket + key (idempotent) στο πρώτο boot.
    blueprint ξαναγράφει το token), `ESEO_REFRESH_TOKEN` όταν ο Keycloak τον
    περιστρέψει (το log προειδοποιεί), κωδικός OuchTracker.
 5. `pnpm audit --prod` πριν από κάθε release. Δύο advisories μένουν συνειδητά:
-   `deepmerge-ts` (μέσω `prisma` CLI, τρέχει μόνο στο `migrate`) και `js-yaml`
-   (μέσω `@nestjs/swagger`, που είναι κλειστό σε παραγωγή).
+   `deepmerge-ts` (μέσω `prisma` CLI, τρέχει μόνο στο `migrate`) και `uuid`
+   (μέσω `exceljs`, που καλεί μόνο `v4()` χωρίς buffer — το ευάλωτο σημείο είναι
+   το όρισμα `buf`).
 
 ---
 
