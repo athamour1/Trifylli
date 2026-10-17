@@ -562,7 +562,7 @@ docker compose -f docker-compose.prod.yml --env-file .env.prod up -d
 gen-env > .env.prod`) τυπώνει το πρότυπο με τα μυστικά, και τα υπόλοιπα τα
 συμπληρώνεις με το χέρι. Το `setup-env` δεν αντικαθιστά ποτέ υπάρχον αρχείο.
 
-Το `TAG` είναι υποχρεωτικό (π.χ. `v1.0.3`) — όχι `latest`, ώστε ένα `pull` να μη
+Το `TAG` είναι υποχρεωτικό (π.χ. `v1.1.0`) — όχι `latest`, ώστε ένα `pull` να μη
 φέρνει ό,τι βγήκε τελευταίο. **Αναβάθμιση:** άλλαξε το `TAG` και ξανά `pull` +
 `up -d` — βήματα, έλεγχοι και τι αλλάζει από τη v1.0.2:
 [`docs/upgrade.md`](docs/upgrade.md). Το `./release.sh` δεν βγάζει έκδοση αν δεν
@@ -596,8 +596,8 @@ crons του API και έναν `watchdog` που κάθε 5' ελέγχει δ
   (default `127.0.0.1`).
 * **Proxy σε Docker** (Zoraxy, Nginx Proxy Manager, Traefik): μία φορά
   `docker network connect trifylli-public <container του proxy>`, και στόχοι τα
-  ονόματα του πίνακα. Το δίκτυο `trifylli-public` έχει **μόνο** τις τέσσερις
-  δημόσιες υπηρεσίες — ο proxy δεν βλέπει ποτέ Postgres/Redis/Garage. **Όχι**
+  ονόματα του πίνακα. Το δίκτυο `trifylli-public` έχει **μόνο** τις δημόσιες
+  υπηρεσίες του πίνακα — ο proxy δεν βλέπει ποτέ Postgres/Redis/Garage. **Όχι**
   `BIND_ADDR` στην IP του LAN: κάθε συσκευή του δικτύου θα έφτανε API και SSO
   χωρίς TLS.
 
@@ -611,6 +611,7 @@ crons του API και έναν `watchdog` που κάθε 5' ελέγχει δ
 | `api.example.gr` | Trifylli API | `trifylli-api:3000` | `API_PORT` (3000) |
 | `sso.example.gr` | Authentik (SSO) | `trifylli-sso:9000` | `AUTHENTIK_PORT` (9010) |
 | `ouch.example.gr` | OuchTracker — κάνει μόνο του proxy `/api` | `trifylli-ouch:80` | `OUCHTRACKER_WEB_PORT` (8081) |
+| `errors.example.gr` | GlitchTip — μόνο με `COMPOSE_PROFILES=errors` | `trifylli-errors:8000` | `GLITCHTIP_PORT` (8082) |
 
 **WebSocket (συνεργασία σε πραγματικό χρόνο).** Το API δέχεται WebSocket στο
 `/api/collab` (κοινά κείμενα, κέρσορες, παρουσία). Ο proxy του `api.` πρέπει να
@@ -643,25 +644,32 @@ flowchart LR
             api["api :3000"]
             ak["authentik :9010"]
             otf["ouchtracker :8081"]
+            gt["glitchtip :8082<br/>προαιρετικό"]
         end
         subgraph closed["χωρίς καμία θύρα προς τα έξω"]
             pg[("postgres")]
             rd[("redis")]
             s3[("garage S3")]
+            jobs["backup · predeploy-backup<br/>backup-offsite · watchdog"]
         end
     end
     smtp["SMTP παρόχου"]
+    offsite[("αντίγραφα εκτός server<br/>restic")]
 
     net --> proxy
     proxy -->|"app."| web
     proxy -->|"api."| api
     proxy -->|"sso."| ak
     proxy -->|"ouch."| otf
+    proxy -->|"errors."| gt
     api --> pg
     api --> s3
     ak --> pg
     ak --> rd
     ak --> smtp
+    jobs --> pg
+    jobs --> s3
+    jobs --> offsite
 ```
 
 **Οι υποτομείς πρέπει να είναι του ίδιου registrable domain** με το Authentik:
@@ -692,10 +700,11 @@ Logout — καμία χειροκίνητη αλλαγή στα `.yaml`. Χωρ
 `SMTP_USE_TLS=false` — ποτέ και τα δύο. Ο αποστολέας θέλει domain με SPF/DKIM
 στον πάροχο, αλλιώς τα μηνύματα πάνε για spam.
 
-**Πρόσκληση λογαριασμών.** Το `AUTHENTIK_API_TOKEN` (Authentik → *Directory →
-Tokens*, σε λογαριασμό με δικαίωμα διαχείρισης χρηστών) είναι αυτό που επιτρέπει
-στο API να φτιάχνει χρήστες και να στέλνει συνδέσμους κωδικού. Χωρίς αυτό οι
-λογαριασμοί δημιουργούνται κανονικά, αλλά κανένα email δεν φεύγει.
+**Πρόσκληση λογαριασμών.** Με το `AUTHENTIK_API_TOKEN` το API φτιάχνει χρήστες
+στο Authentik και στέλνει συνδέσμους κωδικού. Δεν φτιάχνεται στο admin UI: το
+βγάζει τυχαίο το `setup-env`/`gen-env`, και το blueprint `trifylli-security.yaml`
+το δίνει στο service account `trifylli-api` (βλ. [Ασφάλεια](#ταυτότητα)). Χωρίς
+αυτό οι λογαριασμοί δημιουργούνται κανονικά, αλλά κανένα email δεν φεύγει.
 
 **Object storage (Garage).** Αποδείξεις ταμείου και εικόνες markdown πάνε σε
 S3-συμβατό Garage, μέσα από το backend με guards· το `garage-init` φτιάχνει
