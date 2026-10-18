@@ -25,6 +25,20 @@ context:
   TRIFYLLI_APP_URL: !Env [TRIFYLLI_APP_URL, 'http://localhost:8080/']
 
 entries:
+  # Στην πρώτη εκκίνηση όλα τα blueprints τρέχουν μαζί: τα `!Find` πιο κάτω
+  # ψάχνουν αντικείμενα που φτιάχνουν τα default blueprints, και αν δεν προλάβουν
+  # βγαίνουν κενά (`stage: may not be null`). Εφαρμόζονται λοιπόν πρώτα, εδώ.
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: Default - Invalidation flow
+      required: true
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: System - OAuth2 Provider - Scopes
+      required: true
+
   # ── Το claim που δένει χρήστη Authentik ↔ λογαριασμό Trifylli ──
   #
   # Το API, όταν προσκαλεί, γράφει στον χρήστη το attribute

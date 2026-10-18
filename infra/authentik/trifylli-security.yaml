@@ -34,6 +34,25 @@ context:
   TRIFYLLI_API_TOKEN: !Env [TRIFYLLI_API_TOKEN, '']
 
 entries:
+  # Στην πρώτη εκκίνηση όλα τα blueprints τρέχουν μαζί: τα `!Find` πιο κάτω
+  # ψάχνουν αντικείμενα που φτιάχνουν τα default blueprints, και αν δεν προλάβουν
+  # βγαίνουν κενά (`stage: may not be null`). Εφαρμόζονται λοιπόν πρώτα, εδώ.
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: Default - Authentication flow
+      required: true
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: Default - User settings flow
+      required: true
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: Default - TOTP MFA setup flow
+      required: true
+
   # ── 1. Brute force ──
   #
   # Κάθε αποτυχημένη σύνδεση χρεώνει -1 στην IP και στο username. Κάτω από το

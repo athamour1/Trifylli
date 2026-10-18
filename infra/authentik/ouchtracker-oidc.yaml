@@ -27,6 +27,20 @@ context:
   OUCHTRACKER_APP_URL: !Env [OUCHTRACKER_APP_URL, 'http://localhost:9100/']
 
 entries:
+  # Στην πρώτη εκκίνηση όλα τα blueprints τρέχουν μαζί: τα `!Find` πιο κάτω
+  # ψάχνουν αντικείμενα που φτιάχνουν τα default blueprints, και αν δεν προλάβουν
+  # βγαίνουν κενά (`stage: may not be null`). Εφαρμόζονται λοιπόν πρώτα, εδώ.
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: Default - Invalidation flow
+      required: true
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: System - OAuth2 Provider - Scopes
+      required: true
+
   # ── Ροή εξουσιοδότησης χωρίς κανένα βήμα (ίδια λογική με το Trifylli) ──
   - model: authentik_flows.flow
     id: ouchtracker-authorization-flow
