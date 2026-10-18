@@ -244,7 +244,7 @@ import SaveStatus from '../SaveStatus.vue';
 import TimeField from '../TimeField.vue';
 import { ApiError, OfflineError, get, patch, post } from '../../lib/api';
 import { formatDate, formatDuration } from '../../lib/format';
-import { scheduleCaption } from './types';
+import { scheduleCaption, SCHEDULE_KIND_COLOR as KIND_COLOR, SCHEDULE_KIND_ICON as KIND_ICON } from './types';
 import type { SaveState } from '../../lib/save-state';
 import { useLiveReload, useRowPresence } from '../../composables/useLiveChanges';
 import { APPROVAL_META, approvalsByItem, type ItemApproval } from '../../lib/approvals';
@@ -262,24 +262,6 @@ const loading = ref(false);
 const saving = ref(false);
 const view = ref<DrasiScheduleView | null>(null);
 
-const KIND_ICON: Record<DrasiScheduleKind, string> = {
-  DRASTIRIOTITA: 'hiking',
-  GEVMA: 'restaurant',
-  XEKOURASI: 'bedtime',
-  METAKINISI: 'directions_bus',
-  TELETI: 'flag',
-  YPIRESIA: 'cleaning_services',
-  ALLO: 'more_horiz',
-};
-const KIND_COLOR: Record<DrasiScheduleKind, string> = {
-  DRASTIRIOTITA: 'klados',
-  GEVMA: 'orange-7',
-  XEKOURASI: 'indigo-4',
-  METAKINISI: 'blue-grey-6',
-  TELETI: 'red-6',
-  YPIRESIA: 'teal-6',
-  ALLO: 'grey-6',
-};
 const kindOptions = (Object.keys(DrasiScheduleKind) as DrasiScheduleKind[]).map((k) => ({ label: DRASI_SCHEDULE_KIND_LABEL[k], value: k }));
 const snackOptions = (Object.keys(DrasiSnack) as DrasiSnack[]).map((k) => ({ label: DRASI_SNACK_LABEL[k], value: k }));
 

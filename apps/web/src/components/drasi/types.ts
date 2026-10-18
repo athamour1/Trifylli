@@ -1,4 +1,11 @@
-import { guestTopikoKey, type DrasiExternalView, type DrasiGuestTopikoView, type DrasiRoleKind, type KladosType } from '@trifylli/shared';
+import {
+  guestTopikoKey,
+  type DrasiExternalView,
+  type DrasiGuestTopikoView,
+  type DrasiRoleKind,
+  type DrasiScheduleKind,
+  type KladosType,
+} from '@trifylli/shared';
 
 /** Φιλοξενούμενο Τοπικό όπως το κρατά η φόρμα (wizard & ρυθμίσεις). */
 export interface GuestTopikoForm {
@@ -131,3 +138,23 @@ export function scheduleCaption(item: { kindLabel: string; location: string | nu
   const who = !names ? null : compact ? names : `${responsiblesLabel(item.responsibles.length).toLocaleLowerCase('el')}: ${names}`;
   return [compact ? null : item.kindLabel, item.location, who].filter(Boolean).join(' · ');
 }
+
+/** Το εικονίδιο κάθε είδους στοιχείου του ωρολογίου — ίδιο στο ωρολόγιο, στο προγραμματικό και στο kanban. */
+export const SCHEDULE_KIND_ICON: Record<DrasiScheduleKind, string> = {
+  DRASTIRIOTITA: 'hiking',
+  GEVMA: 'restaurant',
+  XEKOURASI: 'bedtime',
+  METAKINISI: 'directions_bus',
+  TELETI: 'flag',
+  YPIRESIA: 'cleaning_services',
+  ALLO: 'more_horiz',
+};
+export const SCHEDULE_KIND_COLOR: Record<DrasiScheduleKind, string> = {
+  DRASTIRIOTITA: 'klados',
+  GEVMA: 'orange-7',
+  XEKOURASI: 'indigo-4',
+  METAKINISI: 'blue-grey-6',
+  TELETI: 'red-6',
+  YPIRESIA: 'teal-6',
+  ALLO: 'grey-6',
+};
