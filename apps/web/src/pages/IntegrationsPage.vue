@@ -23,7 +23,7 @@
               icon="sync"
               label="Συγχρονισμός τώρα"
               :loading="syncing"
-              :disable="!data?.eseo.configured || !offline.online"
+              :disable="!data?.eseo.configured || !data?.eseo.topikoCode || !offline.online"
               @click="runSync"
             />
           </div>
@@ -55,6 +55,27 @@
           <div class="text-caption text-grey-7">
             Πρόγραμμα: {{ describeCron(data?.eseo.cron) }}
           </div>
+        </q-card-section>
+
+        <q-separator />
+
+        <!-- Ο κωδικός του Τοπικού: με αυτόν ο συγχρονισμός βρίσκει τα μέλη του. -->
+        <q-card-section class="row items-start q-gutter-sm">
+          <q-input
+            v-model="topikoCode"
+            dense
+            outlined
+            label="Κωδικός Τοπικού στο e-SEO"
+            hint="Ο αριθμός του Τοπικού στο eseo.seo.gr (π.χ. 35)"
+            class="eseo-code"
+            :maxlength="32"
+            @keyup.enter="saveCode"
+          />
+          <q-btn flat color="primary" label="Αποθήκευση" :disable="!codeChanged" :loading="savingCode" class="q-mt-xs" @click="saveCode" />
+        </q-card-section>
+
+        <q-card-section v-if="data?.eseo.configured && !data.eseo.topikoCode" class="bg-orange-1 text-orange-10 text-body2">
+          Χωρίς κωδικό Τοπικού ο συγχρονισμός δεν ξέρει ποια μέλη να φέρει — συμπλήρωσέ τον παραπάνω.
         </q-card-section>
 
         <q-card-section v-if="!data?.eseo.configured" class="bg-orange-1 text-orange-10 text-body2">
@@ -147,11 +168,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useQuasar } from 'quasar';
 import PageState from '../components/PageState.vue';
 import { useAsyncData } from '../composables/useAsyncData';
-import { ApiError, post, get } from '../lib/api';
+import { ApiError, post, get, put } from '../lib/api';
 import { formatDateTime } from '../lib/format';
 import { OUCHTRACKER_URL } from '../lib/runtime-config';
 import { useOfflineStore } from '../stores/offline';
@@ -169,7 +190,7 @@ interface SyncRun {
 }
 
 interface IntegrationsStatus {
-  eseo: { configured: boolean; cron: string; enabled: boolean; webhookConfigured: boolean };
+  eseo: { configured: boolean; topikoCode: string | null; cron: string; enabled: boolean; webhookConfigured: boolean };
   ouchtracker: { configured: boolean };
   recentRuns: SyncRun[];
 }
@@ -202,6 +223,29 @@ const { data, loading, error, stale, reload } = useAsyncData(
 
 const syncing = ref(false);
 const lastSummary = ref<SyncSummary | null>(null);
+
+// ── Κωδικός Τοπικού στο e-SEO ──
+const topikoCode = ref('');
+watch(
+  () => data.value?.eseo.topikoCode,
+  (code) => (topikoCode.value = code ?? ''),
+  { immediate: true },
+);
+const codeChanged = computed(() => topikoCode.value.trim() !== (data.value?.eseo.topikoCode ?? ''));
+const savingCode = ref(false);
+async function saveCode(): Promise<void> {
+  if (!codeChanged.value) return;
+  savingCode.value = true;
+  try {
+    await put('/integrations/eseo/topiko-code', { code: topikoCode.value.trim() || null });
+    $q.notify({ type: 'positive', message: 'Ο κωδικός e-SEO αποθηκεύτηκε.' });
+    await reload();
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err instanceof ApiError ? err.message : 'Αποτυχία αποθήκευσης.' });
+  } finally {
+    savingCode.value = false;
+  }
+}
 
 async function runSync(): Promise<void> {
   syncing.value = true;
@@ -258,6 +302,10 @@ function describeCron(cron: string | undefined): string {
 }
 .int-head__icon {
   flex: none;
+}
+.eseo-code {
+  width: 260px;
+  max-width: 100%;
 }
 .int-head__actions {
   display: flex;
