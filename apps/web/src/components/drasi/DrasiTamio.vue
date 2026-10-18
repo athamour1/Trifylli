@@ -31,20 +31,20 @@
     <template v-if="view === 'summary' && summary">
       <div class="row q-col-gutter-md q-mb-md">
         <div class="col-12 col-sm-4">
-          <q-card flat bordered><q-card-section>
+          <q-card flat bordered class="full-height"><q-card-section>
             <div class="text-caption text-grey-7">Υπόλοιπο</div>
-            <div class="text-h5" :class="summary.balance < 0 ? 'text-negative' : 'text-klados'">{{ formatEuro(summary.balance) }}</div>
+            <div class="text-h6" :class="summary.balance < 0 ? 'text-negative' : 'text-klados'">{{ formatEuro(summary.balance) }}</div>
           </q-card-section></q-card>
         </div>
         <div class="col-6 col-sm-4">
-          <q-card flat bordered><q-card-section>
+          <q-card flat bordered class="full-height"><q-card-section>
             <div class="text-caption text-grey-7">Έσοδα</div>
             <div class="text-h6 text-positive">{{ formatEuro(summary.income) }}</div>
             <div class="text-caption text-grey-7">συμμετοχές {{ formatEuro(summary.incomeFromPayments) }} · κινήσεις {{ formatEuro(summary.incomeFromEntries) }}</div>
           </q-card-section></q-card>
         </div>
         <div class="col-6 col-sm-4">
-          <q-card flat bordered><q-card-section>
+          <q-card flat bordered class="full-height"><q-card-section>
             <div class="text-caption text-grey-7">Έξοδα</div>
             <div class="text-h6 text-negative">{{ formatEuro(summary.expense) }}</div>
             <div class="text-caption text-grey-7">{{ summary.expenses.reduce((s, e) => s + e.count, 0) }} αποδείξεις</div>
@@ -298,7 +298,7 @@
       <div v-if="!ledger.length" class="text-center text-grey-6 q-pa-lg">Κανένας λογαριασμός ακόμη.</div>
       <div v-else class="row q-col-gutter-md">
         <div v-for="acc in ledger" :key="acc.user.id" class="col-12 col-md-6">
-          <q-card flat bordered>
+          <q-card flat bordered class="full-height">
             <q-card-section class="q-pb-xs">
               <div class="row items-center">
                 <div class="text-subtitle1 text-weight-medium col">{{ acc.user.lastName }} {{ acc.user.firstName }}</div>

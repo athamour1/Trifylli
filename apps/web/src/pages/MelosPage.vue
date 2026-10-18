@@ -11,7 +11,7 @@
 
         <div class="row q-col-gutter-md">
           <div class="col-12 col-md-4">
-            <q-card flat bordered>
+            <q-card flat bordered class="full-height">
               <q-card-section class="text-subtitle2 text-weight-medium">Στοιχεία</q-card-section>
               <q-separator />
               <q-list dense>
@@ -82,7 +82,7 @@
           </div>
 
           <div class="col-12 col-md-4">
-            <q-card flat bordered>
+            <q-card flat bordered class="full-height">
               <q-card-section class="text-subtitle2 text-weight-medium">Συνδρομές</q-card-section>
               <q-separator />
               <q-list v-if="data.syndromes.length" dense separator>
@@ -143,7 +143,7 @@
           </div>
 
           <div class="col-12 col-md-4">
-            <q-card flat bordered>
+            <q-card flat bordered class="full-height">
               <q-card-section class="text-subtitle2 text-weight-medium">Πρόοδος</q-card-section>
               <q-separator />
               <q-list v-if="data.proodos.length" dense separator>

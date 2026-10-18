@@ -3,7 +3,7 @@
     <PageState :loading="loading" :error="error" :stale="stale" :empty="!data?.length" @retry="reload">
       <div class="row q-col-gutter-md">
         <div v-for="k in data" :key="k.type" class="col-12 col-md-6">
-          <q-card flat bordered class="klados-stripe" :style="{ color: k.color }">
+          <q-card flat bordered class="klados-stripe full-height" :style="{ color: k.color }">
             <q-card-section>
               <div class="row items-center justify-between">
                 <div class="text-h6 text-dark">{{ k.label }}</div>

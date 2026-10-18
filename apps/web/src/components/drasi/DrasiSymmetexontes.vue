@@ -33,9 +33,9 @@
     </div>
 
     <div v-if="rows.length" class="row q-col-gutter-sm q-mb-md">
-      <div class="col-4"><q-card flat bordered><q-card-section class="q-py-sm"><div class="text-caption text-grey-7">Οφειλόμενα</div><div class="text-subtitle1">{{ formatEuro(totals.due) }}</div></q-card-section></q-card></div>
-      <div class="col-4"><q-card flat bordered><q-card-section class="q-py-sm"><div class="text-caption text-grey-7">Εισπραγμένα</div><div class="text-subtitle1 text-positive">{{ formatEuro(totals.paid) }}</div></q-card-section></q-card></div>
-      <div class="col-4"><q-card flat bordered><q-card-section class="q-py-sm"><div class="text-caption text-grey-7">Ανείσπρακτα</div><div class="text-subtitle1" :class="totals.balance > 0 ? 'text-negative' : 'text-positive'">{{ formatEuro(totals.balance) }}</div></q-card-section></q-card></div>
+      <div class="col-4"><q-card flat bordered class="full-height"><q-card-section class="q-py-sm"><div class="text-caption text-grey-7">Οφειλόμενα</div><div class="text-subtitle1">{{ formatEuro(totals.due) }}</div></q-card-section></q-card></div>
+      <div class="col-4"><q-card flat bordered class="full-height"><q-card-section class="q-py-sm"><div class="text-caption text-grey-7">Εισπραγμένα</div><div class="text-subtitle1 text-positive">{{ formatEuro(totals.paid) }}</div></q-card-section></q-card></div>
+      <div class="col-4"><q-card flat bordered class="full-height"><q-card-section class="q-py-sm"><div class="text-caption text-grey-7">Ανείσπρακτα</div><div class="text-subtitle1" :class="totals.balance > 0 ? 'text-negative' : 'text-positive'">{{ formatEuro(totals.balance) }}</div></q-card-section></q-card></div>
     </div>
 
     <q-inner-loading :showing="loading" />
@@ -139,7 +139,7 @@
       <div v-if="!collectors.length" class="text-center text-grey-6 q-pa-lg">Χωρίς δεδομένα ακόμη.</div>
       <div v-else class="row q-col-gutter-md">
         <div v-for="c in collectors" :key="c.collector?.id ?? '-'" class="col-12 col-md-6">
-          <q-card flat bordered>
+          <q-card flat bordered class="full-height">
             <q-card-section>
               <div class="text-subtitle1 text-weight-medium">
                 {{ c.collector ? `${c.collector.lastName} ${c.collector.firstName}` : 'Χωρίς υπεύθυνο' }}

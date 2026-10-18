@@ -3,17 +3,17 @@
     <!-- Σύνοψη -->
     <div class="row q-col-gutter-md q-mb-md">
       <div class="col-12 col-sm-4">
-        <q-card flat bordered>
+        <q-card flat bordered class="full-height">
           <q-card-section>
             <div class="text-caption text-grey-7">Υπόλοιπο</div>
-            <div class="text-h5" :class="(summary?.balance ?? 0) < 0 ? 'text-negative' : 'text-klados'">
+            <div class="text-h6" :class="(summary?.balance ?? 0) < 0 ? 'text-negative' : 'text-klados'">
               {{ formatEuro(summary?.balance ?? 0) }}
             </div>
           </q-card-section>
         </q-card>
       </div>
       <div class="col-6 col-sm-4">
-        <q-card flat bordered>
+        <q-card flat bordered class="full-height">
           <q-card-section>
             <div class="text-caption text-grey-7">Έσοδα</div>
             <div class="text-h6 text-positive">{{ formatEuro(summary?.income ?? 0) }}</div>
@@ -21,7 +21,7 @@
         </q-card>
       </div>
       <div class="col-6 col-sm-4">
-        <q-card flat bordered>
+        <q-card flat bordered class="full-height">
           <q-card-section>
             <div class="text-caption text-grey-7">Έξοδα</div>
             <div class="text-h6 text-negative">{{ formatEuro(summary?.expense ?? 0) }}</div>

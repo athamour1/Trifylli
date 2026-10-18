@@ -61,7 +61,7 @@
     <div v-if="health && !health.length" class="text-grey-6 text-center q-pa-md">Κανένα συμπληρωμένο έντυπο υγείας ακόμη.</div>
     <div v-if="health?.length" ref="sheet" class="row q-col-gutter-sm health-sheet">
       <div v-for="h in health" :key="h.participantId" class="col-12 col-md-6">
-        <q-card flat bordered class="health-card">
+        <q-card flat bordered class="health-card full-height">
           <q-card-section class="q-py-sm">
             <div class="row items-center">
               <div class="text-subtitle2 col">{{ h.user.lastName }} {{ h.user.firstName }}</div>

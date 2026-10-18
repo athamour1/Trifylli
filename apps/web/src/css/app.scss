@@ -440,9 +440,11 @@ a.q-card:hover {
 }
 
 /* ── Στατιστικές κάρτες (dashboard) ── */
+/* Κάρτες στην ίδια σειρά έχουν πάντα ίδιο ύψος — και όταν μια ετικέτα πάει σε δύο γραμμές. */
 .stat-card {
   position: relative;
   overflow: hidden;
+  height: 100%;
 }
 .stat-card .stat-label {
   font-size: 0.8rem;

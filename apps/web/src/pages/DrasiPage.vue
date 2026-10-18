@@ -132,7 +132,7 @@
               <!-- Αριθμοί με μια ματιά -->
               <div class="row q-col-gutter-sm q-mb-md">
                 <div v-for="n in numbers" :key="n.label" class="col-6 col-sm-3">
-                  <q-card flat bordered class="q-pa-sm">
+                  <q-card flat bordered class="q-pa-sm full-height">
                     <div class="text-caption text-grey-7">{{ n.label }}</div>
                     <div class="text-h6">{{ n.value }}</div>
                   </q-card>
