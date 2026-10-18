@@ -296,6 +296,7 @@ const DETAIL_LINK: Record<string, string> = {
   'klados-drasi-nea': 'klados-draseis',
   'drasi-nea': 'klados-draseis',
   'drasi-programmatiko': 'klados-draseis',
+  'drasi-programmatika-item': 'klados-draseis',
   'drasi-gevma': 'klados-draseis',
   'drasi-symvoulio': 'klados-draseis',
   syggentrwsh: 'klados-syggentrwseis',

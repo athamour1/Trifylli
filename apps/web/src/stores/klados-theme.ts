@@ -12,6 +12,7 @@ import { isDark } from '../lib/theme';
 const DETAIL_ROUTES = new Set([
   'drasi',
   'drasi-programmatiko',
+  'drasi-programmatika-item',
   'drasi-gevma',
   'drasi-symvoulio',
   'syggentrwsh',

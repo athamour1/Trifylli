@@ -277,6 +277,10 @@
               </template>
             </q-tab-panel>
 
+            <q-tab-panel name="programmatika" class="q-pa-none">
+              <DrasiProgrammatika :drasi-id="id" :can-write="canEdit('programma')" />
+            </q-tab-panel>
+
             <q-tab-panel name="programma" class="q-pa-none">
               <DrasiProgramma :drasi-id="id" :organiser="data.klados?.type ?? null" :can-write="canEdit('programma')" />
             </q-tab-panel>
@@ -444,6 +448,7 @@ import DrasiDiatrofologio from '../components/drasi/DrasiDiatrofologio.vue';
 import DrasiMythos from '../components/drasi/DrasiMythos.vue';
 import DrasiOmades from '../components/drasi/DrasiOmades.vue';
 import DrasiProgramma from '../components/drasi/DrasiProgramma.vue';
+import DrasiProgrammatika from '../components/drasi/DrasiProgrammatika.vue';
 import DrasiRythmiseis from '../components/drasi/DrasiRythmiseis.vue';
 import DrasiSymvoulia from '../components/drasi/DrasiSymvoulia.vue';
 import DrasiYpiresies from '../components/drasi/DrasiYpiresies.vue';
@@ -541,6 +546,9 @@ function goSection(name: string): void {
   void router.replace({ name: 'drasi', params: { id, section: name } });
 }
 
+/** Ενότητες χωρίς δικό τους δικαίωμα: ακολουθούν άλλης. */
+const SECTION_PERM: Record<string, DrasiPerm> = { skines: 'omades', programmatika: 'programma' };
+
 /** Οι ομάδες του συρταριού: Επισκόπηση (μόνη πάνω), Λειτουργία, Πρόγραμμα, Ρυθμίσεις (μόνες κάτω). */
 type SectionGroup = 'top' | 'leitourgia' | 'programma' | 'bottom';
 const SECTION_GROUPS: readonly { key: SectionGroup; label: string | null }[] = [
@@ -566,6 +574,8 @@ const sections = computed(() => {
     { name: 'ektyposi', label: 'Εκτύπωση', icon: 'print', badge: '', group: 'leitourgia' },
     { name: 'arxigeio', label: 'Αρχηγείο', icon: 'shield', badge: '', group: 'leitourgia' },
     // ── Πρόγραμμα: τι κάνουμε και πότε ──
+    // Τα προγραμματικά (kanban) και το ωρολόγιο είναι δύο όψεις του ίδιου προγράμματος.
+    { name: 'programmatika', label: 'Προγραμματικά', icon: 'view_kanban', badge: '', group: 'programma' },
     { name: 'programma', label: 'Ωρολόγιο', icon: 'schedule', badge: '', group: 'programma' },
     { name: 'mythos', label: 'Μύθος', icon: 'auto_stories', badge: '', group: 'programma' },
     // Το όνομα της υποομάδας του κλάδου: Πεντάδες / Φωλιές / Ενωμοτίες — με πολλούς κλάδους, όλες.
@@ -577,8 +587,8 @@ const sections = computed(() => {
     { name: 'axiologisi', label: 'Αξιολόγηση', icon: 'rate_review', badge: '', group: 'programma' },
     { name: 'rythmiseis', label: 'Ρυθμίσεις', icon: 'settings', badge: '', group: 'bottom' },
   ];
-  // Μόνο οι ενότητες που επιτρέπει ο ρόλος του χρήστη στη δράση (σκηνές = ομάδες).
-  return list.filter((x) => drasiCan(data.value?.access, (x.name === 'skines' ? 'omades' : x.name) as DrasiPerm));
+  // Μόνο οι ενότητες που επιτρέπει ο ρόλος του χρήστη στη δράση (σκηνές = ομάδες, προγραμματικά = πρόγραμμα).
+  return list.filter((x) => drasiCan(data.value?.access, (SECTION_PERM[x.name] ?? x.name) as DrasiPerm));
 });
 const navGroups = computed(() =>
   SECTION_GROUPS.map((g) => ({ ...g, items: sections.value.filter((s) => s.group === g.key) })).filter((g) => g.items.length),
