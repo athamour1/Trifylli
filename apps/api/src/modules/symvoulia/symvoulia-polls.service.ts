@@ -12,6 +12,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { CollabService } from '../collab/collab.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { pollCounts, pollResultText } from './poll-result';
+import { symvoulioLink } from './symvoulio-link';
 
 const PERSON = { select: { id: true, firstName: true, lastName: true } } as const;
 
@@ -105,10 +106,14 @@ export class SymvouliaPollsService {
       data: { symvoulioId, question, options, secret: input.secret === true, createdById: user.id },
       select: { id: true },
     });
-    const symvoulio = await this.prisma.symvoulio.findUnique({ where: { id: symvoulioId }, select: { title: true } });
+    const symvoulio = await this.prisma.symvoulio.findUnique({ where: { id: symvoulioId }, select: { title: true, drasiId: true } });
     void this.notifications.notify(
       voters.filter((id) => id !== user.id),
-      { kind: 'poll', title: `Ψηφοφορία στο συμβούλιο «${symvoulio?.title?.trim() || 'χωρίς τίτλο'}»`, link: `/symvoulia/${symvoulioId}` },
+      {
+        kind: 'poll',
+        title: `Ψηφοφορία στο συμβούλιο «${symvoulio?.title?.trim() || 'χωρίς τίτλο'}»`,
+        link: symvoulioLink({ id: symvoulioId, drasiId: symvoulio?.drasiId ?? null }),
+      },
     );
     return poll;
   }
@@ -169,7 +174,7 @@ export class SymvouliaPollsService {
     if (!count) return;
     const poll = await this.prisma.symvoulioPoll.findUniqueOrThrow({
       where: { id: pollId },
-      include: { votes: { select: { userId: true, choice: true } }, ballots: { select: { choice: true } }, symvoulio: { select: { title: true } } },
+      include: { votes: { select: { userId: true, choice: true } }, ballots: { select: { choice: true } }, symvoulio: { select: { title: true, drasiId: true } } },
     });
     const participants = await this.prisma.symvoulioParticipant.findMany({ where: { symvoulioId }, select: { user: PERSON } });
     const votes = new Map(poll.votes.map((vote) => [vote.userId, vote.choice]));
@@ -187,7 +192,11 @@ export class SymvouliaPollsService {
 
     void this.notifications.notify(
       participants.map(({ user: person }) => person.id).filter((id) => id !== user.id),
-      { kind: 'poll', title: `Έκλεισε η ψηφοφορία στο συμβούλιο «${poll.symvoulio.title?.trim() || 'χωρίς τίτλο'}»`, link: `/symvoulia/${symvoulioId}` },
+      {
+        kind: 'poll',
+        title: `Έκλεισε η ψηφοφορία στο συμβούλιο «${poll.symvoulio.title?.trim() || 'χωρίς τίτλο'}»`,
+        link: symvoulioLink({ id: symvoulioId, drasiId: poll.symvoulio.drasiId }),
+      },
     );
   }
 

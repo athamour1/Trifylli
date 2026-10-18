@@ -106,7 +106,12 @@
             </q-card>
           </q-dialog>
 
-          <q-tab-panels :model-value="section" animated transition-prev="slide-down" transition-next="slide-up">
+          <!-- Ένα στοιχείο της δράσης (προγραμματικό, γεύμα, συμβούλιο) ανοίγει στη θέση
+               της ενότητας του: το συρτάρι μένει, η ενότητα μένει τονισμένη. -->
+          <DrasiProgrammatiko v-if="child === 'programmatiko'" :key="childKey" />
+          <DrasiGevma v-else-if="child === 'gevma'" :key="childKey" />
+          <SymvoulioView v-else-if="child === 'symvoulio'" :key="childKey" :symvoulio-id="childKey" :drasi-id="id" />
+          <q-tab-panels v-else :model-value="section" animated transition-prev="slide-down" transition-next="slide-up">
             <!-- ── Επισκόπηση: το γρήγορο βλέμμα ── -->
             <q-tab-panel name="episkopisi" class="q-pa-none">
               <q-banner v-if="data.status === 'PROSXEDIO'" rounded class="bg-grey-2 q-mb-md">
@@ -390,7 +395,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, onBeforeUnmount, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
   drasiCan,
@@ -449,6 +454,11 @@ import { activityPhrase, sectionOfTopic, unseenSections } from '../lib/activity'
 import { CLIENT_ID } from '../lib/client-id';
 import { formatDateRange, formatDateTime, formatTime } from '../lib/format';
 import { useAuthStore } from '../stores/auth';
+
+// Τα «παιδιά» της δράσης: φορτώνονται όταν ανοίξει ένα.
+const DrasiProgrammatiko = defineAsyncComponent(() => import('../components/drasi/DrasiProgrammatiko.vue'));
+const DrasiGevma = defineAsyncComponent(() => import('../components/drasi/DrasiGevma.vue'));
+const SymvoulioView = defineAsyncComponent(() => import('../components/SymvoulioView.vue'));
 
 const kladosTheme = useKladosThemeStore();
 
@@ -509,9 +519,13 @@ const auth = useAuthStore();
 const id = String(route.params.id);
 const router = useRouter();
 
-/** Η ενότητα ζει στη διαδρομή· άγνωστη ή κενή ⇒ Επισκόπηση. */
+/** Ανοιχτό στοιχείο της δράσης (βλ. `meta.drasiChild` στις διαδρομές) και ποιο. */
+const child = computed(() => route.meta.drasiChild ?? null);
+const childKey = computed(() => String(route.params.itemId ?? route.params.symvoulioId ?? ''));
+
+/** Η ενότητα ζει στη διαδρομή (ή είναι εκείνη του ανοιχτού στοιχείου)· άγνωστη ή κενή ⇒ Επισκόπηση. */
 const section = computed(() => {
-  const s = typeof route.params.section === 'string' ? route.params.section : '';
+  const s = child.value ? (route.meta.drasiSection ?? '') : typeof route.params.section === 'string' ? route.params.section : '';
   return sections.value.some((x) => x.name === s) ? s : 'episkopisi';
 });
 const sectionSheet = ref(false);

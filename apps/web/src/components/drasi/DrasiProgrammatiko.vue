@@ -1,23 +1,24 @@
 <template>
   <!--
-    Το προγραμματικό ενός στοιχείου του ωρολογίου: δική του σελίδα, με το markdown
+    Το προγραμματικό ενός στοιχείου του ωρολογίου: ανοίγει μέσα στη δράση (με το
+    συρτάρι της, βλ. DrasiPage), με το markdown
     (εικόνες, προεπισκόπηση) όπως στις συγκεντρώσεις, και ό,τι άλλο το πλαισιώνει
     (λεπτά, είδος, χώρος, υπεύθυνοι, υλικό) σε κάρτες στο πλάι. Σώζει μόνη της —
     δεν έχει κουμπί.
   -->
-  <q-page padding>
+  <div>
     <PageState :loading="loading && !item" :error="error" :stale="stale" @retry="reload">
       <template v-if="item && drasi">
         <!-- ── Κεφαλίδα ── -->
         <div class="row items-start no-wrap q-mb-md">
           <q-btn flat round dense icon="arrow_back" color="klados" class="q-mr-sm q-mt-xs" @click="goBack">
-            <q-tooltip>Πίσω στο πρόγραμμα</q-tooltip>
+            <q-tooltip>{{ backLabel }}</q-tooltip>
           </q-btn>
           <div class="col row items-start justify-between q-col-gutter-sm">
             <div class="col-12 col-sm">
               <q-input v-model="form.title" :readonly="!editAll" borderless dense class="page-title" placeholder="Τι γίνεται" />
               <div class="text-caption text-grey-7">
-                {{ drasi.title }} · {{ formatDateLong(item.date) }} · {{ hm(item.startsAt) }}–{{ hm(item.endsAt) }}
+                {{ formatDateLong(item.date) }} · {{ hm(item.startsAt) }}–{{ hm(item.endsAt) }}
                 · {{ formatDuration(item.durationMin) }}
               </div>
               <div v-if="scope === 'own'" class="text-caption text-klados q-mt-xs">
@@ -155,7 +156,7 @@
         </div>
       </template>
     </PageState>
-  </q-page>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -177,32 +178,32 @@ import {
   type KladosType,
   type ItemYlikoSnapshot,
 } from '@trifylli/shared';
-import CollabBanner from '../components/CollabBanner.vue';
-import CollabPresence from '../components/CollabPresence.vue';
-import DocumentHistory from '../components/collab/DocumentHistory.vue';
-import ApprovalBar from '../components/collab/ApprovalBar.vue';
-import MarkdownField from '../components/MarkdownField.vue';
-import PageState from '../components/PageState.vue';
-import SaveStatus from '../components/SaveStatus.vue';
-import StelexosPicker from '../components/StelexosPicker.vue';
-import { responsiblesLabel } from '../components/drasi/types';
-import { useAsyncData } from '../composables/useAsyncData';
-import { useCollabDoc, useCollabMe } from '../composables/useCollabDoc';
-import { useLiveReload } from '../composables/useLiveChanges';
-import { ApiError, OfflineError, del, get, patch } from '../lib/api';
-import { addItemYlikoAfter, hasSchema, readItemDoc, removeItemYliko, setLocation, updateItemYliko } from '../lib/drasi-docs';
-import { formatDateLong, formatDuration } from '../lib/format';
-import { useKladosThemeStore } from '../stores/klados-theme';
-import { keepFocus } from '../lib/keep-focus';
-import { worstSaveState, type SaveState } from '../lib/save-state';
-import { typedNumber } from '../lib/syggentrwsh-plan';
-import { useAuthStore } from '../stores/auth';
-import { useOfflineStore } from '../stores/offline';
+import CollabBanner from '../CollabBanner.vue';
+import CollabPresence from '../CollabPresence.vue';
+import DocumentHistory from '../collab/DocumentHistory.vue';
+import ApprovalBar from '../collab/ApprovalBar.vue';
+import MarkdownField from '../MarkdownField.vue';
+import PageState from '../PageState.vue';
+import SaveStatus from '../SaveStatus.vue';
+import StelexosPicker from '../StelexosPicker.vue';
+import { responsiblesLabel } from './types';
+import { useAsyncData } from '../../composables/useAsyncData';
+import { useCollabDoc, useCollabMe } from '../../composables/useCollabDoc';
+import { useLiveReload } from '../../composables/useLiveChanges';
+import { ApiError, OfflineError, del, get, patch } from '../../lib/api';
+import { addItemYlikoAfter, hasSchema, readItemDoc, removeItemYliko, setLocation, updateItemYliko } from '../../lib/drasi-docs';
+import { formatDateLong, formatDuration } from '../../lib/format';
+import { useKladosThemeStore } from '../../stores/klados-theme';
+import { keepFocus } from '../../lib/keep-focus';
+import { worstSaveState, type SaveState } from '../../lib/save-state';
+import { typedNumber } from '../../lib/syggentrwsh-plan';
+import { useAuthStore } from '../../stores/auth';
+import { useOfflineStore } from '../../stores/offline';
 
 const kladosTheme = useKladosThemeStore();
 
 // CodeMirror φορτώνεται μόνο όταν ανοίξει σελίδα με κείμενα για γράψιμο.
-const CollabMarkdownField = defineAsyncComponent(() => import('../components/CollabMarkdownField.vue'));
+const CollabMarkdownField = defineAsyncComponent(() => import('../CollabMarkdownField.vue'));
 
 interface DrasiHead {
   id: string;
@@ -471,8 +472,11 @@ function setQty(rowId: string, value: string | number | null): void {
 }
 
 // ── Πλοήγηση ──
+/** Πίσω στην ενότητα απ' όπου ανοίγει — το ωρολόγιο ή τα προγραμματικά (βλ. `meta.drasiSection`). */
+const backSection = computed(() => String(route.meta.drasiSection ?? 'programma'));
+const backLabel = computed(() => (backSection.value === 'programmatika' ? 'Πίσω στα προγραμματικά' : 'Πίσω στο ωρολόγιο'));
 function goBack(): void {
-  void router.push({ name: 'drasi', params: { id: drasiId, section: 'programma' } });
+  void router.push({ name: 'drasi', params: { id: drasiId, section: backSection.value } });
 }
 
 function remove(): void {

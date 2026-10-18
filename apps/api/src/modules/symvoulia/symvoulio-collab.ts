@@ -6,6 +6,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { textDocument, type CollabAccess, type CollabDocumentAbout } from '../collab/collab-documents';
 import { CollabService } from '../collab/collab.service';
 import { SymvoulioAccess } from './symvoulio-access';
+import { symvoulioLink } from './symvoulio-link';
 
 /**
  * Ατζέντα και πρακτικά συμβουλίου ως κοινό έγγραφο (`symvoulio:<id>`).
@@ -39,12 +40,12 @@ export class SymvoulioCollab implements OnModuleInit {
 
   /** Για τα σχόλια: «στο συμβούλιο «…»», και τα μαθαίνει όποιος προεδρεύει. */
   async about([id]: readonly string[]): Promise<CollabDocumentAbout | null> {
-    const symvoulio = await this.prisma.symvoulio.findUnique({ where: { id }, select: { title: true, date: true, chairId: true } });
+    const symvoulio = await this.prisma.symvoulio.findUnique({ where: { id }, select: { title: true, date: true, chairId: true, drasiId: true } });
     if (!symvoulio) return null;
     const name = symvoulio.title?.trim()
       ? `«${symvoulio.title.trim()}»`
       : `της ${symvoulio.date.toLocaleDateString('el-GR', { day: 'numeric', month: 'numeric', timeZone: 'Europe/Athens' })}`;
-    return { title: `στο συμβούλιο ${name}`, link: `/symvoulia/${id}`, watchers: symvoulio.chairId ? [symvoulio.chairId] : [] };
+    return { title: `στο συμβούλιο ${name}`, link: symvoulioLink({ id, drasiId: symvoulio.drasiId }), watchers: symvoulio.chairId ? [symvoulio.chairId] : [] };
   }
 
   /** Όσοι μπορούν να συμμετέχουν (ίδια εμβέλεια με τους συμμετέχοντες): τα στελέχη του κλάδου ή του Τοπικού. */

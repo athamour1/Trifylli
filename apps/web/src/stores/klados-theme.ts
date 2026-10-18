@@ -9,7 +9,17 @@ import { isDark } from '../lib/theme';
  * Σελίδες λεπτομέρειας εκτός `/k/:klados`: ο κλάδος τους δεν είναι στη διαδρομή,
  * τον δηλώνει η ίδια η σελίδα μόλις φορτώσει.
  */
-const DETAIL_ROUTES = new Set(['drasi', 'drasi-programmatiko', 'syggentrwsh', 'parousiologio', 'symvoulio', 'melos', 'yliko-item']);
+const DETAIL_ROUTES = new Set([
+  'drasi',
+  'drasi-programmatiko',
+  'drasi-gevma',
+  'drasi-symvoulio',
+  'syggentrwsh',
+  'parousiologio',
+  'symvoulio',
+  'melos',
+  'yliko-item',
+]);
 
 /**
  * Ο κλάδος που βάφει τη σελίδα.

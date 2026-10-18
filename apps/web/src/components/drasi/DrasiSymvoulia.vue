@@ -13,7 +13,7 @@
     </div>
 
     <q-list v-else bordered separator class="rounded-borders">
-      <q-item v-for="s in rows" :key="s.id" clickable :to="{ name: 'symvoulio', params: { id: s.id } }">
+      <q-item v-for="s in rows" :key="s.id" clickable :to="{ name: 'drasi-symvoulio', params: { id: drasiId, symvoulioId: s.id } }">
         <q-item-section avatar>
           <q-icon :name="s.finalized ? 'lock' : 'edit_note'" :color="s.finalized ? 'positive' : 'grey-6'" />
         </q-item-section>
@@ -64,7 +64,7 @@ async function create(): Promise<void> {
   creating.value = true;
   try {
     const created = await post<{ id: string }>(`/draseis/${props.drasiId}/symvoulia`, {});
-    await router.push({ name: 'symvoulio', params: { id: created.id } });
+    await router.push({ name: 'drasi-symvoulio', params: { id: props.drasiId, symvoulioId: created.id } });
   } catch (err) {
     $q.notify({ type: 'negative', message: err instanceof ApiError ? err.message : 'Αποτυχία δημιουργίας.' });
   } finally {

@@ -12,6 +12,7 @@ import {
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
 import { assertKladosAccess, scopedKladoi } from '../../common/util/klados-scope';
+import { symvoulioLink } from '../symvoulia/symvoulio-link';
 
 /** Χρώμα για γεγονότα που δεν ανήκουν σε κλάδο (Τοπικό). Hex, όπως των κλάδων. */
 const TOPIKO_COLOR = '#546e7a';
@@ -98,6 +99,7 @@ export class CalendarService {
           title: true,
           type: true,
           date: true,
+          drasiId: true,
           klados: { select: { type: true } },
         },
       }),
@@ -147,7 +149,7 @@ export class CalendarService {
           kladosType,
           symvoulioType: s.type as SymvoulioType,
           color: kladosType ? KLADOS_META[kladosType].color : TOPIKO_COLOR,
-          href: `/symvoulia/${s.id}`,
+          href: symvoulioLink(s),
         };
       }),
     ];

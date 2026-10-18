@@ -1,0 +1,599 @@
+<template>
+  <!--
+    Ένα συμβούλιο: κεφαλίδα, ατζέντα, πρακτικά, ψηφοφορίες. Το βάζει η σελίδα του
+    συμβουλίου (κλάδου ή Τοπικού) — και η δράση για τα δικά της, ώστε να ανοίγουν
+    μέσα της, με το συρτάρι των ενοτήτων της.
+  -->
+  <div>
+    <PageState :loading="loading" :error="error" :stale="stale" @retry="reload">
+      <template v-if="data">
+        <div class="row items-start no-wrap q-mb-md">
+          <q-btn flat round dense icon="arrow_back" color="klados" class="q-mr-sm q-mt-xs" @click="goBack">
+            <q-tooltip>Πίσω στη λίστα</q-tooltip>
+          </q-btn>
+          <div class="col row items-start justify-between q-col-gutter-sm">
+          <div class="col-12 col-sm">
+            <q-input
+              v-model="header.title"
+              :readonly="!editable"
+              borderless
+              dense
+              class="page-title"
+              :placeholder="data.typeLabel"
+            />
+            <div class="text-caption text-grey-7">
+              {{ data.typeLabel }}
+              <span v-if="data.klados"> · {{ KLADOS_LABEL[data.klados.type] }}</span>
+              <span v-if="data.finalized"> · οριστικοποιήθηκε</span>
+            </div>
+          </div>
+
+          <div class="col-12 col-sm-auto row items-center q-gutter-sm">
+            <CollabPresence :peers="peers" />
+            <SaveStatus v-if="editable" :status="combinedSave" @retry="saveNow" />
+            <ReadReceipts v-if="data.finalized" :document="collabDocument.symvoulio(id)" />
+            <DocumentHistory :document="collabDocument.symvoulio(id)" :writable="textsEditable" />
+            <q-btn
+              v-if="viewOnly && !data.finalized && canWrite"
+              outline
+              color="klados"
+              icon="edit"
+              label="Επεξεργασία"
+              @click="startEditing"
+            />
+            <q-btn
+              v-if="editable"
+              outline
+              color="klados"
+              icon="lock"
+              label="Οριστικοποίηση"
+              @click="confirmFinalize"
+            >
+              <q-tooltip>Κλειδώνει τα πρακτικά — δεν αλλάζουν μετά.</q-tooltip>
+            </q-btn>
+          </div>
+          </div>
+        </div>
+
+        <CollabBanner :status="collabStatus" :ready="collabReady" :editable="editable" target="στα κείμενα" />
+
+        <q-banner v-if="data.finalized" dense class="bg-grey-3 text-grey-9 q-mb-md">
+          <template #avatar><q-icon name="lock" /></template>
+          Τα πρακτικά έχουν οριστικοποιηθεί και δεν τροποποιούνται.
+        </q-banner>
+
+        <div class="row q-col-gutter-md">
+          <div class="col-12 col-md-8">
+            <!-- Ατζέντα: γράφεται πριν -->
+            <q-card flat bordered class="q-mb-md">
+              <q-card-section class="row items-center justify-between q-py-sm">
+                <div class="text-subtitle1 text-weight-medium">Ατζέντα</div>
+                <div class="text-caption text-grey-7">πριν το συμβούλιο</div>
+              </q-card-section>
+              <q-separator />
+              <q-card-section class="q-py-sm">
+                <CollabMarkdownField
+                  v-if="collabReady"
+                  :doc="collabDoc"
+                  :document-name="collabDocument.symvoulio(id)"
+                  field="agenda"
+                  :awareness="awareness"
+                  :klados="data.klados?.type ?? null"
+                  :readonly="!textsEditable"
+                  label="Τι θα συζητηθεί"
+                  placeholder="- Απολογισμός περιόδου&#10;- Πρόγραμμα δράσεων"
+                  empty-text="Δεν έχει γραφτεί ατζέντα."
+                  :min-height="120"
+                />
+                <MarkdownField
+                  v-else
+                  :model-value="data.agenda ?? ''"
+                  readonly
+                  :klados="data.klados?.type ?? null"
+                  empty-text="Δεν έχει γραφτεί ατζέντα."
+                />
+              </q-card-section>
+            </q-card>
+
+            <!-- Πρακτικά: γράφονται κατά τη διάρκεια -->
+            <q-card flat bordered>
+              <q-card-section class="row items-center justify-between q-py-sm">
+                <div class="text-subtitle1 text-weight-medium">Πρακτικά</div>
+                <div class="text-caption text-grey-7">κατά τη διάρκεια</div>
+              </q-card-section>
+              <q-separator />
+              <q-card-section class="q-py-sm">
+                <CollabMarkdownField
+                  v-if="collabReady"
+                  :doc="collabDoc"
+                  :document-name="collabDocument.symvoulio(id)"
+                  field="minutes"
+                  :awareness="awareness"
+                  :klados="data.klados?.type ?? null"
+                  :readonly="!textsEditable"
+                  label="Τι ειπώθηκε και τι αποφασίστηκε"
+                  placeholder="## Θέμα&#10;&#10;Συζήτηση…&#10;&#10;**Απόφαση:** …"
+                  empty-text="Δεν έχουν γραφτεί πρακτικά."
+                  :min-height="220"
+                />
+                <MarkdownField
+                  v-else
+                  :model-value="data.minutes ?? ''"
+                  readonly
+                  :klados="data.klados?.type ?? null"
+                  empty-text="Δεν έχουν γραφτεί πρακτικά."
+                />
+                <div v-if="!collabReady && collabStatus === 'offline'" class="text-caption text-grey-6 q-mt-sm">
+                  Χωρίς σύνδεση: τα κείμενα φαίνονται μόνο για ανάγνωση σε αυτή τη συσκευή — η επεξεργασία
+                  ανοίγει μόλις συνδεθείς.
+                </div>
+              </q-card-section>
+            </q-card>
+
+            <SymvoulioPolls :symvoulio-id="id" :can-manage="textsEditable" />
+          </div>
+
+          <div class="col-12 col-md-4">
+            <q-card flat bordered class="q-mb-md">
+              <q-card-section class="text-subtitle1 text-weight-medium q-py-sm">
+                Στοιχεία
+              </q-card-section>
+              <q-separator />
+              <q-card-section class="q-gutter-sm">
+                <DateField v-model="header.date" label="Ημερομηνία" :editable="editable" />
+                <q-input
+                  v-model="header.location"
+                  :readonly="!editable"
+                  label="Τοποθεσία"
+                  dense
+                  outlined
+                />
+                <q-select
+                  v-model="header.chairId"
+                  :options="stelexiOptions"
+                  :readonly="!editable"
+                  label="Προεδρεύει"
+                  dense
+                  outlined
+                  emit-value
+                  map-options
+                  clearable
+                />
+              </q-card-section>
+            </q-card>
+
+            <!-- Συμμετέχοντες -->
+            <q-card flat bordered>
+              <q-card-section class="row items-center justify-between q-py-sm">
+                <div class="text-subtitle1 text-weight-medium">Συμμετέχοντες</div>
+                <q-chip
+                  v-if="candidates.length"
+                  dense
+                  outline
+                  :label="`${participantIds.length}/${candidates.length}`"
+                />
+              </q-card-section>
+              <q-separator />
+
+              <q-card-section class="q-py-sm">
+                <div class="text-caption text-grey-7 q-mb-xs">
+                  {{
+                    data.klados
+                      ? 'Τα στελέχη του κλάδου'
+                      : 'Όλα τα στελέχη του Τοπικού'
+                  }}
+                </div>
+
+                <div v-if="!candidates.length" class="text-caption text-grey-6">
+                  Δεν βρέθηκαν ενεργά στελέχη.
+                </div>
+
+                <q-list v-else dense>
+                  <q-item
+                    v-for="stelexos in candidates"
+                    :key="stelexos.id"
+                    v-ripple
+                    tag="label"
+                    :clickable="editable"
+                  >
+                    <q-item-section avatar>
+                      <q-checkbox
+                        v-model="participantIds"
+                        :val="stelexos.id"
+                        :disable="!editable"
+                        color="klados"
+                        dense
+                      />
+                    </q-item-section>
+                    <q-item-section>
+                      {{ stelexos.lastName }} {{ stelexos.firstName }}
+                    </q-item-section>
+                  </q-item>
+                </q-list>
+              </q-card-section>
+            </q-card>
+          </div>
+        </div>
+      </template>
+    </PageState>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { computed, defineAsyncComponent, onBeforeUnmount, reactive, ref, watch } from 'vue';
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
+import { useQuasar } from 'quasar';
+import {
+  KLADOS_LABEL,
+  collabDocument,
+  type KladosType,
+  type SymvoulioType,
+} from '@trifylli/shared';
+import CollabBanner from './CollabBanner.vue';
+import CollabPresence from './CollabPresence.vue';
+import DocumentHistory from './collab/DocumentHistory.vue';
+import ReadReceipts from './collab/ReadReceipts.vue';
+import SymvoulioPolls from './SymvoulioPolls.vue';
+import DateField from './DateField.vue';
+import MarkdownField from './MarkdownField.vue';
+import PageState from './PageState.vue';
+import SaveStatus from './SaveStatus.vue';
+import { useAsyncData } from '../composables/useAsyncData';
+import { useCollabDoc, useCollabMe } from '../composables/useCollabDoc';
+import { useLiveReload } from '../composables/useLiveChanges';
+import { ApiError, OfflineError, get, patch, post } from '../lib/api';
+import { useKladosThemeStore } from '../stores/klados-theme';
+import { worstSaveState, type SaveState } from '../lib/save-state';
+import { useOfflineStore } from '../stores/offline';
+
+const kladosTheme = useKladosThemeStore();
+
+// CodeMirror φορτώνεται μόνο όταν ανοίξει σελίδα με κείμενα για γράψιμο.
+const CollabMarkdownField = defineAsyncComponent(() => import('./CollabMarkdownField.vue'));
+
+/**
+ * Ένα συμβούλιο: τι θα πούμε, τι είπαμε, ποιοι ήταν εκεί.
+ *
+ * Δύο κείμενα και μια λίστα — όχι σύστημα διαχείρισης θεμάτων με υπεύθυνους και
+ * προθεσμίες. Ένα συμβούλιο κλάδου γράφεται σε δέκα λεπτά και πρέπει να
+ * διαβάζεται σε ένα.
+ */
+
+/** Πόσο περιμένουμε να σταματήσει η πληκτρολόγηση πριν στείλουμε. */
+const AUTOSAVE_DELAY_MS = 1200;
+
+interface Stelexos {
+  id: string;
+  firstName: string;
+  lastName: string;
+}
+
+interface SymvoulioDetail {
+  id: string;
+  type: SymvoulioType;
+  typeLabel: string;
+  title: string | null;
+  date: string;
+  location: string | null;
+  agenda: string | null;
+  minutes: string | null;
+  finalized: boolean;
+  /** Συμβούλιο προετοιμασίας μιας δράσης — τα δικαιώματα τα δίνει η δράση. */
+  drasiId: string | null;
+  /** Αν γράφει ο χρήστης (πριν την οριστικοποίηση): ο κανόνας είναι του API — κλάδος, Τοπικό ή δράση. */
+  canWrite: boolean;
+  klados: { type: KladosType; name: string | null } | null;
+  chair: { id: string; firstName: string; lastName: string } | null;
+  participants: { userId: string; user: Stelexos }[];
+}
+
+const props = defineProps<{
+  symvoulioId: string;
+  /** Η δράση μέσα στην οποία ανοίγει (συμβούλιο προετοιμασίας της). */
+  drasiId?: string | null;
+}>();
+
+const route = useRoute();
+const router = useRouter();
+const $q = useQuasar();
+const offline = useOfflineStore();
+const id = props.symvoulioId;
+
+/** Πίσω στη λίστα συμβουλίων — της δράσης, του κλάδου ή του Τοπικού. */
+function goBack(): void {
+  if (props.drasiId) {
+    void router.push({ name: 'drasi', params: { id: props.drasiId, section: 'symvoulia' } });
+    return;
+  }
+  const k = data.value?.klados?.type;
+  void router.push(k ? { name: 'klados-symvoulia', params: { klados: k } } : { name: 'symvoulia' });
+}
+
+const { data, loading, error, stale, reload } = useAsyncData(
+  () => get<SymvoulioDetail>(`/symvoulia/${id}`),
+  { forbiddenPage: true, cacheKey: `symvoulio:${id}` },
+);
+
+// Συμβούλιο δράσης από τον παλιό σύνδεσμο (ειδοποίηση, ημερολόγιο, σελιδοδείκτης):
+// ανοίγει μέσα στη δράση του.
+watch(
+  () => data.value?.drasiId,
+  (drasiId) => {
+    if (drasiId && !props.drasiId) {
+      void router.replace({ name: 'drasi-symvoulio', params: { id: drasiId, symvoulioId: id }, query: route.query });
+    }
+  },
+  { immediate: true },
+);
+
+// Η σελίδα ζει εκτός `/k/:klados`: δηλώνει μόνη της τον κλάδο της ώστε τα
+// κουμπιά της να πάρουν το χρώμα του.
+watch(
+  () => (data.value ? (data.value.klados?.type ?? null) : undefined),
+  (klados) => kladosTheme.declare(klados),
+  { immediate: true },
+);
+
+/**
+ * Η σελίδα ανοίγει και μόνο για διάβασμα (`?view=1`).
+ *
+ * Έχει νόημα επειδή αποθηκεύει μόνη της: χωρίς αυτό, το να ρίξεις μια ματιά στα
+ * πρακτικά σημαίνει ότι ένα κατά λάθος πάτημα γράφεται αμέσως.
+ */
+const viewOnly = computed(() => route.query.view === '1');
+
+/**
+ * Το λέει το API (`canWrite`): συμβούλιο Τοπικού γράφει όποιος έχει το δικαίωμα
+ * Τοπικού, συμβούλιο κλάδου όποιος το έχει σε **εκείνον** τον κλάδο, συμβούλιο
+ * δράσης όποιος γράφει τα συμβούλια της δράσης.
+ */
+const canWrite = computed(() => data.value?.canWrite ?? false);
+
+/** Οριστικοποιημένα πρακτικά δεν αλλάζουν — ούτε κατά λάθος. */
+const editable = computed(() => canWrite.value && !data.value?.finalized && !viewOnly.value);
+
+// ───────────────────────── Ατζέντα & πρακτικά: κοινό έγγραφο ─────────────────────────
+
+/**
+ * Τα δύο κείμενα τα γράφουν πολλοί μαζί (βλ. docs/synergasia.md): ζωντανά, με
+ * κέρσορες, και χωρίς δίκτυο από το αντίγραφο της συσκευής. Τα στοιχεία στο
+ * πλάι (ημερομηνία, συμμετέχοντες) σώζονται όπως πριν.
+ */
+const {
+  doc: collabDoc,
+  awareness,
+  ready: collabReady,
+  writable: collabWritable,
+  status: collabStatus,
+  peers,
+  saveState: collabSaveState,
+  whenSaved,
+  onChange,
+} = useCollabDoc(collabDocument.symvoulio(id), useCollabMe());
+
+/** Τα κείμενα γράφονται όταν γράφεται η σελίδα **και** ο server το επιτρέπει. */
+const textsEditable = computed(() => editable.value && collabWritable.value);
+
+// Ζωντανά: κεφαλίδα, συμμετέχοντες και οριστικοποίηση από άλλους — χωρίς να
+// πατηθεί ό,τι γράφει ο χρήστης και δεν έχει σωθεί.
+useLiveReload(['header', 'finalize'], reload, { subscribe: onChange, busy: () => dirty.value });
+
+const combinedSave = computed(() => worstSaveState(saveStatus.value, collabSaveState.value));
+
+function startEditing(): void {
+  const query = { ...route.query };
+  delete query.view;
+  void router.replace({ query });
+}
+
+// ───────────────────────── Τοπική κατάσταση ─────────────────────────
+
+const header = reactive({
+  title: '',
+  date: '',
+  location: '',
+  chairId: null as string | null,
+});
+
+const participantIds = ref<string[]>([]);
+const fetchedStelexi = ref<Stelexos[]>([]);
+
+const saveStatus = ref<SaveState>('clean');
+const dirty = ref(false);
+let timer: ReturnType<typeof setTimeout> | null = null;
+
+/** Κρατά κλειστό τον watcher της αποθήκευσης όσο γεμίζει η φόρμα. */
+let hydrating = false;
+
+/**
+ * Ό,τι ξέρουμε ότι έχει ο server. Η αποθήκευση στέλνει μόνο ό,τι διαφέρει — και
+ * τους συμμετέχοντες ως «πρόσθεσε / αφαίρεσε» — ώστε δύο που γράφουν μαζί την
+ * κεφαλίδα να μη σβήνουν ο ένας τον άλλον.
+ */
+const baseline = { title: '', date: '', location: '', chairId: null as string | null, participants: [] as string[] };
+
+watch(
+  data,
+  (value) => {
+    if (!value || dirty.value) return;
+    hydrating = true;
+
+    header.title = value.title ?? '';
+    header.date = isoDay(new Date(value.date));
+    header.location = value.location ?? '';
+    header.chairId = value.chair?.id ?? null;
+    participantIds.value = value.participants.map((entry) => entry.userId);
+    Object.assign(baseline, { ...header, participants: [...participantIds.value] });
+
+    void Promise.resolve().then(() => {
+      hydrating = false;
+    });
+  },
+  { immediate: true },
+);
+
+/**
+ * Όσοι μπορούν να δηλωθούν συμμετέχοντες.
+ *
+ * Ενώνει τον κατάλογο με όσους έχουν ήδη δηλωθεί: ο κατάλογος έρχεται από
+ * ξεχωριστό request που χωρίς δίκτυο δεν φτάνει, και χωρίς την ένωση η λίστα
+ * θα έδειχνε άδεια ενώ το συμβούλιο έχει συμμετέχοντες.
+ */
+const candidates = computed<Stelexos[]>(() => {
+  const byId = new Map<string, Stelexos>();
+  for (const entry of data.value?.participants ?? []) byId.set(entry.user.id, entry.user);
+  for (const stelexos of fetchedStelexi.value) byId.set(stelexos.id, stelexos);
+  return [...byId.values()].sort((a, b) => a.lastName.localeCompare(b.lastName, 'el'));
+});
+
+const stelexiOptions = computed(() =>
+  candidates.value.map((stelexos) => ({
+    label: `${stelexos.lastName} ${stelexos.firstName}`,
+    value: stelexos.id,
+  })),
+);
+
+async function loadStelexi(): Promise<void> {
+  try {
+    const result = await get<{ candidates: Stelexos[] }>(`/symvoulia/${id}/stelexi`);
+    fetchedStelexi.value = result.candidates;
+  } catch {
+    // Δευτερεύον: χωρίς δίκτυο μένουν ορατοί όσοι είναι ήδη δηλωμένοι.
+    fetchedStelexi.value = [];
+  }
+}
+
+watch(
+  data,
+  (value) => {
+    if (value && !fetchedStelexi.value.length) void loadStelexi();
+  },
+  { immediate: true },
+);
+
+// ───────────────────────── Αυτόματη αποθήκευση ─────────────────────────
+
+watch(
+  [header, participantIds],
+  () => {
+    if (hydrating || !editable.value) return;
+    dirty.value = true;
+    saveStatus.value = 'pending';
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => void saveNow(), AUTOSAVE_DELAY_MS);
+  },
+  { deep: true },
+);
+
+async function saveNow(): Promise<void> {
+  if (timer) {
+    clearTimeout(timer);
+    timer = null;
+  }
+  if (!dirty.value || !editable.value) return;
+
+  saveStatus.value = 'saving';
+  const sent = { ...header, participants: [...participantIds.value] };
+  const before = new Set(baseline.participants);
+  const after = new Set(sent.participants);
+  const added = sent.participants.filter((userId) => !before.has(userId));
+  const removed = baseline.participants.filter((userId) => !after.has(userId));
+  const body = {
+    ...(sent.title.trim() !== baseline.title.trim() ? { title: sent.title.trim() || null } : {}),
+    ...(sent.date !== baseline.date ? { date: dayToIso(sent.date) } : {}),
+    ...(sent.location.trim() !== baseline.location.trim() ? { location: sent.location.trim() || null } : {}),
+    ...(sent.chairId !== baseline.chairId ? { chairId: sent.chairId ?? null } : {}),
+    ...(added.length ? { addParticipantIds: added } : {}),
+    ...(removed.length ? { removeParticipantIds: removed } : {}),
+  };
+  try {
+    if (Object.keys(body).length) await patch(`/symvoulia/${id}`, body);
+    Object.assign(baseline, sent);
+    dirty.value = false;
+    saveStatus.value = 'saved';
+  } catch (err) {
+    // Χωρίς δίκτυο δεν είναι σφάλμα: η σελίδα κρατά τις αλλαγές και ξαναστέλνει
+    // μόλις επιστρέψει η σύνδεση.
+    if (err instanceof OfflineError) {
+      saveStatus.value = 'offline';
+      return;
+    }
+    saveStatus.value = 'error';
+    $q.notify({
+      type: 'negative',
+      message: err instanceof ApiError ? err.message : 'Αποτυχία αποθήκευσης.',
+    });
+  }
+}
+
+watch(
+  () => offline.online,
+  (online) => {
+    if (online && dirty.value) void saveNow();
+  },
+);
+
+onBeforeRouteLeave(() => {
+  if (dirty.value) void saveNow();
+});
+
+function warnOnUnload(event: BeforeUnloadEvent): void {
+  if (dirty.value) event.preventDefault();
+}
+
+window.addEventListener('beforeunload', warnOnUnload);
+
+onBeforeUnmount(() => {
+  if (timer) clearTimeout(timer);
+  window.removeEventListener('beforeunload', warnOnUnload);
+});
+
+// ───────────────────────── Οριστικοποίηση ─────────────────────────
+
+function confirmFinalize(): void {
+  $q.dialog({
+    title: 'Οριστικοποίηση πρακτικών',
+    message: 'Μετά την οριστικοποίηση τα πρακτικά κλειδώνουν και δεν τροποποιούνται. Συνέχεια;',
+    cancel: { label: 'Άκυρο', flat: true },
+    ok: { label: 'Οριστικοποίηση', color: 'negative' },
+    persistent: true,
+  }).onOk(() => void finalize());
+}
+
+async function finalize(): Promise<void> {
+  // Ό,τι δεν έχει προλάβει να φύγει, φεύγει πρώτα: το κλείδωμα απορρίπτει
+  // κάθε επόμενη αποθήκευση, οπότε μια εκκρεμής αλλαγή θα χανόταν.
+  await saveNow();
+  if (!(await whenSaved())) {
+    $q.notify({ type: 'warning', message: 'Τα κείμενα δεν έχουν φτάσει ακόμη στον server — δοκίμασε ξανά σε λίγο.' });
+    return;
+  }
+  try {
+    await post(`/symvoulia/${id}/finalize`);
+    await reload();
+    $q.notify({ type: 'positive', message: 'Τα πρακτικά οριστικοποιήθηκαν.' });
+  } catch (err) {
+    $q.notify({
+      type: 'negative',
+      message: err instanceof ApiError ? err.message : 'Αποτυχία οριστικοποίησης.',
+    });
+  }
+}
+
+// ───────────────────────── Βοηθητικά ─────────────────────────
+
+/**
+ * «YYYY-MM-DD» από **τοπική** ημερομηνία — όχι μέσω UTC, που σε θετική ζώνη θα
+ * εμφάνιζε ένα βραδινό συμβούλιο την επόμενη μέρα.
+ */
+function isoDay(date: Date): string {
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+/** Η ημερομηνία κρατά την **ημέρα**· στέλνεται στο μεσημέρι ώστε καμία ζώνη να μη τη μετακινήσει. */
+function dayToIso(day: string): string {
+  return new Date(`${day}T12:00:00`).toISOString();
+}
+</script>

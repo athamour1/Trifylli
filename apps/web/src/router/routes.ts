@@ -11,8 +11,15 @@ declare module 'vue-router' {
     superAdmin?: boolean;
     /** Προσβάσιμη χωρίς συνεδρία (σελίδες της ροής σύνδεσης). */
     public?: boolean;
+    /** Στοιχείο της δράσης που ανοίγει μέσα στη σελίδα της (βλ. DrasiPage). */
+    drasiChild?: 'programmatiko' | 'gevma' | 'symvoulio';
+    /** Η ενότητα της δράσης όπου ανήκει — τονισμένη στο συρτάρι, εκεί γυρίζει το «Πίσω». */
+    drasiSection?: string;
   }
 }
+
+/** Η δράση και τα «παιδιά» της: μία σελίδα, για να μένει το συρτάρι των ενοτήτων. */
+const DrasiPage = () => import('../pages/DrasiPage.vue');
 
 /**
  * Οι σελίδες που εμφανίζονται **μέσα σε έναν κλάδο**.
@@ -245,20 +252,28 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'draseis/:id/:section?',
         name: 'drasi',
-        component: () => import('../pages/DrasiPage.vue'),
+        component: DrasiPage,
         meta: { title: 'Δράση' },
       },
+      // Τα «παιδιά» της δράσης ανοίγουν μέσα της, με το συρτάρι των ενοτήτων:
+      // ίδιο component, και η ενότητα στην οποία ανήκουν μένει τονισμένη.
       {
         path: 'draseis/:id/programma/:itemId',
         name: 'drasi-programmatiko',
-        component: () => import('../pages/DrasiProgrammatikoPage.vue'),
-        meta: { title: 'Προγραμματικό' },
+        component: DrasiPage,
+        meta: { title: 'Προγραμματικό', drasiChild: 'programmatiko', drasiSection: 'programma' },
       },
       {
         path: 'draseis/:id/diatrofologio/:itemId',
         name: 'drasi-gevma',
-        component: () => import('../pages/DrasiGevmaPage.vue'),
-        meta: { title: 'Γεύμα' },
+        component: DrasiPage,
+        meta: { title: 'Γεύμα', drasiChild: 'gevma', drasiSection: 'diatrofologio' },
+      },
+      {
+        path: 'draseis/:id/symvoulia/:symvoulioId',
+        name: 'drasi-symvoulio',
+        component: DrasiPage,
+        meta: { title: 'Συμβούλιο', drasiChild: 'symvoulio', drasiSection: 'symvoulia' },
       },
       {
         path: 'symvoulia/:id',

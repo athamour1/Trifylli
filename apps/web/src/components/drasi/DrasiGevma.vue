@@ -5,7 +5,7 @@
     γράφουν μαγείρισσα και τροφοδοσία — μαζί, ζωντανά: όλα είναι ένα κοινό
     έγγραφο (`drasi:<id>:meal:<id>`) που σώζεται μόνο του.
   -->
-  <q-page padding>
+  <div>
     <PageState :loading="loading && !meal" :error="error" :stale="stale" @retry="reload">
       <template v-if="meal && drasi">
         <!-- ── Κεφαλίδα ── -->
@@ -20,7 +20,7 @@
                 <q-badge v-if="meal.snack" color="orange-7" :label="DRASI_SNACK_LABEL[meal.snack]" />
               </div>
               <div class="text-caption text-grey-7">
-                {{ drasi.title }} · {{ formatDateLong(meal.date) }} · {{ hm(meal.startsAt) }}–{{ hm(meal.endsAt) }}
+                {{ formatDateLong(meal.date) }} · {{ hm(meal.startsAt) }}–{{ hm(meal.endsAt) }}
               </div>
             </div>
             <div class="col-12 col-sm-auto row items-center q-gutter-sm">
@@ -149,7 +149,7 @@
         </div>
       </template>
     </PageState>
-  </q-page>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -167,25 +167,25 @@ import {
   type IngredientSnapshot,
   type KladosType,
 } from '@trifylli/shared';
-import CollabBanner from '../components/CollabBanner.vue';
-import CollabPresence from '../components/CollabPresence.vue';
-import DocumentHistory from '../components/collab/DocumentHistory.vue';
-import ApprovalBar from '../components/collab/ApprovalBar.vue';
-import MarkdownField from '../components/MarkdownField.vue';
-import PageState from '../components/PageState.vue';
-import SaveStatus from '../components/SaveStatus.vue';
-import { useAsyncData } from '../composables/useAsyncData';
-import { useCollabDoc, useCollabMe } from '../composables/useCollabDoc';
-import { useComments } from '../composables/useComments';
-import { get } from '../lib/api';
-import { addIngredientAfter, hasSchema, readMealDoc, removeIngredient, setMenu, updateIngredient } from '../lib/drasi-docs';
-import { formatDateLong } from '../lib/format';
-import { keepFocus } from '../lib/keep-focus';
-import { useAuthStore } from '../stores/auth';
-import { useKladosThemeStore } from '../stores/klados-theme';
+import CollabBanner from '../CollabBanner.vue';
+import CollabPresence from '../CollabPresence.vue';
+import DocumentHistory from '../collab/DocumentHistory.vue';
+import ApprovalBar from '../collab/ApprovalBar.vue';
+import MarkdownField from '../MarkdownField.vue';
+import PageState from '../PageState.vue';
+import SaveStatus from '../SaveStatus.vue';
+import { useAsyncData } from '../../composables/useAsyncData';
+import { useCollabDoc, useCollabMe } from '../../composables/useCollabDoc';
+import { useComments } from '../../composables/useComments';
+import { get } from '../../lib/api';
+import { addIngredientAfter, hasSchema, readMealDoc, removeIngredient, setMenu, updateIngredient } from '../../lib/drasi-docs';
+import { formatDateLong } from '../../lib/format';
+import { keepFocus } from '../../lib/keep-focus';
+import { useAuthStore } from '../../stores/auth';
+import { useKladosThemeStore } from '../../stores/klados-theme';
 
 // CodeMirror φορτώνεται μόνο όταν ανοίξει σελίδα με κείμενα για γράψιμο.
-const CollabMarkdownField = defineAsyncComponent(() => import('../components/CollabMarkdownField.vue'));
+const CollabMarkdownField = defineAsyncComponent(() => import('../CollabMarkdownField.vue'));
 
 interface DrasiHead {
   id: string;
