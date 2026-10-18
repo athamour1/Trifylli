@@ -12,6 +12,7 @@ import type {
   DrasiReviewSettings,
   DrasiRoleKind,
   DrasiScheduleKind,
+  DrasiScheduleStatus,
   DrasiSnack,
   DrasiType,
   KladosDuty,
@@ -608,6 +609,8 @@ export interface DrasiScheduleItemView {
   endsAt: string;
   title: string;
   kind: DrasiScheduleKind;
+  /** Η προετοιμασία του — η στήλη του στο kanban «Προγραμματικά». */
+  status: DrasiScheduleStatus;
   /** Κολατσιό μέσα σε αυτό το στοιχείο (δεκατιανό/απογευματινό) — μπαίνει στο διατροφολόγιο. */
   snack: DrasiSnack | null;
   location: string | null;

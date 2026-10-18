@@ -244,6 +244,7 @@ export class DraseisPlanService {
           ...(dto.durationMin !== undefined ? { durationMin: dto.durationMin } : {}),
           ...(dto.title !== undefined ? { title: dto.title.trim() } : {}),
           ...(dto.kind !== undefined ? { kind: dto.kind } : {}),
+          ...(dto.status !== undefined ? { status: dto.status } : {}),
           ...(dto.snack !== undefined ? { snack: dto.snack } : {}),
         },
       });
@@ -724,6 +725,7 @@ export function toScheduleView(
     durationMin: number;
     title: string;
     kind: DrasiScheduleItemView['kind'];
+    status: DrasiScheduleItemView['status'];
     snack: DrasiScheduleItemView['snack'];
     location: string | null;
     description: string | null;
@@ -746,6 +748,7 @@ export function toScheduleView(
     endsAt: endsAt.toISOString(),
     title: r.title,
     kind: r.kind,
+    status: r.status,
     snack: r.snack,
     location: r.location,
     description: r.description,

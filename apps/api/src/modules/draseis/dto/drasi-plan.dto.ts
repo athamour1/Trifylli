@@ -17,7 +17,7 @@ import {
   Min,
   ValidateNested,
 } from 'class-validator';
-import { DrasiScheduleKind, DrasiSnack, KladosType, TreasuryCategory } from '@trifylli/shared';
+import { DrasiScheduleKind, DrasiScheduleStatus, DrasiSnack, KladosType, TreasuryCategory } from '@trifylli/shared';
 
 // ───────────────────────── Ωρολόγιο & προγραμματικό (F7) ─────────────────────────
 
@@ -114,6 +114,11 @@ export class CreateScheduleItemDto {
 }
 
 export class UpdateScheduleItemDto extends CreateScheduleItemDto {
+  @ApiPropertyOptional({ enum: DrasiScheduleStatus, description: 'Η στήλη στο kanban «Προγραμματικά» — Αρχηγός και Πρόγραμμα.' })
+  @IsOptional()
+  @IsEnum(DrasiScheduleStatus)
+  status?: DrasiScheduleStatus;
+
   @ApiPropertyOptional({ description: 'Μεταφορά σε άλλη ημέρα (YYYY-MM-DD).' })
   @IsOptional()
   @Matches(/^\d{4}-\d{2}-\d{2}$/)

@@ -122,6 +122,13 @@ enum DrasiScheduleKind {
   ALLO
 }
 
+/// Πού βρίσκεται η προετοιμασία ενός στοιχείου — οι στήλες του kanban «Προγραμματικά».
+enum DrasiScheduleStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
 /// Είδη ερώτησης αξιολόγησης, όπως σε μια φόρμα: σύντομο κείμενο, παράγραφος,
 /// πολλαπλή επιλογή (μία), πλαίσια ελέγχου (πολλές), γραμμική κλίμακα.
 enum DrasiReviewKind {
@@ -651,6 +658,8 @@ model DrasiScheduleItem {
   durationMin Int               @default(30)
   title       String
   kind        DrasiScheduleKind @default(DRASTIRIOTITA)
+  /// Η προετοιμασία του (kanban «Προγραμματικά»): την αλλάζουν ο Αρχηγός και το Πρόγραμμα.
+  status      DrasiScheduleStatus @default(TODO)
   /// Δεκατιανό/απογευματινό μέσα σε αυτό το στοιχείο (π.χ. σε μια δραστηριότητα).
   snack       DrasiSnack?
   location    String?

@@ -771,6 +771,17 @@ export const DrasiScheduleKind = {
 export type DrasiScheduleKind = (typeof DrasiScheduleKind)[keyof typeof DrasiScheduleKind];
 
 /**
+ * Πού βρίσκεται η προετοιμασία ενός στοιχείου του ωρολογίου — οι στήλες του
+ * kanban «Προγραμματικά». Τη μετακινούν ο Αρχηγός και το Πρόγραμμα.
+ */
+export const DrasiScheduleStatus = {
+  TODO: 'TODO',
+  IN_PROGRESS: 'IN_PROGRESS',
+  DONE: 'DONE',
+} as const;
+export type DrasiScheduleStatus = (typeof DrasiScheduleStatus)[keyof typeof DrasiScheduleStatus];
+
+/**
  * Κολατσιό που σερβίρεται μέσα σε ένα στοιχείο του ωρολογίου (π.χ. δεκατιανό σε
  * μια δραστηριότητα). Ετικέτα πάνω στο στοιχείο, όχι δικό του είδος — μπαίνει
  * στο διατροφολόγιο μαζί με τα «Γεύματα».
