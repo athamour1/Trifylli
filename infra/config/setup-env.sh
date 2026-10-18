@@ -56,12 +56,19 @@ ask_required() {
   done
 }
 
+# Μόνο λατινικοί χαρακτήρες: μια διεύθυνση με ελληνικά (π.χ. «Οδηγοίodigoi@…»,
+# από κόλλημα του ονόματος) δεν τη δέχεται κανένας SMTP — και φαίνεται μόνο τη
+# μέρα που δεν φτάνει ένα email.
 ask_email() {
   while :; do
     ask "$@"
     eval "_v=\$$1"
+    if [ -n "$(printf '%s' "$_v" | LC_ALL=C tr -d '\000-\177')" ]; then
+      say "  Μόνο λατινικοί χαρακτήρες — π.χ. odigoi@example.gr (χωρίς ελληνικά στη διεύθυνση)."
+      continue
+    fi
     case "$_v" in
-      ?*@?*.?*) case "$_v" in *[[:space:]]*) ;; *) return ;; esac ;;
+      ?*@?*.?*) case "$_v" in *[[:space:]\<\>\",\;]*) ;; *) return ;; esac ;;
     esac
     say "  Δεν μοιάζει με email."
   done
@@ -149,10 +156,15 @@ done
 say ''
 say '── Email (προσκλήσεις, ανάκτηση κωδικού) — υποχρεωτικό ──'
 ask_required SMTP_HOST 'SMTP host' 'smtp.eu.mailgun.org'
+say '  Πολλοί πάροχοι servers (π.χ. Hetzner) κόβουν τις εξερχόμενες θύρες 25 και 465 — προτίμησε 587.'
 while :; do
   ask SMTP_PORT 'SMTP θύρα (587 = STARTTLS, 465 = TLS)' '587'
   case "$SMTP_PORT" in ''|*[!0-9]*) say '  Μόνο αριθμός.' ;; *) break ;; esac
 done
+case "$SMTP_PORT" in
+  465) say '  Προσοχή: αν ο server κόβει την 465, τα email δεν θα φεύγουν (timeout) — τότε βάλε 587.' ;;
+  25) say '  Προσοχή: η 25 είναι για επικοινωνία servers και κόβεται σχεδόν παντού — βάλε 587.' ;;
+esac
 ask SMTP_USERNAME 'SMTP χρήστης'
 ask_secret SMTP_PASSWORD 'SMTP κωδικός'
 ask_email FROM_EMAIL 'Διεύθυνση αποστολέα (σε domain με SPF/DKIM στον πάροχο)'
