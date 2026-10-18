@@ -44,7 +44,11 @@
         <tr v-for="p in matrix.participants" :key="p.participantId">
           <td class="tf-stack__head">
             {{ p.user.lastName }} {{ p.user.firstName }}
-            <span class="text-caption text-grey-6">{{ p.isMinor ? '· ανήλικος' : '· ενήλικος' }}</span>
+            <span v-if="p.user.birthDate" class="text-caption text-grey-6">{{ p.isMinor ? '· ανήλικος' : '· ενήλικος' }}</span>
+            <span v-else class="text-caption text-orange-8">
+              · χωρίς ημ. γέννησης
+              <q-tooltip>Λείπει από την καρτέλα: το στέλεχος θεωρείται ενήλικο, το παιδί ανήλικο.</q-tooltip>
+            </span>
           </td>
           <td v-for="type in ['SYMMETOXI', 'YGEIA'] as const" :key="type" :data-label="DRASI_FORM_TYPE_LABEL[type]">
             <template v-if="formOf(p, type)">

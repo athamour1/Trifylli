@@ -9,7 +9,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
-import { DrasiFormStatus, DrasiFormType, Prisma } from '@prisma/client';
+import { DrasiFormStatus, DrasiFormType, MemberKind, Prisma } from '@prisma/client';
 import { createHash, randomBytes } from 'node:crypto';
 import {
   DRASI_FORM_FIELDS,
@@ -82,7 +82,7 @@ export class DraseisFormsService {
     let pending = 0;
     let total = 0;
     const rows = participants.map((p) => {
-      const isMinor = minorAt(p.user.birthDate, drasi.dateStart);
+      const isMinor = minorAt(p.user.birthDate, drasi.dateStart, p.kind);
       const needed = requiredTypes(isMinor);
       const forms = needed.map((type): DrasiFormView => {
         const existing = p.forms.find((f) => f.type === type);
@@ -131,7 +131,7 @@ export class DraseisFormsService {
     const links: IssuedFormLink[] = [];
 
     for (const p of participants) {
-      const isMinor = minorAt(p.user.birthDate, drasi.dateStart);
+      const isMinor = minorAt(p.user.birthDate, drasi.dateStart, p.kind);
       const types = requiredTypes(isMinor).filter((t) => !dto.types?.length || dto.types.includes(t));
       for (const type of types) {
         const existing = p.forms.find((f) => f.type === type);
@@ -331,7 +331,7 @@ export class DraseisFormsService {
 
   private async renderOne(form: Prisma.DrasiFormGetPayload<{ include: typeof formPdfInclude }>, ctx: FilledFormInput['drasi']): Promise<Uint8Array> {
     const u = form.participant.user;
-    const isMinor = minorAt(u.birthDate, ctx.dateStart);
+    const isMinor = minorAt(u.birthDate, ctx.dateStart, form.participant.kind);
     const template: FormTemplate = form.type === DrasiFormType.SYMMETOXI ? 'dilosi' : isMinor ? 'ygeia-paidi' : 'ygeia-stelexos';
     // Ο κλάδος του παιδιού (για τη δήλωση), αλλιώς ο διοργανωτής.
     const memberKlados = u.memberships[0]?.klados.type as KladosType | undefined;
@@ -366,7 +366,7 @@ export class DraseisFormsService {
       await this.prisma.drasiForm.update({ where: { id: form.id }, data: { status: DrasiFormStatus.OPENED, openedAt: new Date() } });
       this.logger.log(`Έντυπο ${form.id} ανοίχτηκε (${ip ?? '-'}).`);
     }
-    const isMinor = minorAt(form.participant.user.birthDate, form.drasi.dateStart);
+    const isMinor = minorAt(form.participant.user.birthDate, form.drasi.dateStart, form.participant.kind);
     const u = form.participant.user;
     // Ό,τι ξέρει ήδη το μητρώο, προσυμπληρωμένο — ο γονέας το διορθώνει αν θέλει.
     const prefill: Record<string, string> = {};
@@ -401,7 +401,7 @@ export class DraseisFormsService {
 
     // Μόνο γνωστά πεδία, μόνο απλές τιμές — ό,τι άλλο στείλει ο client πετιέται.
     // Τα πεδία «μόνο αν…» (π.χ. «αναγράψτε αναλυτικά») μετρούν μόνο όταν ισχύει η συνθήκη τους.
-    const isMinor = minorAt(form.participant.user.birthDate, form.drasi.dateStart);
+    const isMinor = minorAt(form.participant.user.birthDate, form.drasi.dateStart, form.participant.kind);
     const fields = DRASI_FORM_FIELDS[form.type];
     const answers: Record<string, string | boolean> = {};
     const label = (f: DrasiFormField) => (!isMinor && f.labelAdult ? f.labelAdult : f.label);
@@ -583,10 +583,15 @@ function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
 
-function minorAt(birthDate: Date | null, at: Date): boolean {
+/**
+ * Ανήλικος στην έναρξη της δράσης. Χωρίς ημερομηνία γέννησης το παιδί θεωρείται
+ * ανήλικο (καλύτερα ένα έντυπο παραπάνω) και το στέλεχος ενήλικο: αλλιώς ένα
+ * στέλεχος με ελλιπή καρτέλα θα ζητούσε δήλωση γονέα. Με ημερομηνία μετράει μόνο
+ * η ηλικία — στέλεχος 17 ετών μένει ανήλικο και υπογράφει γονέας.
+ */
+export function minorAt(birthDate: Date | null, at: Date, kind: string): boolean {
   const age = ageInYears(birthDate, at);
-  // Χωρίς ημερομηνία γέννησης θεωρείται ανήλικος: καλύτερα ένα έντυπο παραπάνω.
-  return age === null ? true : age < 18;
+  return age === null ? kind !== MemberKind.STELEXOS : age < 18;
 }
 
 function requiredTypes(isMinor: boolean): DrasiFormType[] {
