@@ -142,6 +142,28 @@ const schema = z.object({
     .default('true')
     .transform((v) => v === 'true'),
 
+  // ── Email: σύνδεσμοι εντύπων και αξιολόγησης προς γονείς και μέλη ──
+  // Οι ίδιες μεταβλητές με το Authentik (`.env.prod`, ενότητα SMTP). Χωρίς
+  // SMTP_HOST και SMTP_FROM το API δεν στέλνει email· οι σύνδεσμοι αντιγράφονται.
+  SMTP_HOST: blankToUndefined(z.string()),
+  SMTP_PORT: blankToUndefined(z.coerce.number().int().positive()),
+  SMTP_USERNAME: blankToUndefined(z.string()),
+  SMTP_PASSWORD: blankToUndefined(z.string()),
+  /** 587: STARTTLS υποχρεωτικό. */
+  SMTP_USE_TLS: z
+    .string()
+    .default('true')
+    .transform((v) => v === 'true'),
+  /** 465: TLS από την αρχή (implicit). Ποτέ μαζί με το SMTP_USE_TLS. */
+  SMTP_USE_SSL: z
+    .string()
+    .default('false')
+    .transform((v) => v === 'true'),
+  /** Δευτερόλεπτα. */
+  SMTP_TIMEOUT: blankToUndefined(z.coerce.number().int().positive()),
+  /** «Όνομα <διεύθυνση>» — ο αποστολέας που βλέπει ο γονέας. */
+  SMTP_FROM: blankToUndefined(z.string()),
+
   // ── Object storage (S3 / Garage) ──
   // Προαιρετικά: χωρίς αυτά η εφαρμογή σηκώνεται κανονικά, αλλά τα endpoints
   // αρχείων επιστρέφουν σφάλμα «δεν έχει ρυθμιστεί».

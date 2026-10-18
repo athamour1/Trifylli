@@ -8,6 +8,7 @@ import { AppConfigModule } from './common/config/config.module';
 import { AuditModule } from './common/audit/audit.module';
 import { JobsModule } from './common/jobs/jobs.module';
 import { PrismaModule } from './common/prisma/prisma.module';
+import { MailModule } from './common/mail/mail.module';
 import { StorageModule } from './common/storage/storage.module';
 import { HealthController } from './health.controller';
 import { AccountsModule } from './modules/accounts/accounts.module';
@@ -38,6 +39,7 @@ import { YlikoModule } from './modules/yliko/yliko.module';
     PrismaModule,
     AuditModule,
     StorageModule,
+    MailModule,
     AuthModule,
     ScheduleModule.forRoot(),
     JobsModule,

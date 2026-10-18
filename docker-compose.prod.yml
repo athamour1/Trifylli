@@ -345,6 +345,15 @@ services:
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
       VAPID_SUBJECT: ${VAPID_SUBJECT:-}
+      # Email: οι σύνδεσμοι εντύπων/αξιολόγησης προς γονείς — ο ίδιος SMTP με το Authentik.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_USE_TLS: ${SMTP_USE_TLS:-true}
+      SMTP_USE_SSL: ${SMTP_USE_SSL:-false}
+      SMTP_TIMEOUT: ${SMTP_TIMEOUT:-30}
+      SMTP_FROM: ${SMTP_FROM:-}
       # Heartbeats των crons — ένα URL ανά εργασία (βλ. docs/monitoring.md).
       HEARTBEAT_ESEO_SYNC_URL: ${HEARTBEAT_ESEO_SYNC_URL:-}
       HEARTBEAT_HEALTH_PURGE_URL: ${HEARTBEAT_HEALTH_PURGE_URL:-}
