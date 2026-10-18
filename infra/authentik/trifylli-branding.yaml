@@ -23,18 +23,52 @@ metadata:
     blueprints.goauthentik.io/instantiate: 'true'
 
 entries:
-  # Πρώτα το default brand του Authentik: στο πρώτο boot όλα τα blueprints
-  # τρέχουν μαζί, και αν προλάβαινε αυτό εδώ, το default brand έγραφε μετά τα
-  # δικά του (λογότυπο authentik, σκούρο θέμα) από πάνω.
+  # Πρώτα οι ροές που δείχνει το brand και το ίδιο το default brand του
+  # Authentik: στο πρώτο boot όλα τα blueprints τρέχουν μαζί, και αν προλάβαινε
+  # αυτό εδώ, το default brand έγραφε μετά τα δικά του (λογότυπο authentik,
+  # σκούρο θέμα) από πάνω.
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: Default - Authentication flow
+      required: false
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: Default - Invalidation flow
+      required: false
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: Default - User settings flow
+      required: false
   - model: authentik_blueprints.metaapplyblueprint
     attrs:
       identifiers:
         name: Default - Brand
       required: true
+
+  # Αν το default brand δεν φτιάχτηκε (έτρεξε ταυτόχρονα με άλλο blueprint και
+  # σκόνταψε), το φτιάχνουμε εμείς — ολόκληρο, με τις ροές του, όπως θα το
+  # έφτιαχνε εκείνο. `created`: αν υπάρχει, δεν το αγγίζουμε.
+  - model: authentik_brands.brand
+    state: created
+    identifiers:
+      domain: authentik-default
+    attrs:
+      default: true
+      flow_authentication: !Find [authentik_flows.flow, [slug, default-authentication-flow]]
+      flow_invalidation: !Find [authentik_flows.flow, [slug, default-invalidation-flow]]
+      flow_user_settings: !Find [authentik_flows.flow, [slug, default-user-settings-flow]]
+
+  # Η εμφάνιση. Και `default: true`: ένα brand που δεν είναι default δεν το
+  # βλέπει κανείς — το Authentik δείχνει τότε δικό του (λογότυπο authentik,
+  # «No recovery flow set»).
   - model: authentik_brands.brand
     identifiers:
       domain: authentik-default
     attrs:
+      default: true
       branding_title: Trifylli
       branding_logo: logo.svg
       branding_favicon: favicon.svg

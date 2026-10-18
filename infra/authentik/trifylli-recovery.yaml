@@ -284,7 +284,14 @@ entries:
   # ── Πού φαίνεται ──
   #
   # Στο brand, ώστε το `/if/flow/.../recovery` και τα admin «recovery link» να
-  # ξέρουν ποια ροή να τρέξουν.
+  # ξέρουν ποια ροή να τρέξουν. Πρώτα το ίδιο το brand (`trifylli-branding`):
+  # αλλιώς, στην πρώτη εκκίνηση, αυτό το entry θα το έφτιαχνε μισό — χωρίς
+  # ροές και όχι default.
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: Trifylli — εμφάνιση (brand)
+      required: true
   - model: authentik_brands.brand
     identifiers:
       domain: authentik-default
