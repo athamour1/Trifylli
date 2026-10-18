@@ -32,18 +32,6 @@ services:
       timeout: 5s
       retries: 10
 
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    command: redis-server --save 60 1 --loglevel warning
-    volumes:
-      - redis-data:/data
-    healthcheck:
-      test: ['CMD', 'redis-cli', 'ping']
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
   # ─────────────────────── Mailpit (SMTP ανάπτυξης) ───────────────────────
   # Ψεύτικος SMTP server με web UI: δέχεται ό,τι του στείλει το Authentik και το
   # δείχνει στο http://localhost:8025 αντί να το παραδώσει. Υποδομή και όχι
@@ -74,7 +62,6 @@ services:
     command: server
     environment: &authentik-env
       AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY:-change-me-in-production}
-      AUTHENTIK_REDIS__HOST: redis
       AUTHENTIK_POSTGRESQL__HOST: postgres
       AUTHENTIK_POSTGRESQL__USER: ${POSTGRES_USER:-trifylli}
       AUTHENTIK_POSTGRESQL__PASSWORD: ${POSTGRES_PASSWORD:-trifylli}
@@ -120,8 +107,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_healthy
 
   authentik-worker:
     image: ghcr.io/goauthentik/server:2026.8.3
@@ -136,8 +121,6 @@ services:
       - ./infra/authentik/email-templates:/templates:ro
     depends_on:
       postgres:
-        condition: service_healthy
-      redis:
         condition: service_healthy
 
   # ─────────────────────── Object storage (Garage) ───────────────────────
@@ -308,6 +291,5 @@ services:
 
 volumes:
   postgres-data:
-  redis-data:
   authentik-media:
   garage-data:

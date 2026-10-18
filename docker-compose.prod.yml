@@ -90,6 +90,8 @@ services:
       timeout: 5s
       retries: 10
 
+  # Μόνο για το GlitchTip (profile `errors`, cache και ουρά εργασιών): το
+  # Authentik δεν χρησιμοποιεί Redis από το 2025.10 — όλα στο Postgres.
   redis:
     image: redis:7-alpine
     restart: always
@@ -113,8 +115,6 @@ services:
     command: server
     environment: &authentik-env
       AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY:?AUTHENTIK_SECRET_KEY is required (openssl rand -base64 48)}
-      AUTHENTIK_REDIS__HOST: redis
-      AUTHENTIK_REDIS__PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
       AUTHENTIK_POSTGRESQL__HOST: postgres
       AUTHENTIK_POSTGRESQL__USER: ${POSTGRES_USER:-trifylli}
       AUTHENTIK_POSTGRESQL__PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
@@ -178,8 +178,6 @@ services:
         condition: service_completed_successfully
       postgres:
         condition: service_healthy
-      redis:
-        condition: service_healthy
 
   authentik-worker:
     image: ghcr.io/goauthentik/server:2026.8.3
@@ -197,8 +195,6 @@ services:
       config:
         condition: service_completed_successfully
       postgres:
-        condition: service_healthy
-      redis:
         condition: service_healthy
 
   # ─────────────────────── Object storage (Garage) ───────────────────────

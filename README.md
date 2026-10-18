@@ -13,7 +13,7 @@
 ```bash
 pnpm install
 cp apps/api/.env.example apps/api/.env
-pnpm infra:up                  # Postgres, Redis, Mailpit, Authentik, Garage S3
+pnpm infra:up                  # Postgres, Mailpit, Authentik, Garage S3
 pnpm infra:sso                 # blueprints (OIDC, κωδικός, εμφάνιση) + χρήστες ανάπτυξης
 pnpm db:migrate                # δημιουργεί το σχήμα
 pnpm db:seed                   # δεδομένα ενός πλήρους Τοπικού
@@ -187,7 +187,7 @@ server θα απορρίψει: η συνάρτηση `can()` είναι **ο ί
 | `pnpm db:migrate` | Prisma migration σε development |
 | `pnpm db:seed` | Idempotent seed — τρέχει ξανά χωρίς διπλότυπα |
 | `pnpm db:studio` | Prisma Studio |
-| `pnpm infra:up` / `infra:down` | Υποδομές σε Docker (Postgres, Redis, **Mailpit**, Authentik, Garage) |
+| `pnpm infra:up` / `infra:down` | Υποδομές σε Docker (Postgres, **Mailpit**, Authentik, Garage) |
 | `pnpm infra:sso` | Εφαρμόζει τα blueprints του Authentik και φτιάχνει χρήστες ανάπτυξης |
 
 Πλήρης στοίβα σε containers: `docker compose --profile full up -d`.
@@ -569,7 +569,8 @@ blueprint (`TRIFYLLI_APP_URL`).
 ## Παραγωγή
 
 Μία στοίβα σηκώνει τα πάντα — Trifylli (API + PWA), OuchTracker (backend +
-frontend) και τις κοινές υποδομές (Postgres, Redis, Authentik, Garage S3) — από
+frontend) και τις κοινές υποδομές (Postgres, Authentik, Garage S3 — και Redis για
+το GlitchTip) — από
 το [`docker-compose.prod.yml`](docker-compose.prod.yml):
 
 ```bash
