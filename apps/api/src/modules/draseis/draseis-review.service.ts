@@ -1,4 +1,13 @@
-import { BadRequestException, ForbiddenException, GoneException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  GoneException,
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+  ServiceUnavailableException,
+} from '@nestjs/common';
 import { createHash, randomBytes } from 'node:crypto';
 import { DrasiFormStatus, DrasiReviewKind, MemberKind, type Prisma } from '@prisma/client';
 import ExcelJS from 'exceljs';
@@ -20,6 +29,7 @@ import {
   type DrasiReviewView,
   type IssuedReviewLink,
   type KladosType,
+  type LinkEmailResult,
   type PublicReviewView,
 } from '@trifylli/shared';
 import { AuditService } from '../../common/audit/audit.service';
@@ -29,6 +39,10 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
 import { accessProfileOf } from '../../common/util/klados-scope';
 import { DrasiAccessService } from './drasi-access.service';
+import { minorAt } from './draseis-forms.service';
+import type { EmailLinksDto } from './dto/drasi-forms.dto';
+import { linkRecipients } from './link-emails';
+import { LinkMailer, type MailableLink } from './link-mailer';
 import type { IssueReviewInvitesDto, PublicReviewAnswersDto, SetReviewAnswersDto, SetReviewQuestionsDto, UpdateReviewSettingsDto } from './dto/drasi-review.dto';
 
 const answerInclude = {
@@ -67,6 +81,7 @@ export class DraseisReviewService {
     private readonly access: DrasiAccessService,
     private readonly audit: AuditService,
     @Inject(AppConfigToken) private readonly config: AppConfig,
+    private readonly linkMailer: LinkMailer,
   ) {}
 
   // ── Ρυθμίσεις ──
@@ -113,6 +128,7 @@ export class DraseisReviewService {
       canAnswer: !cannotAnswerReason,
       cannotAnswerReason,
       summary: showSummary ? this.summarize(questions, settings, manages) : null,
+      emailEnabled: this.linkMailer.enabled,
     };
   }
 
@@ -285,7 +301,7 @@ export class DraseisReviewService {
     const settings = this.settingsOf(drasi.reviewSettings);
     const participants = await this.prisma.drasiParticipant.findMany({
       where: { drasiId: id, ...(dto.participantIds?.length ? { id: { in: dto.participantIds } } : {}) },
-      include: { reviewInvite: true },
+      include: { reviewInvite: true, user: { select: { email: true, birthDate: true, guardians: { select: { email: true } } } } },
     });
     const expiresAt = new Date(Date.now() + FORM_LINK_TTL_DAYS * 86_400_000);
     const links: IssuedReviewLink[] = [];
@@ -305,10 +321,65 @@ export class DraseisReviewService {
           openedAt: null,
         },
       });
-      links.push({ participantId: p.id, inviteId: invite.id, url: `${this.appUrl()}/review/${token}`, expiresAt: expiresAt.toISOString() });
+      links.push({
+        participantId: p.id,
+        inviteId: invite.id,
+        url: `${this.appUrl()}/review/${token}`,
+        expiresAt: expiresAt.toISOString(),
+        emailTo: linkRecipients(p.user, minorAt(p.user.birthDate, drasi.dateStart, p.kind)),
+      });
     }
     await this.audit.record(user, 'drasi.review.invite', 'drasi', id, { count: links.length, reissue: dto.reissue ?? false });
     return links;
+  }
+
+  /** Αποστολή με email προσωπικών συνδέσμων που μόλις εκδόθηκαν — ίδιος κανόνας με τα έντυπα (`emailLinks`). */
+  async emailInvites(user: RequestUser, id: string, dto: EmailLinksDto): Promise<LinkEmailResult[]> {
+    await this.access.load(user, id, 'write', { allowClosed: true });
+    if (!this.linkMailer.enabled) throw new ServiceUnavailableException('Η αποστολή email δεν έχει ρυθμιστεί στον server (SMTP).');
+    const invites = await this.prisma.drasiReviewInvite.findMany({
+      where: { drasiId: id, id: { in: dto.links.map((l) => l.id) } },
+      include: {
+        drasi: { select: { dateStart: true } },
+        participant: {
+          select: {
+            kind: true,
+            user: { select: { firstName: true, lastName: true, email: true, birthDate: true, guardians: { select: { email: true } } } },
+          },
+        },
+      },
+    });
+    const byId = new Map(invites.map((i) => [i.id, i]));
+    const now = new Date();
+    const refused: LinkEmailResult[] = [];
+    const mailable: MailableLink[] = [];
+    for (const link of dto.links) {
+      const invite = byId.get(link.id);
+      const live =
+        !!invite &&
+        invite.tokenHash === hashToken(link.token) &&
+        invite.status !== DrasiFormStatus.VOID &&
+        !!invite.expiresAt &&
+        invite.expiresAt > now;
+      if (!invite || !live) {
+        refused.push({ id: link.id, sent: false, to: [], error: 'Ο σύνδεσμος δεν ισχύει πια — βγάλε νέο.' });
+        continue;
+      }
+      const u = invite.participant.user;
+      mailable.push({
+        id: invite.id,
+        kind: 'REVIEW',
+        participant: `${u.lastName} ${u.firstName}`.trim(),
+        to: linkRecipients(u, minorAt(u.birthDate, invite.drasi.dateStart, invite.participant.kind)),
+        url: `${this.appUrl()}/review/${link.token}`,
+        expiresAt: invite.expiresAt!,
+      });
+    }
+    const results = mailable.length ? await this.linkMailer.send(user, id, mailable) : [];
+    const sent = results.filter((r) => r.sent).length;
+    await this.audit.record(user, 'drasi.review.email', 'drasi', id, { sent, failed: results.length - sent + refused.length });
+    const byLink = new Map([...refused, ...results].map((r) => [r.id, r]));
+    return dto.links.map((l) => byLink.get(l.id)!);
   }
 
   async voidInvite(user: RequestUser, id: string, inviteId: string): Promise<{ voided: true }> {

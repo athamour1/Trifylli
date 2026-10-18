@@ -10,6 +10,8 @@ import { drasiCan } from '@trifylli/shared';
 import { DraseisDossierService } from './draseis-dossier.service';
 import { DraseisReviewService } from './draseis-review.service';
 import { IssueReviewInvitesDto, PublicReviewAnswersDto, SetReviewAnswersDto, SetReviewQuestionsDto, UpdateReviewSettingsDto } from './dto/drasi-review.dto';
+import { EmailLinksDto } from './dto/drasi-forms.dto';
+import { QuietChange } from '../collab/live-changes';
 
 /** Αξιολόγηση (φόρμα) και ντοσιέ μιας δράσης. */
 @ApiTags('Δράσεις — αξιολόγηση & ντοσιέ')
@@ -90,6 +92,16 @@ export class DraseisReviewController {
   @ApiOperation({ summary: 'Έκδοση δημόσιων συνδέσμων αξιολόγησης — το token επιστρέφεται μία φορά' })
   issueInvites(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: IssueReviewInvitesDto) {
     return this.review.issueInvites(user, id, dto);
+  }
+
+  @Post('review/invites/email')
+  @RequireDrasi('axiologisi', 'edit')
+  @HttpCode(200)
+  @QuietChange()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Αποστολή με email προσωπικών συνδέσμων που μόλις εκδόθηκαν — σε όποιον υπογράφει' })
+  emailInvites(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: EmailLinksDto) {
+    return this.review.emailInvites(user, id, dto);
   }
 
   @Delete('review/invites/:inviteId')

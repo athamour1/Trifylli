@@ -545,6 +545,8 @@ export interface DrasiFormsMatrix {
   }[];
   pending: number;
   total: number;
+  /** Στέλνει email ο server (SMTP ρυθμισμένο) — αλλιώς οι σύνδεσμοι μόνο αντιγράφονται. */
+  emailEnabled: boolean;
 }
 
 /** Ο σύνδεσμος που βγαίνει ΜΙΑ φορά: στη βάση μένει μόνο το hash του token. */
@@ -554,6 +556,18 @@ export interface IssuedFormLink {
   type: DrasiFormType;
   url: string;
   expiresAt: string;
+  /** Σε ποιον θα πάει με email: σε όποιον υπογράφει (κηδεμόνες ανηλίκου, ο ίδιος ο ενήλικος). */
+  emailTo: string[];
+}
+
+/** Τι έγινε με το email ενός συνδέσμου (εντύπου ή αξιολόγησης). */
+export interface LinkEmailResult {
+  /** Το έντυπο ή η πρόσκληση αξιολόγησης. */
+  id: string;
+  sent: boolean;
+  to: string[];
+  /** Γιατί δεν έφυγε — για το μήνυμα στην οθόνη. */
+  error: string | null;
 }
 
 /** Τι βλέπει ο γονέας: μόνο αυτό το έντυπο, αυτού του παιδιού. */
@@ -761,6 +775,8 @@ export interface IssuedReviewLink {
   inviteId: string;
   url: string;
   expiresAt: string;
+  /** Σε ποιον θα πάει με email — ίδιος κανόνας με τα έντυπα. */
+  emailTo: string[];
 }
 
 /** Ο κοινός σύνδεσμος αξιολόγησης μιας δράσης: υπάρχει; πόσοι απάντησαν μέσω αυτού; */
@@ -803,6 +819,8 @@ export interface DrasiReviewView {
   cannotAnswerReason: string | null;
   /** Σύνοψη — για όσους διαχειρίζονται τη δράση, ή για τους απαντώντες αν το επιτρέπουν οι ρυθμίσεις. */
   summary: DrasiReviewSummary | null;
+  /** Στέλνει email ο server — οι προσωπικοί σύνδεσμοι φεύγουν και με email. */
+  emailEnabled: boolean;
 }
 
 /** Ό,τι χρειάζεται το ντοσιέ, σε ένα request. */

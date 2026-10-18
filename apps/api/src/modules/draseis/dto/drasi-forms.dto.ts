@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   ArrayMaxSize,
+  ArrayMinSize,
   Equals,
   IsArray,
   IsBoolean,
@@ -11,7 +12,9 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   MaxLength,
+  ValidateNested,
 } from 'class-validator';
 import { DrasiFormType, SignerRole } from '@trifylli/shared';
 
@@ -34,6 +37,32 @@ export class IssueFormsDto {
   @IsOptional()
   @IsBoolean()
   reissue?: boolean;
+}
+
+/** Ένας σύνδεσμος που μόλις εκδόθηκε: το έντυπο (ή η πρόσκληση) και το token του. */
+export class EmailLinkDto {
+  @ApiProperty({ format: 'uuid', description: 'Το έντυπο ή η πρόσκληση αξιολόγησης.' })
+  @IsUUID()
+  id!: string;
+
+  @ApiProperty({ description: 'Το token του συνδέσμου (το τελευταίο κομμάτι του URL) — ο server ελέγχει ότι είναι του εντύπου.' })
+  @IsString()
+  @Matches(/^[A-Za-z0-9_-]{30,60}$/)
+  token!: string;
+}
+
+/**
+ * Αποστολή με email συνδέσμων που μόλις εκδόθηκαν. Οι παραλήπτες βγαίνουν στον
+ * server (όποιος υπογράφει) — ο client δεν ορίζει σε ποιον πάει.
+ */
+export class EmailLinksDto {
+  @ApiProperty({ type: [EmailLinkDto] })
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(300)
+  @ValidateNested({ each: true })
+  @Type(() => EmailLinkDto)
+  links!: EmailLinkDto[];
 }
 
 /** Η υποβολή από τον γονέα — χωρίς συνεδρία, μόνο με το token του συνδέσμου. */

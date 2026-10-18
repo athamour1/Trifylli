@@ -10,7 +10,8 @@ import { CurrentUser, Public, RequireDrasi } from '../../common/auth/decorators'
 import type { RequestUser } from '../../common/auth/types';
 import { DraseisFormsService } from './draseis-forms.service';
 import { DraseisPharmacyService } from './draseis-pharmacy.service';
-import { IssueFormsDto, SetPharmacyKitsDto, SubmitFormDto } from './dto/drasi-forms.dto';
+import { EmailLinksDto, IssueFormsDto, SetPharmacyKitsDto, SubmitFormDto } from './dto/drasi-forms.dto';
+import { QuietChange } from '../collab/live-changes';
 
 /** Έντυπα και φαρμακείο μιας δράσης — για τα στελέχη. */
 @ApiTags('Δράσεις — έντυπα & φαρμακείο')
@@ -36,6 +37,17 @@ export class DraseisFormsController {
   @ApiOperation({ summary: 'Έκδοση συνδέσμων — το token επιστρέφεται μία φορά' })
   issue(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: IssueFormsDto) {
     return this.forms.issue(user, id, dto);
+  }
+
+  // Χωρίς θέση στη ροή δραστηριότητας: δεν αλλάζει τίποτα στη δράση, φεύγουν email.
+  @Post('forms/email')
+  @RequireDrasi('entypa', 'edit')
+  @HttpCode(200)
+  @QuietChange()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Αποστολή με email συνδέσμων που μόλις εκδόθηκαν — σε όποιον υπογράφει' })
+  email(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: EmailLinksDto) {
+    return this.forms.emailLinks(user, id, dto);
   }
 
   // Πριν από το `forms/:formId`: αλλιώς το «export.pdf» θα έπεφτε στο ParseUUIDPipe.

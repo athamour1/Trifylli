@@ -7,6 +7,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { DrasiFormStatus, DrasiFormType, MemberKind, Prisma } from '@prisma/client';
@@ -24,6 +25,7 @@ import {
   type HealthSummaryEntry,
   type IssuedFormLink,
   type KladosType,
+  type LinkEmailResult,
   type PublicFormView,
 } from '@trifylli/shared';
 import { AuditService } from '../../common/audit/audit.service';
@@ -37,7 +39,9 @@ import { ageInYears } from '../meloi/age';
 import { sniffMime } from '../files/sniff';
 import { EseoClient } from '../integrations/eseo.client';
 import { DrasiAccessService } from './drasi-access.service';
-import type { IssueFormsDto, SubmitFormDto } from './dto/drasi-forms.dto';
+import type { EmailLinksDto, IssueFormsDto, SubmitFormDto } from './dto/drasi-forms.dto';
+import { linkRecipients } from './link-emails';
+import { LinkMailer, type MailableLink } from './link-mailer';
 import { mergePdfs, renderFilledForm, type FilledFormInput, type FormTemplate } from './forms-pdf';
 
 const MAX_SIGNATURE_BYTES = 250 * 1024;
@@ -63,6 +67,7 @@ export class DraseisFormsService {
     private readonly eseo: EseoClient,
     @Inject(AppConfigToken) private readonly config: AppConfig,
     private readonly jobs: JobMonitor,
+    private readonly linkMailer: LinkMailer,
   ) {}
 
   // ───────────────────────── Για τα στελέχη ─────────────────────────
@@ -112,7 +117,7 @@ export class DraseisFormsService {
       };
     });
 
-    return { participants: rows, pending, total };
+    return { participants: rows, pending, total, emailEnabled: this.linkMailer.enabled };
   }
 
   /**
@@ -123,7 +128,7 @@ export class DraseisFormsService {
     const drasi = await this.access.load(user, id, 'write');
     const participants = await this.prisma.drasiParticipant.findMany({
       where: { drasiId: id, ...(dto.participantIds?.length ? { id: { in: dto.participantIds } } : {}) },
-      include: { user: { select: { birthDate: true } }, forms: true },
+      include: { user: { select: { birthDate: true, email: true, guardians: { select: { email: true } } } }, forms: true },
     });
 
     const expiresAt = new Date(Date.now() + FORM_LINK_TTL_DAYS * 86_400_000);
@@ -132,6 +137,7 @@ export class DraseisFormsService {
 
     for (const p of participants) {
       const isMinor = minorAt(p.user.birthDate, drasi.dateStart, p.kind);
+      const emailTo = linkRecipients(p.user, isMinor);
       const types = requiredTypes(isMinor).filter((t) => !dto.types?.length || dto.types.includes(t));
       for (const type of types) {
         const existing = p.forms.find((f) => f.type === type);
@@ -159,12 +165,69 @@ export class DraseisFormsService {
             openedAt: null,
           },
         });
-        links.push({ participantId: p.id, formId: form.id, type, url: `${this.appUrl()}/forms/${token}`, expiresAt: expiresAt.toISOString() });
+        links.push({ participantId: p.id, formId: form.id, type, url: `${this.appUrl()}/forms/${token}`, expiresAt: expiresAt.toISOString(), emailTo });
       }
     }
 
     await this.audit.record(user, 'drasi.forms.issue', 'drasi', id, { count: links.length, reissue: dto.reissue ?? false });
     return links;
+  }
+
+  /**
+   * Αποστολή με email συνδέσμων που μόλις εκδόθηκαν. Το token το έχει μόνο η
+   * σελίδα που τους έβγαλε (στη βάση μένει το hash): έρχεται από εκεί και
+   * ελέγχεται με το hash του εντύπου. Οι παραλήπτες βγαίνουν εδώ — όποιος
+   * υπογράφει — ώστε το endpoint να μη στέλνει ό,τι θέλει σε όποιον θέλει.
+   */
+  async emailLinks(user: RequestUser, id: string, dto: EmailLinksDto): Promise<LinkEmailResult[]> {
+    await this.access.load(user, id, 'write');
+    if (!this.linkMailer.enabled) throw new ServiceUnavailableException('Η αποστολή email δεν έχει ρυθμιστεί στον server (SMTP).');
+    const forms = await this.prisma.drasiForm.findMany({
+      where: { drasiId: id, id: { in: dto.links.map((l) => l.id) } },
+      include: {
+        drasi: { select: { dateStart: true } },
+        participant: {
+          select: {
+            kind: true,
+            user: { select: { firstName: true, lastName: true, email: true, birthDate: true, guardians: { select: { email: true } } } },
+          },
+        },
+      },
+    });
+    const byId = new Map(forms.map((f) => [f.id, f]));
+    const now = new Date();
+    const refused: LinkEmailResult[] = [];
+    const mailable: MailableLink[] = [];
+    for (const link of dto.links) {
+      const form = byId.get(link.id);
+      const live =
+        !!form &&
+        form.tokenHash === hashToken(link.token) &&
+        (form.status === DrasiFormStatus.SENT || form.status === DrasiFormStatus.OPENED) &&
+        !!form.expiresAt &&
+        form.expiresAt > now;
+      if (!form || !live) {
+        refused.push({ id: link.id, sent: false, to: [], error: 'Ο σύνδεσμος δεν ισχύει πια — βγάλε νέο.' });
+        continue;
+      }
+      const u = form.participant.user;
+      const isMinor = minorAt(u.birthDate, form.drasi.dateStart, form.participant.kind);
+      mailable.push({
+        id: form.id,
+        kind: form.type,
+        participant: `${u.lastName} ${u.firstName}`.trim(),
+        to: linkRecipients(u, isMinor),
+        url: `${this.appUrl()}/forms/${link.token}`,
+        expiresAt: form.expiresAt!,
+      });
+    }
+
+    const results = mailable.length ? await this.linkMailer.send(user, id, mailable) : [];
+    const sent = results.filter((r) => r.sent);
+    for (const r of sent) await this.prisma.drasiForm.update({ where: { id: r.id }, data: { sentTo: r.to.join(', ') } });
+    await this.audit.record(user, 'drasi.forms.email', 'drasi', id, { sent: sent.length, failed: results.length - sent.length + refused.length });
+    const byLink = new Map([...refused, ...results].map((r) => [r.id, r]));
+    return dto.links.map((l) => byLink.get(l.id)!);
   }
 
   /** Ακύρωση: ο σύνδεσμος πεθαίνει· οι απαντήσεις (αν υπήρχαν) μένουν ως ιστορικό μέχρι τον καθαρισμό. */
