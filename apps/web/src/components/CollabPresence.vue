@@ -14,7 +14,11 @@
       </q-avatar>
       <q-avatar v-if="hidden" :size="compact ? '20px' : '26px'" class="collab-presence__face collab-presence__more">+{{ hidden }}</q-avatar>
     </div>
-    <span v-if="!compact" class="text-caption text-grey-7 q-ml-sm gt-xs">{{ summary }}</span>
+    <!-- Στενό σημείο (κεφαλίδα, κινητό): το κείμενο κόβεται με «…», τα πρόσωπα μένουν. -->
+    <span v-if="!compact" class="text-caption text-grey-7 q-ml-sm gt-xs ellipsis collab-presence__summary">
+      {{ summary }}
+      <q-tooltip>{{ summary }}</q-tooltip>
+    </span>
   </div>
 </template>
 
@@ -57,6 +61,16 @@ function initials(name: string): string {
 </script>
 
 <style scoped lang="scss">
+.collab-presence {
+  min-width: 0;
+  max-width: 100%;
+}
+.collab-presence__faces {
+  flex: none;
+}
+.collab-presence__summary {
+  min-width: 0;
+}
 .collab-presence__face {
   font-size: 11px;
   font-weight: 700;
