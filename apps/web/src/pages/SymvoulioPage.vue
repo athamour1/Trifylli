@@ -220,7 +220,6 @@ import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 import { useQuasar } from 'quasar';
 import {
   KLADOS_LABEL,
-  TOPIKO_SYMVOULIA,
   collabDocument,
   type KladosType,
   type SymvoulioType,
@@ -240,7 +239,6 @@ import { useLiveReload } from '../composables/useLiveChanges';
 import { ApiError, OfflineError, get, patch, post } from '../lib/api';
 import { useKladosThemeStore } from '../stores/klados-theme';
 import { worstSaveState, type SaveState } from '../lib/save-state';
-import { useAuthStore } from '../stores/auth';
 import { useOfflineStore } from '../stores/offline';
 
 const kladosTheme = useKladosThemeStore();
@@ -275,6 +273,10 @@ interface SymvoulioDetail {
   agenda: string | null;
   minutes: string | null;
   finalized: boolean;
+  /** Συμβούλιο προετοιμασίας μιας δράσης — τα δικαιώματα τα δίνει η δράση. */
+  drasiId: string | null;
+  /** Αν γράφει ο χρήστης (πριν την οριστικοποίηση): ο κανόνας είναι του API — κλάδος, Τοπικό ή δράση. */
+  canWrite: boolean;
   klados: { type: KladosType; name: string | null } | null;
   chair: { id: string; firstName: string; lastName: string } | null;
   participants: { userId: string; user: Stelexos }[];
@@ -283,7 +285,6 @@ interface SymvoulioDetail {
 const route = useRoute();
 const router = useRouter();
 const $q = useQuasar();
-const auth = useAuthStore();
 const offline = useOfflineStore();
 const id = String(route.params.id);
 
@@ -315,16 +316,11 @@ watch(
 const viewOnly = computed(() => route.query.view === '1');
 
 /**
- * Ίδιος κανόνας με το API: συμβούλιο Τοπικού γράφει μόνο όποιος έχει το δικαίωμα
- * Τοπικού, συμβούλιο κλάδου όποιος έχει το δικαίωμα σε **εκείνον** τον κλάδο.
+ * Το λέει το API (`canWrite`): συμβούλιο Τοπικού γράφει όποιος έχει το δικαίωμα
+ * Τοπικού, συμβούλιο κλάδου όποιος το έχει σε **εκείνον** τον κλάδο, συμβούλιο
+ * δράσης όποιος γράφει τα συμβούλια της δράσης.
  */
-const canWrite = computed(() => {
-  const value = data.value;
-  if (!value) return false;
-  return (TOPIKO_SYMVOULIA as readonly string[]).includes(value.type)
-    ? auth.can('symvoulio:topiko:write')
-    : auth.can('symvoulio:klados:write', value.klados?.type);
-});
+const canWrite = computed(() => data.value?.canWrite ?? false);
 
 /** Οριστικοποιημένα πρακτικά δεν αλλάζουν — ούτε κατά λάθος. */
 const editable = computed(() => canWrite.value && !data.value?.finalized && !viewOnly.value);

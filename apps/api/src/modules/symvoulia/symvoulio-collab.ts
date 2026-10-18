@@ -1,11 +1,11 @@
 import { Injectable, type OnModuleInit } from '@nestjs/common';
 import { MemberKind, MemberStatus } from '@prisma/client';
-import { COLLAB_FIELDS, TOPIKO_SYMVOULIA, can, type CommentPerson, type KladosType } from '@trifylli/shared';
+import { COLLAB_FIELDS, type CommentPerson } from '@trifylli/shared';
 import type { RequestUser } from '../../common/auth/types';
 import { PrismaService } from '../../common/prisma/prisma.service';
-import { accessProfileOf, hasCapabilityFor } from '../../common/util/klados-scope';
 import { textDocument, type CollabAccess, type CollabDocumentAbout } from '../collab/collab-documents';
 import { CollabService } from '../collab/collab.service';
+import { SymvoulioAccess } from './symvoulio-access';
 
 /**
  * Ατζέντα και πρακτικά συμβουλίου ως κοινό έγγραφο (`symvoulio:<id>`).
@@ -18,6 +18,7 @@ export class SymvoulioCollab implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly collab: CollabService,
+    private readonly symvoulioAccess: SymvoulioAccess,
   ) {}
 
   onModuleInit(): void {
@@ -63,23 +64,17 @@ export class SymvoulioCollab implements OnModuleInit {
     });
   }
 
+  /** Ο ίδιος κανόνας με το service (`SymvoulioAccess`)· μετά την οριστικοποίηση μόνο ανάγνωση. */
   async access(user: RequestUser, [id]: readonly string[]): Promise<CollabAccess | null> {
     const symvoulio = await this.prisma.symvoulio.findFirst({
       where: { id, topikoId: user.topikoId, archivedAt: null },
-      select: { type: true, finalizedAt: true, klados: { select: { type: true } } },
+      select: { type: true, drasiId: true, finalizedAt: true, klados: { select: { type: true } } },
     });
     if (!symvoulio) return null;
-    const klados = symvoulio.klados?.type as KladosType | undefined;
-    if (!hasCapabilityFor(user, 'calendar:read', klados)) return null;
+    const grant = await this.symvoulioAccess.grant(user, symvoulio);
+    if (!grant.view) return null;
     if (symvoulio.finalizedAt) return 'read';
-
-    // Τα συμβούλια Τοπικού τα γράφει μόνο όποιος έχει και το δικαίωμα Τοπικού —
-    // ίδιος κανόνας με το `assertAccess` του service.
-    const topiko = (TOPIKO_SYMVOULIA as readonly string[]).includes(symvoulio.type);
-    const writes =
-      hasCapabilityFor(user, 'symvoulio:klados:write', klados) &&
-      (!topiko || can(accessProfileOf(user), 'symvoulio:topiko:write'));
-    return writes ? 'write' : 'read';
+    return grant.write ? 'write' : 'read';
   }
 
   async load([id]: readonly string[]): Promise<Record<string, string> | null> {

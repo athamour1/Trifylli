@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { AccountRole, KladosType } from '@trifylli/shared';
 import type { RequestUser } from '../../common/auth/types';
 import { SymvouliaService } from './symvoulia.service';
+import { SymvoulioAccess } from './symvoulio-access';
 
 const ID = 's-1';
 const ME: RequestUser = {
@@ -39,7 +40,7 @@ function setup() {
     symvoulio: { findFirst: async () => ({ id: ID, type: 'KLADOS', finalizedAt: null, klados: { type: 'ODIGOI' } }) },
     $transaction: async (fn: (t: typeof tx) => Promise<unknown>) => fn(tx),
   };
-  const service = new SymvouliaService(prisma as never, {} as never, {} as never, {} as never);
+  const service = new SymvouliaService(prisma as never, {} as never, {} as never, {} as never, new SymvoulioAccess({} as never));
   return { service, participants, updates, who: () => participants.map((p) => p.userId).sort() };
 }
 

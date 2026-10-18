@@ -11,18 +11,18 @@ import {
   SYMVOULIO_TYPE_LABEL,
   TOPIKO_SYMVOULIA,
   COLLAB_FIELDS,
-  can,
   collabDocument,
   type KladosType,
   type SymvoulioType,
 } from '@trifylli/shared';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
-import { accessProfileOf, assertKladosAccess, scopedKladoi } from '../../common/util/klados-scope';
+import { assertKladosAccess, scopedKladoi } from '../../common/util/klados-scope';
 import { MemberKind, MemberStatus } from '@prisma/client';
 import { refuseCollabFields } from '../collab/collab-fields';
 import { CollabService } from '../collab/collab.service';
 import { SymvouliaPollsService } from './symvoulia-polls.service';
+import { SymvoulioAccess } from './symvoulio-access';
 import { FilesService } from '../files/files.service';
 import type { CreateSymvoulioDto, UpdateSymvoulioDto } from './dto/symvoulio.dto';
 
@@ -33,6 +33,7 @@ export class SymvouliaService {
     private readonly files: FilesService,
     private readonly collab: CollabService,
     private readonly polls: SymvouliaPollsService,
+    private readonly symvoulioAccess: SymvoulioAccess,
   ) {}
 
   async list(user: RequestUser, type?: SymvoulioType, klados?: KladosType, drasiId?: string) {
@@ -60,11 +61,21 @@ export class SymvouliaService {
       },
     });
 
-    return rows.map((row) => ({
-      ...row,
-      typeLabel: SYMVOULIO_TYPE_LABEL[row.type as SymvoulioType],
-      finalized: row.finalizedAt !== null,
-    }));
+    // Τα συμβούλια μιας δράσης τα βλέπει όποιος βλέπει τη δράση — όχι όλος ο κλάδος.
+    const drasiIds = [...new Set(rows.map((row) => row.drasiId).filter((v): v is string => !!v))];
+    const visibleDrasi = new Set<string>();
+    for (const drasiId of drasiIds) {
+      const grant = await this.symvoulioAccess.grant(user, { type: '', drasiId, klados: null });
+      if (grant.view) visibleDrasi.add(drasiId);
+    }
+
+    return rows
+      .filter((row) => !row.drasiId || visibleDrasi.has(row.drasiId))
+      .map((row) => ({
+        ...row,
+        typeLabel: SYMVOULIO_TYPE_LABEL[row.type as SymvoulioType],
+        finalized: row.finalizedAt !== null,
+      }));
   }
 
   async findOne(user: RequestUser, id: string) {
@@ -82,12 +93,15 @@ export class SymvouliaService {
       },
     });
     if (!symvoulio) throw new NotFoundException('Το συμβούλιο δεν βρέθηκε.');
-    assertKladosAccess(user, symvoulio.klados?.type as KladosType | undefined);
+    const grant = await this.symvoulioAccess.grant(user, symvoulio);
+    if (!grant.view) throw new ForbiddenException('Δεν έχετε πρόσβαση σε αυτό το συμβούλιο.');
 
     return {
       ...symvoulio,
       typeLabel: SYMVOULIO_TYPE_LABEL[symvoulio.type as SymvoulioType],
       finalized: symvoulio.finalizedAt !== null,
+      // Η σελίδα δεν ξαναβγάζει τον κανόνα (κλάδος ή δράση): τον μαθαίνει από εδώ.
+      canWrite: grant.write,
     };
   }
 
@@ -175,7 +189,9 @@ export class SymvouliaService {
       include: { klados: { select: { type: true } } },
     });
     if (!symvoulio) throw new NotFoundException('Το συμβούλιο δεν βρέθηκε.');
-    assertKladosAccess(user, symvoulio.klados?.type as KladosType | undefined);
+    if (!(await this.symvoulioAccess.grant(user, symvoulio)).view) {
+      throw new ForbiddenException('Δεν έχετε πρόσβαση σε αυτό το συμβούλιο.');
+    }
 
     const [candidates, selected] = await Promise.all([
       this.prisma.user.findMany({
@@ -253,13 +269,12 @@ export class SymvouliaService {
   }
 
   /**
-   * Εμβέλεια και δικαίωμα εγγραφής για ένα υπάρχον συμβούλιο.
+   * Δικαίωμα εγγραφής σε ένα υπάρχον συμβούλιο (βλ. `SymvoulioAccess`).
    *
-   * Ο έλεγχος για τα συμβούλια Τοπικού γίνεται **εδώ** και όχι μόνο στη
-   * δημιουργία: το guard του controller ζητά `symvoulio:klados:write`, που την
-   * έχει και ο διαχειριστής κλάδου, και το `assertKladosAccess` δεν λέει τίποτα
-   * για πόρους χωρίς κλάδο. Χωρίς αυτό, ένας διαχειριστής κλάδου θα μπορούσε να
-   * αλλάξει ή να σβήσει πρακτικά Τοπικού.
+   * Ο έλεγχος γίνεται **εδώ** και όχι στο guard του controller: ο κανόνας
+   * εξαρτάται από το ίδιο το συμβούλιο — της δράσης ακολουθεί τους ρόλους της,
+   * του Τοπικού θέλει και το δικαίωμα Τοπικού (αλλιώς ένας διαχειριστής κλάδου
+   * θα άλλαζε ή θα έσβηνε πρακτικά Τοπικού).
    */
   private async assertAccess(user: RequestUser, id: string) {
     const symvoulio = await this.prisma.symvoulio.findFirst({
@@ -267,11 +282,15 @@ export class SymvouliaService {
       include: { klados: { select: { type: true } } },
     });
     if (!symvoulio) throw new NotFoundException('Το συμβούλιο δεν βρέθηκε.');
-    assertKladosAccess(user, symvoulio.klados?.type as KladosType | undefined);
 
-    const isTopiko = (TOPIKO_SYMVOULIA as readonly string[]).includes(symvoulio.type);
-    if (isTopiko && !can(accessProfileOf(user), 'symvoulio:topiko:write')) {
-      throw new ForbiddenException('Τα συμβούλια Τοπικού τα διαχειρίζεται ο υπερδιαχειριστής.');
+    const grant = await this.symvoulioAccess.grant(user, symvoulio);
+    if (!grant.view) throw new ForbiddenException('Δεν έχετε πρόσβαση σε αυτό το συμβούλιο.');
+    if (!grant.write) {
+      if (symvoulio.drasiId) throw new ForbiddenException('Ο ρόλος σας στη δράση δεν επιτρέπει αλλαγές στα συμβούλιά της.');
+      if ((TOPIKO_SYMVOULIA as readonly string[]).includes(symvoulio.type)) {
+        throw new ForbiddenException('Τα συμβούλια Τοπικού τα διαχειρίζεται ο υπερδιαχειριστής.');
+      }
+      throw new ForbiddenException('Δεν έχετε δικαίωμα αλλαγών στα συμβούλια του κλάδου.');
     }
 
     return symvoulio;

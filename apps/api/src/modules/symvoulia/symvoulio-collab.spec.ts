@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { AccountRole, KladosType, STELEXOS_BASE_CAPABILITIES, SymvoulioType, type Capability } from '@trifylli/shared';
 import type { RequestUser } from '../../common/auth/types';
+import { SymvoulioAccess } from './symvoulio-access';
 import { SymvoulioCollab } from './symvoulio-collab';
 
 const ID = '3f2b8c1e-9a4d-4f6b-8e2a-1c5d7e9f0a3b';
@@ -35,7 +36,7 @@ function collab(row: { type: SymvoulioType; klados: KladosType | null; finalized
         row && { type: row.type, finalizedAt: row.finalizedAt ?? null, klados: row.klados ? { type: row.klados } : null },
     },
   };
-  return new SymvoulioCollab(prisma as never, { registry: { register: () => undefined } } as never);
+  return new SymvoulioCollab(prisma as never, { registry: { register: () => undefined } } as never, new SymvoulioAccess({} as never));
 }
 
 describe('πρακτικά συμβουλίου — ποιος γράφει και ποιος βλέπει', () => {

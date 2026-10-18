@@ -24,12 +24,14 @@ import { SymvouliaPollsService } from './symvoulia-polls.service';
 import { SymvouliaService } from './symvoulia.service';
 
 /**
- * Ένας controller για τα δύο επίπεδα συμβουλίων.
+ * Ένας controller για τα δύο επίπεδα συμβουλίων — και τα συμβούλια των δράσεων.
  *
- * Η διάκριση δικαιωμάτων γίνεται ανά τύπο: τα συμβούλια Τοπικού/Στελεχών
- * απαιτούν `symvoulio:topiko:write`, τα συμβούλια κλάδου `symvoulio:klados:write`.
- * Ο έλεγχος είναι στο service για τα υπάρχοντα και στο `assertWriteCapability`
- * για τη δημιουργία, όπου ο τύπος έρχεται από το body.
+ * Η διάκριση δικαιωμάτων γίνεται ανά συμβούλιο: της δράσης ακολουθεί τους
+ * ρόλους της δράσης, του Τοπικού/Στελεχών απαιτεί `symvoulio:topiko:write`,
+ * του κλάδου `symvoulio:klados:write`. Για τα υπάρχοντα (`:id`) ο έλεγχος είναι
+ * μόνο στο service (`SymvoulioAccess`): ένα guard ικανότητας θα έκοβε το
+ * εξωτερικό στέλεχος με ρόλο στη δράση. Για τη δημιουργία, όπου ο τύπος έρχεται
+ * από το body, στο `assertWriteCapability`.
  */
 @ApiTags('Συμβούλια')
 @ApiBearerAuth()
@@ -56,7 +58,6 @@ export class SymvouliaController {
   }
 
   @Get(':id')
-  @RequireCapability('calendar:read')
   findOne(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.symvoulia.findOne(user, id);
   }
@@ -73,7 +74,6 @@ export class SymvouliaController {
   }
 
   @Patch(':id')
-  @RequireCapability('symvoulio:klados:write')
   update(
     @CurrentUser() user: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,
@@ -83,7 +83,6 @@ export class SymvouliaController {
   }
 
   @Get(':id/stelexi')
-  @RequireCapability('calendar:read')
   @ApiOperation({
     summary: 'Τα στελέχη που μπορούν να συμμετέχουν',
     description:
@@ -95,14 +94,12 @@ export class SymvouliaController {
   }
 
   @Delete(':id')
-  @RequireCapability('symvoulio:klados:write')
   @ApiOperation({ summary: 'Αρχειοθέτηση συμβουλίου' })
   archive(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.symvoulia.archive(user, id);
   }
 
   @Post(':id/finalize')
-  @RequireCapability('symvoulio:klados:write')
   @ApiOperation({ summary: 'Οριστικοποίηση πρακτικών (κλείδωμα)' })
   finalize(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.symvoulia.finalize(user, id);
@@ -111,21 +108,18 @@ export class SymvouliaController {
   // ── Ψηφοφορίες ──
 
   @Get(':id/polls')
-  @RequireCapability('calendar:read')
   @ApiOperation({ summary: 'Οι ψηφοφορίες του συμβουλίου, με τα αποτελέσματα' })
   listPolls(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.polls.list(user, id);
   }
 
   @Post(':id/polls')
-  @RequireCapability('calendar:read')
   @ApiOperation({ summary: 'Νέα ψηφοφορία — όποιος γράφει το συμβούλιο' })
   openPoll(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: OpenPollDto) {
     return this.polls.open(user, id, dto);
   }
 
   @Put(':id/polls/:pollId/vote')
-  @RequireCapability('calendar:read')
   @ApiOperation({ summary: 'Η ψήφος ενός συμμετέχοντα' })
   async vote(
     @CurrentUser() user: RequestUser,
@@ -138,7 +132,6 @@ export class SymvouliaController {
   }
 
   @Post(':id/polls/:pollId/close')
-  @RequireCapability('calendar:read')
   @ApiOperation({ summary: 'Κλείσιμο — το αποτέλεσμα μπαίνει στα πρακτικά' })
   async closePoll(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Param('pollId', ParseUUIDPipe) pollId: string) {
     await this.polls.close(user, id, pollId);
@@ -146,7 +139,6 @@ export class SymvouliaController {
   }
 
   @Delete(':id/polls/:pollId')
-  @RequireCapability('calendar:read')
   @ApiOperation({ summary: 'Διαγραφή ψηφοφορίας' })
   async removePoll(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Param('pollId', ParseUUIDPipe) pollId: string) {
     await this.polls.remove(user, id, pollId);
