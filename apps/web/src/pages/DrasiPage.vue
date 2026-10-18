@@ -21,24 +21,28 @@
               </q-item>
               <q-separator spaced />
             </template>
-            <q-item-label header class="q-pb-xs">Ενότητες</q-item-label>
-            <q-item
-              v-for="s in sections"
-              :key="s.name"
-              clickable
-              dense
-              :active="section === s.name"
-              active-class="drasi-nav__active"
-              :to="{ name: 'drasi', params: { id, section: s.name } }"
-              replace
-            >
-              <q-item-section avatar><q-icon :name="s.icon" size="20px" /></q-item-section>
-              <q-item-section>{{ s.label }}</q-item-section>
-              <q-item-section v-if="unseen.has(s.name)" side>
-                <span class="drasi-nav__dot" aria-label="Άλλαξε από την τελευταία σου επίσκεψη" />
-              </q-item-section>
-              <q-item-section v-if="s.badge" side><q-badge color="grey-4" text-color="grey-9" :label="s.badge" /></q-item-section>
-            </q-item>
+            <!-- Σε ομάδες: η Επισκόπηση μόνη πάνω, Λειτουργία, Πρόγραμμα, οι Ρυθμίσεις μόνες κάτω. -->
+            <template v-for="g in navGroups" :key="g.key">
+              <q-separator v-if="g.key === 'bottom'" spaced />
+              <q-item-label v-if="g.label" header class="q-pb-xs">{{ g.label }}</q-item-label>
+              <q-item
+                v-for="s in g.items"
+                :key="s.name"
+                clickable
+                dense
+                :active="section === s.name"
+                active-class="drasi-nav__active"
+                :to="{ name: 'drasi', params: { id, section: s.name } }"
+                replace
+              >
+                <q-item-section avatar><q-icon :name="s.icon" size="20px" /></q-item-section>
+                <q-item-section>{{ s.label }}</q-item-section>
+                <q-item-section v-if="unseen.has(s.name)" side>
+                  <span class="drasi-nav__dot" aria-label="Άλλαξε από την τελευταία σου επίσκεψη" />
+                </q-item-section>
+                <q-item-section v-if="s.badge" side><q-badge color="grey-4" text-color="grey-9" :label="s.badge" /></q-item-section>
+              </q-item>
+            </template>
           </q-list>
         </nav>
 
@@ -88,21 +92,24 @@
                 <q-btn flat no-caps color="klados" icon="arrow_back" label="Οι δράσεις μου" :to="{ name: 'dashboard' }" @click="sectionSheet = false" />
               </q-card-section>
               <q-card-section class="text-subtitle2 q-pb-sm">Ενότητες</q-card-section>
-              <q-card-section class="q-pt-none section-sheet__grid">
-                <button
-                  v-for="s in sections"
-                  :key="s.name"
-                  type="button"
-                  class="section-sheet__tile"
-                  :class="{ 'section-sheet__tile--active': s.name === section }"
-                  @click="goSection(s.name); sectionSheet = false"
-                >
-                  <q-icon :name="s.icon" size="24px" />
-                  <span>{{ s.label }}</span>
-                  <q-badge v-if="s.badge" floating rounded color="klados" text-color="klados-on" :label="s.badge" />
-                  <span v-else-if="unseen.has(s.name)" class="drasi-nav__dot section-sheet__dot" aria-label="Άλλαξε από την τελευταία σου επίσκεψη" />
-                </button>
-              </q-card-section>
+              <template v-for="g in navGroups" :key="g.key">
+                <q-card-section v-if="g.label" class="text-caption text-grey-7 q-py-xs">{{ g.label }}</q-card-section>
+                <q-card-section class="q-pt-none section-sheet__grid">
+                  <button
+                    v-for="s in g.items"
+                    :key="s.name"
+                    type="button"
+                    class="section-sheet__tile"
+                    :class="{ 'section-sheet__tile--active': s.name === section }"
+                    @click="goSection(s.name); sectionSheet = false"
+                  >
+                    <q-icon :name="s.icon" size="24px" />
+                    <span>{{ s.label }}</span>
+                    <q-badge v-if="s.badge" floating rounded color="klados" text-color="klados-on" :label="s.badge" />
+                    <span v-else-if="unseen.has(s.name)" class="drasi-nav__dot section-sheet__dot" aria-label="Άλλαξε από την τελευταία σου επίσκεψη" />
+                  </button>
+                </q-card-section>
+              </template>
             </q-card>
           </q-dialog>
 
@@ -534,32 +541,48 @@ function goSection(name: string): void {
   void router.replace({ name: 'drasi', params: { id, section: name } });
 }
 
+/** Οι ομάδες του συρταριού: Επισκόπηση (μόνη πάνω), Λειτουργία, Πρόγραμμα, Ρυθμίσεις (μόνες κάτω). */
+type SectionGroup = 'top' | 'leitourgia' | 'programma' | 'bottom';
+const SECTION_GROUPS: readonly { key: SectionGroup; label: string | null }[] = [
+  { key: 'top', label: null },
+  { key: 'leitourgia', label: 'Λειτουργία' },
+  { key: 'programma', label: 'Πρόγραμμα' },
+  { key: 'bottom', label: null },
+];
+
 const sections = computed(() => {
-  const list = [
-    { name: 'episkopisi', label: 'Επισκόπηση', icon: 'dashboard', badge: '' },
-    { name: 'programma', label: 'Πρόγραμμα', icon: 'schedule', badge: '' },
-    { name: 'diatrofologio', label: 'Διατροφολόγιο', icon: 'restaurant_menu', badge: '' },
-    { name: 'mythos', label: 'Μύθος', icon: 'auto_stories', badge: '' },
-    { name: 'participants', label: 'Συμμετέχοντες', icon: 'groups', badge: String(data.value?.participants.length ?? '') },
+  const list: { name: string; label: string; icon: string; badge: string; group: SectionGroup }[] = [
+    { name: 'episkopisi', label: 'Επισκόπηση', icon: 'dashboard', badge: '', group: 'top' },
+    // ── Λειτουργία: ό,τι κρατά τη δράση όρθια ──
+    { name: 'diatrofologio', label: 'Διατροφολόγιο', icon: 'restaurant_menu', badge: '', group: 'leitourgia' },
+    { name: 'participants', label: 'Συμμετέχοντες', icon: 'groups', badge: String(data.value?.participants.length ?? ''), group: 'leitourgia' },
+    // Οι σκηνές έχουν δική τους ενότητα — μόνο όπου η δράση έχει (όχι μονοήμερες, ρύθμιση ανοιχτή).
+    ...(data.value && drasiHasSkines(data.value) ? [{ name: 'skines', label: 'Σκηνές', icon: 'night_shelter', badge: '', group: 'leitourgia' as const }] : []),
+    { name: 'ypiresies', label: 'Υπηρεσίες', icon: 'cleaning_services', badge: '', group: 'leitourgia' },
+    { name: 'entypa', label: 'Έντυπα', icon: 'assignment', badge: '', group: 'leitourgia' },
+    { name: 'farmakeio', label: 'Φαρμακείο', icon: 'medical_services', badge: '', group: 'leitourgia' },
+    { name: 'yliko', label: 'Υλικό', icon: 'inventory_2', badge: '', group: 'leitourgia' },
+    { name: 'tamio', label: 'Ταμείο', icon: 'account_balance_wallet', badge: '', group: 'leitourgia' },
+    { name: 'ektyposi', label: 'Εκτύπωση', icon: 'print', badge: '', group: 'leitourgia' },
+    { name: 'arxigeio', label: 'Αρχηγείο', icon: 'shield', badge: '', group: 'leitourgia' },
+    // ── Πρόγραμμα: τι κάνουμε και πότε ──
+    { name: 'programma', label: 'Ωρολόγιο', icon: 'schedule', badge: '', group: 'programma' },
+    { name: 'mythos', label: 'Μύθος', icon: 'auto_stories', badge: '', group: 'programma' },
     // Το όνομα της υποομάδας του κλάδου: Πεντάδες / Φωλιές / Ενωμοτίες — με πολλούς κλάδους, όλες.
     // Οι δράσεις του Τοπικού δεν έχουν τέτοιες ομάδες (μόνο σκηνές, αν έχουν).
-    ...(data.value?.klados && data.value.kladoi.length ? [{ name: 'omades', label: groupsLabel.value, icon: 'diversity_3', badge: '' }] : []),
-    // Οι σκηνές έχουν δική τους ενότητα — μόνο όπου η δράση έχει (όχι μονοήμερες, ρύθμιση ανοιχτή).
-    ...(data.value && drasiHasSkines(data.value) ? [{ name: 'skines', label: 'Σκηνές', icon: 'night_shelter', badge: '' }] : []),
-    { name: 'ypiresies', label: 'Υπηρεσίες', icon: 'cleaning_services', badge: '' },
-    { name: 'entypa', label: 'Έντυπα', icon: 'assignment', badge: '' },
-    { name: 'farmakeio', label: 'Φαρμακείο', icon: 'medical_services', badge: '' },
-    { name: 'yliko', label: 'Υλικό', icon: 'inventory_2', badge: '' },
-    { name: 'tamio', label: 'Ταμείο', icon: 'account_balance_wallet', badge: '' },
-    { name: 'symvoulia', label: 'Συμβούλια', icon: 'forum', badge: '' },
-    { name: 'axiologisi', label: 'Αξιολόγηση', icon: 'rate_review', badge: '' },
-    { name: 'ektyposi', label: 'Εκτύπωση', icon: 'print', badge: '' },
-    { name: 'arxigeio', label: 'Αρχηγείο', icon: 'shield', badge: '' },
-    { name: 'rythmiseis', label: 'Ρυθμίσεις', icon: 'settings', badge: '' },
+    ...(data.value?.klados && data.value.kladoi.length
+      ? [{ name: 'omades', label: groupsLabel.value, icon: 'diversity_3', badge: '', group: 'programma' as const }]
+      : []),
+    { name: 'symvoulia', label: 'Συμβούλια', icon: 'forum', badge: '', group: 'programma' },
+    { name: 'axiologisi', label: 'Αξιολόγηση', icon: 'rate_review', badge: '', group: 'programma' },
+    { name: 'rythmiseis', label: 'Ρυθμίσεις', icon: 'settings', badge: '', group: 'bottom' },
   ];
   // Μόνο οι ενότητες που επιτρέπει ο ρόλος του χρήστη στη δράση (σκηνές = ομάδες).
   return list.filter((x) => drasiCan(data.value?.access, (x.name === 'skines' ? 'omades' : x.name) as DrasiPerm));
 });
+const navGroups = computed(() =>
+  SECTION_GROUPS.map((g) => ({ ...g, items: sections.value.filter((s) => s.group === g.key) })).filter((g) => g.items.length),
+);
 
 /** Οι αριθμοί της επισκόπησης. */
 const numbers = computed(() => {
