@@ -327,7 +327,7 @@
             </q-tab-panel>
 
             <q-tab-panel name="entypa" class="q-pa-none">
-              <DrasiEntypa :drasi-id="id" :can-write="canEdit('entypa')" />
+              <DrasiEntypa :drasi-id="id" :can-write="canEdit('entypa')" :can-health="drasiCanReadHealth(data.access)" />
             </q-tab-panel>
 
             <q-tab-panel name="farmakeio" class="q-pa-none">
@@ -364,7 +364,7 @@
             </q-tab-panel>
 
             <q-tab-panel name="ektyposi" class="q-pa-none">
-              <DrasiEktyposi :drasi-id="id" :title="data.title" :has-skines="drasiHasSkines(data)" :can-health="drasiCan(data.access, 'farmakeio')" />
+              <DrasiEktyposi :drasi-id="id" :title="data.title" :has-skines="drasiHasSkines(data)" :can-health="drasiCanReadHealth(data.access)" />
             </q-tab-panel>
 
             <q-tab-panel name="arxigeio" class="q-pa-none">
@@ -394,6 +394,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
   drasiCan,
+  drasiCanReadHealth,
   type DrasiAccess,
   type DrasiPerm,
   DRASI_GROUP_KINDS_BY_KLADOS,

@@ -8,7 +8,7 @@
       <q-space />
       <q-btn-dropdown flat color="klados" icon="picture_as_pdf" label="Λήψη εντύπων" :disable="!submittedCount" :loading="downloading">
         <q-list dense>
-          <q-item v-for="type in (['SYMMETOXI', 'YGEIA'] as const)" :key="type" clickable v-close-popup :disable="!submittedOf(type)" @click="downloadAll(type)">
+          <q-item v-for="type in downloadTypes" :key="type" clickable v-close-popup :disable="!submittedOf(type)" @click="downloadAll(type)">
             <q-item-section avatar><q-icon name="picture_as_pdf" /></q-item-section>
             <q-item-section>
               <q-item-label>{{ type === 'SYMMETOXI' ? 'Δηλώσεις Συμμετοχής' : 'Πιστοποιητικά Υγείας' }}</q-item-label>
@@ -53,7 +53,7 @@
                 {{ formatDate(formOf(p, type)!.submittedAt!) }} · {{ formOf(p, type)!.signerName }}
               </span>
               <span v-else-if="formOf(p, type)!.sentAt" class="text-caption text-grey-7">έως {{ formatDate(formOf(p, type)!.expiresAt!) }}</span>
-              <q-btn v-if="formOf(p, type)!.hasData" flat dense round size="sm" icon="visibility" color="klados" @click="view(formOf(p, type)!)"><q-tooltip>Προβολή</q-tooltip></q-btn>
+              <q-btn v-if="formOf(p, type)!.hasData && (type !== 'YGEIA' || canHealth)" flat dense round size="sm" icon="visibility" color="klados" @click="view(formOf(p, type)!)"><q-tooltip>Προβολή</q-tooltip></q-btn>
               <q-btn v-if="formOf(p, type)!.hasData && formOf(p, type)!.status === 'SUBMITTED'" flat dense round size="sm" icon="picture_as_pdf" color="klados" @click="downloadOne(formOf(p, type)!, p)"><q-tooltip>Λήψη — το έντυπο του Σ.Ε.Ο. συμπληρωμένο</q-tooltip></q-btn>
               <q-btn v-if="canWrite && formOf(p, type)!.id && formOf(p, type)!.status !== 'SUBMITTED' && formOf(p, type)!.status !== 'VOID'" flat dense round size="sm" icon="link_off" color="negative" @click="voidForm(formOf(p, type)!)"><q-tooltip>Ακύρωση συνδέσμου</q-tooltip></q-btn>
               <q-btn v-if="canWrite && formOf(p, type)!.id && (formOf(p, type)!.status === 'SENT' || formOf(p, type)!.status === 'OPENED')" flat dense round size="sm" icon="content_copy" color="klados" :loading="copying === `${p.participantId}:${type}`" @click="copyLink(p, type)">
@@ -153,7 +153,12 @@ import { ApiError, del, downloadFile, get, getBlob, post } from '../../lib/api';
 import { formatDate, formatDateTime } from '../../lib/format';
 import { useLiveReload } from '../../composables/useLiveChanges';
 
-const props = defineProps<{ drasiId: string; canWrite: boolean }>();
+const props = defineProps<{
+  drasiId: string;
+  canWrite: boolean;
+  /** Ανοίγει τα έντυπα υγείας (αρχηγός, Τοπικό, φαρμακείο) — οι άλλοι βλέπουν μόνο την κατάστασή τους. */
+  canHealth: boolean;
+}>();
 const $q = useQuasar();
 const loading = ref(false);
 const issuing = ref(false);
@@ -165,7 +170,8 @@ const names = computed(() => new Map((matrix.value?.participants ?? []).map((p) 
 const nameOf = (pid: string) => names.value.get(pid) ?? '';
 
 const submittedOf = (type: DrasiFormType): number => (matrix.value?.participants ?? []).filter((p) => formOf(p, type)?.status === 'SUBMITTED').length;
-const submittedCount = computed(() => submittedOf('SYMMETOXI') + submittedOf('YGEIA'));
+const downloadTypes = computed((): DrasiFormType[] => (props.canHealth ? ['SYMMETOXI', 'YGEIA'] : ['SYMMETOXI']));
+const submittedCount = computed(() => downloadTypes.value.reduce((n, type) => n + submittedOf(type), 0));
 
 // ── Λήψη: τα πρωτότυπα έντυπα του Σ.Ε.Ο. συμπληρωμένα, με την υπογραφή στη θέση της ──
 const downloading = ref(false);

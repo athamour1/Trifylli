@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   GoneException,
   Inject,
   Injectable,
@@ -15,6 +16,7 @@ import {
   FORM_LINK_TTL_DAYS,
   HEALTH_DATA_RETENTION_DAYS,
   KLADOS_LABEL,
+  drasiCanReadHealth,
   formFieldApplies,
   type DrasiFormField,
   type DrasiFormsMatrix,
@@ -183,7 +185,10 @@ export class DraseisFormsService {
       include: { participant: { include: { user: { select: { firstName: true, lastName: true } } } }, signatureFile: true },
     });
     if (!form) throw new NotFoundException('Το έντυπο δεν βρέθηκε.');
-    if (form.type === DrasiFormType.YGEIA) await this.audit.record(user, 'drasi.health.read', 'drasi_form', formId, { drasiId: id });
+    if (form.type === DrasiFormType.YGEIA) {
+      await this.assertHealthReader(user, id);
+      await this.audit.record(user, 'drasi.health.read', 'drasi_form', formId, { drasiId: id });
+    }
     return {
       ...toView(form),
       participant: form.participant.user,
@@ -246,6 +251,17 @@ export class DraseisFormsService {
     });
   }
 
+  /**
+   * Τα ιατρικά τα διαβάζει μόνο όποιος βλέπει το Φαρμακείο (F6). Τα Έντυπα τα
+   * βλέπει κάθε στέλεχος — αλλά μόνο την κατάσταση των εντύπων υγείας.
+   */
+  private async assertHealthReader(user: RequestUser, id: string): Promise<void> {
+    const access = user.drasiGrant?.drasiId === id ? user.drasiGrant.access : await this.access.accessFor(user, id);
+    if (!drasiCanReadHealth(access)) {
+      throw new ForbiddenException('Τα στοιχεία υγείας τα βλέπουν μόνο ο αρχηγός, το Τοπικό και το φαρμακείο της δράσης.');
+    }
+  }
+
   // ───────────────────────── Λήψη: τα επίσημα έντυπα συμπληρωμένα ─────────────────────────
 
   /** Ένα έντυπο ως το πρωτότυπο PDF του Σ.Ε.Ο. συμπληρωμένο, με την υπογραφή στη θέση της. */
@@ -253,6 +269,7 @@ export class DraseisFormsService {
     const drasi = await this.access.load(user, id, 'read');
     const form = await this.prisma.drasiForm.findFirst({ where: { id: formId, drasiId: id }, include: formPdfInclude });
     if (!form) throw new NotFoundException('Το έντυπο δεν βρέθηκε.');
+    if (form.type === DrasiFormType.YGEIA) await this.assertHealthReader(user, id);
     if (form.status !== DrasiFormStatus.SUBMITTED || !form.data) throw new BadRequestException('Το έντυπο δεν έχει συμπληρωθεί.');
     if (form.type === DrasiFormType.YGEIA) await this.audit.record(user, 'drasi.health.read', 'drasi_form', formId, { drasiId: id, pdf: true });
     const ctx = await this.pdfContext(drasi.id);
@@ -264,6 +281,7 @@ export class DraseisFormsService {
   /** Όλα τα συμπληρωμένα έντυπα ενός είδους σε ένα PDF — για εκτύπωση/αρχείο της δράσης. */
   async pdfAll(user: RequestUser, id: string, type: DrasiFormType): Promise<{ filename: string; buffer: Buffer }> {
     const drasi = await this.access.load(user, id, 'read');
+    if (type === DrasiFormType.YGEIA) await this.assertHealthReader(user, id);
     const forms = await this.prisma.drasiForm.findMany({
       where: { drasiId: id, type, status: DrasiFormStatus.SUBMITTED, data: { not: Prisma.DbNull } },
       include: formPdfInclude,
