@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Body,
+  ConflictException,
   Controller,
   Get,
   Headers,
@@ -8,6 +9,7 @@ import {
   Inject,
   Logger,
   Post,
+  Put,
   Req,
   ServiceUnavailableException,
   UnauthorizedException,
@@ -17,6 +19,7 @@ import {
 import { ApiBearerAuth, ApiExcludeEndpoint, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
+import { Prisma } from '@prisma/client';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { AuditService } from '../../common/audit/audit.service';
 import { CapabilityGuard } from '../../common/auth/capability.guard';
@@ -28,6 +31,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { EseoClient } from './eseo.client';
 import { EseoSyncService } from './eseo-sync.service';
 import { OuchtrackerClient } from './ouchtracker.client';
+import { SetEseoCodeDto } from './dto/eseo-code.dto';
 
 @ApiTags('Ενσωματώσεις')
 @ApiBearerAuth()
@@ -49,15 +53,19 @@ export class IntegrationsController {
   @SuperAdminOnly()
   @ApiOperation({ summary: 'Κατάσταση ενσωματώσεων και τελευταίοι συγχρονισμοί' })
   async status(@CurrentUser() user: RequestUser) {
-    const runs = await this.prisma.syncRun.findMany({
-      where: { topikoId: user.topikoId },
-      orderBy: { startedAt: 'desc' },
-      take: 10,
-    });
+    const [runs, topiko] = await Promise.all([
+      this.prisma.syncRun.findMany({
+        where: { topikoId: user.topikoId },
+        orderBy: { startedAt: 'desc' },
+        take: 10,
+      }),
+      this.prisma.topiko.findUnique({ where: { id: user.topikoId }, select: { eseoCode: true } }),
+    ]);
 
     return {
       eseo: {
         configured: this.eseo.configured,
+        topikoCode: topiko?.eseoCode ?? null,
         cron: this.config.ESEO_SYNC_CRON,
         enabled: this.config.SYNC_ENABLED,
         webhookConfigured: Boolean(this.config.ESEO_WEBHOOK_SECRET),
@@ -65,6 +73,27 @@ export class IntegrationsController {
       ouchtracker: { configured: this.ouchtracker.configured },
       recentRuns: runs,
     };
+  }
+
+  /**
+   * Ο κωδικός του Τοπικού στο e-SEO. Τον ορίζει το `TOPIKO_ESEO_CODE` στην πρώτη
+   * εκκίνηση· από εδώ διορθώνεται όταν λείπει ή είναι λάθος, χωρίς SQL.
+   */
+  @Put('eseo/topiko-code')
+  @SuperAdminOnly()
+  @ApiOperation({ summary: 'Ο κωδικός του Τοπικού στο e-SEO — το κλειδί του συγχρονισμού μελών' })
+  async setTopikoCode(@CurrentUser() user: RequestUser, @Body() dto: SetEseoCodeDto) {
+    const code = dto.code?.trim() || null;
+    try {
+      await this.prisma.topiko.update({ where: { id: user.topikoId }, data: { eseoCode: code } });
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+        throw new ConflictException('Αυτόν τον κωδικό e-SEO τον έχει ήδη άλλο Τοπικό.');
+      }
+      throw err;
+    }
+    await this.audit.record(user, 'topiko.eseo_code', 'topiko', user.topikoId, { code });
+    return { topikoCode: code };
   }
 
   @Post('eseo/sync')
