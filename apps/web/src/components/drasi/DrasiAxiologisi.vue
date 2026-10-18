@@ -80,22 +80,51 @@
           </q-card-section>
           <q-card-section v-if="issued.length" class="q-pt-none">
             <q-banner rounded class="bg-grey-2">
-              <div class="text-caption text-grey-7 q-mb-xs">Νέοι σύνδεσμοι ({{ issued.length }}) — αντίγραψέ τους τώρα:</div>
+              <div class="text-caption text-grey-7 q-mb-xs">
+                Νέοι σύνδεσμοι ({{ issued.length }}) — {{ view?.emailEnabled ? 'στείλ\' τους με email ή αντίγραψέ τους τώρα' : 'αντίγραψέ τους τώρα' }}:
+              </div>
               <q-list dense separator>
                 <q-item v-for="l in issued" :key="l.inviteId" class="q-px-none">
                   <q-item-section>
                     <q-item-label>{{ inviteName(l.participantId) }}</q-item-label>
                     <q-item-label caption class="ellipsis">{{ l.url }}</q-item-label>
+                    <q-item-label v-if="view?.emailEnabled" caption :class="TONE_CLASS[emailCaption(l.emailTo, emails.state.value[l.inviteId]).tone]">
+                      {{ emailCaption(l.emailTo, emails.state.value[l.inviteId]).text }}
+                    </q-item-label>
                   </q-item-section>
                   <q-item-section side>
                     <div class="row no-wrap">
                       <q-btn flat dense round icon="content_copy" @click="copyText(l.url)"><q-tooltip>Αντιγραφή</q-tooltip></q-btn>
-                      <q-btn flat dense round icon="share" :href="whatsapp(l)" target="_blank" rel="noopener"><q-tooltip>WhatsApp</q-tooltip></q-btn>
+                      <q-btn
+                        v-if="view?.emailEnabled"
+                        flat
+                        dense
+                        round
+                        :icon="emails.state.value[l.inviteId]?.status === 'sent' ? 'mark_email_read' : 'mail'"
+                        :color="emails.state.value[l.inviteId]?.status === 'sent' ? 'positive' : undefined"
+                        :loading="emails.state.value[l.inviteId]?.status === 'sending'"
+                        :disable="!l.emailTo.length || !emails.canSend(l.inviteId)"
+                        @click="emails.send([{ id: l.inviteId, url: l.url }])"
+                      >
+                        <q-tooltip>{{ l.emailTo.length ? `Αποστολή email σε ${l.emailTo.join(', ')}` : 'Δεν υπάρχει email στην καρτέλα' }}</q-tooltip>
+                      </q-btn>
                     </div>
                   </q-item-section>
                 </q-item>
               </q-list>
-              <q-btn flat dense no-caps color="klados" label="Αντιγραφή όλων" class="q-mt-xs" @click="copyText(issued.map((l) => `${inviteName(l.participantId)}: ${l.url}`).join('\n'))" />
+              <div class="row q-gutter-sm q-mt-xs">
+                <q-btn
+                  v-if="view?.emailEnabled && unsentInvites.length"
+                  flat
+                  dense
+                  no-caps
+                  color="klados"
+                  icon="forward_to_inbox"
+                  :label="`Email σε όλους (${unsentInvites.length})`"
+                  @click="emails.send(unsentInvites.map((l) => ({ id: l.inviteId, url: l.url })))"
+                />
+                <q-btn flat dense no-caps color="klados" label="Αντιγραφή όλων" @click="copyText(issued.map((l) => `${inviteName(l.participantId)}: ${l.url}`).join('\n'))" />
+              </div>
             </q-banner>
           </q-card-section>
           <q-card-section class="col scroll q-pt-none">
@@ -379,6 +408,8 @@ import { ApiError, OfflineError, del, downloadFile, get, patch, post, put } from
 import { formatDate, formatDateTime } from '../../lib/format';
 import type { SaveState } from '../../lib/save-state';
 import { useLiveReload } from '../../composables/useLiveChanges';
+import { useLinkEmails } from '../../composables/useLinkEmails';
+import { emailCaption } from '../../lib/link-email';
 
 const props = defineProps<{ drasiId: string; canWrite: boolean; drasiTitle?: string }>();
 const $q = useQuasar();
@@ -658,6 +689,10 @@ async function submit(answers: ReviewAnswerPayload[]): Promise<void> {
 const sendDialog = ref(false);
 const invites = ref<DrasiReviewInviteView[]>([]);
 const issued = ref<IssuedReviewLink[]>([]);
+/** Email: σε όποιον υπογράφει — τους παραλήπτες τους λέει ο server (`emailTo`). */
+const emails = useLinkEmails(() => `/draseis/${props.drasiId}/review/invites/email`);
+const unsentInvites = computed(() => issued.value.filter((l) => l.emailTo.length && emails.canSend(l.inviteId)));
+const TONE_CLASS = { muted: 'text-grey-7', warning: 'text-orange-8', positive: 'text-positive', negative: 'text-negative' } as const;
 const issuing = ref(false);
 const copying = ref<string | null>(null);
 const inviteName = (pid: string): string => {
@@ -724,6 +759,7 @@ async function issueInvites(body: { participantIds?: string[]; reissue?: boolean
   issuing.value = true;
   try {
     issued.value = await post<IssuedReviewLink[]>(`/draseis/${props.drasiId}/review/invites`, body);
+    emails.reset();
     if (!issued.value.length) $q.notify({ type: 'info', message: 'Δεν υπάρχει κανείς για αποστολή.' });
     await loadInvites();
   } catch (err) {
@@ -758,10 +794,6 @@ async function voidInvite(i: DrasiReviewInviteView): Promise<void> {
   } catch (err) {
     notifyError(err, 'Αποτυχία.');
   }
-}
-function whatsapp(l: IssuedReviewLink): string {
-  const text = `Γεια σου! Θα θέλαμε τη γνώμη σου για τη δράση «${props.drasiTitle ?? ''}» — συμπλήρωσε την αξιολόγηση εδώ: ${l.url}`;
-  return `https://wa.me/?text=${encodeURIComponent(text)}`;
 }
 async function copyText(text: string): Promise<void> {
   try {

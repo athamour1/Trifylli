@@ -81,6 +81,8 @@
         </q-card-section>
         <q-card-section class="text-caption text-grey-7 q-pt-none">
           Φαίνονται <b>μόνο τώρα</b> — αποθηκεύεται μόνο το αποτύπωμά τους. Στείλ' τους από εδώ ή αντίγραψέ τους.
+          <template v-if="matrix?.emailEnabled">Το email πάει σε όποιον υπογράφει: στους κηδεμόνες του ανήλικου, στον ίδιο τον ενήλικο.</template>
+          <template v-else>Η αποστολή email δεν έχει ρυθμιστεί στον server — αντίγραψέ τους.</template>
         </q-card-section>
         <q-card-section class="col scroll q-pt-none">
           <q-list separator dense>
@@ -88,17 +90,40 @@
               <q-item-section>
                 <q-item-label>{{ nameOf(l.participantId) }} — {{ DRASI_FORM_TYPE_LABEL[l.type] }}</q-item-label>
                 <q-item-label caption class="ellipsis">{{ l.url }}</q-item-label>
+                <q-item-label v-if="matrix?.emailEnabled" caption :class="TONE_CLASS[emailCaption(l.emailTo, emails.state.value[l.formId]).tone]">
+                  {{ emailCaption(l.emailTo, emails.state.value[l.formId]).text }}
+                </q-item-label>
               </q-item-section>
               <q-item-section side>
                 <div class="row no-wrap">
                   <q-btn flat dense round icon="content_copy" @click="copy(l.url)"><q-tooltip>Αντιγραφή</q-tooltip></q-btn>
-                  <q-btn flat dense round icon="share" :href="whatsapp(l)" target="_blank" rel="noopener"><q-tooltip>WhatsApp</q-tooltip></q-btn>
+                  <q-btn
+                    v-if="matrix?.emailEnabled"
+                    flat
+                    dense
+                    round
+                    :icon="emails.state.value[l.formId]?.status === 'sent' ? 'mark_email_read' : 'mail'"
+                    :color="emails.state.value[l.formId]?.status === 'sent' ? 'positive' : undefined"
+                    :loading="emails.state.value[l.formId]?.status === 'sending'"
+                    :disable="!l.emailTo.length || !emails.canSend(l.formId)"
+                    @click="emails.send([{ id: l.formId, url: l.url }])"
+                  >
+                    <q-tooltip>{{ l.emailTo.length ? `Αποστολή email σε ${l.emailTo.join(', ')}` : 'Δεν υπάρχει email στην καρτέλα' }}</q-tooltip>
+                  </q-btn>
                 </div>
               </q-item-section>
             </q-item>
           </q-list>
         </q-card-section>
         <q-card-actions align="right">
+          <q-btn
+            v-if="matrix?.emailEnabled && unsent.length"
+            flat
+            color="klados"
+            icon="forward_to_inbox"
+            :label="`Email σε όλους (${unsent.length})`"
+            @click="emails.send(unsent.map((l) => ({ id: l.formId, url: l.url })))"
+          />
           <q-btn flat label="Αντιγραφή όλων" @click="copy(links.map((l) => `${nameOf(l.participantId)} — ${DRASI_FORM_TYPE_LABEL[l.type]}: ${l.url}`).join('\n'))" />
           <q-btn color="klados" text-color="klados-on" label="Κλείσιμο" v-close-popup />
         </q-card-actions>
@@ -156,6 +181,8 @@ import {
 import { ApiError, del, downloadFile, get, getBlob, post } from '../../lib/api';
 import { formatDate, formatDateTime } from '../../lib/format';
 import { useLiveReload } from '../../composables/useLiveChanges';
+import { useLinkEmails } from '../../composables/useLinkEmails';
+import { emailCaption } from '../../lib/link-email';
 
 const props = defineProps<{
   drasiId: string;
@@ -218,10 +245,15 @@ useLiveReload(['forms', 'participants'], reload);
 // ── Έκδοση ──
 const links = ref<IssuedFormLink[]>([]);
 const linksDialog = ref(false);
+/** Email: σε όποιον υπογράφει — τους παραλήπτες τους λέει ο server (`emailTo`). */
+const emails = useLinkEmails(() => `/draseis/${props.drasiId}/forms/email`);
+const unsent = computed(() => links.value.filter((l) => l.emailTo.length && emails.canSend(l.formId)));
+const TONE_CLASS = { muted: 'text-grey-7', warning: 'text-orange-8', positive: 'text-positive', negative: 'text-negative' } as const;
 async function issue(body: { participantIds?: string[]; types?: DrasiFormType[]; reissue?: boolean }): Promise<void> {
   issuing.value = true;
   try {
     links.value = await post<IssuedFormLink[]>(`/draseis/${props.drasiId}/forms/issue`, body);
+    emails.reset();
     if (!links.value.length) $q.notify({ type: 'info', message: 'Δεν υπάρχει τίποτα να σταλεί.' });
     else linksDialog.value = true;
     await reload();
@@ -252,10 +284,6 @@ async function copyLink(p: Row, type: DrasiFormType): Promise<void> {
   } finally {
     copying.value = null;
   }
-}
-function whatsapp(l: IssuedFormLink): string {
-  const text = `Γεια σας! Για τη δράση χρειαζόμαστε συμπληρωμένο το έντυπο «${DRASI_FORM_TYPE_LABEL[l.type]}» για ${nameOf(l.participantId)}: ${l.url}`;
-  return `https://wa.me/?text=${encodeURIComponent(text)}`;
 }
 async function copy(text: string): Promise<void> {
   try {
