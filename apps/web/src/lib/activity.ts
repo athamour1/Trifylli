@@ -15,6 +15,7 @@ const TOPICS: Record<string, { the: string; in: string; section: string }> = {
   'doc:item': { the: 'ένα προγραμματικό', in: 'σε προγραμματικό', section: 'programma' },
   'comment:item': { the: 'ένα σχόλιο σε προγραμματικό', in: 'σχόλιο σε προγραμματικό', section: 'programma' },
   diatrofologio: { the: 'το διατροφολόγιο', in: 'στο διατροφολόγιο', section: 'diatrofologio' },
+  trofodosia: { the: 'τη λίστα της τροφοδοσίας', in: 'στη λίστα της τροφοδοσίας', section: 'trofodosia' },
   'doc:meal': { the: 'ένα γεύμα', in: 'σε γεύμα', section: 'diatrofologio' },
   'comment:meal': { the: 'ένα σχόλιο σε γεύμα', in: 'σχόλιο σε γεύμα', section: 'diatrofologio' },
   mythos: { the: 'τον μύθο', in: 'στον μύθο', section: 'mythos' },

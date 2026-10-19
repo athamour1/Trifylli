@@ -309,6 +309,10 @@
               <DrasiDiatrofologio :drasi-id="id" />
             </q-tab-panel>
 
+            <q-tab-panel name="trofodosia" class="q-pa-none">
+              <DrasiTrofodosia :drasi-id="id" :can-add="canEdit('trofodosia')" :can-buy="canEdit('purchase')" />
+            </q-tab-panel>
+
             <q-tab-panel name="mythos" class="q-pa-none">
               <DrasiMythos
                 :drasi-id="id"
@@ -455,6 +459,7 @@ import DrasiYpiresies from '../components/drasi/DrasiYpiresies.vue';
 import DrasiYliko from '../components/drasi/DrasiYliko.vue';
 import DrasiSymmetexontes from '../components/drasi/DrasiSymmetexontes.vue';
 import DrasiTamio from '../components/drasi/DrasiTamio.vue';
+import DrasiTrofodosia from '../components/drasi/DrasiTrofodosia.vue';
 import { useAsyncData } from '../composables/useAsyncData';
 import { useCollabDoc, useCollabMe } from '../composables/useCollabDoc';
 import { provideLiveChanges, useLiveReload } from '../composables/useLiveChanges';
@@ -563,6 +568,8 @@ const sections = computed(() => {
     { name: 'episkopisi', label: 'Επισκόπηση', icon: 'dashboard', badge: '', group: 'top' },
     // ── Λειτουργία: ό,τι κρατά τη δράση όρθια ──
     { name: 'diatrofologio', label: 'Διατροφολόγιο', icon: 'restaurant_menu', badge: '', group: 'leitourgia' },
+    // Τι αγοράζει η τροφοδοσία κάθε ημέρα: τα υλικά των γευμάτων και τα επιπλέον.
+    { name: 'trofodosia', label: 'Τροφοδοσία', icon: 'shopping_cart', badge: '', group: 'leitourgia' },
     { name: 'participants', label: 'Συμμετέχοντες', icon: 'groups', badge: String(data.value?.participants.length ?? ''), group: 'leitourgia' },
     // Οι σκηνές έχουν δική τους ενότητα — μόνο όπου η δράση έχει (όχι μονοήμερες, ρύθμιση ανοιχτή).
     ...(data.value && drasiHasSkines(data.value) ? [{ name: 'skines', label: 'Σκηνές', icon: 'night_shelter', badge: '', group: 'leitourgia' as const }] : []),
