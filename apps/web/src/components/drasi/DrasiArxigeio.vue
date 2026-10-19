@@ -28,7 +28,12 @@
             <!-- Χωρίς λογαριασμό: μόνο «Δώσε πρόσβαση»· η αφαίρεση γίνεται από τους συμμετέχοντες. -->
             <q-btn v-if="!e.account" outline no-caps dense color="klados" icon="key" label="Δώσε πρόσβαση" class="q-px-sm" @click="openAccess(e)" />
             <div v-else class="row no-wrap items-center">
-              <q-btn flat round dense icon="forward_to_inbox" color="klados" @click="resend(e)"><q-tooltip>Ξανά αποστολή πρόσκλησης</q-tooltip></q-btn>
+              <q-btn
+                flat round dense :icon="passwordLinkButton(e.active).icon" color="klados"
+                @click="confirmPasswordLink($q, { email: e.email, activated: e.active }, `/draseis/${drasiId}/externals/${e.userId}/invite`)"
+              >
+                <q-tooltip>{{ passwordLinkButton(e.active).label }}</q-tooltip>
+              </q-btn>
               <q-btn flat round dense icon="person_remove" color="negative" @click="removeExternal(e)"><q-tooltip>Αφαίρεση από τη δράση</q-tooltip></q-btn>
             </div>
           </q-item-section>
@@ -163,6 +168,7 @@ import {
 import DrasiRolesEditor from './DrasiRolesEditor.vue';
 import { drasiRoleOptions, emptyRoles, externalStelexosOption, looksLikeEmail, type RolesMap } from './types';
 import { ApiError, del, get, post } from '../../lib/api';
+import { confirmPasswordLink, passwordLinkButton } from '../../lib/password-link';
 import { useLiveReload } from '../../composables/useLiveChanges';
 
 const props = defineProps<{
@@ -261,14 +267,6 @@ async function loadExternals(): Promise<void> {
     externals.value = await get<DrasiExternalView[]>(`/draseis/${props.drasiId}/externals`);
   } catch {
     externals.value = [];
-  }
-}
-async function resend(e: DrasiExternalView): Promise<void> {
-  try {
-    await post(`/draseis/${props.drasiId}/externals/${e.userId}/invite`);
-    $q.notify({ type: 'positive', icon: 'forward_to_inbox', message: `Στάλθηκε ξανά στο ${e.email}.` });
-  } catch (err) {
-    $q.notify({ type: 'negative', message: err instanceof ApiError ? err.message : 'Η πρόσκληση δεν έφυγε.' });
   }
 }
 function removeExternal(e: DrasiExternalView): void {

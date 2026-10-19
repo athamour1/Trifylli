@@ -89,6 +89,13 @@
               >
                 <q-tooltip>{{ r.status === 'NONE' ? 'Ενεργοποίηση' : 'Ξανά αποστολή πρόσκλησης' }}</q-tooltip>
               </q-btn>
+              <q-btn
+                v-if="r.status === 'ACTIVE'"
+                flat round dense :icon="passwordLinkButton(true).icon" color="primary"
+                @click="confirmPasswordLink($q, { email: r.email, activated: true }, `/accounts/${r.userId}/invite`)"
+              >
+                <q-tooltip>{{ passwordLinkButton(true).label }}</q-tooltip>
+              </q-btn>
               <q-btn v-if="r.status === 'ACTIVE' || r.status === 'INVITED'" flat round dense icon="person_off" color="negative" @click="confirmRevoke(r)">
                 <q-tooltip>Αφαίρεση πρόσβασης</q-tooltip>
               </q-btn>
@@ -117,6 +124,7 @@ import PageState from './PageState.vue';
 import { ApiError, del, get, post } from '../lib/api';
 import { inkOnWhite, readableOn } from '../lib/color';
 import { formatDateTime } from '../lib/format';
+import { confirmPasswordLink, passwordLinkButton } from '../lib/password-link';
 
 const $q = useQuasar();
 

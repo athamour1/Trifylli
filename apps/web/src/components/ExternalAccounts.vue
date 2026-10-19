@@ -43,7 +43,16 @@
             </div>
           </q-item-section>
 
-          <q-item-section side>
+          <q-item-section side class="row no-wrap items-center">
+            <q-btn
+              dense flat round
+              :icon="passwordLinkButton(e.activated).icon"
+              color="primary"
+              :aria-label="passwordLinkButton(e.activated).label"
+              @click="confirmPasswordLink($q, { email: e.email, activated: e.activated }, `/accounts/${e.id}/invite`)"
+            >
+              <q-tooltip>{{ passwordLinkButton(e.activated).label }}</q-tooltip>
+            </q-btn>
             <q-btn dense flat round icon="person_remove" color="negative" aria-label="Ανάκληση πρόσβασης" @click="confirmRevoke(e)">
               <q-tooltip>Ανάκληση πρόσβασης</q-tooltip>
             </q-btn>
@@ -62,6 +71,7 @@ import PageState from './PageState.vue';
 import { useAsyncData } from '../composables/useAsyncData';
 import { ApiError, del, get } from '../lib/api';
 import { formatDateTime } from '../lib/format';
+import { confirmPasswordLink, passwordLinkButton } from '../lib/password-link';
 import { kladosVars } from '../lib/klados-theme';
 
 const $q = useQuasar();
