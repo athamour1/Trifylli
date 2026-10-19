@@ -110,14 +110,14 @@ describe('διατροφολόγιο', () => {
     expect(drasiCan(a, 'diatrofologio', 'edit')).toBe(false);
   });
 
-  it('το γράφουν η μαγείρισσα και η τροφοδοσία', () => {
-    for (const role of ['MAGEIRISSA', 'TROFODOSIA'] as const) {
+  it('το γράφουν η μαγείρισσα, η τροφοδοσία, η λειτουργία και ο αρχηγός της δράσης', () => {
+    for (const role of ['MAGEIRISSA', 'TROFODOSIA', 'LEITOURGIA', 'ARXIGOS'] as const) {
       expect(drasiCan(drasiAccess({ full: false, staff: true, roles: [role] }), 'diatrofologio', 'edit')).toBe(true);
     }
   });
 
-  it('ο αρχηγός της δράσης και οι άλλοι ρόλοι μόνο το βλέπουν', () => {
-    for (const role of ['ARXIGOS', 'PROGRAMMA', 'LEITOURGIA', 'TAMIAS', 'FARMAKEIO'] as const) {
+  it('οι άλλοι ρόλοι μόνο το βλέπουν', () => {
+    for (const role of ['PROGRAMMA', 'TAMIAS', 'FARMAKEIO'] as const) {
       const a = drasiAccess({ full: false, staff: true, roles: [role] });
       expect(drasiCan(a, 'diatrofologio')).toBe(true);
       expect(drasiCan(a, 'diatrofologio', 'edit')).toBe(false);

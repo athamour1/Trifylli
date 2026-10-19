@@ -84,10 +84,12 @@ describe('κοινά κείμενα της δράσης — ποιος γράφ�
     expect(await setup({ who: null })('drasi:room', [DRASI])).toBeNull();
   });
 
-  it('συνταγή: μόνο για γεύματα, τη γράφουν μαγείρισσα και τροφοδοσία', async () => {
+  it('συνταγή: μόνο για γεύματα, τη γράφουν μαγείρισσα, τροφοδοσία, λειτουργία και αρχηγός', async () => {
     const meal = { kind: 'GEVMA', snack: null, assignees: [] };
-    expect(await setup({ who: { staff: true, roles: ['MAGEIRISSA'] }, item: meal })('drasi:meal', [DRASI, ITEM])).toBe('write');
-    expect(await setup({ who: { staff: true, roles: ['ARXIGOS'] }, item: meal })('drasi:meal', [DRASI, ITEM])).toBe('read');
+    for (const role of ['MAGEIRISSA', 'TROFODOSIA', 'LEITOURGIA', 'ARXIGOS'] as const) {
+      expect(await setup({ who: { staff: true, roles: [role] }, item: meal })('drasi:meal', [DRASI, ITEM])).toBe('write');
+    }
+    expect(await setup({ who: { staff: true, roles: ['PROGRAMMA'] }, item: meal })('drasi:meal', [DRASI, ITEM])).toBe('read');
     expect(await setup({ who: { staff: true }, item: { kind: 'DRASTIRIOTITA', snack: 'DEKATIANO', assignees: [] } })('drasi:meal', [DRASI, ITEM])).toBe(
       'read',
     );

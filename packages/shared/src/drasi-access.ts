@@ -59,19 +59,20 @@ const STAFF_VIEW: readonly DrasiPerm[] = [
 
 /** Τι προσθέτει κάθε ρόλος (πέρα από τα του στελέχους). */
 const ROLE_ACCESS: Partial<Record<DrasiRoleKind, { view: readonly DrasiPerm[]; edit: readonly DrasiPerm[] }>> = {
-  // Ο αρχηγός της δράσης: τα πάντα — εκτός από τα χρήματα, που τα κινεί ο ταμίας,
-  // και το διατροφολόγιο, που το γράφουν μαγείρισσα και τροφοδοσία.
+  // Ο αρχηγός της δράσης: τα πάντα — εκτός από τα χρήματα, που τα κινεί ο ταμίας.
   ARXIGOS: {
     view: DRASI_PERMS.filter((p) => p !== 'handover' && p !== 'payments'),
-    edit: DRASI_PERMS.filter((p) => p !== 'tamio' && p !== 'payments' && p !== 'handover' && p !== 'diatrofologio'),
+    edit: DRASI_PERMS.filter((p) => p !== 'tamio' && p !== 'payments' && p !== 'handover'),
   },
   PROGRAMMA: { view: [], edit: ['mythos', 'programma'] },
-  // Η λειτουργία τρέχει και τις υπηρεσίες (ποια ομάδα έχει τι, πότε).
-  LEITOURGIA: { view: ['yliko', 'tamio'], edit: ['omades', 'ypiresies', 'entypa', 'yliko', 'axiologisi'] },
+  // Η λειτουργία τρέχει και τις υπηρεσίες (ποια ομάδα έχει τι, πότε) — και γράφει
+  // το διατροφολόγιο μαζί με τη μαγείρισσα και την τροφοδοσία.
+  LEITOURGIA: { view: ['yliko', 'tamio'], edit: ['omades', 'ypiresies', 'entypa', 'yliko', 'axiologisi', 'diatrofologio'] },
   // Μόνο ο ταμίας καταχωρεί έσοδα/έξοδα, πληρωμές και παραδόσεις.
   TAMIAS: { view: ['tamio'], edit: ['tamio', 'payments', 'handover'] },
   FARMAKEIO: { view: ['farmakeio'], edit: ['farmakeio', 'entypa'] },
-  // Μόνο αυτές οι δύο γράφουν το διατροφολόγιο (μενού, συνταγές, ποσολόγιο).
+  // Το διατροφολόγιο (μενού, συνταγές, ποσολόγιο) το γράφουν αυτές οι δύο, η
+  // λειτουργία και ο αρχηγός της δράσης.
   TROFODOSIA: { view: [], edit: ['diatrofologio'] },
   MAGEIRISSA: { view: [], edit: ['diatrofologio'] },
 };
