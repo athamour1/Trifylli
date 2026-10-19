@@ -17,6 +17,10 @@ interface RuntimeConfig {
   ouchtrackerUrl?: string;
   /** DSN του project της PWA στο GlitchTip· κενό = χωρίς error tracking. */
   sentryDsn?: string;
+  sentryEnvironment?: string;
+  /** `true`/`false`: tracing, breadcrumbs, logs, αναφορά προβλήματος (ROADMAP §6). */
+  sentryExtras?: string;
+  sentryTracesSampleRate?: string;
 }
 
 function raw(): RuntimeConfig {
@@ -32,3 +36,9 @@ export const OIDC_CLIENT_ID = c.oidcClientId || process.env.OIDC_CLIENT_ID || ''
 export const OIDC_LOGOUT_FLOW = c.oidcLogoutFlow || process.env.OIDC_LOGOUT_FLOW || 'trifylli-invalidation';
 export const OUCHTRACKER_URL = c.ouchtrackerUrl || process.env.OUCHTRACKER_URL || '';
 export const SENTRY_DSN = c.sentryDsn || process.env.SENTRY_DSN || '';
+export const SENTRY_ENVIRONMENT =
+  c.sentryEnvironment || process.env.SENTRY_ENVIRONMENT || (process.env.DEV ? 'development' : 'production');
+/** Χωρίς τιμή: ανοιχτά στο `quasar dev`, κλειστά αλλού (το image τα ορίζει ρητά). */
+export const SENTRY_EXTRAS = (c.sentryExtras || process.env.SENTRY_EXTRAS || (process.env.DEV ? 'true' : '')) === 'true';
+const sampleRate = Number(c.sentryTracesSampleRate || process.env.SENTRY_TRACES_SAMPLE_RATE || '1');
+export const SENTRY_TRACES_SAMPLE_RATE = Number.isFinite(sampleRate) ? Math.min(Math.max(sampleRate, 0), 1) : 1;

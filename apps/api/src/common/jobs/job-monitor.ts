@@ -16,8 +16,12 @@ export interface HeartbeatRequest {
  *   `/fail`, το μήνυμα στο body.
  *   Uptime Kuma (push monitor — `/api/push/<token>`): `status=up|down` και `msg`
  *   στο query.
+ *   GlitchTip (heartbeat monitor — `/heartbeat_check/<id>/`): μόνο επιτυχία. Δεν
+ *   έχει «αποτυχία»· η σιωπή είναι η αποτυχία (alert όταν περάσει το διάστημα),
+ *   και το ίδιο το σφάλμα έχει ήδη πάει στο error tracking. `null` = κανένα αίτημα.
  */
-export function heartbeatRequest(url: string, ok: boolean, message?: string): HeartbeatRequest {
+export function heartbeatRequest(url: string, ok: boolean, message?: string): HeartbeatRequest | null {
+  if (url.includes('/heartbeat_check/')) return ok ? { url } : null;
   if (url.includes('/api/push/')) {
     const target = new URL(url);
     target.searchParams.set('status', ok ? 'up' : 'down');
@@ -89,8 +93,10 @@ export class JobRun {
     if (!this.url) return;
     const lines = [...this.failures, ...(summary ? [summary] : [])];
     const message = lines.length ? scrubEmails(lines.join('\n')) : undefined;
+    const request = heartbeatRequest(this.url, this.failures.length === 0, message);
+    if (!request) return;
     try {
-      await this.send(heartbeatRequest(this.url, this.failures.length === 0, message));
+      await this.send(request);
     } catch (error) {
       this.logger.warn(`Heartbeat ${this.job}: ${error instanceof Error ? error.message : String(error)}`);
     }

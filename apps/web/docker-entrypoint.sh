@@ -13,6 +13,14 @@ OIDC_LOGOUT_FLOW="${OIDC_LOGOUT_FLOW:-trifylli-invalidation}"
 OUCHTRACKER_URL="${OUCHTRACKER_URL:-}"
 # Error tracking (GlitchTip): το DSN του project της PWA· κενό = ανενεργό.
 SENTRY_DSN="${SENTRY_DSN:-}"
+SENTRY_ENVIRONMENT="${SENTRY_ENVIRONMENT:-production}"
+# Tracing, breadcrumbs, logs, «Αναφορά προβλήματος» — όσο το σύστημα είναι σε
+# ενεργή ανάπτυξη (ROADMAP §6). `false` τα κλείνει.
+SENTRY_EXTRAS="${SENTRY_EXTRAS:-false}"
+SENTRY_TRACES_SAMPLE_RATE="${SENTRY_TRACES_SAMPLE_RATE:-1}"
+# Οι παραβιάσεις CSP πάνε στο API (που κόβει tokens και τις προωθεί στο
+# GlitchTip — CSP_REPORT_FORWARD_URL στο API). `off` = καμία αναφορά.
+CSP_REPORT_URI="${CSP_REPORT_URI:-${API_URL%/}/csp-report}"
 
 # ── 1. config.js ──
 # Οι τιμές μπαίνουν μέσα σε JS string: ό,τι θα έσπαγε το literal (\ ' < newline)
@@ -30,6 +38,9 @@ window.__APP_CONFIG__ = {
   oidcLogoutFlow: '$(js_escape "$OIDC_LOGOUT_FLOW")',
   ouchtrackerUrl: '$(js_escape "$OUCHTRACKER_URL")',
   sentryDsn: '$(js_escape "$SENTRY_DSN")',
+  sentryEnvironment: '$(js_escape "$SENTRY_ENVIRONMENT")',
+  sentryExtras: '$(js_escape "$SENTRY_EXTRAS")',
+  sentryTracesSampleRate: '$(js_escape "$SENTRY_TRACES_SAMPLE_RATE")',
 };
 EOF
 
@@ -59,7 +70,10 @@ ERRORS_ORIGIN="$(printf '%s' "$SENTRY_DSN" | sed -nE 's#^(https?://)([^@/]*@)?([
 #                                  στο Authentik και γυρίζει στο /auth/silent
 #   form-action 'self' + SSO     — η ροή σύνδεσης υποβάλλει στο Authentik
 #   object-src 'none'            — κανένα plugin, ποτέ
-CSP_BASE="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'${API_ORIGIN:+ $API_ORIGIN}${COLLAB_ORIGIN:+ $COLLAB_ORIGIN}${SSO_ORIGIN:+ $SSO_ORIGIN}${ERRORS_ORIGIN:+ $ERRORS_ORIGIN}; frame-src 'self'${SSO_ORIGIN:+ $SSO_ORIGIN}; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'${SSO_ORIGIN:+ $SSO_ORIGIN};"
+#   report-uri                   — οι παραβιάσεις στο API → GlitchTip
+CSP_REPORT=""
+[ "$CSP_REPORT_URI" = off ] || CSP_REPORT=" report-uri $CSP_REPORT_URI;"
+CSP_BASE="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'${API_ORIGIN:+ $API_ORIGIN}${COLLAB_ORIGIN:+ $COLLAB_ORIGIN}${SSO_ORIGIN:+ $SSO_ORIGIN}${ERRORS_ORIGIN:+ $ERRORS_ORIGIN}; frame-src 'self'${SSO_ORIGIN:+ $SSO_ORIGIN}; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'${SSO_ORIGIN:+ $SSO_ORIGIN};${CSP_REPORT}"
 FRAME_ANCESTORS_SLO="${SSO_ORIGIN:-'none'}"
 export CSP_BASE FRAME_ANCESTORS_SLO
 
@@ -68,3 +82,21 @@ envsubst '${CSP_BASE} ${FRAME_ANCESTORS_SLO}' \
 
 echo "[entrypoint] config.js written — api=${API_URL} oidc=${OIDC_CLIENT_ID:-(off)} ouch=${OUCHTRACKER_URL:-(off)} errors=${ERRORS_ORIGIN:-(off)}"
 echo "[entrypoint] CSP — connect/frame: ${API_ORIGIN:-self} ${COLLAB_ORIGIN:-} ${SSO_ORIGIN:-(no sso)}"
+
+# ── 3. source maps στο GlitchTip ──
+# Με token, ανεβαίνουν στο project της PWA για το release αυτού του image — στο
+# παρασκήνιο, ώστε ο nginx να μην περιμένει. Το URL είναι το ΔΗΜΟΣΙΟ του
+# GlitchTip (GLITCHTIP_DOMAIN): εκεί δείχνουν τα URL που επιστρέφει για το upload.
+# Ίδια αρχεία σε κάθε εκκίνηση· το GlitchTip αντικαθιστά τα παλιά (ίδιο debug id).
+if [ -n "${SOURCEMAP_UPLOAD_TOKEN:-}" ] && [ -n "${SOURCEMAP_UPLOAD_URL:-}" ] && [ -f /opt/trifylli/sourcemaps/VERSION ]; then
+  (
+    release="trifylli-web@$(cat /opt/trifylli/sourcemaps/VERSION)"
+    if SENTRY_URL="$SOURCEMAP_UPLOAD_URL" SENTRY_AUTH_TOKEN="$SOURCEMAP_UPLOAD_TOKEN" \
+      SENTRY_ORG="${SOURCEMAP_UPLOAD_ORG:-trifylli}" SENTRY_PROJECT="${SOURCEMAP_UPLOAD_PROJECT:-pwa}" \
+      sentry-cli sourcemaps upload --release "$release" /opt/trifylli/sourcemaps > /tmp/sourcemaps.log 2>&1; then
+      echo "[entrypoint] source maps: ανέβηκαν ($release)"
+    else
+      echo "[entrypoint] source maps: αποτυχία — δες /tmp/sourcemaps.log" >&2
+    fi
+  ) &
+fi

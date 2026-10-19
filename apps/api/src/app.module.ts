@@ -10,6 +10,7 @@ import { JobsModule } from './common/jobs/jobs.module';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { MailModule } from './common/mail/mail.module';
 import { StorageModule } from './common/storage/storage.module';
+import { CspReportController } from './common/errors/csp-report.controller';
 import { HealthController } from './health.controller';
 import { AccountsModule } from './modules/accounts/accounts.module';
 import { CalendarModule } from './modules/calendar/calendar.module';
@@ -69,7 +70,7 @@ import { YlikoModule } from './modules/yliko/yliko.module';
     PharmaciesModule,
     IntegrationsModule,
   ],
-  controllers: [HealthController],
+  controllers: [HealthController, CspReportController],
   providers: [
     { provide: APP_GUARD, useExisting: JwtAuthGuard },
     { provide: APP_GUARD, useClass: ThrottlerGuard },

@@ -6,6 +6,8 @@
 #   Healthchecks (healthchecks.io ή self-hosted): ok → το URL, fail → <url>/fail,
 #   το μήνυμα στο body.
 #   Uptime Kuma (push monitor — /api/push/<token>): ?status=up|down&msg=…
+#   GlitchTip (heartbeat monitor — /heartbeat_check/<id>/): μόνο ok· στο fail
+#   σιωπή, και το GlitchTip ειδοποιεί όταν περάσει το διάστημα χωρίς ping.
 #
 # Δεν αποτυγχάνει ποτέ: ένα heartbeat που δεν φεύγει δεν πρέπει να ρίξει ένα
 # backup (το `run-parts` του backup σταματά στο πρώτο hook που αποτυγχάνει).
@@ -16,6 +18,10 @@ heartbeat() {
   [ -n "$hb_url" ] || return 0
 
   case "$hb_url" in
+    */heartbeat_check/*)
+      [ "$hb_state" = ok ] || return 0
+      hb_target=$hb_url
+      ;;
     */api/push/*)
       case "$hb_url" in *\?*) hb_sep='&' ;; *) hb_sep='?' ;; esac
       if [ "$hb_state" = ok ]; then hb_status=up; else hb_status=down; fi

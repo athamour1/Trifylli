@@ -9,14 +9,16 @@ import { scrubEmails, scrubUrlPath } from '@trifylli/shared';
  * το πλαίσιο υπάρχει στα logs, μέσω του requestId. Τα emails σε μηνύματα
  * σφαλμάτων γίνονται `***@***`.
  */
-export function scrubEvent<E extends Event>(event: E): E {
+export function scrubEvent<E extends Event>(event: E, options: { keepBreadcrumbs?: boolean } = {}): E {
   if (event.request) {
     const { method, url } = event.request;
     event.request = { ...(method ? { method } : {}), ...(url ? { url: scrubUrlPath(url) } : {}) };
   }
   if (event.user?.id) event.user = { id: String(event.user.id) };
   else delete event.user;
-  delete event.breadcrumbs;
+  // Με τα extras (ROADMAP §6) τα breadcrumbs μένουν — έχουν ήδη περάσει από το
+  // `scrubBreadcrumb` όταν γράφτηκαν.
+  if (!options.keepBreadcrumbs) delete event.breadcrumbs;
   if (event.message) event.message = scrubEmails(event.message);
   for (const value of event.exception?.values ?? []) {
     if (value.value) value.value = scrubEmails(value.value);

@@ -8,7 +8,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { AppConfigToken } from './common/config/config.module';
-import { corsOrigins, loadConfig, logFormat, type AppConfig } from './common/config/configuration';
+import { corsOrigins, loadConfig, logFormat, sentryExtras, type AppConfig } from './common/config/configuration';
 import { AppExceptionFilter } from './common/errors/app-exception.filter';
 import { initErrorReporting } from './common/errors/error-reporting';
 import { AppLogger } from './common/logging/app-logger';
@@ -47,6 +47,7 @@ async function bootstrap(): Promise<void> {
     dsn: early.SENTRY_DSN,
     environment: early.SENTRY_ENVIRONMENT ?? early.NODE_ENV,
     release: `trifylli-api@${appVersion()}`,
+    extras: sentryExtras(early) ? { tracesSampleRate: early.SENTRY_TRACES_SAMPLE_RATE } : undefined,
   });
   // `rawBody`: το webhook του e-SEO επαληθεύει HMAC πάνω στα **ακριβή bytes** που
   // υπέγραψε ο αποστολέας, όχι σε δική μας επανασειριοποίηση του JSON.
@@ -60,6 +61,9 @@ async function bootstrap(): Promise<void> {
   // Τα έντυπα των δράσεων στέλνουν την υπογραφή ως εικόνα (data URL) — το
   // προεπιλεγμένο όριο των 100 KB δεν φτάνει. Το `rawBody` παραμένει για το webhook.
   app.useBodyParser('json', { limit: '2mb' });
+  // Οι αναφορές CSP του browser έρχονται ως `application/csp-report` (βλ.
+  // `CspReportController`) — μικρές, οπότε και μικρό όριο.
+  app.useBodyParser('json', { type: 'application/csp-report', limit: '16kb' });
   app.setGlobalPrefix(config.API_PREFIX);
   app.set('trust proxy', config.TRUST_PROXY_HOPS);
   app.disable('x-powered-by');

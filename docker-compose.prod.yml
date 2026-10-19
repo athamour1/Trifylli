@@ -337,6 +337,12 @@ services:
       SYNC_ENABLED: ${SYNC_ENABLED:-true}
       # Error tracking (GlitchTip, profile `errors`): το DSN του project «API».
       SENTRY_DSN: ${API_SENTRY_DSN:-}
+      # Tracing, logs, breadcrumbs όσο το σύστημα είναι σε ενεργή ανάπτυξη —
+      # κλείνουν (`false`) πριν από την κανονική παραγωγή, ROADMAP §6.
+      SENTRY_EXTRAS: ${SENTRY_EXTRAS:-true}
+      SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-1}
+      # Παραβιάσεις CSP της PWA → «Security Endpoint» του project «PWA».
+      CSP_REPORT_FORWARD_URL: ${CSP_REPORT_FORWARD_URL:-}
       # Web Push (ειδοποιήσεις στο κινητό) — τα κλειδιά τα βγάζει το gen-env.
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
@@ -398,6 +404,14 @@ services:
       OUCHTRACKER_URL: ${VITE_OUCHTRACKER_URL:-}
       # Error tracking (GlitchTip): το DSN του project «PWA» — μπαίνει και στο CSP.
       SENTRY_DSN: ${WEB_SENTRY_DSN:-}
+      SENTRY_EXTRAS: ${SENTRY_EXTRAS:-true}
+      SENTRY_TRACES_SAMPLE_RATE: ${SENTRY_TRACES_SAMPLE_RATE:-1}
+      # Source maps της PWA στο GlitchTip, σε κάθε εκκίνηση: token με
+      # `project:releases`, και το ΔΗΜΟΣΙΟ URL του GlitchTip.
+      SOURCEMAP_UPLOAD_URL: ${GLITCHTIP_DOMAIN:-}
+      SOURCEMAP_UPLOAD_TOKEN: ${SOURCEMAP_UPLOAD_TOKEN:-}
+      SOURCEMAP_UPLOAD_ORG: ${SOURCEMAP_UPLOAD_ORG:-trifylli}
+      SOURCEMAP_UPLOAD_PROJECT: ${SOURCEMAP_UPLOAD_PROJECT:-pwa}
     ports:
       - '${BIND_ADDR:-127.0.0.1}:${WEB_PORT:-8080}:80'
     networks:
@@ -545,6 +559,11 @@ services:
       ENABLE_USER_REGISTRATION: 'false'
       # Όπως τα backups: τίποτα πάνω από 30 ημέρες.
       GLITCHTIP_RETENTION_DAYS: ${GLITCHTIP_RETENTION_DAYS:-30}
+      # DuckDB: τα spans του tracing (και τα logs) θέλουν την «ψυχρή» αποθήκη.
+      GLITCHTIP_ENABLE_DUCKDB: 'true'
+      GLITCHTIP_COLD_STORAGE_DIR: /code/uploads/cold
+      # MCP: διαλογή σφαλμάτων από το Claude Code — μόνο όσο είμαστε σε ανάπτυξη (ROADMAP §6).
+      GLITCHTIP_ENABLE_MCP: ${GLITCHTIP_ENABLE_MCP:-true}
     volumes:
       - glitchtip-uploads:/code/uploads
     ports:

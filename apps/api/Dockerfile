@@ -63,4 +63,6 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
 # tini ως PID 1: χωρίς αυτό το Node δεν λαμβάνει σωστά SIGTERM και το
 # `enableShutdownHooks` του Nest δεν κλείνει ποτέ τη σύνδεση με τη βάση.
 ENTRYPOINT ["/sbin/tini", "--"]
-CMD ["node", "dist/main.js"]
+# `--enable-source-maps`: τα stack traces (logs, GlitchTip) δείχνουν αρχείο και
+# γραμμή του TypeScript, όχι του μεταγλωττισμένου `dist/`.
+CMD ["node", "--enable-source-maps", "dist/main.js"]

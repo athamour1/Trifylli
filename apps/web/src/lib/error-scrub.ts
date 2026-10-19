@@ -19,14 +19,20 @@ export function shouldReport(error: unknown): boolean {
  * το requestId του API (για να βρεθεί η γραμμή στα logs). Φεύγουν headers,
  * email/IP χρήστη, breadcrumbs· τα emails σε μηνύματα γίνονται `***@***`.
  */
-export function prepareEvent(event: ErrorEvent, hint: EventHint): ErrorEvent | null {
+export function prepareEvent(
+  event: ErrorEvent,
+  hint: EventHint,
+  options: { keepBreadcrumbs?: boolean } = {},
+): ErrorEvent | null {
   const error = hint.originalException;
   if (!shouldReport(error)) return null;
 
   if (event.request) event.request = event.request.url ? { url: scrubUrlPath(event.request.url) } : {};
   if (event.user?.id) event.user = { id: String(event.user.id) };
   else delete event.user;
-  delete event.breadcrumbs;
+  // Με τα extras (ROADMAP §6) τα breadcrumbs μένουν — έχουν ήδη περάσει από το
+  // `scrubBreadcrumb` όταν γράφτηκαν.
+  if (!options.keepBreadcrumbs) delete event.breadcrumbs;
   if (event.message) event.message = scrubEmails(event.message);
   for (const value of event.exception?.values ?? []) {
     if (value.value) value.value = scrubEmails(value.value);

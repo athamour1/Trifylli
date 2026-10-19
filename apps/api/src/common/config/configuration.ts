@@ -26,6 +26,24 @@ const schema = z.object({
   SENTRY_DSN: blankToUndefined(z.string().url()),
   SENTRY_ENVIRONMENT: blankToUndefined(z.string()),
   /**
+   * Τα «extras» του error tracking όσο το σύστημα είναι σε ενεργή ανάπτυξη:
+   * tracing, logs, breadcrumbs (βλ. `common/errors/error-reporting-extras.ts`).
+   * Χωρίς τιμή: ανοιχτά εκτός παραγωγής. Φεύγουν πριν από την κανονική παραγωγή
+   * — ROADMAP §6.
+   */
+  SENTRY_EXTRAS: z
+    .string()
+    .optional()
+    .transform((v) => (v === undefined || v === '' ? undefined : v === 'true')),
+  /** Ποσοστό αιτημάτων με tracing (0–1), όταν τα extras είναι ανοιχτά. */
+  SENTRY_TRACES_SAMPLE_RATE: z.coerce.number().min(0).max(1).default(1),
+  /**
+   * Το «Security Endpoint» του project της PWA στο GlitchTip. Ο browser στέλνει
+   * τις παραβιάσεις CSP στο API (`/api/csp-report`), που κόβει tokens και query
+   * από τα URL και τις προωθεί εδώ. Κενό = οι αναφορές απορρίπτονται.
+   */
+  CSP_REPORT_FORWARD_URL: blankToUndefined(z.string().url()),
+  /**
    * Heartbeats των crons (Healthchecks ή Uptime Kuma push) — ένα URL ανά εργασία,
    * κενό = κανένα ping. Βλ. docs/monitoring.md και `common/jobs`.
    */
@@ -192,6 +210,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     throw new Error('DEV_AUTH_BYPASS=true απαγορεύεται σε production.');
   }
   return config;
+}
+
+export function sentryExtras(config: Pick<AppConfig, 'SENTRY_EXTRAS' | 'NODE_ENV'>): boolean {
+  return config.SENTRY_EXTRAS ?? config.NODE_ENV !== 'production';
 }
 
 export function logFormat(config: AppConfig): 'json' | 'text' {

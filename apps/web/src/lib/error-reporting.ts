@@ -1,5 +1,7 @@
 import type { App } from 'vue';
+import type { Router } from 'vue-router';
 import * as Sentry from '@sentry/vue';
+import { extrasOptions, startExtras } from './error-reporting-extras';
 import { prepareEvent } from './error-scrub';
 import { onReportingUser } from './reporting-user';
 
@@ -7,13 +9,24 @@ import { onReportingUser } from './reporting-user';
  * Error tracking της PWA (Sentry SDK → GlitchTip). Φορτώνεται σε δικό του chunk
  * και μόνο αν υπάρχει DSN. Μόνο σφάλματα: χωρίς tracing, χωρίς replay, χωρίς
  * breadcrumbs, χωρίς props των components (`attachProps: false` — εκεί ζουν
- * δεδομένα παιδιών)· κάθε event περνά από το `prepareEvent`.
+ * δεδομένα παιδιών)· κάθε event περνά από το `prepareEvent`. Με `extras`
+ * προστίθενται tracing, breadcrumbs, logs και «Αναφορά προβλήματος»
+ * (`error-reporting-extras.ts`, ROADMAP §6).
  */
-export function initErrorReporting(app: App, dsn: string): void {
+export function initErrorReporting(
+  app: App,
+  options: {
+    dsn: string;
+    environment: string;
+    router: Router;
+    extras?: { apiUrl: string; tracesSampleRate: number };
+  },
+): void {
+  const extras = options.extras ? extrasOptions(options.router, options.extras) : undefined;
   Sentry.init({
-    dsn,
+    dsn: options.dsn,
     release: `trifylli-web@${process.env.APP_VERSION ?? 'dev'}`,
-    environment: process.env.DEV ? 'development' : 'production',
+    environment: options.environment,
     defaultIntegrations: false,
     integrations: [
       Sentry.vueIntegration({ app, attachProps: false }),
@@ -24,6 +37,7 @@ export function initErrorReporting(app: App, dsn: string): void {
       Sentry.functionToStringIntegration(),
       Sentry.eventFiltersIntegration(),
       Sentry.httpContextIntegration(),
+      ...(extras?.integrations ?? []),
     ],
     maxBreadcrumbs: 0,
     dataCollection: {
@@ -34,7 +48,9 @@ export function initErrorReporting(app: App, dsn: string): void {
       urlQueryParams: false,
       stackFrameVariables: false,
     },
-    beforeSend: prepareEvent,
+    ...extras?.options,
+    beforeSend: (event, hint) => prepareEvent(event, hint, { keepBreadcrumbs: !!extras }),
   });
   onReportingUser((id) => Sentry.setUser(id ? { id } : null));
+  if (extras) startExtras();
 }

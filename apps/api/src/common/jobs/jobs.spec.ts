@@ -12,11 +12,17 @@ describe('heartbeatRequest', () => {
   });
 
   it('Uptime Kuma (/api/push/): status και msg στο query', () => {
-    const ok = new URL(heartbeatRequest('https://kuma.example/api/push/tok123', true, 'ok').url);
+    const ok = new URL(heartbeatRequest('https://kuma.example/api/push/tok123', true, 'ok')!.url);
     expect(ok.searchParams.get('status')).toBe('up');
-    const fail = new URL(heartbeatRequest('https://kuma.example/api/push/tok123?ping=', false, 'Μέγαρα: timeout').url);
+    const fail = new URL(heartbeatRequest('https://kuma.example/api/push/tok123?ping=', false, 'Μέγαρα: timeout')!.url);
     expect(fail.searchParams.get('status')).toBe('down');
     expect(fail.searchParams.get('msg')).toBe('Μέγαρα: timeout');
+  });
+
+  it('GlitchTip (/heartbeat_check/): ping μόνο στην επιτυχία — η σιωπή είναι η αποτυχία', () => {
+    const url = 'https://errors.example.gr/api/0/organizations/trifylli/heartbeat_check/861cf2dc/';
+    expect(heartbeatRequest(url, true, '3 Τοπικά')).toEqual({ url });
+    expect(heartbeatRequest(url, false, 'απέτυχε')).toBeNull();
   });
 });
 

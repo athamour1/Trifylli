@@ -46,11 +46,21 @@ export default defineConfig((ctx) => ({
       OUCHTRACKER_URL: process.env.VITE_OUCHTRACKER_URL ?? '',
       // Error tracking (GlitchTip) για `quasar dev`· στο image έρχεται από το config.js.
       SENTRY_DSN: process.env.VITE_SENTRY_DSN ?? '',
+      SENTRY_ENVIRONMENT: process.env.VITE_SENTRY_ENVIRONMENT ?? '',
+      SENTRY_EXTRAS: process.env.VITE_SENTRY_EXTRAS ?? '',
+      SENTRY_TRACES_SAMPLE_RATE: process.env.VITE_SENTRY_TRACES_SAMPLE_RATE ?? '',
       APP_VERSION,
     },
 
     alias: {
       '@trifylli/shared': fileURLToPath(new URL('../../packages/shared/src/index.ts', import.meta.url)),
+    },
+
+    // Source maps για το error tracking: «hidden» = χωρίς `sourceMappingURL` στα
+    // bundles. Το image τα βγάζει από τη ρίζα του nginx και τα ανεβάζει στο
+    // GlitchTip στην εκκίνηση (apps/web/Dockerfile, docker-entrypoint.sh).
+    extendViteConf(viteConf) {
+      viteConf.build = { ...viteConf.build, sourcemap: 'hidden' };
     },
   },
 
@@ -89,8 +99,9 @@ export default defineConfig((ctx) => ({
     manifestFilename: 'manifest.json',
     // Το config.js (runtime ρυθμίσεις) ΔΕΝ μπαίνει στο precache — αλλιώς ένα
     // installed PWA θα κρατούσε τις build-time τιμές αντί των runtime.
+    // Ούτε τα source maps: δεν σερβίρονται (βλ. `extendViteConf`).
     extendInjectManifestOptions(cfg) {
-      cfg.globIgnores = [...(cfg.globIgnores ?? []), 'config.js'];
+      cfg.globIgnores = [...(cfg.globIgnores ?? []), 'config.js', '**/*.map'];
     },
     extendManifestJson(json) {
       Object.assign(json, {

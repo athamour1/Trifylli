@@ -48,6 +48,10 @@
                 <q-item-section avatar><q-icon name="settings" /></q-item-section>
                 <q-item-section>Ρυθμίσεις</q-item-section>
               </q-item>
+              <q-item v-if="feedbackAvailable" clickable v-close-popup @click="reportProblem">
+                <q-item-section avatar><q-icon name="bug_report" /></q-item-section>
+                <q-item-section>Αναφορά προβλήματος</q-item-section>
+              </q-item>
               <template v-if="session.enabled">
                 <q-separator />
                 <q-item clickable v-close-popup @click="confirmSignOut">
@@ -198,6 +202,7 @@ import { useOfflineStore } from '../stores/offline';
 import { useSessionStore } from '../stores/session';
 import { KLADOS_LINKS, TOPIKO_LINKS } from '../router/routes';
 import { useSlidingThumb } from '../composables/useSlidingThumb';
+import { feedbackAvailable, sendFeedback } from '../lib/feedback';
 
 const drawer = ref(false);
 const route = useRoute();
@@ -385,5 +390,22 @@ function confirmSignOut(): void {
     return;
   }
   void session.signOut();
+}
+
+/**
+ * «Αναφορά προβλήματος» στο GlitchTip (μόνο με τα extras — ROADMAP §6). Πάει
+ * μαζί με τη σελίδα (χωρίς tokens) και τον λογαριασμό· όχι ονόματα παιδιών.
+ */
+function reportProblem(): void {
+  $q.dialog({
+    title: 'Αναφορά προβλήματος',
+    message: 'Τι έκανες και τι έγινε; Μη γράψεις ονόματα ή στοιχεία παιδιών.',
+    prompt: { model: '', type: 'textarea', isValid: (v: string) => v.trim().length >= 5 },
+    cancel: { label: 'Άκυρο', flat: true },
+    ok: { label: 'Αποστολή' },
+  }).onOk((text: string) => {
+    sendFeedback(text.trim());
+    $q.notify({ type: 'positive', message: 'Ευχαριστούμε — η αναφορά στάλθηκε.' });
+  });
 }
 </script>

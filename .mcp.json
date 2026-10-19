@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "glitchtip": {
+      "type": "http",
+      "url": "${GLITCHTIP_MCP_URL:-http://localhost:8082/mcp}",
+      "headers": {
+        "Authorization": "Bearer ${GLITCHTIP_MCP_TOKEN:-}"
+      }
+    }
+  }
+}

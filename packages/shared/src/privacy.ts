@@ -26,3 +26,32 @@ export function scrubUrlPath(url: string): string {
 export function scrubEmails(text: string): string {
   return text.replace(/[^\s@<>()"',;:]+@[^\s@<>()"',;:]+\.[A-Za-z]{2,}/g, '***@***');
 }
+
+/**
+ * Η «μορφή» μιας διαδρομής, για ονόματα συναλλαγών στο tracing: ό,τι το
+ * `scrubUrlPath`, και επιπλέον UUID και αριθμοί γίνονται `:id`. Έτσι το
+ * `GET /api/draseis/<uuid>` είναι μία γραμμή στα στατιστικά, όχι μία ανά δράση.
+ */
+export function urlTemplate(url: string): string {
+  const scrubbed = scrubUrlPath(url);
+  const match = /^([a-z][a-z0-9+.-]*:\/\/[^/]*)?(.*)$/i.exec(scrubbed);
+  const origin = match?.[1] ?? '';
+  const path = match?.[2] ?? '';
+  return (
+    origin +
+    path
+      .split('/')
+      .map((segment) => (UUID.test(segment) || /^\d+$/.test(segment) ? ':id' : segment))
+      .join('/')
+  );
+}
+
+/**
+ * Ελεύθερο κείμενο προς logs/tracing (μήνυμα log, περιγραφή span, breadcrumb):
+ * emails → `***@***`, και κάθε URL ή διαδρομή μέσα του περνά από το
+ * `scrubUrlPath` (χωρίς query, tokens ως `:token`).
+ */
+export function scrubText(text: string): string {
+  // Πρώτα τα URL (φεύγει το query, μαζί με ό,τι email είχε μέσα), μετά τα emails.
+  return scrubEmails(text.replace(/(?:[a-z][a-z0-9+.-]*:\/\/|\/)[^\s"'<>]*/gi, (url) => scrubUrlPath(url)));
+}

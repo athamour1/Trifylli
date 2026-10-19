@@ -1,5 +1,6 @@
 import * as Sentry from '@sentry/node';
 import { requestContext } from '../logging/request-context';
+import { extrasOptions, startExtras } from './error-reporting-extras';
 import { scrubEvent } from './scrub-event';
 
 let enabled = false;
@@ -7,10 +8,17 @@ let enabled = false;
 /**
  * Error tracking (Sentry SDK → GlitchTip). Μόνο σφάλματα: χωρίς tracing, χωρίς
  * auto-instrumentation, χωρίς breadcrumbs — και κάθε event περνά από το
- * `scrubEvent`. Χωρίς `SENTRY_DSN` δεν κάνει τίποτα.
+ * `scrubEvent`. Χωρίς `SENTRY_DSN` δεν κάνει τίποτα. Με `extras` προστίθενται
+ * tracing, logs και breadcrumbs (`error-reporting-extras.ts`, ROADMAP §6).
  */
-export function initErrorReporting(options: { dsn?: string; environment: string; release: string }): void {
+export function initErrorReporting(options: {
+  dsn?: string;
+  environment: string;
+  release: string;
+  extras?: { tracesSampleRate: number };
+}): void {
   if (!options.dsn) return;
+  const extras = options.extras ? extrasOptions(options.extras.tracesSampleRate) : undefined;
   Sentry.init({
     dsn: options.dsn,
     environment: options.environment,
@@ -42,10 +50,13 @@ export function initErrorReporting(options: { dsn?: string; environment: string;
       Sentry.functionToStringIntegration(),
       Sentry.nodeContextIntegration(),
       Sentry.contextLinesIntegration(),
+      ...(extras?.integrations ?? []),
     ],
     maxBreadcrumbs: 0,
-    beforeSend: (event) => scrubEvent(event),
+    ...extras?.options,
+    beforeSend: (event) => scrubEvent(event, { keepBreadcrumbs: !!extras }),
   });
+  if (extras) startExtras();
   enabled = true;
 }
 

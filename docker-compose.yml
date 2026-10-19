@@ -213,6 +213,12 @@ services:
       S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:?S3_ACCESS_KEY_ID is required}
       S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:?S3_SECRET_ACCESS_KEY is required}
       S3_FORCE_PATH_STYLE: 'true'
+      # Error tracking (profile `errors`): DSN του project «api» με host
+      # `glitchtip:8000` — το container δεν βλέπει το localhost του host.
+      SENTRY_DSN: ${API_SENTRY_DSN:-}
+      SENTRY_ENVIRONMENT: development
+      SENTRY_EXTRAS: 'true'
+      CSP_REPORT_FORWARD_URL: ${CSP_REPORT_FORWARD_URL:-}
     ports:
       - '${DEV_BIND_ADDR:-127.0.0.1}:${API_PORT:-3000}:3000'
     # Για να φτάνει το API σε υπηρεσίες του host (π.χ. Ouchtracker στο :80).
@@ -237,6 +243,10 @@ services:
       OIDC_CLIENT_ID: ${VITE_OIDC_CLIENT_ID:-trifylli-pwa}
       OIDC_LOGOUT_FLOW: ${VITE_OIDC_LOGOUT_FLOW:-trifylli-invalidation}
       OUCHTRACKER_URL: ${VITE_OUCHTRACKER_URL:-http://localhost:9100}
+      # Error tracking: DSN του project «pwa» με host localhost:8082 (το στέλνει ο browser).
+      SENTRY_DSN: ${WEB_SENTRY_DSN:-}
+      SENTRY_ENVIRONMENT: development
+      SENTRY_EXTRAS: 'true'
     ports:
       - '${DEV_BIND_ADDR:-127.0.0.1}:${WEB_PORT:-8080}:80'
     depends_on:
@@ -289,7 +299,63 @@ services:
     depends_on:
       - ouchtracker-backend
 
+  # ─────────────────── Error tracking (GlitchTip) — profile: errors ───────────────────
+  #   docker compose --profile errors up -d glitchtip
+  # UI στο http://localhost:8082. Πρώτος χρήστης (η εγγραφή είναι κλειστή):
+  #   docker compose exec glitchtip ./manage.py createsuperuser
+  # Μετά: οργανισμός `trifylli`, projects `api` και `pwa`, και τα DSN στο
+  # apps/api/.env (`SENTRY_DSN`) και apps/web/.env (`VITE_SENTRY_DSN`) — docs/monitoring.md §3.
+  # Χωρίς Valkey (ουρά/cache στο Postgres)· DuckDB για spans και logs· MCP ανοιχτό,
+  # για διαλογή σφαλμάτων από το Claude Code (μόνο στο dev — βλ. ROADMAP §6).
+  glitchtip-db:
+    image: postgres:16-alpine
+    profiles: ['errors']
+    restart: 'no'
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER:-trifylli}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-trifylli}
+      PGDATABASE: ${POSTGRES_DB:-trifylli}
+    # Η βάση φτιάχνεται εδώ και όχι στο init του Postgres: εκείνο τρέχει μόνο σε
+    # άδειο volume, και τα υπάρχοντα dev volumes δεν θα την αποκτούσαν ποτέ.
+    command:
+      - sh
+      - -c
+      - psql -tAc "SELECT 1 FROM pg_database WHERE datname = 'glitchtip'" | grep -q 1 || createdb glitchtip
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  glitchtip:
+    image: glitchtip/glitchtip:${GLITCHTIP_VERSION:-6.2.6}
+    profiles: ['errors']
+    restart: unless-stopped
+    environment:
+      SERVER_ROLE: all_in_one
+      SECRET_KEY: trifylli-dev-glitchtip-secret-key-not-for-production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-trifylli}:${POSTGRES_PASSWORD:-trifylli}@postgres:5432/glitchtip
+      VALKEY_URL: ''
+      GLITCHTIP_DOMAIN: http://localhost:${GLITCHTIP_PORT:-8082}
+      DEFAULT_FROM_EMAIL: GlitchTip <glitchtip@trifylli.local>
+      # Οι ειδοποιήσεις φαίνονται στο Mailpit (:8025).
+      EMAIL_URL: smtp://mailpit:1025
+      ENABLE_USER_REGISTRATION: 'false'
+      GLITCHTIP_RETENTION_DAYS: 30
+      GLITCHTIP_ENABLE_DUCKDB: 'true'
+      GLITCHTIP_COLD_STORAGE_DIR: /code/uploads/cold
+      GLITCHTIP_ENABLE_MCP: 'true'
+    volumes:
+      - glitchtip-uploads:/code/uploads
+    ports:
+      - '${DEV_BIND_ADDR:-127.0.0.1}:${GLITCHTIP_PORT:-8082}:8000'
+    depends_on:
+      glitchtip-db:
+        condition: service_completed_successfully
+      mailpit:
+        condition: service_healthy
+
 volumes:
   postgres-data:
   authentik-media:
   garage-data:
+  glitchtip-uploads:
