@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { drasiHeadcountKinds } from '@trifylli/shared';
 import { headcountTotals, newerCheck } from './headcount';
 
 describe('καταμέτρηση', () => {
@@ -17,5 +18,14 @@ describe('καταμέτρηση', () => {
     expect(newerCheck(null, at('10:00'))).toBe(true);
     expect(newerCheck({ checkedAt: at('10:05') }, at('10:00'))).toBe(false);
     expect(newerCheck({ checkedAt: at('10:00') }, at('10:05'))).toBe(true);
+  });
+});
+
+describe('ανά τι μετρά μια δράση', () => {
+  it('τα είδη των κλάδων της, και σκηνές μόνο αν έχει', () => {
+    expect(drasiHeadcountKinds({ kladoi: ['ODIGOI'], type: 'KATASKINOSI', hasSkines: true })).toEqual(['ENOMOTIA', 'SKINI']);
+    expect(drasiHeadcountKinds({ kladoi: ['ODIGOI'], type: 'KATASKINOSI', hasSkines: false })).toEqual(['ENOMOTIA']);
+    expect(drasiHeadcountKinds({ kladoi: ['POULIA', 'ASTERIA'], type: 'MONOIMERI', hasSkines: true })).toEqual(['FOLIA', 'PENTADA']);
+    expect(drasiHeadcountKinds({ kladoi: ['MEGALOI_ODIGOI'], type: 'POLYIMERI', hasSkines: true })).toEqual(['EPITROPI', 'OE', 'SKINI']);
   });
 });

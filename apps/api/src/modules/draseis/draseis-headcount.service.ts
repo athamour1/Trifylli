@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { MemberKind, type DrasiGroupKind } from '@prisma/client';
-import type { DrasiHeadcountView } from '@trifylli/shared';
+import { DRASI_GROUP_KIND_FULL, drasiHeadcountKinds, type DrasiHeadcountView, type KladosType } from '@trifylli/shared';
 import type { RequestUser } from '../../common/auth/types';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -87,6 +87,10 @@ export class DraseisHeadcountService {
     const drasi = await this.access.load(user, drasiId, 'write');
     const name = title.trim().slice(0, 120);
     if (!name) throw new BadRequestException('Δώσε έναν τίτλο — π.χ. «Αναχώρηση από Μέγαρα».');
+    const kinds = drasiHeadcountKinds({ ...drasi, kladoi: drasi.kladoi.map((k) => k.klados.type as KladosType) });
+    if (!kinds.includes(groupKind)) {
+      throw new BadRequestException(`Καταμέτρηση ανά «${DRASI_GROUP_KIND_FULL[groupKind]}»: δεν ταιριάζει σε αυτή τη δράση.`);
+    }
     const groups = await this.groups(drasiId, groupKind);
     if (!groups.some((group) => group.members.length)) throw new BadRequestException('Δεν υπάρχουν ομάδες με μέλη αυτού του είδους.');
 
@@ -179,6 +183,16 @@ export class DraseisHeadcountService {
       where: { id: headcountId, drasiId },
       data: { closedAt: closed ? new Date() : null },
     });
+    if (!count) throw new NotFoundException('Η καταμέτρηση δεν βρέθηκε.');
+  }
+
+  /**
+   * Διαγραφή μιας καταμέτρησης — π.χ. μια δοκιμαστική. Φεύγουν μαζί και οι
+   * μετρήσεις των ομάδων της (cascade).
+   */
+  async remove(user: RequestUser, drasiId: string, headcountId: string): Promise<void> {
+    await this.access.load(user, drasiId, 'write', { allowClosed: true });
+    const { count } = await this.prisma.drasiHeadcount.deleteMany({ where: { id: headcountId, drasiId } });
     if (!count) throw new NotFoundException('Η καταμέτρηση δεν βρέθηκε.');
   }
 

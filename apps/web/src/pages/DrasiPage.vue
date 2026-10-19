@@ -126,7 +126,7 @@
                 Προσχέδιο: το στήσιμο δεν ολοκληρώθηκε. Δεν εμφανίζεται στο ημερολόγιο μέχρι να ολοκληρωθεί.
               </q-banner>
 
-              <DrasiHeadcounts :drasi-id="id" :can-start="canEdit('rythmiseis')" />
+              <DrasiHeadcounts :drasi-id="id" :can-start="canEdit('rythmiseis')" :kinds="drasiHeadcountKinds(data)" />
               <DrasiAnnouncements :drasi-id="id" :can-post="canEdit('rythmiseis')" />
 
               <!-- Αριθμοί με μια ματιά -->
@@ -420,6 +420,7 @@ import {
   type DrasiAccess,
   type DrasiPerm,
   DRASI_GROUP_KINDS_BY_KLADOS,
+  drasiHeadcountKinds,
   DRASI_GROUP_KIND_PLURAL,
   drasiHasSkines,
   DRASI_ARXIGEIO_KINDS,

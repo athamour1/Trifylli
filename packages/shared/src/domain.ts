@@ -484,6 +484,20 @@ export function drasiHasSkines(drasi: { type: DrasiType; hasSkines: boolean }): 
 }
 
 /**
+ * Ανά τι μετρά μια καταμέτρηση της δράσης: τα είδη ομάδων των κλάδων που
+ * συμμετέχουν (ενωμοτίες για Οδηγούς, φωλιές για Πουλιά…) και οι σκηνές, μόνο
+ * αν η δράση έχει. Το ίδιο για το «Ανά» της PWA και τον έλεγχο του API.
+ */
+export function drasiHeadcountKinds(drasi: {
+  kladoi: readonly KladosType[];
+  type: DrasiType;
+  hasSkines: boolean;
+}): DrasiGroupKind[] {
+  const kinds = [...new Set(drasi.kladoi.flatMap((klados) => DRASI_GROUP_KINDS_BY_KLADOS[klados]))];
+  return drasiHasSkines(drasi) ? [...kinds, DrasiGroupKind.SKINI] : kinds;
+}
+
+/**
  * Πότε δύο ονόματα φιλοξενούμενου Τοπικού είναι το ίδιο Τοπικό: χωρίς τόνους,
  * πεζά/κεφαλαία και περιττά κενά — «ΧΑΛΑΝΔΡΙ » = «Χαλάνδρι». Τα ονόματα
  * γράφονται με το χέρι, οπότε μέσα σε μια δράση αυτό είναι η ταυτότητά τους.

@@ -32,6 +32,11 @@ function setup() {
         return { id: row.id };
       },
       findFirst: async ({ where }: { where: { id: string } }) => headcounts.find((h) => h.id === where.id) ?? null,
+      deleteMany: async ({ where }: { where: { id: string; drasiId: string } }) => {
+        const before = headcounts.length;
+        headcounts.splice(0, headcounts.length, ...headcounts.filter((h) => !(h.id === where.id && h.drasiId === where.drasiId)));
+        return { count: before - headcounts.length };
+      },
       updateMany: async ({ where, data }: { where: { id: string; completedAt?: null }; data: Partial<(typeof headcounts)[number]> }) => {
         const hit = headcounts.filter((h) => h.id === where.id && (where.completedAt !== null || h.completedAt === null));
         for (const h of hit) Object.assign(h, data);
@@ -51,12 +56,13 @@ function setup() {
     drasiParticipant: { findMany: async () => [{ userId: 'u-maria' }, { userId: 'u-sofia' }] },
     drasiRole: { findMany: async () => [{ userId: 'u-arxigos' }] },
   };
-  const access = { load: async () => ({ id: DRASI, title: 'Κατασκήνωση' }) };
+  const drasi = { id: DRASI, title: 'Κατασκήνωση', type: 'KATASKINOSI', hasSkines: true, kladoi: [{ klados: { type: 'ODIGOI' } }] };
+  const access = { load: async () => drasi };
   const notified: { userIds: string[]; title: string }[] = [];
   const notifications = { notify: async (userIds: string[], input: { title: string }) => void notified.push({ userIds: [...userIds].sort(), title: input.title }) };
   const service = new DraseisHeadcountService(prisma as never, access as never, notifications as never);
   const at = (hhmm: string) => new Date(`2026-10-01T${hhmm}:00Z`);
-  return { service, checks, headcounts, notified, at };
+  return { service, checks, headcounts, notified, at, drasi };
 }
 
 describe('καταμέτρηση της δράσης', () => {
@@ -99,5 +105,21 @@ describe('καταμέτρηση της δράσης', () => {
       'Καταμέτρηση «Αναχώρηση»: λείπει 1 από «Γλάροι»',
       'Καταμέτρηση «Αναχώρηση»: 4/5 — λείπει 1',
     ]);
+  });
+
+  it('ανά τι μετράμε: μόνο ό,τι έχει η δράση — όχι πεντάδες σε δράση Οδηγών, όχι σκηνές χωρίς σκηνές', async () => {
+    const { service, drasi } = setup();
+    await expect(service.start(ARXIGOS, DRASI, 'Αναχώρηση', 'PENTADA')).rejects.toThrow(/Πεντάδες.*δεν ταιριάζει/);
+    drasi.hasSkines = false;
+    await expect(service.start(ARXIGOS, DRASI, 'Σκηνές', 'SKINI')).rejects.toThrow(/Σκηνές.*δεν ταιριάζει/);
+  });
+
+  it('διαγραφή: φεύγει η καταμέτρηση της δράσης· άγνωστη ή άλλης δράσης → δεν βρέθηκε', async () => {
+    const { service, headcounts } = setup();
+    const { id } = await service.start(ARXIGOS, DRASI, 'Δοκιμή', 'ENOMOTIA');
+    await expect(service.remove(ARXIGOS, 'd-other', id)).rejects.toThrow(/δεν βρέθηκε/);
+    await service.remove(ARXIGOS, DRASI, id);
+    expect(headcounts).toEqual([]);
+    await expect(service.remove(ARXIGOS, DRASI, id)).rejects.toThrow(/δεν βρέθηκε/);
   });
 });

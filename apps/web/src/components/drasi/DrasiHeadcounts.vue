@@ -13,11 +13,12 @@
           <q-input v-model="title" dense outlined autofocus color="klados" label="Τι μετράμε" placeholder="π.χ. Αναχώρηση από Μέγαρα" :maxlength="120" />
         </div>
         <div class="col-8 col-sm-4">
-          <q-select v-model="kind" :options="kindOptions" dense outlined emit-value map-options color="klados" label="Ανά" />
+          <q-select v-if="kindOptions.length" v-model="kind" :options="kindOptions" dense outlined emit-value map-options color="klados" label="Ανά" />
+          <div v-else class="text-caption text-grey-7">Η δράση δεν έχει ομάδες για καταμέτρηση.</div>
         </div>
         <div class="col-4 col-sm-2 row no-wrap justify-end">
           <q-btn flat dense no-caps label="Άκυρο" @click="starting = false" />
-          <q-btn unelevated dense no-caps color="klados" label="Έναρξη" class="q-px-sm" :disable="!title.trim()" :loading="busy" @click="start" />
+          <q-btn unelevated dense no-caps color="klados" label="Έναρξη" class="q-px-sm" :disable="!title.trim() || !kind" :loading="busy" @click="start" />
         </div>
       </div>
     </q-card-section>
@@ -63,6 +64,8 @@
       </q-list>
 
       <q-card-actions v-if="canStart" align="right">
+        <q-btn flat dense no-caps color="negative" icon="delete_outline" label="Διαγραφή" @click="remove" />
+        <q-space />
         <q-btn v-if="!current.closedAt" flat dense no-caps icon="flag" label="Τέλος" @click="close(true)" />
         <template v-else>
           <q-btn flat dense no-caps icon="restart_alt" label="Ξανά ανοιχτή" @click="close(false)" />
@@ -105,7 +108,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useQuasar } from 'quasar';
 import {
   DRASI_GROUP_KIND_PLURAL,
@@ -115,7 +118,7 @@ import {
 } from '@trifylli/shared';
 import { useAsyncData } from '../../composables/useAsyncData';
 import { useLiveReload } from '../../composables/useLiveChanges';
-import { get, post } from '../../lib/api';
+import { del, get, post } from '../../lib/api';
 import { formatDateTime } from '../../lib/format';
 import { useOfflineStore } from '../../stores/offline';
 
@@ -125,7 +128,12 @@ import { useOfflineStore } from '../../stores/offline';
  * λείπουν. Δουλεύει και χωρίς σήμα: η μέτρηση μπαίνει στην ουρά της συσκευής
  * και φεύγει μόλις πιάσει.
  */
-const props = defineProps<{ drasiId: string; canStart: boolean }>();
+const props = defineProps<{
+  drasiId: string;
+  canStart: boolean;
+  /** Ανά τι μπορεί να μετρήσει η δράση (shared `drasiHeadcountKinds`): οι ομάδες των κλάδων της, σκηνές αν έχει. */
+  kinds: DrasiGroupKind[];
+}>();
 
 const $q = useQuasar();
 const offline = useOfflineStore();
@@ -168,7 +176,7 @@ const missing = computed(() =>
   (current.value?.groups ?? []).flatMap((group) => group.members.filter((member) => group.check?.absentIds.includes(member.id))),
 );
 
-const kindOptions = (['ENOMOTIA', 'SKINI', 'PENTADA', 'FOLIA', 'OE', 'EPITROPI'] as DrasiGroupKind[]).map((value) => ({ label: DRASI_GROUP_KIND_PLURAL[value], value }));
+const kindOptions = computed(() => props.kinds.map((value) => ({ label: DRASI_GROUP_KIND_PLURAL[value], value })));
 
 function groupIcon(group: DrasiHeadcountGroupView): { icon: string; color: string } {
   if (!group.check) return { icon: 'radio_button_unchecked', color: 'grey-6' };
@@ -186,8 +194,15 @@ function groupCaption(group: DrasiHeadcountGroupView): string {
 // ── Νέα καταμέτρηση ──
 const starting = ref(false);
 const title = ref('');
-const kind = ref<DrasiGroupKind>('ENOMOTIA');
+const kind = ref<DrasiGroupKind | null>(props.kinds[0] ?? null);
 const busy = ref(false);
+// Άλλαξαν οι κλάδοι ή οι σκηνές της δράσης: η επιλογή μένει μόνο αν ισχύει ακόμα.
+watch(
+  () => props.kinds,
+  (kinds) => {
+    if (!kind.value || !kinds.includes(kind.value)) kind.value = kinds[0] ?? null;
+  },
+);
 
 async function start(): Promise<void> {
   busy.value = true;
@@ -202,6 +217,25 @@ async function start(): Promise<void> {
   } finally {
     busy.value = false;
   }
+}
+
+function remove(): void {
+  const headcount = current.value;
+  if (!headcount) return;
+  $q.dialog({
+    title: 'Διαγραφή καταμέτρησης',
+    message: `Να σβηστεί η καταμέτρηση «${headcount.title}»; Χάνονται και οι μετρήσεις των ομάδων.`,
+    cancel: { label: 'Άκυρο', flat: true },
+    ok: { label: 'Διαγραφή', color: 'negative' },
+  }).onOk(async () => {
+    try {
+      await del(`/draseis/${props.drasiId}/headcounts/${headcount.id}`);
+      pending.value = new Map();
+      await reload();
+    } catch {
+      $q.notify({ type: 'negative', message: 'Δεν σβήστηκε — δοκίμασε ξανά με δίκτυο.' });
+    }
+  });
 }
 
 async function close(closed: boolean): Promise<void> {

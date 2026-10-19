@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Put, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Post, Put, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CapabilityGuard } from '../../common/auth/capability.guard';
 import { CurrentUser, RequireDrasi } from '../../common/auth/decorators';
@@ -53,6 +53,18 @@ export class DraseisHeadcountController {
     @Body() dto: CloseHeadcountDto,
   ) {
     await this.headcounts.close(user, id, headcountId, dto.closed);
+    return { ok: true };
+  }
+
+  @Delete('headcounts/:headcountId')
+  @RequireDrasi('rythmiseis', 'edit')
+  @ApiOperation({ summary: 'Διαγραφή καταμέτρησης — μαζί με τις μετρήσεις των ομάδων' })
+  async remove(
+    @CurrentUser() user: RequestUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('headcountId', ParseUUIDPipe) headcountId: string,
+  ) {
+    await this.headcounts.remove(user, id, headcountId);
     return { ok: true };
   }
 }
