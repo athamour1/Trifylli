@@ -38,6 +38,38 @@ dc() { docker compose -f docker-compose.prod.yml --env-file .env.prod "$@"; }
 
 ---
 
+## Από v1.1.2
+
+Η ρουτίνα του «Κάθε φορά», **με** το νέο `docker-compose.prod.yml`.
+
+**Τι αλλάζει:**
+
+* GlitchTip: DuckDB ανοιχτό (spans και logs), MCP ανοιχτό
+  (`GLITCHTIP_ENABLE_MCP`), και «Log in with Authentik» (νέο blueprint
+  `glitchtip-oidc.yaml` + one-shot `glitchtip-sso`). Στο `.env.prod`:
+  `GLITCHTIP_OIDC_ISSUER=https://sso.<domain>/application/o/glitchtip/` και
+  `GLITCHTIP_OIDC_CLIENT_SECRET` (`openssl rand -hex 32`)· χωρίς αυτά το SSO
+  απλώς δεν εμφανίζεται.
+* API και PWA: τα «extras» του error tracking (tracing, logs, breadcrumbs,
+  «Αναφορά προβλήματος») ανοιχτά από προεπιλογή — `SENTRY_EXTRAS=true`, ως την
+  έξοδο του [ROADMAP §6](../ROADMAP.md#6-glitchtip-extras--έξοδος-πριν-από-την-παραγωγή).
+* Η CSP της PWA στέλνει τις παραβιάσεις στο API (`/api/csp-report`).
+* Το API τρέχει με `--enable-source-maps`: τα stack traces δείχνουν `.ts`.
+* 1 migration: η αποδοχή του μηνύματος «Καταγραφή χρήσης» ανά λογαριασμό
+  (δύο κολόνες στο `user`). Το μήνυμα εμφανίζεται μόνο αν είναι ρυθμισμένο
+  replay ή analytics.
+* Νέα προαιρετικά profiles: `replay` (OpenReplay, ~20 containers, ≥ 8 GB RAM)
+  και `analytics` (Umami). Τα μυστικά `REPLAY_*`/`UMAMI_APP_SECRET`: βγάλ' τα με
+  `docker run --rm …/config:<TAG> gen-env | grep -E '^(REPLAY_|UMAMI_)'` και
+  βάλ' τα στο `.env.prod`· στήσιμο στο [`monitoring.md`](monitoring.md) §5–6.
+
+**Στο `.env.prod` (προαιρετικά, [`monitoring.md`](monitoring.md) §3):**
+`CSP_REPORT_FORWARD_URL` (Security Endpoint του project «pwa»),
+`SOURCEMAP_UPLOAD_TOKEN` (source maps της PWA), και `SENTRY_EXTRAS=false` αν
+**δεν** τα θέλεις στο ζωντανό σύστημα.
+
+---
+
 ## Από v1.1.1
 
 Η ρουτίνα του «Κάθε φορά», **με** το νέο `docker-compose.prod.yml`. Χωρίς αλλαγές

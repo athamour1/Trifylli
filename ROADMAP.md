@@ -24,6 +24,7 @@
 | 3 | [Δράσεις & κατασκήνωση](#3-δράσεις--κατασκήνωση) | L | Έγινε (2026-10-07) |
 | 4 | [Ταυτόχρονη επεξεργασία](#4-ταυτόχρονη-επεξεργασία-co-edit) | L | Έγινε — Φ0–Φ14 (2026-10-16): κοινά έγγραφα, ζωντανές λίστες, ροή, ειδοποιήσεις, σχόλια, ιστορικό, εγκρίσεις, δράση ζωντανά, καταμέτρηση, ψηφοφορίες — [`docs/synergasia.md`](docs/synergasia.md) |
 | 5 | [Observability](#5-observability) | S | Το 80/20 πέρασε στο 0 (σημεία 8–11) |
+| 6 | [GlitchTip extras — έξοδος πριν από την παραγωγή](#6-glitchtip-extras--έξοδος-πριν-από-την-παραγωγή) | S | **Ανοιχτά τώρα** (2026-10-19), dev και prod· φεύγουν πριν από την κανονική παραγωγή |
 
 ---
 
@@ -273,6 +274,72 @@ OpenReplay **τοπικά με ψεύτικα δεδομένα**, ή ένα κο
 που στέλνει τις τελευταίες ενέργειες από την ουρά + το σφάλμα. Το δεύτερο
 δουλεύει και σε αληθινό χρήστη στην κατασκήνωση, που είναι και η περίπτωση που
 σε νοιάζει.
+
+---
+
+## 6. GlitchTip extras — έξοδος πριν από την παραγωγή
+
+**Τι ζητήθηκε (2026-10-19):** «επειδή το project είναι σε ενεργή ανάπτυξη θέλω
+να χρησιμοποιήσω όλα τα features και να τα βγάλω μόλις πάει σε παραγωγή· και
+όσα είπες ότι δεν τα θέλουμε, φτιάξε νέα φάση στο roadmap». Ο αιτών επέλεξε
+ρητά να είναι ανοιχτά **και στο ζωντανό prod** μέχρι τότε.
+
+**Τι μένει μόνιμα** (δεν αφορά αυτή τη φάση): source maps της PWA (ανέβασμα
+στην εκκίνηση του `web`) και `--enable-source-maps` στο API, releases,
+αναφορές CSP μέσω του API, heartbeats GlitchTip για τα crons, GlitchTip στο
+dev compose, ειδοποιήσεις με webhook, **analytics (Umami)** — ανώνυμα, χωρίς
+cookies — και το μήνυμα «Καταγραφή χρήσης» (με νέο κείμενο χωρίς το replay:
+`TRACKING_NOTICE_VERSION` +1). Βλ. [`docs/monitoring.md`](docs/monitoring.md) §3.
+
+**Τι είναι «extra» — και γιατί φεύγει:**
+
+| Extra | Πού | Γιατί όχι στην κανονική παραγωγή |
+| :--- | :--- | :--- |
+| **Tracing** (API + PWA, με συνέχεια `sentry-trace`) | `SENTRY_EXTRAS` | Τα spans κουβαλούν διαδρομές με UUID δράσεων/μελών, SQL (παραμετρικά, χωρίς τιμές) και χρόνους ανά λογαριασμό: ένα αναλυτικό ημερολόγιο του ποιος άνοιξε τι, πότε. Για **ένα** Τοπικό το `ms` στη γραμμή log κάθε αιτήματος απαντά το «τι είναι αργό». Θέλει και DuckDB στο GlitchTip (+RAM, +δίσκος). |
+| **Logs στο GlitchTip** | `SENTRY_EXTRAS` (API: Nest logger, PWA: `console.warn/error`) | Δεύτερο αντίγραφο του `docker logs`, με `userId`, σε βάση με αναζήτηση. Τα logs μένουν ήδη στον server με περιστροφή· ένα ακόμη αποθετήριο είναι ένα ακόμη σημείο να διαρρεύσει και να σβηστεί στην ώρα του. |
+| **Breadcrumbs** | `SENTRY_EXTRAS` | Τα κλικ της PWA γράφουν τον CSS selector του στοιχείου — που μπορεί να έχει `aria-label` με όνομα παιδιού. Τα URL/emails καθαρίζονται, τα ονόματα δεν μπορούν. |
+| **Αναφορά προβλήματος** | `SENTRY_EXTRAS` (μενού λογαριασμού) | Ελεύθερο κείμενο: το στέλεχος θα γράψει «η Μαρία Π. δεν φαίνεται στη λίστα» παρά την προειδοποίηση. Στην παραγωγή, ένα κανάλι που πάει σε **άνθρωπο** (email/Viber) είναι καλύτερο. |
+| **MCP του GlitchTip** | `GLITCHTIP_ENABLE_MCP` | Δίνει σε εργαλείο AI πρόσβαση στα σφάλματα της παραγωγής (stacks, URL, ids λογαριασμών). Στο dev είναι χρήσιμο· στην παραγωγή είναι ακόμη ένα token με πρόσβαση σε δεδομένα. |
+| **Uptime monitors μέσα στο GlitchTip** | ρύθμιση στο UI (αν φτιαχτούν) | Τρέχει στον ίδιο server: όταν πέσει ο server πέφτει και αυτό — δεν θα σου πει ποτέ ότι έπεσε. Οι έλεγχοι απ' έξω (§2 του monitoring.md) κάνουν σωστά αυτή τη δουλειά. |
+| **Session replay (OpenReplay)** | profile `replay` + `OPENREPLAY_PROJECT_KEY` (μόνο μετά το μήνυμα «Καταγραφή χρήσης») | Βιντεοσκόπηση οθόνης με δεδομένα παιδιών, **χωρίς masking** (απόφαση του Τοπικού, 2026-10-19: πρόσβαση μόνο ο Έφορος, που βλέπει ήδη τα δεδομένα). Μένουν: καταγράφει και τα άλλα στελέχη, και είναι ~20 containers / ≥ 8 GB RAM — μεγαλύτερο από την ίδια την εφαρμογή. Βλ. [§5](#5-observability) και monitoring.md §5. |
+
+**Αντίρρηση που καταγράφηκε:** με τα extras ανοιχτά στο ζωντανό prod,
+πραγματικά δεδομένα χρήσης (διαδρομές, χρόνοι, logs με `userId`) φτάνουν στο
+GlitchTip για 30 ημέρες. Ο καθαρισμός (URL χωρίς query/tokens, emails, κονσόλα
+χωρίς ορίσματα) περιορίζει τη ζημιά, δεν τη μηδενίζει. Όσο μένουν ανοιχτά,
+μείωσε το `SENTRY_TRACES_SAMPLE_RATE` αν ο όγκος μεγαλώσει.
+
+**Έξοδος — σειρά (S):**
+
+1. **Αμέσως, χωρίς release:** στο `.env.prod` `SENTRY_EXTRAS=false`,
+   `GLITCHTIP_ENABLE_MCP=false`, κενό `OPENREPLAY_PROJECT_KEY` και `replay` έξω
+   από το `COMPOSE_PROFILES` → `up -d --remove-orphans`. Από εκεί και πέρα φεύγουν
+   μόνο σφάλματα (και τα ανώνυμα analytics). Τα volumes `replay-*` σβήνονται
+   με `docker volume rm` όταν δεν χρειάζεσαι πια τις εγγραφές.
+2. Στο GlitchTip: διαγραφή όσων uptime monitors φτιάχτηκαν μέσα του, των
+   tokens MCP, και — αν θέλεις καθαρό — των παλιών συναλλαγών/logs (σβήνονται
+   ούτως ή άλλως στις 30 ημέρες).
+3. **Στον κώδικα (επόμενο release):**
+   * σβήσιμο `apps/api/src/common/errors/error-reporting-extras.ts` και της
+     κλήσης του στο `error-reporting.ts`· το `setLogSink` του `app-logger.ts`·
+     το `keepBreadcrumbs` του `scrubEvent`· `SENTRY_EXTRAS`,
+     `SENTRY_TRACES_SAMPLE_RATE` και `sentryExtras()` από το `configuration.ts`·
+     το `extras.spec.ts` (κράτα τα tests του `scrubCspReport`, `urlTemplate`, `scrubText`)·
+   * σβήσιμο `apps/web/src/lib/error-reporting-extras.ts`, `lib/feedback.ts`,
+     το «Αναφορά προβλήματος» στο `MainLayout.vue`, τα `sentryExtras`/
+     `sentryTracesSampleRate` από `runtime-config.ts`, `docker-entrypoint.sh`,
+     `quasar.config.ts`· το `keepBreadcrumbs` του `prepareEvent`·
+   * OpenReplay: έξω το `apps/web/src/lib/replay.ts` (+ `replay-link.ts`, το
+     `@openreplay/tracker`), η γραμμή «τις συνεδρίες σου» από το
+     `TrackingNotice.vue` (και `TRACKING_NOTICE_VERSION` +1), τα `replay-*`
+     services, το `x-replay-*`, το δίκτυο `replay`, το `infra/openreplay/`, τα
+     `REPLAY_*`/`OPENREPLAY_*` και το `blob:` του `worker-src` στον entrypoint·
+   * compose (dev + prod) και `.env.prod.example`: έξω τα `SENTRY_EXTRAS`,
+     `SENTRY_TRACES_SAMPLE_RATE`, `GLITCHTIP_ENABLE_MCP`· το DuckDB μένει μόνο
+     αν κρατήσεις logs/spans — αλλιώς έξω και αυτό· το `.mcp.json` μένει (μόνο dev).
+   * `docs/monitoring.md` §3: έξω η ενότητα «extras».
+4. Έλεγχος: ένα 500 του API και ένα σφάλμα της PWA φτάνουν όπως πριν, χωρίς
+   συναλλαγές/logs/breadcrumbs.
 
 ---
 

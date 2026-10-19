@@ -6,7 +6,7 @@
 > το DI του Nest)· GlitchTip 6.2.6 με πραγματικό 500 του API και σφάλμα της PWA —
 > καθαρισμένα, με το ίδιο `requestId` στα logs.
 
-Τέσσερα κομμάτια, από το πιο φθηνό:
+Έξι κομμάτια, από το πιο φθηνό:
 
 | Τι | Πιάνει | Πού ζει |
 | :--- | :--- | :--- |
@@ -14,6 +14,8 @@
 | **Έλεγχοι απ' έξω** | ό,τι βλέπει ο χρήστης: DNS, TLS, proxy, «η σελίδα δεν ανοίγει» | UptimeRobot ή Uptime Kuma σε **άλλο** μηχάνημα |
 | **Error tracking** | σφάλματα του κώδικα (API και PWA), με stack | GlitchTip (profile `errors`) |
 | **Logs** | τι έγινε σε ένα συγκεκριμένο αίτημα | `docker logs` / Portainer, με `requestId` |
+| **Καταγραφή συνεδριών** | τι έκανε ο χρήστης πριν σκάσει κάτι — βίντεο της συνεδρίας | OpenReplay (profile `replay`) |
+| **Analytics** | ποιες σελίδες χρησιμοποιούνται, πόσο, από τι συσκευές — ανώνυμα | Umami (profile `analytics`) |
 
 ---
 
@@ -30,6 +32,11 @@
   `…/fail`, με το μήνυμα στο body.
 * **Uptime Kuma** — push monitor· το URL του έχει `/api/push/<token>`. Η
   αποτυχία στέλνει `status=down` με το μήνυμα.
+* **GlitchTip** — heartbeat monitor (Uptime → New → Heartbeat)· το URL του έχει
+  `/heartbeat_check/<id>/`. Δεν έχει «αποτυχία»: στο fail δεν στέλνουμε τίποτα
+  και ειδοποιεί όταν περάσει το διάστημα. Το ίδιο το σφάλμα έχει ήδη φτάσει
+  στο GlitchTip ως issue. **Μόνο για τα crons του API**: τρέχει στον ίδιο
+  server, άρα για τον watchdog (τον «νεκρό διακόπτη») θέλεις υπηρεσία απ' έξω.
 
 | Μεταβλητή | Ποιος στέλνει | Περίοδος | Ανοχή |
 | :--- | :--- | :--- | :--- |
@@ -80,21 +87,88 @@ server: δεν σου λέει ποτέ ότι έπεσε ο server.)
 
 ## 3. Error tracking (GlitchTip)
 
+> **Δοκιμάστηκε 2026-10-19** στο dev (GlitchTip 6.2.6, SDK 11.7): είσοδος με
+> Authentik (και απόρριψη χρήστη χωρίς λογαριασμό στο GlitchTip), σφάλματα,
+> συναλλαγές με spans (HTTP, Prisma), logs, «Αναφορά προβλήματος», αναφορά CSP
+> μέσω του API (με το token κομμένο), heartbeat, και source maps της PWA που
+> ανέβηκαν από το image στην εκκίνηση και ξεδιάλυναν πραγματικό σφάλμα σε
+> αρχείο/γραμμή/συνάρτηση.
+
+### Στήσιμο (παραγωγή)
+
 1. `COMPOSE_PROFILES=errors`, `GLITCHTIP_DOMAIN`, `GLITCHTIP_SECRET_KEY` στο
    `.env.prod`, ο υποτομέας `errors.` στον proxy (`trifylli-errors:8000`).
 2. Πρώτος χρήστης (η εγγραφή είναι κλειστή):
    `dc exec glitchtip ./manage.py createsuperuser`
-3. Ένας οργανισμός και δύο projects: **API** (Node) και **PWA** (Vue). Τα DSN
-   στο `API_SENTRY_DSN` (με host `glitchtip:8000` — εσωτερικά) και
+3. Οργανισμός **`trifylli`** και δύο projects: **`api`** (Node) και **`pwa`**
+   (Vue). Τα DSN στο `API_SENTRY_DSN` (με host `glitchtip:8000` — εσωτερικά) και
    `WEB_SENTRY_DSN` (με τον δημόσιο host — το στέλνει ο browser).
-4. Ειδοποιήσεις: στο project, alert με email (θέλει `GLITCHTIP_EMAIL_URL`).
+4. **CSP:** το «Security Endpoint» του `pwa` (Settings → Client Keys) στο
+   `CSP_REPORT_FORWARD_URL` (και εδώ αρκεί ο εσωτερικός host).
+5. **Source maps της PWA:** token από Profile → Auth Tokens με
+   `project:releases` στο `SOURCEMAP_UPLOAD_TOKEN`. Σε κάθε εκκίνηση το `web`
+   ανεβάζει τα maps του image στο `pwa` (release `trifylli-web@<έκδοση>`) —
+   στο log: `[entrypoint] source maps: ανέβηκαν`. Πάει στο **δημόσιο** URL
+   (`GLITCHTIP_DOMAIN`): το GlitchTip δίνει URL upload με αυτό το host, οπότε
+   ο server πρέπει να φτάνει το δικό του δημόσιο όνομα.
+6. **Ειδοποιήσεις:** στο project → Alerts. Email (θέλει `GLITCHTIP_EMAIL_URL`)
+   ή **webhook** (Discord, Slack-συμβατό, Google Chat) για ειδοποίηση στο κινητό
+   σε δευτερόλεπτα.
+7. **Είσοδος με Authentik (SSO):** στη σελίδα εισόδου υπάρχει «Log in with
+   Authentik». Μπαίνει **μόνο** όποιος έχει ήδη χρήστη στο GlitchTip με το ίδιο
+   email όπως στο Authentik — οι υπόλοιποι παίρνουν «signup closed». Το
+   `glitchtip-sso` (σε κάθε `up`) ρυθμίζει τον provider και δένει τους χρήστες
+   με το email τους· νέος χρήστης ⇒ `dc up glitchtip-sso` για να δεθεί. Θέλει
+   `GLITCHTIP_OIDC_ISSUER` και `GLITCHTIP_OIDC_CLIENT_SECRET` (το βγάζει το
+   `gen-env`· το ίδιο το διαβάζει και το Authentik). Ο server πρέπει να φτάνει το
+   δημόσιο `sso.<domain>`. Το UI του GlitchTip **δεν** δέχεται emails σε `.local`
+   (σφάλμα 500) — χρήστες με κανονικό domain.
+8. **Releases:** τα σφάλματα έχουν release (`trifylli-api@…`, `trifylli-web@…`).
+   «Resolve in next release» κλείνει ένα issue ως την επόμενη έκδοση· αν
+   ξαναφανεί μετά, ανοίγει ξανά ως regression.
 
-**Τι φεύγει:** τύπος και stack του σφάλματος, URL χωρίς query και με τα tokens ως
-`:token`, id λογαριασμού, `requestId`, έκδοση. **Τι δεν φεύγει ποτέ:** body,
-headers, cookies, email/IP/όνομα χρήστη, breadcrumbs, props των components,
-τοπικές μεταβλητές, ερωτήματα βάσης — όλα κλειστά στο SDK, και ό,τι μείνει
-περνά από καθαρισμό πριν φύγει. Τα 4xx (π.χ. «δεν έχετε δικαίωμα») και το «εκτός
-σύνδεσης» δεν αναφέρονται: είναι αναμενόμενα. Διατήρηση: 30 ημέρες.
+### Στήσιμο (dev)
+
+```bash
+docker compose --profile errors up -d glitchtip     # UI: http://localhost:8082
+docker compose exec glitchtip ./manage.py createsuperuser
+```
+
+Το SSO δουλεύει και στο dev (`http://localhost:9010` — ένας μικρός socat,
+`glitchtip-sso-bridge`, κάνει το Authentik ορατό στο ίδιο URL και μέσα από το
+GlitchTip). Ίδια βήματα 3–4· τα DSN στο `apps/api/.env` (`SENTRY_DSN`,
+`CSP_REPORT_FORWARD_URL`) και στο `apps/web/.env` (`VITE_SENTRY_DSN`). Στο
+`quasar dev` τα source maps είναι ήδη εκεί. Το dev GlitchTip έχει **MCP**
+(`http://localhost:8082/mcp`): το `.mcp.json` του repo το δηλώνει στο Claude
+Code — χρειάζεται μόνο `export GLITCHTIP_MCP_TOKEN=<token από Profile → Auth
+Tokens>` πριν ανοίξει, και διαβάζει issues, traces και logs.
+
+### Τι φεύγει — πάντα
+
+Τύπος και stack του σφάλματος (στην PWA ξεδιαλυμένο από τα source maps), URL
+χωρίς query και με τα tokens ως `:token`, id λογαριασμού, `requestId`, έκδοση.
+**Ποτέ:** body, headers, cookies, email/IP/όνομα χρήστη, props των components,
+τοπικές μεταβλητές, τιμές ερωτημάτων βάσης — όλα κλειστά στο SDK, και ό,τι
+μείνει περνά από καθαρισμό πριν φύγει. Τα 4xx (π.χ. «δεν έχετε δικαίωμα») και το
+«εκτός σύνδεσης» δεν αναφέρονται: είναι αναμενόμενα. Οι παραβιάσεις CSP περνούν
+από το API (`/api/csp-report`), που κρατά μόνο τα γνωστά πεδία, κόβει tokens
+και query και πετά το `script-sample`. Διατήρηση: 30 ημέρες.
+
+### Τα «extras» — μόνο όσο είμαστε σε ανάπτυξη
+
+`SENTRY_EXTRAS=true` (προεπιλογή στο compose **για τώρα**) ανοίγει επιπλέον:
+
+| Τι | API | PWA |
+| :--- | :--- | :--- |
+| **Tracing** | κάθε αίτημα (εκτός health/CSP, 401–404) με spans Prisma και κλήσεων προς τα έξω | φόρτωμα σελίδας, πλοήγηση, κλήσεις στο API — με συνέχεια στο trace του API (`sentry-trace`) |
+| **Logs** | κάθε γραμμή του Nest logger, με `context`/`requestId` | `console.warn/error`, μόνο το κείμενο (κανένα όρισμα) |
+| **Breadcrumbs** | κλήσεις HTTP προς τα έξω | πλοήγηση, κλικ, κλήσεις fetch/xhr |
+| **Αναφορά προβλήματος** | — | μενού λογαριασμού → GlitchTip «User Feedback» |
+
+Ίδιοι κανόνες καθαρισμού (URL, tokens, emails). Ονόματα συναλλαγών ως «μορφή»
+διαδρομής (`GET /api/draseis/:id`). `SENTRY_TRACES_SAMPLE_RATE` (0–1) για
+λιγότερα traces. Γιατί **δεν** μένουν στην κανονική παραγωγή και πώς φεύγουν:
+[ROADMAP §6](../ROADMAP.md#6-glitchtip-extras--έξοδος-πριν-από-την-παραγωγή).
 
 ## 4. Logs
 
@@ -108,3 +182,76 @@ docker logs trifylli-prod-api-1 2>&1 | grep <requestId>
 ```
 
 Περιστροφή: driver `local`, έως 10 × 20 MB ανά container (εβδομάδες ιστορικού).
+
+## 5. Καταγραφή συνεδριών (OpenReplay)
+
+> **Δοκιμάστηκε 2026-10-19** στο dev (OpenReplay v1.28.0, tracker 18.2.0):
+> μήνυμα ενημέρωσης → αποδοχή → εγγραφή → σφάλμα στο GlitchTip με tag
+> `openreplay` (σύνδεσμος στο replay) → αναπαραγωγή στο UI του OpenReplay.
+
+**Απόφαση του Τοπικού (2026-10-19):** χωρίς masking. Κείμενα, πεδία, emails και
+τα bodies των κλήσεων προς το API φαίνονται στο replay· **όχι** τα headers
+`Authorization`/`Cookie` (θα κρατούσαν ζωντανά tokens). Πρόσβαση μόνο ο
+υπεύθυνος του συστήματος. Είναι από τα extras της [ROADMAP §6](../ROADMAP.md#6-glitchtip-extras--έξοδος-πριν-από-την-παραγωγή).
+
+**Πότε καταγράφει:** μόνο αφού ο λογαριασμός αποδεχτεί το μήνυμα «Καταγραφή
+χρήσης» (μία φορά ανά λογαριασμό και έκδοση κειμένου· η αποδοχή γράφεται στη
+βάση — `trackingNoticeAcceptedAt` — και στο audit log). **Ποτέ** στις δημόσιες
+σελίδες των γονιών (έντυπα, αξιολόγηση): εκεί δεν υπάρχει λογαριασμός. Νέο
+κείμενο ή αλλαγή στο τι καταγράφεται ⇒ `TRACKING_NOTICE_VERSION` +1 στο shared,
+και όλοι το ξαναβλέπουν.
+
+### Στήσιμο (παραγωγή)
+
+1. `replay` στο `COMPOSE_PROFILES`, `REPLAY_URL` (π.χ. `https://replay.<domain>`)
+   — τα `REPLAY_*` μυστικά τα βγάζει το `gen-env`. Ο υποτομέας στον proxy →
+   `trifylli-replay:80`, **με WebSocket** (assist). ≥ 8 GB RAM.
+2. **Ο server πρέπει να φτάνει το δικό του δημόσιο `REPLAY_URL`:** οι υπηρεσίες
+   του OpenReplay μιλούν με το S3 τους μέσω αυτού (proxy → `replay-nginx` →
+   RustFS). Σε dedicated με δημόσια IP δουλεύει μόνο του· πίσω από NAT θέλει
+   «hairpin» ή εσωτερικό DNS.
+3. Το πρώτο pull: το AWS ECR κόβει τα πολλά παράλληλα pulls (429) —
+   `COMPOSE_PARALLEL_LIMIT=2 docker compose … pull`.
+4. Άνοιξε το `REPLAY_URL`: **ο πρώτος λογαριασμός που γράφεται γίνεται owner**
+   — κάν' το αμέσως μετά το `up`, πριν το βρει κάποιος άλλος.
+5. Στο project: **Preferences → Projects → (project) → Capture**: «Input data» =
+   Plain, «Mask emails» κλειστό, «Sample rate» 100% — αλλιώς ο server
+   υπερισχύει του tracker (προεπιλογή: 33% και κρυφά πεδία).
+6. Το project key στο `OPENREPLAY_PROJECT_KEY` → `up -d web`.
+
+Εγγραφές: σβήνονται στις 30 ημέρες (κανόνας στο bucket `mobs`, TTL στο
+ClickHouse). Δεν μπαίνουν στα backups.
+
+### Στήσιμο (dev)
+
+```bash
+COMPOSE_PARALLEL_LIMIT=2 docker compose --profile replay pull
+docker compose --profile replay up -d     # UI: http://replay.localhost:8090
+```
+
+Ο Chrome λύνει μόνος του το `*.localhost`· μέσα στο δίκτυο `replay` το ίδιο
+όνομα είναι alias του `replay-nginx`. Ίδια βήματα 4–5 (email με κανονικό domain —
+το `.local` απορρίπτεται), το key στο `VITE_OPENREPLAY_PROJECT_KEY` του
+`apps/web/.env`. Στο dev οι γραμματοσειρές/εικονίδια δεν φαίνονται στο replay
+(το OpenReplay δεν φτάνει το `localhost:9000` για να τα κατεβάσει).
+
+## 6. Analytics (Umami)
+
+Ανώνυμα στατιστικά: σελίδες, χρόνοι, συσκευές, χώρες. **Χωρίς cookies, χωρίς
+IP, χωρίς λογαριασμό** — άρα χωρίς banner συναίνεσης· αναφέρεται στο μήνυμα
+«Καταγραφή χρήσης» για διαφάνεια. Κάθε URL φεύγει ως «μορφή» διαδρομής
+(`/draseis/:id`, `/forms/:token`): χωρίς query, χωρίς tokens δημόσιων συνδέσμων.
+Μόνιμο — δεν είναι από τα extras της ROADMAP §6.
+
+### Στήσιμο
+
+1. `analytics` στο `COMPOSE_PROFILES`, `UMAMI_URL` (π.χ. `https://analytics.<domain>`)
+   — το `UMAMI_APP_SECRET` το βγάζει το `gen-env`. Ο υποτομέας στον proxy →
+   `trifylli-analytics:3000`. Βάση `umami` στον ίδιο Postgres (τη φτιάχνει το `umami-db`).
+2. Είσοδος **admin / umami** → άλλαξε αμέσως τον κωδικό (Settings → Profile).
+3. Settings → Websites → Add website (domain της εφαρμογής) → το id στο
+   `UMAMI_WEBSITE_ID` → `up -d web`.
+
+Dev: `docker compose --profile analytics up -d umami` → http://localhost:8083, το
+id στο `VITE_UMAMI_WEBSITE_ID`. Η βάση `umami` **δεν** μπαίνει στο ημερήσιο
+backup (μόνο trifylli/authentik/ouchtracker)· την παίρνει το dump πριν από κάθε deploy (`predeploy-backup`).

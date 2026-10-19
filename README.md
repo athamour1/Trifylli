@@ -643,6 +643,8 @@ crons του API και έναν `watchdog` που κάθε 5' ελέγχει δ
 | `sso.example.gr` | Authentik (SSO) | `trifylli-sso:9000` | `AUTHENTIK_PORT` (9010) |
 | `ouch.example.gr` | OuchTracker — κάνει μόνο του proxy `/api` | `trifylli-ouch:80` | `OUCHTRACKER_WEB_PORT` (8081) |
 | `errors.example.gr` | GlitchTip — μόνο με `COMPOSE_PROFILES=errors` | `trifylli-errors:8000` | `GLITCHTIP_PORT` (8082) |
+| `replay.example.gr` | OpenReplay — μόνο με `COMPOSE_PROFILES=replay`, με WebSocket | `trifylli-replay:80` | `REPLAY_PORT` (8090) |
+| `analytics.example.gr` | Umami — μόνο με `COMPOSE_PROFILES=analytics` | `trifylli-analytics:3000` | `UMAMI_PORT` (8083) |
 
 **WebSocket (συνεργασία σε πραγματικό χρόνο).** Το API δέχεται WebSocket στο
 `/api/collab` (κοινά κείμενα, κέρσορες, παρουσία). Ο proxy του `api.` πρέπει να
