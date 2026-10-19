@@ -301,7 +301,7 @@ cookies — και το μήνυμα «Καταγραφή χρήσης» (με �
 | **Αναφορά προβλήματος** | `SENTRY_EXTRAS` (μενού λογαριασμού) | Ελεύθερο κείμενο: το στέλεχος θα γράψει «η Μαρία Π. δεν φαίνεται στη λίστα» παρά την προειδοποίηση. Στην παραγωγή, ένα κανάλι που πάει σε **άνθρωπο** (email/Viber) είναι καλύτερο. |
 | **MCP του GlitchTip** | `GLITCHTIP_ENABLE_MCP` | Δίνει σε εργαλείο AI πρόσβαση στα σφάλματα της παραγωγής (stacks, URL, ids λογαριασμών). Στο dev είναι χρήσιμο· στην παραγωγή είναι ακόμη ένα token με πρόσβαση σε δεδομένα. |
 | **Uptime monitors μέσα στο GlitchTip** | ρύθμιση στο UI (αν φτιαχτούν) | Τρέχει στον ίδιο server: όταν πέσει ο server πέφτει και αυτό — δεν θα σου πει ποτέ ότι έπεσε. Οι έλεγχοι απ' έξω (§2 του monitoring.md) κάνουν σωστά αυτή τη δουλειά. |
-| **Session replay (OpenReplay)** | profile `replay` + `OPENREPLAY_PROJECT_KEY` (μόνο μετά το μήνυμα «Καταγραφή χρήσης») | Βιντεοσκόπηση οθόνης με δεδομένα παιδιών, **χωρίς masking** (απόφαση του Τοπικού, 2026-10-19: πρόσβαση μόνο ο Έφορος, που βλέπει ήδη τα δεδομένα). Μένουν: καταγράφει και τα άλλα στελέχη, και είναι ~20 containers / ≥ 8 GB RAM — μεγαλύτερο από την ίδια την εφαρμογή. Βλ. [§5](#5-observability) και monitoring.md §5. |
+| **Session replay (OpenObserve)** | profile `replay` + `OPENOBSERVE_RUM_TOKEN` (μόνο μετά το μήνυμα «Καταγραφή χρήσης») | Βιντεοσκόπηση οθόνης με δεδομένα παιδιών, **χωρίς masking** (απόφαση του Τοπικού, 2026-10-19: πρόσβαση μόνο ο Έφορος — SSO, ομάδα `trifylli-monitoring` — που βλέπει ήδη τα δεδομένα). Μένει: καταγράφει και τα άλλα στελέχη. Το OpenObserve αντικατέστησε το OpenReplay ίδια μέρα (SSO δωρεάν· 2 containers αντί για 24). Βλ. [§5](#5-observability) και monitoring.md §5. |
 
 **Αντίρρηση που καταγράφηκε:** με τα extras ανοιχτά στο ζωντανό prod,
 πραγματικά δεδομένα χρήσης (διαδρομές, χρόνοι, logs με `userId`) φτάνουν στο
@@ -312,10 +312,10 @@ GlitchTip για 30 ημέρες. Ο καθαρισμός (URL χωρίς query/
 **Έξοδος — σειρά (S):**
 
 1. **Αμέσως, χωρίς release:** στο `.env.prod` `SENTRY_EXTRAS=false`,
-   `GLITCHTIP_ENABLE_MCP=false`, κενό `OPENREPLAY_PROJECT_KEY` και `replay` έξω
+   `GLITCHTIP_ENABLE_MCP=false`, κενό `OPENOBSERVE_RUM_TOKEN` και `replay` έξω
    από το `COMPOSE_PROFILES` → `up -d --remove-orphans`. Από εκεί και πέρα φεύγουν
-   μόνο σφάλματα (και τα ανώνυμα analytics). Τα volumes `replay-*` σβήνονται
-   με `docker volume rm` όταν δεν χρειάζεσαι πια τις εγγραφές.
+   μόνο σφάλματα (και τα ανώνυμα analytics). Τα volumes `openobserve-data` και
+   `dex-data` σβήνονται με `docker volume rm` όταν δεν χρειάζεσαι πια τις εγγραφές.
 2. Στο GlitchTip: διαγραφή όσων uptime monitors φτιάχτηκαν μέσα του, των
    tokens MCP, και — αν θέλεις καθαρό — των παλιών συναλλαγών/logs (σβήνονται
    ούτως ή άλλως στις 30 ημέρες).
@@ -329,11 +329,12 @@ GlitchTip για 30 ημέρες. Ο καθαρισμός (URL χωρίς query/
      το «Αναφορά προβλήματος» στο `MainLayout.vue`, τα `sentryExtras`/
      `sentryTracesSampleRate` από `runtime-config.ts`, `docker-entrypoint.sh`,
      `quasar.config.ts`· το `keepBreadcrumbs` του `prepareEvent`·
-   * OpenReplay: έξω το `apps/web/src/lib/replay.ts` (+ `replay-link.ts`, το
-     `@openreplay/tracker`), η γραμμή «τις συνεδρίες σου» από το
-     `TrackingNotice.vue` (και `TRACKING_NOTICE_VERSION` +1), τα `replay-*`
-     services, το `x-replay-*`, το δίκτυο `replay`, το `infra/openreplay/`, τα
-     `REPLAY_*`/`OPENREPLAY_*` και το `blob:` του `worker-src` στον entrypoint·
+   * Replay: έξω το `apps/web/src/lib/replay.ts` (+ `replay-link.ts`, το
+     `@openobserve/browser-rum`), η γραμμή «τις συνεδρίες σου» από το
+     `TrackingNotice.vue` (και `TRACKING_NOTICE_VERSION` +1), τα services
+     `openobserve`/`dex` (+ τα socat του dev), το `infra/dex/`, το blueprint
+     `openobserve-oidc.yaml` (και η ομάδα `trifylli-monitoring` στο Authentik),
+     τα `OPENOBSERVE_*`/`DEX_*` και το `blob:` του `worker-src` στον entrypoint·
    * compose (dev + prod) και `.env.prod.example`: έξω τα `SENTRY_EXTRAS`,
      `SENTRY_TRACES_SAMPLE_RATE`, `GLITCHTIP_ENABLE_MCP`· το DuckDB μένει μόνο
      αν κρατήσεις logs/spans — αλλιώς έξω και αυτό· το `.mcp.json` μένει (μόνο dev).

@@ -58,10 +58,12 @@ dc() { docker compose -f docker-compose.prod.yml --env-file .env.prod "$@"; }
 * 1 migration: η αποδοχή του μηνύματος «Καταγραφή χρήσης» ανά λογαριασμό
   (δύο κολόνες στο `user`). Το μήνυμα εμφανίζεται μόνο αν είναι ρυθμισμένο
   replay ή analytics.
-* Νέα προαιρετικά profiles: `replay` (OpenReplay, ~20 containers, ≥ 8 GB RAM)
-  και `analytics` (Umami). Τα μυστικά `REPLAY_*`/`UMAMI_APP_SECRET`: βγάλ' τα με
-  `docker run --rm …/config:<TAG> gen-env | grep -E '^(REPLAY_|UMAMI_)'` και
-  βάλ' τα στο `.env.prod`· στήσιμο στο [`monitoring.md`](monitoring.md) §5–6.
+* Νέα προαιρετικά profiles: `replay` (OpenObserve + Dex για το SSO του — δύο
+  νέοι υποτομείς, observe. και dex.) και `analytics` (Umami). Τα μυστικά
+  `OPENOBSERVE_*`/`UMAMI_APP_SECRET`: βγάλ' τα με
+  `docker run --rm …/config:<TAG> gen-env | grep -E '^(OPENOBSERVE_|UMAMI_)'` και
+  βάλ' τα στο `.env.prod` (+ `DEX_ISSUER`, `OPENOBSERVE_OIDC_ISSUER`)· στήσιμο στο
+  [`monitoring.md`](monitoring.md) §5–6.
 
 **Στο `.env.prod` (προαιρετικά, [`monitoring.md`](monitoring.md) §3):**
 `CSP_REPORT_FORWARD_URL` (Security Endpoint του project «pwa»),

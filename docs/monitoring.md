@@ -14,7 +14,7 @@
 | **Έλεγχοι απ' έξω** | ό,τι βλέπει ο χρήστης: DNS, TLS, proxy, «η σελίδα δεν ανοίγει» | UptimeRobot ή Uptime Kuma σε **άλλο** μηχάνημα |
 | **Error tracking** | σφάλματα του κώδικα (API και PWA), με stack | GlitchTip (profile `errors`) |
 | **Logs** | τι έγινε σε ένα συγκεκριμένο αίτημα | `docker logs` / Portainer, με `requestId` |
-| **Καταγραφή συνεδριών** | τι έκανε ο χρήστης πριν σκάσει κάτι — βίντεο της συνεδρίας | OpenReplay (profile `replay`) |
+| **Καταγραφή συνεδριών** | τι έκανε ο χρήστης πριν σκάσει κάτι — βίντεο της συνεδρίας | OpenObserve (profile `replay`) |
 | **Analytics** | ποιες σελίδες χρησιμοποιούνται, πόσο, από τι συσκευές — ανώνυμα | Umami (profile `analytics`) |
 
 ---
@@ -183,57 +183,59 @@ docker logs trifylli-prod-api-1 2>&1 | grep <requestId>
 
 Περιστροφή: driver `local`, έως 10 × 20 MB ανά container (εβδομάδες ιστορικού).
 
-## 5. Καταγραφή συνεδριών (OpenReplay)
+## 5. Καταγραφή συνεδριών (OpenObserve)
 
-> **Δοκιμάστηκε 2026-10-19** στο dev (OpenReplay v1.28.0, tracker 18.2.0):
-> μήνυμα ενημέρωσης → αποδοχή → εγγραφή → σφάλμα στο GlitchTip με tag
-> `openreplay` (σύνδεσμος στο replay) → αναπαραγωγή στο UI του OpenReplay.
+> **Δοκιμάστηκε 2026-10-19** στο dev (OpenObserve Enterprise v1.1.1, Dex v2.46,
+> SDK `@openobserve/browser-rum` 0.4.3): μήνυμα ενημέρωσης → αποδοχή → εγγραφή
+> → αναπαραγωγή στο UI· «Login with SSO» με χρήστη της ομάδας
+> `trifylli-monitoring` (μπαίνει) και εκτός ομάδας («Permission denied»).
+> ~180 MB RAM σε ηρεμία (το OpenReplay που αντικατέστησε: ~2,3 GB, 24 containers).
 
-**Απόφαση του Τοπικού (2026-10-19):** χωρίς masking. Κείμενα, πεδία, emails και
-τα bodies των κλήσεων προς το API φαίνονται στο replay· **όχι** τα headers
-`Authorization`/`Cookie` (θα κρατούσαν ζωντανά tokens). Πρόσβαση μόνο ο
-υπεύθυνος του συστήματος. Είναι από τα extras της [ROADMAP §6](../ROADMAP.md#6-glitchtip-extras--έξοδος-πριν-από-την-παραγωγή).
+**Απόφαση του Τοπικού (2026-10-19):** χωρίς masking (`defaultPrivacyLevel:
+'allow'`): κείμενα, πεδία και emails φαίνονται στο replay. Οι κλήσεις δικτύου
+γράφονται ως resources (URL, χρόνος, status) — όχι headers ούτε bodies. Είναι από
+τα extras της [ROADMAP §6](../ROADMAP.md#6-glitchtip-extras--έξοδος-πριν-από-την-παραγωγή).
 
 **Πότε καταγράφει:** μόνο αφού ο λογαριασμός αποδεχτεί το μήνυμα «Καταγραφή
 χρήσης» (μία φορά ανά λογαριασμό και έκδοση κειμένου· η αποδοχή γράφεται στη
 βάση — `trackingNoticeAcceptedAt` — και στο audit log). **Ποτέ** στις δημόσιες
 σελίδες των γονιών (έντυπα, αξιολόγηση): εκεί δεν υπάρχει λογαριασμός. Νέο
-κείμενο ή αλλαγή στο τι καταγράφεται ⇒ `TRACKING_NOTICE_VERSION` +1 στο shared,
-και όλοι το ξαναβλέπουν.
+κείμενο ή αλλαγή στο τι καταγράφεται ⇒ `TRACKING_NOTICE_VERSION` +1 στο shared.
+Κάθε σφάλμα της PWA στο GlitchTip έχει tag `replay` με σύνδεσμο στην εγγραφή.
+
+**Ποιος βλέπει:** «Login with SSO» → Dex → Authentik, όπου η εφαρμογή
+`openobserve` επιτρέπεται **μόνο** στην ομάδα `trifylli-monitoring`
+(`infra/authentik/openobserve-oidc.yaml`)· όλοι οι άλλοι παίρνουν «Permission
+denied». Εφεδρικά: ο root λογαριασμός (`OPENOBSERVE_ROOT_*`). Το SSO είναι στην
+Enterprise έκδοση — δωρεάν έως 50 GB/ημέρα, χωρίς license key.
 
 ### Στήσιμο (παραγωγή)
 
-1. `replay` στο `COMPOSE_PROFILES`, `REPLAY_URL` (π.χ. `https://replay.<domain>`)
-   — τα `REPLAY_*` μυστικά τα βγάζει το `gen-env`. Ο υποτομέας στον proxy →
-   `trifylli-replay:80`, **με WebSocket** (assist). ≥ 8 GB RAM.
-2. **Ο server πρέπει να φτάνει το δικό του δημόσιο `REPLAY_URL`:** οι υπηρεσίες
-   του OpenReplay μιλούν με το S3 τους μέσω αυτού (proxy → `replay-nginx` →
-   RustFS). Σε dedicated με δημόσια IP δουλεύει μόνο του· πίσω από NAT θέλει
-   «hairpin» ή εσωτερικό DNS.
-3. Το πρώτο pull: το AWS ECR κόβει τα πολλά παράλληλα pulls (429) —
-   `COMPOSE_PARALLEL_LIMIT=2 docker compose … pull`.
-4. Άνοιξε το `REPLAY_URL`: **ο πρώτος λογαριασμός που γράφεται γίνεται owner**
-   — κάν' το αμέσως μετά το `up`, πριν το βρει κάποιος άλλος.
-5. Στο project: **Preferences → Projects → (project) → Capture**: «Input data» =
-   Plain, «Mask emails» κλειστό, «Sample rate» 100% — αλλιώς ο server
-   υπερισχύει του tracker (προεπιλογή: 33% και κρυφά πεδία).
-6. Το project key στο `OPENREPLAY_PROJECT_KEY` → `up -d web`.
+1. `replay` στο `COMPOSE_PROFILES`, `OPENOBSERVE_URL` (`https://observe.<domain>`),
+   `DEX_ISSUER` (`https://dex.<domain>/dex`), `OPENOBSERVE_OIDC_ISSUER`
+   (`https://sso.<domain>/application/o/openobserve/`), `OPENOBSERVE_ROOT_EMAIL`
+   — τα μυστικά τα βγάζει το `gen-env`. **Δύο** υποτομείς στον proxy:
+   `observe.` → `trifylli-observe:5080`, `dex.` → `trifylli-dex:5556`.
+2. Ο server πρέπει να φτάνει τα δημόσια `dex.` και `sso.` (το OpenObserve μιλά με
+   τον Dex, ο Dex με το Authentik).
+3. Authentik → Directory → Groups → `trifylli-monitoring` → πρόσθεσε τον εαυτό σου.
+4. OpenObserve (root) → Ingestion → RUM → το token στο `OPENOBSERVE_RUM_TOKEN` →
+   `up -d web`.
 
-Εγγραφές: σβήνονται στις 30 ημέρες (κανόνας στο bucket `mobs`, TTL στο
-ClickHouse). Δεν μπαίνουν στα backups.
+Εγγραφές: 30 ημέρες (`ZO_COMPACT_DATA_RETENTION_DAYS`). Δεν μπαίνουν στα backups.
 
 ### Στήσιμο (dev)
 
 ```bash
-COMPOSE_PARALLEL_LIMIT=2 docker compose --profile replay pull
-docker compose --profile replay up -d     # UI: http://replay.localhost:8090
+docker compose --profile replay up -d     # UI: http://localhost:5080
 ```
 
-Ο Chrome λύνει μόνος του το `*.localhost`· μέσα στο δίκτυο `replay` το ίδιο
-όνομα είναι alias του `replay-nginx`. Ίδια βήματα 4–5 (email με κανονικό domain —
-το `.local` απορρίπτεται), το key στο `VITE_OPENREPLAY_PROJECT_KEY` του
-`apps/web/.env`. Στο dev οι γραμματοσειρές/εικονίδια δεν φαίνονται στο replay
-(το OpenReplay δεν φτάνει το `localhost:9000` για να τα κατεβάσει).
+Root: `admin@trifylli.gr` / `Trifylli-dev-1`· το token στο
+`VITE_OPENOBSERVE_RUM_TOKEN` του `apps/web/.env`. Το SSO δουλεύει και στο dev:
+μικροί socat (`openobserve-net`, `dex-net`) κρατούν το network namespace κάθε
+εφαρμογής και κάνουν το `localhost:5556` (Dex) και `localhost:9010` (Authentik)
+ορατά και μέσα από τα containers, στα ίδια URL με τον browser. Στο dev οι
+γραμματοσειρές/εικονίδια μπορεί να μη φαίνονται στο replay.
 
 ## 6. Analytics (Umami)
 
