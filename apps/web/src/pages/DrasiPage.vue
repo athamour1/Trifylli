@@ -141,18 +141,15 @@
 
               <BirthdaysBanner :birthdays="data.birthdays ?? []" title="Γενέθλια κατά τη δράση" />
 
-              <!-- Ποιοι έρχονται: δικοί μας κλάδοι στο χρώμα τους, φιλοξενούμενα Τοπικά ουδέτερα. -->
+              <!-- Ποιοι έρχονται: ανά Τοπικό — πρώτα το δικό μας, μετά τα φιλοξενούμενα· οι κλάδοι στο tooltip. -->
               <div class="text-subtitle2 q-mb-xs">Ποιοι έρχονται</div>
               <div class="row items-center q-gutter-xs q-mb-md">
-        <q-chip
-          v-for="k in data.kladoi"
-          :key="k"
-          dense
-          :style="kladosVars(k)"
-          class="bg-klados text-klados-on"
-          :icon="KLADOS_META[k].icon"
-          :label="KLADOS_LABEL[k]"
-        />
+        <q-chip v-if="data.kladoi.length" dense outline icon="location_city" :label="ourTopiko">
+          <q-tooltip>
+            {{ data.kladoi.map((k) => KLADOS_LABEL[k]).join(', ') }}
+            <span v-if="auth.topiko?.name"> · {{ auth.topiko.name }}</span>
+          </q-tooltip>
+        </q-chip>
         <q-chip
           v-for="g in data.guestTopika"
           :key="g.id"
@@ -435,7 +432,6 @@ import {
   DRASI_STATUS_LABEL,
   DRASI_TYPE_LABEL,
   KLADOS_LABEL,
-  KLADOS_META,
   collabDocument,
   type BirthdayView,
   type DrasiActivityEvent,
@@ -476,7 +472,6 @@ import { useAsyncData } from '../composables/useAsyncData';
 import { useCollabDoc, useCollabMe } from '../composables/useCollabDoc';
 import { provideLiveChanges, useLiveReload } from '../composables/useLiveChanges';
 import { useSlidingThumb } from '../composables/useSlidingThumb';
-import { kladosVars } from '../lib/klados-theme';
 import { useKladosThemeStore } from '../stores/klados-theme';
 import { get, post } from '../lib/api';
 import { activityPhrase, sectionOfTopic, unseenSections } from '../lib/activity';
@@ -547,6 +542,8 @@ const groupsLabel = computed(() => {
 const navEl = ref<HTMLElement | null>(null);
 const { thumbStyle: navThumb, ready: navReady } = useSlidingThumb(navEl, '.drasi-nav__active');
 const auth = useAuthStore();
+/** Το δικό μας Τοπικό, όπως λέγονται και τα φιλοξενούμενα: με τον τόπο του. */
+const ourTopiko = computed(() => auth.topiko?.location || auth.topiko?.name || 'Τοπικό');
 const id = String(route.params.id);
 const router = useRouter();
 
