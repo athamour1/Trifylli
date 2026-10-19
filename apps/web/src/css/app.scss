@@ -530,25 +530,46 @@ body,
    αλλάζει ανά διαδρομή, ώστε να ακολουθεί τη μπάρα — ακόμη και για το ανοιχτό
    κίτρινο των Πουλιών μένει ορατή. Παντού, όχι μόνο σελίδα και συρτάρι: και
    διάλογοι, λίστες επιλογής, πίνακες. Όπου κρύβεται (segmented control), το
-   κρύβει πιο ειδικός κανόνας. */
-* {
-  scrollbar-width: thin;
-  scrollbar-color: var(--klados-ink) transparent;
+   κρύβει πιο ειδικός κανόνας.
+   Χωρίς βελάκια πάνω/κάτω: τα στάνταρ `scrollbar-width`/`scrollbar-color` μπαίνουν
+   ΜΟΝΟ όπου δεν υπάρχει `::-webkit-scrollbar` (Firefox). Ο Chrome (≥121), όταν
+   τα βλέπει, αγνοεί τους κανόνες `::-webkit-*` και ζωγραφίζει τη δική του μπάρα,
+   που στο Linux/Windows έχει βελάκια. */
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--klados-ink) transparent;
+  }
 }
 *::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
-*::-webkit-scrollbar-track {
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
   background: transparent;
 }
+*::-webkit-scrollbar-button {
+  display: none;
+}
+/* Κενό στις άκρες της ράγας: τα πάνελ έχουν στρογγυλές γωνίες (14–20px) με
+   `overflow: hidden`, και χωρίς αυτό η γωνία «έτρωγε» την άκρη του χαπιού. */
+*::-webkit-scrollbar-track:vertical {
+  margin-block: 12px;
+}
+*::-webkit-scrollbar-track:horizontal {
+  margin-inline: 12px;
+}
+/* Διάφανο περιθώριο γύρω από το «χάπι», ώστε να πατά σωστά σε κάθε φόντο
+   (σελίδα, κάρτα, συρτάρι) — όχι δαχτυλίδι στο χρώμα μιας επιφάνειας. */
 *::-webkit-scrollbar-thumb {
   background: var(--klados-ink);
+  background-clip: padding-box;
   border-radius: 999px;
-  border: 2px solid var(--surface);
+  border: 2px solid transparent;
 }
 *::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, var(--klados-ink), #000 18%);
+  background-color: color-mix(in srgb, var(--klados-ink), #000 18%);
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -671,7 +692,7 @@ body.body--dark {
   }
 
   *::-webkit-scrollbar-thumb:hover {
-    background: color-mix(in srgb, var(--klados-ink), #fff 18%);
+    background-color: color-mix(in srgb, var(--klados-ink), #fff 18%);
   }
 }
 
