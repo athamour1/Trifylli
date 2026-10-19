@@ -157,6 +157,17 @@ export interface Paginated<T> {
   pageSize: number;
 }
 
+/** Γενέθλια μέσα σε ένα διάστημα — γύρω από μια συγκέντρωση, κατά τη δράση. */
+export interface BirthdayView {
+  userId: string;
+  firstName: string;
+  lastName: string;
+  /** `YYYY-MM-DD` — η μέρα των γενεθλίων μέσα στο διάστημα. */
+  day: string;
+  /** Η ηλικία που κλείνει. */
+  age: number;
+}
+
 /**
  * Σε ποιον «ανήκει» ένα γεγονός του ημερολογίου — τα φίλτρα του ημερολογίου
  * Τοπικού. `STELEXON`: συμβούλια στελεχών και γενέθλια στελεχών.

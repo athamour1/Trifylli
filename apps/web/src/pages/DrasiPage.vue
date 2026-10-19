@@ -139,6 +139,8 @@
                 </div>
               </div>
 
+              <BirthdaysBanner :birthdays="data.birthdays ?? []" title="Γενέθλια κατά τη δράση" />
+
               <!-- Ποιοι έρχονται: δικοί μας κλάδοι στο χρώμα τους, φιλοξενούμενα Τοπικά ουδέτερα. -->
               <div class="text-subtitle2 q-mb-xs">Ποιοι έρχονται</div>
               <div class="row items-center q-gutter-xs q-mb-md">
@@ -427,6 +429,7 @@ import {
   KLADOS_LABEL,
   KLADOS_META,
   collabDocument,
+  type BirthdayView,
   type DrasiActivityEvent,
   type DrasiActivityView,
   type DrasiGuestTopikoView,
@@ -438,6 +441,7 @@ import {
   type KladosType,
   type MemberKind,
 } from '@trifylli/shared';
+import BirthdaysBanner from '../components/BirthdaysBanner.vue';
 import CollabPresence from '../components/CollabPresence.vue';
 import PageState from '../components/PageState.vue';
 import DrasiAnnouncements from '../components/drasi/DrasiAnnouncements.vue';
@@ -495,6 +499,8 @@ interface DrasiDetail {
   ypiresies: { id: string; name: string; responsibles: { user: DrasiRoleView['user'] }[] }[];
   /** Τι μπορεί ο χρήστης σε αυτή τη δράση (βλ. shared `drasiAccess`). */
   access: DrasiAccess;
+  /** Συμμετέχοντες με γενέθλια κατά τη δράση — κενό αν δεν βλέπεις τους συμμετέχοντες. */
+  birthdays?: BirthdayView[];
   costPerPerson: string | number | null;
   costReduced: string | number | null;
   costStelexos: string | number | null;

@@ -8,10 +8,14 @@ import {
 } from '@trifylli/shared';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
-import { assertKladosAccess, scopedKladoi } from '../../common/util/klados-scope';
+import { assertKladosAccess, hasCapabilityFor, scopedKladoi } from '../../common/util/klados-scope';
+import { addDays, birthdaysIn } from '../calendar/birthdays';
 import { CollabService } from '../collab/collab.service';
 import { FilesService } from '../files/files.service';
 import type { CreateSyggentrwshDto, UpdateSyggentrwshDto } from './dto/syggentrwsh.dto';
+
+/** Πόσες μέρες πριν και μετά τη συγκέντρωση κοιτάμε για γενέθλια. */
+const BIRTHDAY_WINDOW_DAYS = 3;
 
 @Injectable()
 export class SyggentrwseisService {
@@ -104,7 +108,30 @@ export class SyggentrwseisService {
       totalDurationMin: sections.reduce((sum, s) => sum + s.durationMin, 0),
       /** Συγκεντρωτικό απαιτούμενο υλικό — τι να πάρεις μαζί. */
       requiredYliko: aggregateRequiredYliko(syggentrwsh.timeline),
+      birthdays: await this.birthdays(user, syggentrwsh.klados.id, syggentrwsh.klados.type as KladosType, syggentrwsh.date),
     };
+  }
+
+  /**
+   * Γενέθλια των ενεργών μελών του κλάδου (παιδιά και στελέχη) από 3 μέρες πριν
+   * έως 3 μέρες μετά τη συγκέντρωση — για να τα γιορτάσει η ομάδα. Μόνο σε όποιον
+   * βλέπει τα μέλη του κλάδου.
+   */
+  private async birthdays(user: RequestUser, kladosId: string, klados: KladosType, date: Date) {
+    if (!hasCapabilityFor(user, 'meloi:read', klados)) return [];
+    const from = addDays(date, -BIRTHDAY_WINDOW_DAYS);
+    const to = addDays(date, BIRTHDAY_WINDOW_DAYS);
+    const members = await this.prisma.user.findMany({
+      where: {
+        archivedAt: null,
+        guestTopikoCode: null,
+        status: MemberStatus.ENERGO,
+        birthDate: { not: null },
+        memberships: { some: { kladosId, leftAt: null } },
+      },
+      select: { id: true, firstName: true, lastName: true, birthDate: true },
+    });
+    return birthdaysIn(members, from, to);
   }
 
   async create(user: RequestUser, dto: CreateSyggentrwshDto) {

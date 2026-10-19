@@ -50,6 +50,7 @@
         </div>
 
         <CollabBanner :status="collabStatus" :ready="collabReady" :editable="editable" target="στο πρόγραμμα" />
+        <BirthdaysBanner :birthdays="data.birthdays ?? []" title="Γενέθλια αυτή την εβδομάδα" />
 
         <div class="row q-col-gutter-md">
           <!-- ── Πρόγραμμα ── -->
@@ -464,6 +465,7 @@ import {
   TIMELINE_SECTION_ORDER,
   TimelineSection,
   collabDocument,
+  type BirthdayView,
   type CheckoutStatus,
   type KladosType,
   type PlanSnapshot,
@@ -478,6 +480,7 @@ import DateField from '../components/DateField.vue';
 import TimeField from '../components/TimeField.vue';
 import SyggentrwshPrint from '../components/SyggentrwshPrint.vue';
 import { useAsyncData } from '../composables/useAsyncData';
+import BirthdaysBanner from '../components/BirthdaysBanner.vue';
 import { useCollabDoc, useCollabMe } from '../composables/useCollabDoc';
 import { useLiveReload } from '../composables/useLiveChanges';
 import { useKladosThemeStore } from '../stores/klados-theme';
@@ -574,6 +577,8 @@ interface Detail {
   id: string;
   title: string | null;
   date: string;
+  /** Γενέθλια μελών του κλάδου 3 μέρες γύρω από τη συγκέντρωση. */
+  birthdays?: BirthdayView[];
   startTime: string | null;
   location: string | null;
   goal: string | null;

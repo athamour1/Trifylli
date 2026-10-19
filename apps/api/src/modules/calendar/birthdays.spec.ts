@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { birthdayOccurrences } from './birthdays';
+import { addDays, birthdayOccurrences, birthdaysIn } from './birthdays';
 
 const born = (iso: string) => new Date(`${iso}T00:00:00.000Z`);
 
@@ -38,5 +38,29 @@ describe('γενέθλια στο ημερολόγιο', () => {
     expect(
       birthdayOccurrences(born('2026-10-10'), new Date('2026-10-01T00:00:00Z'), new Date('2026-10-31T00:00:00Z')),
     ).toEqual([]);
+  });
+});
+
+describe('γενέθλια γύρω από συγκέντρωση / κατά τη δράση', () => {
+  const people = [
+    { id: 'u-2', firstName: 'Σοφία', lastName: 'Νίκα', birthDate: born('1995-10-25') },
+    { id: 'u-1', firstName: 'Μαρία', lastName: 'Παππά', birthDate: born('2016-10-22') },
+    { id: 'u-1', firstName: 'Μαρία', lastName: 'Παππά', birthDate: born('2016-10-22') },
+    { id: 'u-3', firstName: 'Ελένη', lastName: 'Ζήση', birthDate: born('2016-10-26') },
+    { id: 'u-4', firstName: 'Άννα', lastName: 'Χωρίς', birthDate: null },
+  ];
+
+  it('3 μέρες πριν έως 3 μετά: μία φορά ο καθένας, με τη σειρά της μέρας', () => {
+    const meeting = new Date('2026-10-23T12:00:00Z');
+    expect(birthdaysIn(people, addDays(meeting, -3), addDays(meeting, 3))).toEqual([
+      { userId: 'u-1', firstName: 'Μαρία', lastName: 'Παππά', day: '2026-10-22', age: 10 },
+      { userId: 'u-2', firstName: 'Σοφία', lastName: 'Νίκα', day: '2026-10-25', age: 31 },
+      { userId: 'u-3', firstName: 'Ελένη', lastName: 'Ζήση', day: '2026-10-26', age: 10 },
+    ]);
+  });
+
+  it('η 4η μέρα μετά μένει έξω', () => {
+    const meeting = new Date('2026-10-22T12:00:00Z');
+    expect(birthdaysIn(people, addDays(meeting, -3), addDays(meeting, 3)).map((b) => b.userId)).toEqual(['u-1', 'u-2']);
   });
 });

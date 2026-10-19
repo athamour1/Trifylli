@@ -5,8 +5,10 @@ import {
   COLLAB_FIELDS,
   collabDocument,
   DRASI_ROLE_LABEL,
+  drasiCan,
   KLADOS_LABEL,
   KLADOS_META,
+  type DrasiAccess,
   type DrasiRoleKind,
   type KataskinosiStats,
   type MyDrasiView,
@@ -16,6 +18,7 @@ import {
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
 import { accessProfileOf, assertKladosAccess, scopedKladoi } from '../../common/util/klados-scope';
+import { birthdaysIn } from '../calendar/birthdays';
 import { refuseCollabFields } from '../collab/collab-fields';
 import { CollabService } from '../collab/collab.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -218,7 +221,22 @@ export class DraseisService {
 
     // Τι μπορεί ο χρήστης εδώ — το UI δείχνει μόνο τις ενότητες του ρόλου του.
     const access = user.drasiGrant?.drasiId === id ? user.drasiGrant.access : await this.drasiAccess.accessFor(user, id);
-    return { ...drasi, kladoi, access };
+    return { ...drasi, kladoi, access, birthdays: await this.birthdays(id, drasi.dateStart, drasi.dateEnd, access) };
+  }
+
+  /**
+   * Ποιοι από τους συμμετέχοντες έχουν γενέθλια κατά τη δράση — για να το ξέρει
+   * το αρχηγείο (και η τροφοδοσία, για την τούρτα). Χωριστό ερώτημα, ώστε η
+   * ημερομηνία γέννησης να μη φτάνει σε όποιον βλέπει μόνο την επισκόπηση: μόνο
+   * σε όποιον βλέπει τους συμμετέχοντες. Μετράνε και οι φιλοξενούμενοι.
+   */
+  private async birthdays(drasiId: string, from: Date, to: Date, access: DrasiAccess | null) {
+    if (!drasiCan(access, 'participants')) return [];
+    const participants = await this.prisma.drasiParticipant.findMany({
+      where: { drasiId, user: { birthDate: { not: null } } },
+      select: { user: { select: { id: true, firstName: true, lastName: true, birthDate: true } } },
+    });
+    return birthdaysIn(participants.map((p) => p.user), from, to);
   }
 
   async create(user: RequestUser, dto: CreateDrasiDto) {

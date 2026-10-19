@@ -1,3 +1,5 @@
+import type { BirthdayView } from '@trifylli/shared';
+
 /** Μία επέτειος γενεθλίων μέσα στο διάστημα του ημερολογίου. */
 export interface BirthdayOccurrence {
   /** `YYYY-MM-DD` — η ημέρα, χωρίς ώρα. */
@@ -29,6 +31,32 @@ export function birthdayOccurrences(birthDate: Date, from: Date, to: Date): Birt
     if (day >= fromDay && day <= toDay) occurrences.push({ day, age });
   }
   return occurrences;
+}
+
+/**
+ * Ποιοι έχουν γενέθλια μέσα στο `[from, to]` — μία φορά ο καθένας, με τη σειρά
+ * της μέρας. Για τις ενδείξεις στη συγκέντρωση και στη δράση.
+ */
+export function birthdaysIn(
+  people: readonly { id: string; firstName: string; lastName: string; birthDate: Date | null }[],
+  from: Date,
+  to: Date,
+): BirthdayView[] {
+  const seen = new Set<string>();
+  const result: BirthdayView[] = [];
+  for (const person of people) {
+    if (!person.birthDate || seen.has(person.id)) continue;
+    seen.add(person.id);
+    for (const { day, age } of birthdayOccurrences(person.birthDate, from, to)) {
+      result.push({ userId: person.id, firstName: person.firstName, lastName: person.lastName, day, age });
+    }
+  }
+  return result.sort((a, b) => a.day.localeCompare(b.day) || a.lastName.localeCompare(b.lastName, 'el'));
+}
+
+/** Μετατόπιση κατά ακέραιες ημέρες (για τα παράθυρα γύρω από μια ημερομηνία). */
+export function addDays(date: Date, days: number): Date {
+  return new Date(date.getTime() + days * 86_400_000);
 }
 
 function isoDay(date: Date): string {
