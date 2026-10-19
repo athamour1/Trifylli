@@ -21,10 +21,11 @@ SENTRY_TRACES_SAMPLE_RATE="${SENTRY_TRACES_SAMPLE_RATE:-1}"
 # Οι παραβιάσεις CSP πάνε στο API (που κόβει tokens και τις προωθεί στο
 # GlitchTip — CSP_REPORT_FORWARD_URL στο API). `off` = καμία αναφορά.
 CSP_REPORT_URI="${CSP_REPORT_URI:-${API_URL%/}/csp-report}"
-# Καταγραφή συνεδριών (OpenReplay) και ανώνυμα analytics (Umami): η βάση του
+# Καταγραφή συνεδριών (OpenObserve) και ανώνυμα analytics (Umami): η βάση του
 # καθενός και το κλειδί του· κενά = ανενεργά (ROADMAP §6, docs/monitoring.md §5).
-OPENREPLAY_URL="${OPENREPLAY_URL:-}"
-OPENREPLAY_PROJECT_KEY="${OPENREPLAY_PROJECT_KEY:-}"
+OPENOBSERVE_URL="${OPENOBSERVE_URL:-}"
+OPENOBSERVE_RUM_TOKEN="${OPENOBSERVE_RUM_TOKEN:-}"
+OPENOBSERVE_ORG="${OPENOBSERVE_ORG:-default}"
 UMAMI_URL="${UMAMI_URL:-}"
 UMAMI_WEBSITE_ID="${UMAMI_WEBSITE_ID:-}"
 
@@ -47,8 +48,9 @@ window.__APP_CONFIG__ = {
   sentryEnvironment: '$(js_escape "$SENTRY_ENVIRONMENT")',
   sentryExtras: '$(js_escape "$SENTRY_EXTRAS")',
   sentryTracesSampleRate: '$(js_escape "$SENTRY_TRACES_SAMPLE_RATE")',
-  openreplayUrl: '$(js_escape "$OPENREPLAY_URL")',
-  openreplayProjectKey: '$(js_escape "$OPENREPLAY_PROJECT_KEY")',
+  openobserveUrl: '$(js_escape "$OPENOBSERVE_URL")',
+  openobserveRumToken: '$(js_escape "$OPENOBSERVE_RUM_TOKEN")',
+  openobserveOrg: '$(js_escape "$OPENOBSERVE_ORG")',
   umamiUrl: '$(js_escape "$UMAMI_URL")',
   umamiWebsiteId: '$(js_escape "$UMAMI_WEBSITE_ID")',
 };
@@ -68,10 +70,10 @@ COLLAB_ORIGIN="$(printf '%s' "$API_ORIGIN" | sed -E 's#^http#ws#')"
 # Το DSN έχει μέσα το κλειδί (https://<κλειδί>@errors.…/1)· στο CSP μόνο το origin.
 ERRORS_ORIGIN="$(printf '%s' "$SENTRY_DSN" | sed -nE 's#^(https?://)([^@/]*@)?([^/]+).*#\1\3#p')"
 REPLAY_ORIGIN=""
-[ -n "$OPENREPLAY_PROJECT_KEY" ] && REPLAY_ORIGIN="$(origin_of "$OPENREPLAY_URL")"
+[ -n "$OPENOBSERVE_RUM_TOKEN" ] && REPLAY_ORIGIN="$(origin_of "$OPENOBSERVE_URL")"
 ANALYTICS_ORIGIN=""
 [ -n "$UMAMI_WEBSITE_ID" ] && ANALYTICS_ORIGIN="$(origin_of "$UMAMI_URL")"
-# Ο tracker του OpenReplay τρέχει σε Web Worker από blob: — μόνο όταν είναι ενεργός.
+# Το replay του OpenObserve συμπιέζει σε Web Worker από blob: — μόνο όταν είναι ενεργό.
 WORKER_BLOB=""
 [ -n "$REPLAY_ORIGIN" ] && WORKER_BLOB=" blob:"
 
@@ -89,7 +91,7 @@ WORKER_BLOB=""
 #   object-src 'none'            — κανένα plugin, ποτέ
 #   report-uri                   — οι παραβιάσεις στο API → GlitchTip
 #   script/connect + analytics   — ο tracker του Umami και οι αποστολές του
-#   connect + replay, worker blob: — ο tracker του OpenReplay (Web Worker από blob)
+#   connect + replay, worker blob: — το RUM/replay του OpenObserve (Web Worker από blob)
 CSP_REPORT=""
 [ "$CSP_REPORT_URI" = off ] || CSP_REPORT=" report-uri $CSP_REPORT_URI;"
 CSP_BASE="default-src 'self'; script-src 'self'${ANALYTICS_ORIGIN:+ $ANALYTICS_ORIGIN}; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'${API_ORIGIN:+ $API_ORIGIN}${COLLAB_ORIGIN:+ $COLLAB_ORIGIN}${SSO_ORIGIN:+ $SSO_ORIGIN}${ERRORS_ORIGIN:+ $ERRORS_ORIGIN}${REPLAY_ORIGIN:+ $REPLAY_ORIGIN}${ANALYTICS_ORIGIN:+ $ANALYTICS_ORIGIN}; frame-src 'self'${SSO_ORIGIN:+ $SSO_ORIGIN}; worker-src 'self'${WORKER_BLOB}; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'${SSO_ORIGIN:+ $SSO_ORIGIN};${CSP_REPORT}"

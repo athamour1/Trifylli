@@ -21,9 +21,10 @@ interface RuntimeConfig {
   /** `true`/`false`: tracing, breadcrumbs, logs, αναφορά προβλήματος (ROADMAP §6). */
   sentryExtras?: string;
   sentryTracesSampleRate?: string;
-  /** OpenReplay: η βάση (π.χ. https://replay.example.gr) και το project key· κενά = χωρίς replay. */
-  openreplayUrl?: string;
-  openreplayProjectKey?: string;
+  /** OpenObserve (καταγραφή συνεδριών): η βάση, το RUM token και ο οργανισμός· κενά = χωρίς replay. */
+  openobserveUrl?: string;
+  openobserveRumToken?: string;
+  openobserveOrg?: string;
   /** Umami: η βάση και το website id· κενά = χωρίς analytics. */
   umamiUrl?: string;
   umamiWebsiteId?: string;
@@ -48,7 +49,8 @@ export const SENTRY_ENVIRONMENT =
 export const SENTRY_EXTRAS = (c.sentryExtras || process.env.SENTRY_EXTRAS || (process.env.DEV ? 'true' : '')) === 'true';
 const sampleRate = Number(c.sentryTracesSampleRate || process.env.SENTRY_TRACES_SAMPLE_RATE || '1');
 export const SENTRY_TRACES_SAMPLE_RATE = Number.isFinite(sampleRate) ? Math.min(Math.max(sampleRate, 0), 1) : 1;
-export const OPENREPLAY_URL = (c.openreplayUrl || process.env.OPENREPLAY_URL || '').replace(/\/$/, '');
-export const OPENREPLAY_PROJECT_KEY = c.openreplayProjectKey || process.env.OPENREPLAY_PROJECT_KEY || '';
+export const OPENOBSERVE_URL = (c.openobserveUrl || process.env.OPENOBSERVE_URL || '').replace(/\/$/, '');
+export const OPENOBSERVE_RUM_TOKEN = c.openobserveRumToken || process.env.OPENOBSERVE_RUM_TOKEN || '';
+export const OPENOBSERVE_ORG = c.openobserveOrg || process.env.OPENOBSERVE_ORG || 'default';
 export const UMAMI_URL = (c.umamiUrl || process.env.UMAMI_URL || '').replace(/\/$/, '');
 export const UMAMI_WEBSITE_ID = c.umamiWebsiteId || process.env.UMAMI_WEBSITE_ID || '';

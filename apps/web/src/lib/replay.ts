@@ -1,52 +1,58 @@
-import { OPENREPLAY_PROJECT_KEY, OPENREPLAY_URL } from './runtime-config';
-import { setReplayUrl } from './replay-link';
+import { OPENOBSERVE_ORG, OPENOBSERVE_RUM_TOKEN, OPENOBSERVE_URL, SENTRY_ENVIRONMENT } from './runtime-config';
+import { setReplayUrlProvider } from './replay-link';
 
 /*
- * Καταγραφή συνεδριών (OpenReplay) — ROADMAP §6. Ξεκινά ΜΟΝΟ αφού ο λογαριασμός
- * αποδεχτεί την ενημέρωση (`trackingNotice`), και ποτέ στις δημόσιες σελίδες των
- * γονιών (εκεί δεν υπάρχει λογαριασμός να αποδεχτεί — το καλεί μόνο το MainLayout).
+ * Καταγραφή συνεδριών (OpenObserve RUM + Session Replay) — ROADMAP §6. Ξεκινά
+ * ΜΟΝΟ αφού ο λογαριασμός αποδεχτεί την ενημέρωση (`trackingNotice`), και ποτέ
+ * στις δημόσιες σελίδες των γονιών (εκεί δεν υπάρχει λογαριασμός να αποδεχτεί —
+ * το καλεί μόνο το MainLayout, μέσω του TrackingNotice).
  *
- * Χωρίς masking, με απόφαση του Τοπικού: κείμενα, πεδία και emails φαίνονται
- * στο replay, και οι κλήσεις δικτύου γράφονται με το body τους. ΟΧΙ τα headers
- * `Authorization`/`Cookie`: το replay θα κρατούσε ζωντανά tokens.
+ * Χωρίς masking, με απόφαση του Τοπικού (`defaultPrivacyLevel: 'allow'`):
+ * κείμενα, πεδία και emails φαίνονται στο replay. Το RUM γράφει τις κλήσεις
+ * δικτύου ως resources (URL, χρόνος, status) — όχι headers ούτε bodies.
  */
 
-type Tracker = import('@openreplay/tracker').default;
+type Rum = typeof import('@openobserve/browser-rum').openobserveRum;
 
-let tracker: Tracker | null = null;
+let rum: Rum | null = null;
 let starting: Promise<void> | null = null;
 
-export const replayConfigured = (): boolean => !!OPENREPLAY_URL && !!OPENREPLAY_PROJECT_KEY;
+export const replayConfigured = (): boolean => !!OPENOBSERVE_URL && !!OPENOBSERVE_RUM_TOKEN;
 
 export function startReplay(user: { id: string; email: string; name: string }): Promise<void> {
-  if (!replayConfigured() || tracker) return Promise.resolve();
-  starting ??= import('@openreplay/tracker')
-    .then(async ({ default: Tracker }) => {
-      const instance = new Tracker({
-        projectKey: OPENREPLAY_PROJECT_KEY,
-        ingestPoint: `${OPENREPLAY_URL}/ingest`,
+  if (!replayConfigured() || rum) return Promise.resolve();
+  starting ??= import('@openobserve/browser-rum')
+    .then(({ openobserveRum }) => {
+      const url = new URL(OPENOBSERVE_URL);
+      openobserveRum.init({
+        applicationId: 'trifylli-web',
+        clientToken: OPENOBSERVE_RUM_TOKEN,
+        site: url.host,
+        // Το dev τρέχει σε http://localhost — αλλιώς το SDK στέλνει πάντα σε https.
+        insecureHTTP: url.protocol === 'http:',
+        organizationIdentifier: OPENOBSERVE_ORG,
+        apiVersion: 'v1',
+        service: 'trifylli-web',
+        env: SENTRY_ENVIRONMENT,
+        version: process.env.APP_VERSION ?? 'dev',
+        sessionSampleRate: 100,
+        // Η προεπιλογή του SDK είναι 0 (κανένα replay).
+        sessionReplaySampleRate: 100,
+        trackUserInteractions: true,
+        trackResources: true,
+        trackLongTasks: true,
         // Χωρίς masking (βλ. πάνω).
-        defaultInputMode: 0,
-        obscureTextEmails: false,
-        obscureTextNumbers: false,
-        obscureInputEmails: false,
-        obscureInputNumbers: false,
-        obscureInputDates: false,
-        network: {
-          failuresOnly: false,
-          captureInIframes: false,
-          capturePayload: true,
-          ignoreHeaders: ['authorization', 'cookie', 'set-cookie'],
-          // Κανένα επιπλέον header προς το API (θα ήθελε αλλαγή στο CORS).
-          sessionTokenHeader: false,
-        },
-        // Το dev τρέχει σε http://localhost — ο tracker αλλιώς αρνείται.
-        __DISABLE_SECURE_MODE: location.protocol !== 'https:',
-        css: {},
+        defaultPrivacyLevel: 'allow',
       });
-      await instance.start({ userID: user.email, metadata: { accountId: user.id, name: user.name } });
-      tracker = instance;
-      setReplayUrl(instance.getSessionURL({ withCurrentTime: false }) ?? null);
+      openobserveRum.setUser({ id: user.id, email: user.email, name: user.name });
+      openobserveRum.startSessionReplayRecording();
+      rum = openobserveRum;
+      setReplayUrlProvider(() => {
+        const sessionId = openobserveRum.getInternalContext()?.session_id;
+        return sessionId
+          ? `${OPENOBSERVE_URL}/web/rum/sessions/view/${sessionId}?org_identifier=${encodeURIComponent(OPENOBSERVE_ORG)}`
+          : null;
+      });
     })
     .catch((error: unknown) => {
       console.warn('Η καταγραφή συνεδρίας δεν ξεκίνησε:', error);
@@ -59,7 +65,10 @@ export function startReplay(user: { id: string; email: string; name: string }): 
 
 /** Στην αποσύνδεση: η επόμενη συνεδρία (άλλος λογαριασμός) είναι νέα εγγραφή. */
 export function stopReplay(): void {
-  tracker?.stop();
-  tracker = null;
-  setReplayUrl(null);
+  if (!rum) return;
+  rum.stopSessionReplayRecording();
+  rum.clearUser();
+  rum.stopSession();
+  rum = null;
+  setReplayUrlProvider(null);
 }

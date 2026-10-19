@@ -109,10 +109,10 @@ say '── Υποτομείς (ό,τι γράφει ο browser, πίσω από
 ask_host APP 'Εφαρμογή (PWA)'
 case "$APP" in
   app.*) rest=${APP#app.}; d_api=api.$rest; d_sso=sso.$rest; d_ouch=ouch.$rest; d_err=errors.$rest
-     d_replay=replay.$rest; d_analytics=analytics.$rest ;;
+     d_observe=observe.$rest; d_dex=dex.$rest; d_analytics=analytics.$rest ;;
   *) first=${APP%%.*}; rest=${APP#*.}
      d_api=$first-api.$rest; d_sso=$first-sso.$rest; d_ouch=$first-ouch.$rest; d_err=$first-errors.$rest
-     d_replay=$first-replay.$rest; d_analytics=$first-analytics.$rest ;;
+     d_observe=$first-observe.$rest; d_dex=$first-dex.$rest; d_analytics=$first-analytics.$rest ;;
 esac
 ask_host API 'API' "$d_api"
 ask_host SSO 'Σύνδεση (Authentik)' "$d_sso"
@@ -125,11 +125,13 @@ else
   ERRORS=$d_err
 fi
 REPLAY=no
-if ask_yes 'Καταγραφή συνεδριών (OpenReplay, ~20 containers, ≥ 8 GB RAM);' 'ο'; then
+if ask_yes 'Καταγραφή συνεδριών (OpenObserve, με SSO μέσω Dex);' 'ο'; then
   REPLAY=yes
-  ask_host REPLAY_HOST 'OpenReplay' "$d_replay"
+  ask_host OBSERVE_HOST 'OpenObserve' "$d_observe"
+  ask_host DEX_HOST 'Dex (το SSO του OpenObserve)' "$d_dex"
 else
-  REPLAY_HOST=$d_replay
+  OBSERVE_HOST=$d_observe
+  DEX_HOST=$d_dex
 fi
 ANALYTICS=no
 if ask_yes 'Ανώνυμα analytics (Umami);' 'ν'; then
@@ -248,7 +250,10 @@ set_var OUCHTRACKER_CORS_ORIGIN "https://$OUCH"
 set_var OUCHTRACKER_OIDC_ISSUER "https://$SSO/application/o/ouchtracker/"
 set_var GLITCHTIP_DOMAIN "https://$ERRORS"
 set_var GLITCHTIP_OIDC_ISSUER "https://$SSO/application/o/glitchtip/"
-set_var REPLAY_URL "https://$REPLAY_HOST"
+set_var OPENOBSERVE_URL "https://$OBSERVE_HOST"
+set_var DEX_ISSUER "https://$DEX_HOST/dex"
+set_var OPENOBSERVE_OIDC_ISSUER "https://$SSO/application/o/openobserve/"
+set_var OPENOBSERVE_ROOT_EMAIL "$ADMIN_EMAIL"
 set_var UMAMI_URL "https://$ANALYTICS_HOST"
 profiles=""
 [ "$GLITCHTIP" = yes ] && profiles="errors"
@@ -305,13 +310,14 @@ say "  $API → trifylli-api:3000   (με WebSocket)"
 say "  $SSO → trifylli-sso:9000"
 say "  $OUCH → trifylli-ouch:80"
 [ "$GLITCHTIP" = yes ] && say "  $ERRORS → trifylli-errors:8000"
-[ "$REPLAY" = yes ] && say "  $REPLAY_HOST → trifylli-replay:80"
+[ "$REPLAY" = yes ] && say "  $OBSERVE_HOST → trifylli-observe:5080"
+[ "$REPLAY" = yes ] && say "  $DEX_HOST → trifylli-dex:5556"
 [ "$ANALYTICS" = yes ] && say "  $ANALYTICS_HOST → trifylli-analytics:3000"
 say ''
 say 'Έμειναν για μετά (στο αρχείο, κενά):'
 [ -n "$ESEO_TOKEN" ] || say '  • ESEO_REFRESH_TOKEN — ο συγχρονισμός μελών με το e-SEO'
 [ -n "$RESTIC_REPO" ] || say '  • RESTIC_REPOSITORY (+ κλειδιά) — αντίγραφα εκτός server'
 [ "$GLITCHTIP" = yes ] && say '  • API_SENTRY_DSN / WEB_SENTRY_DSN — μετά το createsuperuser και τα δύο projects στο GlitchTip'
-[ "$REPLAY" = yes ] && say '  • OPENREPLAY_PROJECT_KEY — μετά τον πρώτο λογαριασμό στο OpenReplay (docs/monitoring.md §5)'
+[ "$REPLAY" = yes ] && say '  • OPENOBSERVE_RUM_TOKEN — Ingestion → RUM στο OpenObserve· και στο Authentik η ομάδα trifylli-monitoring (docs/monitoring.md §5)'
 [ "$ANALYTICS" = yes ] && say '  • UMAMI_WEBSITE_ID — μετά το «Add website» στο Umami (άλλαξε και τον κωδικό admin / umami)'
 say '  • HEARTBEAT_* — docs/monitoring.md'

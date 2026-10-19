@@ -51,76 +51,6 @@ x-hardened: &hardened
   cap_drop:
     - ALL
 
-# ─────────────────── OpenReplay (session replay) — profile `replay` ───────────────────
-# Οι μεταβλητές που μοιράζονται όλα τα services του OpenReplay (βάσεις, S3,
-# μυστικά — όλα από το .env.prod, `REPLAY_*`). Ό,τι αφορά ένα μόνο service μένει
-# σε εκείνο. `:-` και όχι `:?`: το compose αξιολογεί όλο το αρχείο, και χωρίς το
-# profile `replay` δεν πρέπει να ζητά τιμές. Πρότυπο: infra/openreplay/README.md.
-x-replay-env: &replay-env
-  version_number: v1.28.0
-  LICENSE_KEY: ''
-  LOGLEVEL: INFO
-  PYTHONUNBUFFERED: '0'
-  SITE_URL: ${REPLAY_URL:-}
-  pg_host: postgresql.db.svc.cluster.local
-  pg_port: '5432'
-  pg_dbname: postgres
-  pg_user: postgres
-  pg_password: ${REPLAY_PG_PASSWORD:-}
-  POSTGRES_STRING: postgres://postgres:${REPLAY_PG_PASSWORD:-}@postgresql.db.svc.cluster.local:5432/postgres?sslmode=disable
-  REDIS_STRING: redis://redis-master.db.svc.cluster.local:6379
-  ch_host: clickhouse-openreplay-clickhouse.db.svc.cluster.local
-  ch_port: '9000'
-  ch_port_http: '8123'
-  ch_username: default
-  ch_user: default
-  ch_password: ''
-  ch_db: default
-  CH_USERNAME: default
-  CH_PASSWORD: ''
-  CLICKHOUSE_STRING: clickhouse-openreplay-clickhouse.db.svc.cluster.local:9000/default
-  CLICKHOUSE_HTTP_STRING: clickhouse-openreplay-clickhouse.db.svc.cluster.local:8123/default
-  KAFKA_SERVERS: kafka.db.svc.cluster.local:9092
-  KAFKA_USE_SSL: 'false'
-  # Οι υπηρεσίες μιλούν με το S3 μέσω του ΔΗΜΟΣΙΟΥ URL (proxy → replay-nginx →
-  # RustFS): ο server πρέπει να φτάνει το δικό του δημόσιο όνομα.
-  AWS_ENDPOINT: ${REPLAY_URL:-}
-  S3_HOST: ${REPLAY_URL:-}
-  AWS_ACCESS_KEY_ID: ${REPLAY_S3_KEY:-}
-  AWS_SECRET_ACCESS_KEY: ${REPLAY_S3_SECRET:-}
-  S3_KEY: ${REPLAY_S3_KEY:-}
-  S3_SECRET: ${REPLAY_S3_SECRET:-}
-  AWS_REGION: us-east-1
-  AWS_DEFAULT_REGION: us-east-1
-  JWT_SECRET: ${REPLAY_JWT_SECRET:-}
-  JWT_REFRESH_SECRET: ${REPLAY_JWT_REFRESH_SECRET:-}
-  JWT_SPOT_SECRET: ${REPLAY_JWT_SPOT_SECRET:-}
-  JWT_SPOT_REFRESH_SECRET: ${REPLAY_JWT_SPOT_REFRESH_SECRET:-}
-  ASSIST_JWT_SECRET: ${REPLAY_ASSIST_JWT_SECRET:-}
-  ASSIST_KEY: ${REPLAY_ASSIST_KEY:-}
-  ASSIST_URL: http://assist-openreplay.app.svc.cluster.local:9001/assist/%s
-  ASSETS_ORIGIN: ${REPLAY_URL:-}/sessions-assets
-
-x-replay-app: &replay-app
-  profiles: [replay]
-  restart: always
-  <<: *logging
-  volumes:
-    - replay-shared:/mnt/efs
-  depends_on:
-    replay-postgres:
-      condition: service_healthy
-    replay-redis:
-      condition: service_healthy
-    replay-clickhouse:
-      condition: service_healthy
-    replay-minio:
-      condition: service_healthy
-    replay-db-init:
-      condition: service_completed_successfully
-    replay-ch-init:
-      condition: service_completed_successfully
-
 services:
   # ─────────────────── Ρυθμίσεις (one-shot) ───────────────────
   # Σβήνει και ξαναγράφει τα config volumes από το image — ό,τι αφαιρέθηκε από
@@ -136,7 +66,7 @@ services:
       - postgres-init:/sync/postgres-init
       - garage-config:/sync/garage
       - backup-hooks:/sync/backup-hooks
-      - openreplay-config:/sync/openreplay
+      - dex-config:/sync/dex
       - glitchtip-config:/sync/glitchtip
 
   postgres:
@@ -205,6 +135,9 @@ services:
       # και το secret του client — ίδιο με του glitchtip-sso.
       GLITCHTIP_DOMAIN: ${GLITCHTIP_DOMAIN:-}
       GLITCHTIP_OIDC_CLIENT_SECRET: ${GLITCHTIP_OIDC_CLIENT_SECRET:-}
+      # SSO του OpenObserve μέσω Dex (openobserve-oidc.yaml): redirect URI και secret.
+      DEX_ISSUER: ${DEX_ISSUER:-}
+      OPENOBSERVE_OIDC_CLIENT_SECRET: ${OPENOBSERVE_OIDC_CLIENT_SECRET:-}
       AUTHENTIK_LOG_LEVEL: ${AUTHENTIK_LOG_LEVEL:-info}
       # ── Blueprint ασφάλειας (trifylli-security.yaml) ──
       # Το κλειδί του token του service account `trifylli-api` (ίδια τιμή με το
@@ -491,8 +424,8 @@ services:
       SOURCEMAP_UPLOAD_PROJECT: ${SOURCEMAP_UPLOAD_PROJECT:-pwa}
       # Καταγραφή συνεδριών (profile replay — ROADMAP §6) και ανώνυμα analytics
       # (profile analytics): μπαίνουν και στο CSP. Κενά = ανενεργά.
-      OPENREPLAY_URL: ${REPLAY_URL:-}
-      OPENREPLAY_PROJECT_KEY: ${OPENREPLAY_PROJECT_KEY:-}
+      OPENOBSERVE_URL: ${OPENOBSERVE_URL:-}
+      OPENOBSERVE_RUM_TOKEN: ${OPENOBSERVE_RUM_TOKEN:-}
       UMAMI_URL: ${UMAMI_URL:-}
       UMAMI_WEBSITE_ID: ${UMAMI_WEBSITE_ID:-}
     ports:
@@ -780,390 +713,73 @@ services:
       umami-db:
         condition: service_completed_successfully
 
-  # ─────────────────── Session replay (OpenReplay) — profile `replay` ───────────────────
-  # Προαιρετικό: COMPOSE_PROFILES=…,replay. ~20 containers, ≥ 8 GB RAM. Δικό του
-  # δίκτυο (`replay`): τα ονόματα των υπηρεσιών του (redis, postgresql, minio) θα
-  # συγκρούονταν με τα δικά μας. Βγαίνει έξω μόνο ο replay-nginx, ως
-  # `trifylli-replay` στο trifylli-public. Πρώτος λογαριασμός: ο πρώτος που
-  # γράφεται στο UI γίνεται owner — docs/monitoring.md §5. Εγγραφές: 30 ημέρες.
-  # Δεν μπαίνει στα backups (εγγραφές μιας χρήσης).
-  replay-fs-permission:
-    image: debian:stable-slim
-    profiles: [replay]
-    restart: 'no'
-    <<: *logging
-    volumes:
-      - replay-shared:/mnt/efs
-      - replay-minio:/mnt/minio
-      - replay-postgres:/mnt/postgres
-    entrypoint: ['/bin/bash', '-c', 'chown -R 1001:1001 /mnt/efs /mnt/postgres && chown -R 10001:10001 /mnt/minio']
-
-  replay-postgres:
-    image: ghcr.io/openreplay/postgres:17
+  # ─────────────────── Καταγραφή συνεδριών (OpenObserve) — profile `replay` ───────────────────
+  # Προαιρετικό: COMPOSE_PROFILES=…,replay. Enterprise image — δωρεάν έως 50 GB/ημέρα,
+  # χωρίς license key· εκεί είναι το SSO. Είσοδος: «Login with SSO» (OpenObserve →
+  # Dex → Authentik, μόνο η ομάδα trifylli-monitoring) ή ο root λογαριασμός.
+  # Εγγραφές: 30 ημέρες, εκτός backups. Στο trifylli-public ως `trifylli-observe`
+  # (ο browser στέλνει RUM/replay). docs/monitoring.md §5, ROADMAP §6.
+  openobserve:
+    image: o2cr.ai/openobserve/openobserve-enterprise:${OPENOBSERVE_VERSION:-v1.1.1}
     profiles: [replay]
     restart: always
-    <<: *logging
-    volumes:
-      - replay-postgres:/bitnami/postgresql
-    networks:
-      replay:
-        aliases: [postgresql, postgresql.db.svc.cluster.local]
+    <<: [*logging, *hardened]
     environment:
-      POSTGRESQL_PASSWORD: ${REPLAY_PG_PASSWORD:-}
-    healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U postgres']
-      interval: 10s
-      timeout: 5s
-      retries: 10
-    depends_on:
-      replay-fs-permission:
-        condition: service_completed_successfully
-
-  replay-clickhouse:
-    image: clickhouse/clickhouse-server:26.2-alpine
-    profiles: [replay]
-    restart: always
-    <<: *logging
+      ZO_DATA_DIR: /data
+      ZO_ROOT_USER_EMAIL: ${OPENOBSERVE_ROOT_EMAIL:-}
+      ZO_ROOT_USER_PASSWORD: ${OPENOBSERVE_ROOT_PASSWORD:-}
+      ZO_WEB_URL: ${OPENOBSERVE_URL:-}
+      ZO_COMPACT_DATA_RETENTION_DAYS: '30'
+      # Μόνο η εφαρμογή στέλνει RUM/replay από τον browser.
+      ZO_CORS_ALLOWED_ORIGINS: ${CORS_ORIGINS:-}
+      # ── SSO μέσω Dex (infra/dex/config.yaml) ──
+      O2_DEX_ENABLED: 'true'
+      O2_DEX_CLIENT_ID: openobserve
+      O2_DEX_CLIENT_SECRET: ${OPENOBSERVE_DEX_CLIENT_SECRET:-}
+      O2_DEX_BASE_URL: ${DEX_ISSUER:-}
+      O2_DEX_REDIRECT_URL: ${OPENOBSERVE_URL:-}/config/redirect
+      O2_CALLBACK_URL: ${OPENOBSERVE_URL:-}/web/cb
+      O2_DEX_SCOPES: openid profile email offline_access
+      O2_DEX_DEFAULT_ORG: default
+      # Όποιος περνά το Authentik είναι ήδη στην ομάδα trifylli-monitoring.
+      O2_DEX_DEFAULT_ROLE: admin
+      O2_DEX_NATIVE_LOGIN_ENABLED: 'true'
     volumes:
-      - replay-clickhouse:/var/lib/clickhouse
-    networks:
-      replay:
-        aliases: [clickhouse, clickhouse-openreplay-clickhouse.db.svc.cluster.local]
-    environment:
-      CLICKHOUSE_USER: default
-      CLICKHOUSE_PASSWORD: ''
-      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: '1'
-    healthcheck:
-      test: ['CMD-SHELL', "clickhouse-client --query 'SELECT 1'"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-
-  replay-redis:
-    image: ghcr.io/openreplay/valkey:8
-    profiles: [replay]
-    restart: always
-    <<: *logging
-    volumes:
-      - replay-redis:/data
-    networks:
-      replay:
-        aliases: [redis, redis-master.db.svc.cluster.local]
-    environment:
-      ALLOW_EMPTY_PASSWORD: 'yes'
-    healthcheck:
-      test: ['CMD', 'redis-cli', 'ping']
-      interval: 10s
-      timeout: 5s
-      retries: 10
-
-  replay-minio:
-    image: docker.io/rustfs/rustfs:1.0.0-beta.1
-    profiles: [replay]
-    restart: always
-    <<: *logging
-    volumes:
-      - replay-minio:/data
-    networks:
-      replay:
-        aliases: [minio, minio.db.svc.cluster.local]
-    environment:
-      RUSTFS_ACCESS_KEY: ${REPLAY_S3_KEY:-}
-      RUSTFS_SECRET_KEY: ${REPLAY_S3_SECRET:-}
-      RUSTFS_ADDRESS: '0.0.0.0:9000'
-      RUSTFS_CONSOLE_ENABLE: 'false'
-      RUSTFS_VOLUMES: /data
-    healthcheck:
-      test: ['CMD-SHELL', 'curl -so /dev/null http://localhost:9000/ || exit 1']
-      interval: 10s
-      timeout: 5s
-      retries: 10
-    depends_on:
-      replay-fs-permission:
-        condition: service_completed_successfully
-
-  # Buckets (+ διαγραφή εγγραφών στις 30 ημέρες) και σχήματα βάσεων — σε κάθε
-  # `up`· ασφαλή στην επανάληψη. Τα αρχεία έρχονται από το config image.
-  replay-minio-init:
-    image: ghcr.io/openreplay/minio:2025
-    profiles: [replay]
-    restart: 'no'
-    <<: *logging
-    user: root
-    networks: [replay]
-    volumes:
-      - openreplay-config:/opt/openreplay:ro
-    environment:
-      MINIO_HOST: http://minio.db.svc.cluster.local:9000
-      MINIO_ACCESS_KEY: ${REPLAY_S3_KEY:-}
-      MINIO_SECRET_KEY: ${REPLAY_S3_SECRET:-}
-    entrypoint: ['/bin/bash', '/opt/openreplay/minio.sh', 'init']
-    depends_on:
-      config:
-        condition: service_completed_successfully
-      replay-minio:
-        condition: service_healthy
-
-  replay-db-init:
-    image: ghcr.io/openreplay/postgres:17
-    profiles: [replay]
-    restart: 'no'
-    <<: *logging
-    networks: [replay]
-    volumes:
-      - openreplay-config:/opt/openreplay:ro
-    environment:
-      PGHOST: postgresql
-      PGPORT: '5432'
-      PGDATABASE: postgres
-      PGUSER: postgres
-      PGPASSWORD: ${REPLAY_PG_PASSWORD:-}
-    entrypoint: ['psql', '-v', 'ON_ERROR_STOP=1', '-f', '/opt/openreplay/init_pg_schema.sql']
-    depends_on:
-      replay-postgres:
-        condition: service_healthy
-      replay-minio-init:
-        condition: service_completed_successfully
-
-  replay-ch-init:
-    image: clickhouse/clickhouse-server:26.2-alpine
-    profiles: [replay]
-    restart: 'no'
-    <<: *logging
-    networks: [replay]
-    volumes:
-      - openreplay-config:/opt/openreplay:ro
-    entrypoint: ['/bin/sh', '-c', 'clickhouse-client -h clickhouse --user default --port 9000 --multiquery < /opt/openreplay/init_ch_schema.sql || true']
-    depends_on:
-      config:
-        condition: service_completed_successfully
-      replay-clickhouse:
-        condition: service_healthy
-
-  replay-nginx:
-    image: nginx:1.27-alpine
-    profiles: [replay]
-    restart: always
-    <<: *logging
-    volumes:
-      - openreplay-config:/opt/openreplay:ro
-    environment:
-      REPLAY_LISTEN_PORT: '80'
-      NGINX_ENVSUBST_TEMPLATE_DIR: /opt/openreplay
-      NGINX_ENVSUBST_TEMPLATE_SUFFIX: .template
+      - openobserve-data:/data
     ports:
-      - '${BIND_ADDR:-127.0.0.1}:${REPLAY_PORT:-8090}:80'
+      - '${BIND_ADDR:-127.0.0.1}:${OPENOBSERVE_PORT:-5080}:5080'
     networks:
-      replay:
-        aliases: [nginx]
+      default:
       public:
-        aliases: [trifylli-replay]
+        aliases: [trifylli-observe]
+
+  # Ο Dex: η γέφυρα SSO του OpenObserve. Ο browser περνά από εδώ (υποτομέας dex.),
+  # οπότε είναι κι αυτός στο trifylli-public, ως `trifylli-dex`.
+  dex:
+    image: ghcr.io/dexidp/dex:${DEX_VERSION:-v2.46.0}
+    profiles: [replay]
+    restart: always
+    <<: [*logging, *hardened]
+    command: ['dex', 'serve', '/opt/dex/config.yaml']
+    environment:
+      DEX_EXPAND_ENV: 'false'
+      DEX_ISSUER: ${DEX_ISSUER:-}
+      OPENOBSERVE_URL: ${OPENOBSERVE_URL:-}
+      OPENOBSERVE_DEX_CLIENT_SECRET: ${OPENOBSERVE_DEX_CLIENT_SECRET:-}
+      OPENOBSERVE_OIDC_ISSUER: ${OPENOBSERVE_OIDC_ISSUER:-}
+      OPENOBSERVE_OIDC_CLIENT_SECRET: ${OPENOBSERVE_OIDC_CLIENT_SECRET:-}
+    volumes:
+      - dex-config:/opt/dex:ro
+      - dex-data:/var/dex
+    ports:
+      - '${BIND_ADDR:-127.0.0.1}:${DEX_PORT:-5556}:5556'
+    networks:
+      default:
+      public:
+        aliases: [trifylli-dex]
     depends_on:
       config:
         condition: service_completed_successfully
-
-  replay-alerts:
-    <<: *replay-app
-    image: public.ecr.aws/p1t3u8a3/alerts:${REPLAY_VERSION:-v1.28.0}
-    networks:
-      replay:
-        aliases: [alerts-openreplay, alerts-openreplay.app.svc.cluster.local]
-    environment:
-      <<: *replay-env
-      EMAIL_HOST: '${SMTP_HOST:-}'
-      EMAIL_PORT: '${SMTP_PORT:-587}'
-      EMAIL_USER: '${SMTP_USERNAME:-}'
-      EMAIL_PASSWORD: '${SMTP_PASSWORD:-}'
-      EMAIL_USE_TLS: '${SMTP_USE_TLS:-true}'
-      EMAIL_USE_SSL: '${SMTP_USE_SSL:-false}'
-      EMAIL_SSL_KEY: ''
-      EMAIL_SSL_CERT: ''
-      EMAIL_FROM: '${SMTP_FROM:-}'
-
-  replay-api:
-    <<: *replay-app
-    image: public.ecr.aws/p1t3u8a3/api:${REPLAY_VERSION:-v1.28.0}
-    networks:
-      replay:
-        aliases: [api-openreplay, api-openreplay.app.svc.cluster.local]
-    environment:
-      <<: *replay-env
-      BUCKET_NAME: mobs
-      TOKEN_SECRET: '${REPLAY_TOKEN_SECRET_API:-}'
-      REDIS_CACHE_ENABLED: 'false'
-
-  replay-images:
-    <<: *replay-app
-    image: public.ecr.aws/p1t3u8a3/images:${REPLAY_VERSION:-v1.28.0}
-    networks:
-      replay:
-        aliases: [images-openreplay, images-openreplay.app.svc.cluster.local]
-    environment:
-      <<: *replay-env
-      BUCKET_NAME: mobs
-      TOKEN_SECRET: '${REPLAY_TOKEN_SECRET:-}'
-      FS_CLEAN_HRS: '24'
-
-  replay-sink:
-    <<: *replay-app
-    image: public.ecr.aws/p1t3u8a3/sink:${REPLAY_VERSION:-v1.28.0}
-    networks:
-      replay:
-        aliases: [sink-openreplay, sink-openreplay.app.svc.cluster.local]
-    environment:
-      <<: *replay-env
-
-  replay-sourcemapreader:
-    <<: *replay-app
-    image: public.ecr.aws/p1t3u8a3/sourcemapreader:${REPLAY_VERSION:-v1.28.0}
-    networks:
-      replay:
-        aliases: [sourcemapreader-openreplay, sourcemapreader-openreplay.app.svc.cluster.local]
-    environment:
-      <<: *replay-env
-      SMR_HOST: '0.0.0.0'
-      S3_HOST: 'http://minio.db.svc.cluster.local:9000'
-
-  replay-spot:
-    <<: *replay-app
-    image: public.ecr.aws/p1t3u8a3/spot:${REPLAY_VERSION:-v1.28.0}
-    networks:
-      replay:
-        aliases: [spot-openreplay, spot-openreplay.app.svc.cluster.local]
-    environment:
-      <<: *replay-env
-      BUCKET_NAME: spots
-      TOKEN_SECRET: '${REPLAY_TOKEN_SECRET_API:-}'
-      CACHE_ASSETS: 'true'
-      FS_CLEAN_HRS: '24'
-
-  replay-storage:
-    <<: *replay-app
-    image: public.ecr.aws/p1t3u8a3/storage:${REPLAY_VERSION:-v1.28.0}
-    networks:
-      replay:
-        aliases: [storage-openreplay, storage-openreplay.app.svc.cluster.local]
-    environment:
-      <<: *replay-env
-      BUCKET_NAME: mobs
-      FS_CLEAN_HRS: '24'
-
-  replay-assets:
-    <<: *replay-app
-    image: public.ecr.aws/p1t3u8a3/assets:${REPLAY_VERSION:-v1.28.0}
-    networks:
-      replay:
-        aliases: [assets-openreplay, assets-openreplay.app.svc.cluster.local]
-    environment:
-      <<: *replay-env
-      BUCKET_NAME: sessions-assets
-
-  replay-assist:
-    <<: *replay-app
-    image: public.ecr.aws/p1t3u8a3/assist:${REPLAY_VERSION:-v1.28.0}
-    networks:
-      replay:
-        aliases: [assist-openreplay, assist-openreplay.app.svc.cluster.local]
-    environment:
-      <<: *replay-env
-      REDIS_URL: redis-master.db.svc.cluster.local
-      CLEAR_SOCKET_TIME: '720'
-      MAX_BACKPRESSURE_KB: '128'
-      debug: '0'
-      redis: 'false'
-
-  replay-canvases:
-    <<: *replay-app
-    image: public.ecr.aws/p1t3u8a3/canvases:${REPLAY_VERSION:-v1.28.0}
-    networks:
-      replay:
-        aliases: [canvases-openreplay, canvases-openreplay.app.svc.cluster.local]
-    environment:
-      <<: *replay-env
-      BUCKET_NAME: mobs
-      TOKEN_SECRET: '${REPLAY_TOKEN_SECRET:-}'
-      FS_CLEAN_HRS: '24'
-
-  replay-chalice:
-    <<: *replay-app
-    image: public.ecr.aws/p1t3u8a3/chalice:${REPLAY_VERSION:-v1.28.0}
-    networks:
-      replay:
-        aliases: [chalice-openreplay, chalice-openreplay.app.svc.cluster.local]
-    environment:
-      <<: *replay-env
-      EMAIL_HOST: '${SMTP_HOST:-}'
-      EMAIL_PORT: '${SMTP_PORT:-587}'
-      EMAIL_USER: '${SMTP_USERNAME:-}'
-      EMAIL_PASSWORD: '${SMTP_PASSWORD:-}'
-      EMAIL_USE_TLS: '${SMTP_USE_TLS:-true}'
-      EMAIL_USE_SSL: '${SMTP_USE_SSL:-false}'
-      EMAIL_SSL_KEY: ''
-      EMAIL_SSL_CERT: ''
-      EMAIL_FROM: '${SMTP_FROM:-}'
-      sourcemaps_reader: 'http://sourcemapreader-openreplay.app.svc.cluster.local:9000/{}/sourcemaps'
-      CLUSTER_URL: svc.cluster.local
-      JWT_EXPIRATION: '86400'
-      jwt_algorithm: HS512
-      root_path: /api
-      sessions_region: us-east-1
-      ASSIST_RECORDS_BUCKET: records
-      sessions_bucket: mobs
-      IOS_VIDEO_BUCKET: mobs
-      sourcemaps_bucket: sourcemaps
-      js_cache_bucket: sessions-assets
-      CH_COMPRESSION: 'false'
-      SCIM_ACCESS_SECRET_KEY: '${REPLAY_SCIM_SECRET:-}'
-      SCIM_REFRESH_SECRET_KEY: '${REPLAY_SCIM_SECRET:-}'
-      SCIM_ACCESS_TOKEN_EXPIRE_SECONDS: '86400'
-      SAML2_MD_URL: ''
-      announcement_url: ''
-      assist_secret: ''
-      async_Token: ''
-      captcha_key: ''
-      captcha_server: ''
-      iceServers: ''
-
-  replay-db:
-    <<: *replay-app
-    image: public.ecr.aws/p1t3u8a3/db:${REPLAY_VERSION:-v1.28.0}
-    networks:
-      replay:
-        aliases: [db-openreplay, db-openreplay.app.svc.cluster.local]
-    environment:
-      <<: *replay-env
-
-  replay-ender:
-    <<: *replay-app
-    image: public.ecr.aws/p1t3u8a3/ender:${REPLAY_VERSION:-v1.28.0}
-    networks:
-      replay:
-        aliases: [ender-openreplay, ender-openreplay.app.svc.cluster.local]
-    environment:
-      <<: *replay-env
-
-  replay-frontend:
-    <<: *replay-app
-    image: public.ecr.aws/p1t3u8a3/frontend:${REPLAY_VERSION:-v1.28.0}
-    networks:
-      replay:
-        aliases: [frontend-openreplay, frontend-openreplay.app.svc.cluster.local]
-    environment:
-      <<: *replay-env
-      TRACKER_HOST: '${REPLAY_URL:-}/script'
-      HTTP_PORT: '80'
-
-  replay-http:
-    <<: *replay-app
-    image: public.ecr.aws/p1t3u8a3/http:${REPLAY_VERSION:-v1.28.0}
-    networks:
-      replay:
-        aliases: [http-openreplay, http-openreplay.app.svc.cluster.local]
-    environment:
-      <<: *replay-env
-      BUCKET_NAME: uxtesting-records
-      TOKEN_SECRET: '${REPLAY_TOKEN_SECRET:-}'
-      CACHE_ASSETS: 'true'
 
 # Δύο δίκτυα με σταθερά subnets (τα ζητά το TRUSTED_PROXY_CIDRS του Authentik):
 #   default  — όλη η στοίβα, και οι βάσεις.
@@ -1184,11 +800,6 @@ networks:
     ipam:
       config:
         - subnet: ${PUBLIC_SUBNET:-10.97.51.0/24}
-  # Το εσωτερικό δίκτυο του OpenReplay (profile replay) — βλ. replay-nginx.
-  replay:
-    ipam:
-      config:
-        - subnet: ${REPLAY_SUBNET:-10.97.52.0/24}
 
 volumes:
   # Γράφονται από τον `config` σε κάθε `up` — μην τα πειράζεις με το χέρι.
@@ -1198,7 +809,7 @@ volumes:
   postgres-init:
   garage-config:
   backup-hooks:
-  openreplay-config:
+  dex-config:
   glitchtip-config:
   # Δεδομένα.
   postgres-backups:
@@ -1212,9 +823,6 @@ volumes:
   redis-data:
   authentik-media:
   garage-data:
-  # OpenReplay (profile replay): εγγραφές και οι βάσεις τους — εκτός backups.
-  replay-postgres:
-  replay-clickhouse:
-  replay-redis:
-  replay-minio:
-  replay-shared:
+  # OpenObserve (profile replay): εγγραφές (30 ημέρες, εκτός backups) και Dex.
+  openobserve-data:
+  dex-data:

@@ -31,8 +31,8 @@ COPY infra/authentik/branding /config/authentik-branding/
 COPY infra/authentik/email-templates /config/authentik-templates/
 COPY infra/postgres/init /config/postgres-init/
 COPY infra/garage/garage.toml /config/garage/garage.toml
-# OpenReplay (profile replay): nginx template, σχήματα βάσεων, buckets.
-COPY infra/openreplay /config/openreplay/
+# Dex (profile replay): η γέφυρα SSO του OpenObserve — config χωρίς μυστικά.
+COPY infra/dex /config/dex/
 # GlitchTip: η ρύθμιση του «Log in with Authentik» (glitchtip-sso).
 COPY infra/glitchtip /config/glitchtip/
 RUN ln -s /config/garage/garage.toml /etc/garage.toml

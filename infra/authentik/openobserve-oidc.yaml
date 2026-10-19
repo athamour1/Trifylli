@@ -1,0 +1,99 @@
+# Authentik blueprint για το OpenObserve (καταγραφή συνεδριών) — SSO μέσω Dex.
+#
+# OpenObserve → Dex (infra/dex/config.yaml) → εδώ. Ο client είναι ο Dex, όχι το
+# ίδιο το OpenObserve: το redirect URI είναι το `/callback` του Dex.
+#
+# ΜΟΝΟ η ομάδα `trifylli-monitoring` περνά: τα replays δείχνουν δεδομένα παιδιών
+# χωρίς masking, και κάθε στέλεχος έχει λογαριασμό στο Authentik. Πρόσθεσε τον
+# εαυτό σου στην ομάδα (Directory → Groups → trifylli-monitoring → Users).
+# Η εφαρμογή δεν φαίνεται στη βιβλιοθήκη εφαρμογών (`blank://blank`).
+version: 1
+metadata:
+  name: OpenObserve — OIDC provider (μέσω Dex) & application
+  labels:
+    blueprints.goauthentik.io/instantiate: 'true'
+
+context:
+  # Το issuer του Dex (π.χ. https://dex.trifylli.gr/dex) — εκεί γυρίζει ο browser.
+  DEX_ISSUER: !Env [DEX_ISSUER, 'http://localhost:5556/dex']
+  # Ίδια τιμή με το `OPENOBSERVE_OIDC_CLIENT_SECRET` του Dex.
+  OPENOBSERVE_OIDC_CLIENT_SECRET: !Env [OPENOBSERVE_OIDC_CLIENT_SECRET, 'trifylli-dev-openobserve-oidc']
+
+entries:
+  # Πρώτη εκκίνηση: τα `!Find` πιο κάτω θέλουν αντικείμενα των default blueprints.
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: Default - Invalidation flow
+      required: true
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: System - OAuth2 Provider - Scopes
+      required: true
+
+  - model: authentik_core.group
+    id: monitoring-group
+    identifiers:
+      name: trifylli-monitoring
+    attrs:
+      is_superuser: false
+
+  - model: authentik_flows.flow
+    id: openobserve-authorization-flow
+    identifiers:
+      slug: openobserve-authorization
+    attrs:
+      name: OpenObserve — εξουσιοδότηση
+      title: Σύνδεση στο OpenObserve
+      designation: authorization
+      authentication: require_authenticated
+
+  - model: authentik_providers_oauth2.oauth2provider
+    id: openobserve-provider
+    identifiers:
+      name: OpenObserve
+    attrs:
+      client_type: confidential
+      client_id: openobserve
+      client_secret: !Context OPENOBSERVE_OIDC_CLIENT_SECRET
+      sub_mode: hashed_user_id
+      grant_types:
+        - authorization_code
+        - refresh_token
+      authorization_flow: !KeyOf openobserve-authorization-flow
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-invalidation-flow]]
+      signing_key:
+        !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
+      property_mappings:
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, 'goauthentik.io/providers/oauth2/scope-openid']]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, 'goauthentik.io/providers/oauth2/scope-profile']]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, 'goauthentik.io/providers/oauth2/scope-email']]
+      redirect_uris:
+        - matching_mode: strict
+          url: !Format ['%s/callback', !Context DEX_ISSUER]
+      access_token_validity: minutes=30
+
+  - model: authentik_core.application
+    id: openobserve-app
+    identifiers:
+      slug: openobserve
+    attrs:
+      name: OpenObserve
+      provider: !KeyOf openobserve-provider
+      meta_description: Καταγραφή συνεδριών του Trifylli
+      meta_launch_url: blank://blank
+      open_in_new_tab: false
+      # Χωρίς binding που να ταιριάζει ⇒ άρνηση (όχι «όλοι»).
+      policy_engine_mode: any
+
+  # Μόνο τα μέλη της ομάδας. Όπως στο trifylli-security.yaml: ψάχνουμε το
+  # PolicyBindingModel της εφαρμογής, ώστε η επανεφαρμογή να βρίσκει το binding.
+  - model: authentik_policies.policybinding
+    identifiers:
+      target: !Find [authentik_policies.policybindingmodel, [application__slug, openobserve]]
+      order: 0
+    attrs:
+      group: !KeyOf monitoring-group
+      enabled: true
+      timeout: 30
