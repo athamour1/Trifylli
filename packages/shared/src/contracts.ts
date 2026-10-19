@@ -864,6 +864,59 @@ export interface DrasiScheduleView {
   stelexi: DrasiScheduleStelexos[];
 }
 
+// ───────────────────────── Δράσεις: τροφοδοσία ─────────────────────────
+
+/** Ποιος ζήτησε ή αγόρασε κάτι. */
+export interface DrasiPersonRef {
+  id: string;
+  firstName: string;
+  lastName: string;
+}
+
+/** Ένα υλικό του ποσολογίου ενός γεύματος, όπως φαίνεται στη λίστα της Τροφοδοσίας. */
+export interface DrasiTrofodosiaIngredient {
+  id: string;
+  label: string;
+  qty: string;
+  /** Το ίδιο «αγοράστηκε» με το ποσολόγιο του γεύματος. */
+  bought: boolean;
+  boughtBy: DrasiPersonRef | null;
+  boughtAt: string | null;
+}
+
+/** Ό,τι ζήτησε κάποιος να αγοραστεί μια ημέρα, πέρα από τα γεύματα. */
+export interface DrasiFoodPurchaseView {
+  id: string;
+  /** YYYY-MM-DD. */
+  date: string;
+  label: string;
+  qty: string;
+  note: string | null;
+  requestedBy: DrasiPersonRef | null;
+  bought: boolean;
+  boughtBy: DrasiPersonRef | null;
+  boughtAt: string | null;
+}
+
+/** Μία ημέρα της λίστας: τα γεύματά της με το ποσολόγιο, και τα επιπλέον. */
+export interface DrasiTrofodosiaDay {
+  /** YYYY-MM-DD. */
+  date: string;
+  meals: {
+    itemId: string;
+    title: string;
+    kind: DrasiScheduleKind;
+    snack: DrasiSnack | null;
+    startsAt: string;
+    ingredients: DrasiTrofodosiaIngredient[];
+  }[];
+  extras: DrasiFoodPurchaseView[];
+}
+
+export interface DrasiTrofodosiaView {
+  days: DrasiTrofodosiaDay[];
+}
+
 // ───────────────────────── Δράσεις: διατροφολόγιο ─────────────────────────
 
 /** Γραμμή του ποσολογίου ενός γεύματος. */

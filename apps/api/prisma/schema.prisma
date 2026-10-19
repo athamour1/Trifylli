@@ -372,6 +372,8 @@ model User {
   docReads                DocRead[]
   drasiDelays             DrasiDelay[]               @relation("DrasiDelayAuthor")
   shoppingPurchased       DrasiShoppingItem[]        @relation("ShoppingPurchaser")
+  foodRequested           DrasiFoodPurchase[]        @relation("FoodPurchaseRequester")
+  foodBought              DrasiFoodPurchase[]        @relation("FoodPurchaseBuyer")
   checkoutsLoaded         YlikoCheckout[]            @relation("CheckoutLoadedBy")
   externalLoaded          DrasiExternalYliko[]       @relation("ExternalLoadedBy")
   announcements           DrasiAnnouncement[]        @relation("DrasiAnnouncementAuthor")
@@ -593,6 +595,7 @@ model Drasi {
   pharmacyKits    DrasiPharmacyKit[]
   symvoulia       Symvoulio[]
   shopping        DrasiShoppingItem[]
+  foodPurchases   DrasiFoodPurchase[]
   externalYliko   DrasiExternalYliko[]
   reviewQuestions DrasiReviewQuestion[]
   reviewInvites   DrasiReviewInvite[]
@@ -649,15 +652,15 @@ model DrasiVisit {
 /// πλαίσιο (ημέρα, από–έως, τίτλος) και μετά, πάνω σε κάθε στοιχείο, το
 /// «προγραμματικό»: markdown, υπεύθυνος διεξαγωγής & υλοποίησης, υλικό.
 model DrasiScheduleItem {
-  id          String            @id @default(uuid()) @db.Uuid
-  drasiId     String            @db.Uuid
+  id          String              @id @default(uuid()) @db.Uuid
+  drasiId     String              @db.Uuid
   /// Η ημέρα (YYYY-MM-DD στη ζώνη του Τοπικού). Η ώρα ΔΕΝ αποθηκεύεται:
   /// υπολογίζεται από την έναρξη της ημέρας + τις διάρκειες των προηγούμενων.
-  date        DateTime          @db.Date
-  order       Int               @default(0)
-  durationMin Int               @default(30)
+  date        DateTime            @db.Date
+  order       Int                 @default(0)
+  durationMin Int                 @default(30)
   title       String
-  kind        DrasiScheduleKind @default(DRASTIRIOTITA)
+  kind        DrasiScheduleKind   @default(DRASTIRIOTITA)
   /// Η προετοιμασία του (kanban «Προγραμματικά»): την αλλάζουν ο Αρχηγός και το Πρόγραμμα.
   status      DrasiScheduleStatus @default(TODO)
   /// Δεκατιανό/απογευματινό μέσα σε αυτό το στοιχείο (π.χ. σε μια δραστηριότητα).
@@ -665,8 +668,8 @@ model DrasiScheduleItem {
   location    String?
   /// Το προγραμματικό: οδηγίες, κανόνες, εναλλακτική — Markdown.
   description String?
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
 
   drasi     Drasi                    @relation(fields: [drasiId], references: [id], onDelete: Cascade)
   /// Οι υπεύθυνοι — ένα ή περισσότερα στελέχη της δράσης.
@@ -977,6 +980,31 @@ model DrasiShoppingItem {
 
   @@index([drasiId])
   @@map("drasi_shopping_item")
+}
+
+/// Ό,τι πρέπει να αγοράσει η Τροφοδοσία μια ημέρα, πέρα από τα υλικά των γευμάτων
+/// (εκείνα ζουν στο ποσολόγιο κάθε γεύματος). Το ζητούν λειτουργία, πρόγραμμα,
+/// αρχηγός και μαγείρισσα· «αγοράστηκε» λένε η τροφοδοσία και ο αρχηγός.
+model DrasiFoodPurchase {
+  id            String    @id @default(uuid()) @db.Uuid
+  drasiId       String    @db.Uuid
+  /// Η ημέρα (YYYY-MM-DD στη ζώνη του Τοπικού), όπως στο ωρολόγιο.
+  date          DateTime  @db.Date
+  label         String
+  /// Ποσότητα ως κείμενο — «2 kg», «3 πακέτα».
+  qty           String    @default("")
+  note          String?
+  requestedById String?   @db.Uuid
+  boughtAt      DateTime?
+  boughtById    String?   @db.Uuid
+  createdAt     DateTime  @default(now())
+
+  drasi       Drasi @relation(fields: [drasiId], references: [id], onDelete: Cascade)
+  requestedBy User? @relation("FoodPurchaseRequester", fields: [requestedById], references: [id], onDelete: SetNull)
+  boughtBy    User? @relation("FoodPurchaseBuyer", fields: [boughtById], references: [id], onDelete: SetNull)
+
+  @@index([drasiId, date])
+  @@map("drasi_food_purchase")
 }
 
 /// Υλικό που ΔΕΝ είναι δικό μας: το φέρνει φιλοξενούμενο Τοπικό ή άλλος κλάδος.

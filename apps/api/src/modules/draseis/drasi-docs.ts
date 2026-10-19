@@ -157,6 +157,22 @@ export function seedMeal(doc: Doc, rows: MealRows): void {
   });
 }
 
+/**
+ * «Αγοράστηκε» ενός υλικού του ποσολογίου από τον server (η λίστα της
+ * Τροφοδοσίας): τα ίδια πεδία με το τικ της σελίδας του γεύματος — ποιος και
+ * πότε, ή τίποτα στο ξε-τικ. `false` αν η γραμμή δεν υπάρχει πια.
+ */
+export function tickMealIngredient(doc: Doc, rowId: string, bought: boolean, by: string, at = new Date()): boolean {
+  const row = doc.getMap<unknown>(MEAL_DOC.ingredients).get(rowId);
+  if (!(row instanceof YMap)) return false;
+  doc.transact(() => {
+    row.set('bought', bought);
+    row.set('boughtBy', bought ? by : null);
+    row.set('boughtAt', bought ? at.toISOString() : null);
+  });
+  return true;
+}
+
 /** Έγγραφο της δομής 1 (μόνο η συνταγή): μενού και ποσολόγιο από τη βάση. */
 export function upgradeMeal(doc: Doc, rows: Pick<MealRows, 'menu' | 'ingredients'>): void {
   doc.transact(() => {

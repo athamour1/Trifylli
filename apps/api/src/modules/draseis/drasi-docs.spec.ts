@@ -12,6 +12,7 @@ import {
   restoreMeal,
   seedItem,
   seedMeal,
+  tickMealIngredient,
   upgradeItem,
   upgradeMeal,
 } from './drasi-docs';
@@ -181,5 +182,34 @@ describe('ποιος και πότε σε κάθε τικ', () => {
       [null, null],
       [null, null],
     ]);
+  });
+});
+
+describe('«αγοράστηκε» από τη λίστα της Τροφοδοσίας', () => {
+  function meal(): Doc {
+    const doc = new Doc();
+    seedMeal(doc, {
+      recipe: '',
+      menu: 'Μακαρόνια',
+      ingredients: [{ id: id(1), order: 0, label: 'Μακαρόνια', qty: '2 kg', bought: false, boughtBy: null, boughtAt: null }],
+    });
+    return doc;
+  }
+
+  it('γράφει τα ίδια με το τικ της σελίδας του γεύματος: ποιος και πότε', () => {
+    const doc = meal();
+    const at = new Date('2026-10-01T08:00:00.000Z');
+    expect(tickMealIngredient(doc, id(1), true, id(90), at)).toBe(true);
+    expect(normalizeMeal(readMeal(doc)).ingredients).toEqual([
+      { id: id(1), order: 0, label: 'Μακαρόνια', qty: '2 kg', bought: true, boughtById: id(90), boughtAt: at },
+    ]);
+  });
+
+  it('το ξε-τικ σβήνει ποιος και πότε· γραμμή που δεν υπάρχει πια: false', () => {
+    const doc = meal();
+    tickMealIngredient(doc, id(1), true, id(90));
+    expect(tickMealIngredient(doc, id(1), false, id(90))).toBe(true);
+    expect(normalizeMeal(readMeal(doc)).ingredients[0]).toMatchObject({ bought: false, boughtById: null, boughtAt: null });
+    expect(tickMealIngredient(doc, id(7), true, id(90))).toBe(false);
   });
 });

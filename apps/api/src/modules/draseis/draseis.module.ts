@@ -10,6 +10,8 @@ import { DrasiPermGuard } from './drasi-perm.guard';
 import { DraseisController } from './draseis.controller';
 import { DraseisDiatrofologioController } from './draseis-diatrofologio.controller';
 import { DraseisDiatrofologioService } from './draseis-diatrofologio.service';
+import { DraseisTrofodosiaController } from './draseis-trofodosia.controller';
+import { DraseisTrofodosiaService } from './draseis-trofodosia.service';
 import { DraseisDossierService } from './draseis-dossier.service';
 import { DrasiRemindersService } from './drasi-reminders.service';
 import { DraseisAnnouncementsService } from './draseis-announcements.service';
@@ -50,6 +52,7 @@ import { DraseisService } from './draseis.service';
     PublicFormsController,
     DraseisPlanController,
     DraseisDiatrofologioController,
+    DraseisTrofodosiaController,
     DraseisMythosController,
     DraseisExternalsController,
     DraseisYpiresiesController,
@@ -70,6 +73,7 @@ import { DraseisService } from './draseis.service';
     DraseisPharmacyService,
     DraseisPlanService,
     DraseisDiatrofologioService,
+    DraseisTrofodosiaService,
     DraseisMythosService,
     DraseisExternalsService,
     DraseisYpiresiesService,

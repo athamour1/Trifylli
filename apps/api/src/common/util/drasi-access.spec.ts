@@ -128,3 +128,25 @@ describe('διατροφολόγιο', () => {
     expect(drasiCan(drasiAccess({ full: true, staff: false, roles: [] }), 'diatrofologio', 'edit')).toBe(true);
   });
 });
+
+describe('τροφοδοσία: η λίστα αγορών της ημέρας', () => {
+  const as = (roles: readonly string[]) => drasiAccess({ full: false, staff: true, roles: roles as never });
+
+  it('κάθε στέλεχος τη βλέπει, χωρίς να προσθέτει', () => {
+    expect(drasiCan(as([]), 'trofodosia')).toBe(true);
+    expect(drasiCan(as([]), 'trofodosia', 'edit')).toBe(false);
+  });
+
+  it('προσθέτουν λειτουργία, πρόγραμμα, αρχηγός, μαγείρισσα και τροφοδοσία', () => {
+    for (const role of ['LEITOURGIA', 'PROGRAMMA', 'ARXIGOS', 'MAGEIRISSA', 'TROFODOSIA']) {
+      expect(drasiCan(as([role]), 'trofodosia', 'edit')).toBe(true);
+    }
+    for (const role of ['TAMIAS', 'FARMAKEIO']) expect(drasiCan(as([role]), 'trofodosia', 'edit')).toBe(false);
+  });
+
+  it('«αγοράστηκε» σημειώνουν μόνο η τροφοδοσία και ο αρχηγός (και η εφεδρεία)', () => {
+    for (const role of ['TROFODOSIA', 'ARXIGOS']) expect(drasiCan(as([role]), 'purchase', 'edit')).toBe(true);
+    for (const role of ['LEITOURGIA', 'PROGRAMMA', 'MAGEIRISSA', 'TAMIAS']) expect(drasiCan(as([role]), 'purchase', 'edit')).toBe(false);
+    expect(drasiCan(drasiAccess({ full: true, staff: false, roles: [] }), 'purchase', 'edit')).toBe(true);
+  });
+});
