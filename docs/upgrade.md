@@ -38,6 +38,31 @@ dc() { docker compose -f docker-compose.prod.yml --env-file .env.prod "$@"; }
 
 ---
 
+## Από v1.1.1
+
+Η ρουτίνα του «Κάθε φορά», **με** το νέο `docker-compose.prod.yml`. Χωρίς αλλαγές
+στο `.env.prod`.
+
+**Τι αλλάζει:**
+
+* Το compose: το API παίρνει τις ίδιες `SMTP_*` με το Authentik (στέλνει πλέον
+  τους συνδέσμους των εντύπων με email)· το Authentik δεν περιμένει πια το Redis
+  (δεν το χρησιμοποιεί από το 2025.10 — μένει μόνο για το GlitchTip).
+* 1 migration: η κατάσταση κάθε στοιχείου του ωρολογίου (kanban «Προγραμματικά»)·
+  όλα ξεκινούν «To Do».
+* Τα blueprints του Authentik (νέο config image): στην πρώτη εκκίνηση εφαρμόζουν
+  πρώτα τα default που χρειάζονται, και το brand του Trifylli γίνεται πάντα το
+  default. Σε υπάρχουσα στοίβα εφαρμόζονται μόνα τους μόλις αλλάξουν τα αρχεία —
+  το χειροκίνητο `update authentik_brands_brand set "default"=true` δεν ξαναχρειάζεται.
+
+**Αν ο server κόβει τις εξερχόμενες 25/465** (π.χ. Hetzner) και τα email δεν
+φεύγουν (timeout): `SMTP_PORT=587`, `SMTP_USE_TLS=true`, `SMTP_USE_SSL=false`.
+
+**Μετά:** ο κωδικός e-SEO του Τοπικού διορθώνεται πλέον από τις Ενσωματώσεις
+(υπερδιαχειριστής) — όχι με SQL.
+
+---
+
 ## Από v1.0.2
 
 **Τι αλλάζει:**
