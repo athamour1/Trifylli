@@ -1,18 +1,21 @@
 import { Injectable } from '@nestjs/common';
-import { DrasiStatus, Prisma } from '@prisma/client';
+import { DrasiStatus, MemberKind, MemberStatus, Prisma } from '@prisma/client';
 import {
   DRASI_TYPE_LABEL,
   KLADOS_META,
+  KladosType as KLADOI,
   SYMVOULIO_TYPE_LABEL,
+  SymvoulioType,
+  TOPIKO_SYMVOULIA,
   type CalendarEvent,
   type DrasiType,
   type KladosType,
-  type SymvoulioType,
 } from '@trifylli/shared';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
-import { assertKladosAccess, scopedKladoi } from '../../common/util/klados-scope';
+import { assertKladosAccess, hasCapabilityFor, scopedKladoi } from '../../common/util/klados-scope';
 import { symvoulioLink } from '../symvoulia/symvoulio-link';
+import { birthdayOccurrences } from './birthdays';
 
 /** Χρώμα για γεγονότα που δεν ανήκουν σε κλάδο (Τοπικό). Hex, όπως των κλάδων. */
 const TOPIKO_COLOR = '#546e7a';
@@ -27,12 +30,16 @@ export class CalendarService {
    * Το ημερολόγιο εμφανίζεται πανομοιότυπα σε επίπεδο κλάδου και Τοπικού — η
    * μόνη διαφορά είναι η εμβέλεια. Ένα endpoint αντί για τρία σημαίνει ότι η PWA
    * κατεβάζει τον μήνα με μία κλήση και τον έχει offline.
+   *
+   * Τα γενέθλια μπαίνουν μόνο όταν ζητηθούν (`birthdays`): ανήκουν στο ίδιο το
+   * ημερολόγιο, όχι στο «τι έρχεται» της αρχικής οθόνης.
    */
   async events(
     user: RequestUser,
     from: Date,
     to: Date,
     klados?: KladosType,
+    options: { birthdays?: boolean } = {},
   ): Promise<CalendarEvent[]> {
     if (klados) assertKladosAccess(user, klados);
 
@@ -51,6 +58,21 @@ export class CalendarService {
       : scope
         ? { OR: [{ kladosId: null }, { klados: { type: { in: scope } } }] }
         : {};
+    // Το ημερολόγιο ενός κλάδου δείχνει τα δικά του, και από το Τοπικό μόνο τα
+    // συμβούλια (Τοπικού, Στελεχών) — όχι συμβούλια δράσεων, που έχουν δικούς τους
+    // κανόνες πρόσβασης.
+    const symvoulioOwnerFilter: Prisma.SymvoulioWhereInput = klados
+      ? {
+          OR: [
+            { klados: { type: klados } },
+            { kladosId: null, drasiId: null, type: { in: [...TOPIKO_SYMVOULIA] } },
+          ],
+        }
+      : ownerFilter;
+
+    const birthdays = options.birthdays
+      ? this.birthdays(user, from, to, klados ? [klados] : (scope ?? Object.values(KLADOI)))
+      : Promise.resolve([]);
 
     const [draseis, syggentrwseis, symvoulia] = await this.prisma.$transaction([
       this.prisma.drasi.findMany({
@@ -92,7 +114,7 @@ export class CalendarService {
           topikoId: user.topikoId,
           archivedAt: null,
           date: { gte: from, lte: to },
-          ...ownerFilter,
+          ...symvoulioOwnerFilter,
         },
         select: {
           id: true,
@@ -115,6 +137,7 @@ export class CalendarService {
           end: d.dateEnd.toISOString(),
           allDay: true,
           kind: 'DRASI' as const,
+          source: kladosType ? ('KLADOS' as const) : ('TOPIKO' as const),
           kladosType,
           drasiType: d.type as DrasiType,
           color: kladosType ? KLADOS_META[kladosType].color : TOPIKO_COLOR,
@@ -132,6 +155,7 @@ export class CalendarService {
           end: end.toISOString(),
           allDay: !s.startTime,
           kind: 'SYGGENTRWSH' as const,
+          source: 'KLADOS' as const,
           kladosType,
           color: KLADOS_META[kladosType].color,
           href: `/syggentrwseis/${s.id}`,
@@ -146,15 +170,81 @@ export class CalendarService {
           end: addHours(s.date, 2).toISOString(),
           allDay: false,
           kind: 'SYMVOULIO' as const,
+          source:
+            s.type === SymvoulioType.STELEXON
+              ? ('STELEXON' as const)
+              : kladosType
+                ? ('KLADOS' as const)
+                : ('TOPIKO' as const),
           kladosType,
           symvoulioType: s.type as SymvoulioType,
           color: kladosType ? KLADOS_META[kladosType].color : TOPIKO_COLOR,
           href: symvoulioLink(s),
         };
       }),
+      ...(await birthdays),
     ];
 
     return events.sort((a, b) => a.start.localeCompare(b.start));
+  }
+
+  /**
+   * Γενέθλια των ενεργών μελών του μητρώου, από τη συμμετοχή τους στους κλάδους.
+   * Μόνο όπου ο χρήστης βλέπει τα μέλη (`meloi:read`). Τα στελέχη (συμμετοχή
+   * `STELEXOS`) πάνε στην πηγή «Στελέχη», τα παιδιά στον κλάδο τους. Ένα γεγονός
+   * ανά άτομο, ακόμη κι αν υπηρετεί σε δύο κλάδους.
+   */
+  private async birthdays(user: RequestUser, from: Date, to: Date, kladoi: KladosType[]): Promise<CalendarEvent[]> {
+    const visible = kladoi.filter((k) => hasCapabilityFor(user, 'meloi:read', k));
+    if (visible.length === 0) return [];
+    const membershipFilter: Prisma.MembershipWhereInput = {
+      leftAt: null,
+      klados: { topikoId: user.topikoId, type: { in: visible } },
+    };
+
+    const members = await this.prisma.user.findMany({
+      where: {
+        topikoId: user.topikoId,
+        archivedAt: null,
+        guestTopikoCode: null,
+        status: MemberStatus.ENERGO,
+        birthDate: { not: null },
+        memberships: { some: membershipFilter },
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        birthDate: true,
+        memberships: {
+          where: membershipFilter,
+          select: { kind: true, klados: { select: { type: true } } },
+          orderBy: { joinedAt: 'asc' },
+        },
+      },
+    });
+
+    return members.flatMap((member) => {
+      const membership = member.memberships[0];
+      if (!member.birthDate || !membership) return [];
+      const kladosType = membership.klados.type as KladosType;
+      const stelexos = member.memberships.some((m) => m.kind === MemberKind.STELEXOS);
+      return birthdayOccurrences(member.birthDate, from, to).map(({ day, age }) => {
+        const start = `${day}T00:00:00.000Z`;
+        return {
+          id: `birthday:${member.id}:${day}`,
+          title: `${member.firstName} ${member.lastName} · ${age} χρονών`,
+          start,
+          end: start,
+          allDay: true,
+          kind: 'BIRTHDAY' as const,
+          source: stelexos ? ('STELEXON' as const) : ('KLADOS' as const),
+          kladosType,
+          color: KLADOS_META[kladosType].color,
+          href: `/meloi/${member.id}`,
+        };
+      });
+    });
   }
 
   /**

@@ -157,13 +157,20 @@ export interface Paginated<T> {
   pageSize: number;
 }
 
+/**
+ * Σε ποιον «ανήκει» ένα γεγονός του ημερολογίου — τα φίλτρα του ημερολογίου
+ * Τοπικού. `STELEXON`: συμβούλια στελεχών και γενέθλια στελεχών.
+ */
+export type CalendarSource = 'KLADOS' | 'TOPIKO' | 'STELEXON';
+
 export interface CalendarEvent {
   id: string;
   title: string;
   start: string;
   end: string;
   allDay: boolean;
-  kind: 'DRASI' | 'SYGGENTRWSH' | 'SYMVOULIO';
+  kind: 'DRASI' | 'SYGGENTRWSH' | 'SYMVOULIO' | 'BIRTHDAY';
+  source: CalendarSource;
   kladosType: KladosType | null;
   drasiType?: DrasiType;
   symvoulioType?: SymvoulioType;

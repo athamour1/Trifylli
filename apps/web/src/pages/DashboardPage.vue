@@ -196,12 +196,14 @@ const KIND_ICON: Record<CalendarEvent['kind'], string> = {
   DRASI: 'hiking',
   SYGGENTRWSH: 'schedule',
   SYMVOULIO: 'forum',
+  BIRTHDAY: 'cake',
 };
 
 const KIND_LABEL: Record<CalendarEvent['kind'], string> = {
   DRASI: 'Δράση',
   SYGGENTRWSH: 'Συγκέντρωση',
   SYMVOULIO: 'Συμβούλιο',
+  BIRTHDAY: 'Γενέθλια',
 };
 </script>
 

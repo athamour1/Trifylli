@@ -14,26 +14,47 @@
       />
     </div>
 
-    <div class="row q-col-gutter-sm q-mb-md items-center">
-      <!-- Σε προβολή κλάδου δεν υπάρχει επιλογή: ο κλάδος είναι η διαδρομή. -->
-      <div v-if="!inKlados" class="col-12 col-sm-4">
-        <q-select
-          v-model="picked"
-          :options="kladosOptions"
-          label="Κλάδος"
-          dense
-          outlined
-          emit-value
-          map-options
-          clearable
-        />
-      </div>
+    <div class="row q-col-gutter-sm q-mb-sm items-center">
       <div v-if="view === 'month'" class="col-12 col-sm-auto">
         <q-btn-group flat>
           <q-btn icon="chevron_left" @click="shiftMonth(-1)" />
           <q-btn :label="monthLabel" no-caps @click="goToday" />
           <q-btn icon="chevron_right" @click="shiftMonth(1)" />
         </q-btn-group>
+      </div>
+    </div>
+
+    <!-- Τι δείχνει το ημερολόγιο. Φιλτράρει ό,τι έχει ήδη κατέβει — καμία νέα
+         κλήση, άρα δουλεύει και offline. Πηγές μόνο στο ημερολόγιο Τοπικού: σε
+         κλάδο, ο κλάδος είναι η διαδρομή. -->
+    <div class="cal-filters q-mb-md">
+      <div class="cal-filter-row" role="group" aria-label="Τύπος">
+        <button
+          v-for="option in KIND_OPTIONS"
+          :key="option.value"
+          type="button"
+          class="cal-chip"
+          :class="{ 'cal-chip--on': !hiddenKinds.includes(option.value) }"
+          :aria-pressed="!hiddenKinds.includes(option.value)"
+          @click="toggle(hiddenKinds, option.value)"
+        >
+          <q-icon :name="option.icon" size="16px" />
+          {{ option.label }}
+        </button>
+      </div>
+      <div v-if="!inKlados" class="cal-filter-row" role="group" aria-label="Από">
+        <button
+          v-for="option in sourceOptions"
+          :key="option.value"
+          type="button"
+          class="cal-chip"
+          :class="{ 'cal-chip--on': !hiddenSources.includes(option.value) }"
+          :aria-pressed="!hiddenSources.includes(option.value)"
+          @click="toggle(hiddenSources, option.value)"
+        >
+          <span class="cal-chip__dot" :style="{ backgroundColor: option.color }" />
+          {{ option.label }}
+        </button>
       </div>
     </div>
 
@@ -58,7 +79,8 @@
               <q-item-section>
                 <q-item-label>{{ event.title }}</q-item-label>
                 <q-item-label caption>
-                  <span v-if="!event.allDay">{{ formatTime(event.start) }} · </span>
+                  <span v-if="event.kind === 'BIRTHDAY'">Γενέθλια · </span>
+                  <span v-else-if="!event.allDay">{{ formatTime(event.start) }} · </span>
                   <span v-if="event.kladosType">{{ KLADOS_LABEL[event.kladosType] }}</span>
                   <span v-else>Τοπικό</span>
                 </q-item-label>
@@ -95,28 +117,84 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue';
-import { KLADOS_LABEL, KLADOS_META, type CalendarEvent, type KladosType } from '@trifylli/shared';
+import { computed, ref, watch } from 'vue';
+import { KLADOS_LABEL, type CalendarEvent } from '@trifylli/shared';
 import { readableOn } from '../lib/color';
 import PageState from '../components/PageState.vue';
 import { useAsyncData } from '../composables/useAsyncData';
 import { get } from '../lib/api';
 import { formatTime } from '../lib/format';
 import { useKladosScope } from '../composables/useKladosScope';
+import { useAuthStore } from '../stores/auth';
 
-const {
-  klados: routeKlados,
-  inKlados,
-  options: kladosOptions,
-} = useKladosScope();
+type Kind = CalendarEvent['kind'];
+
+const auth = useAuthStore();
+const { klados: routeKlados, inKlados } = useKladosScope();
 
 const view = ref<'list' | 'month'>('list');
-/** Επιλογή του χρήστη — έχει νόημα μόνο στην προβολή Τοπικού. */
-const picked = ref<KladosType | null>(null);
 const anchor = ref(new Date());
 
-/** Ο κλάδος της διαδρομής υπερισχύει της επιλογής. */
-const effectiveKlados = computed(() => routeKlados.value ?? picked.value);
+const KIND_OPTIONS: { value: Kind; label: string; icon: string }[] = [
+  { value: 'BIRTHDAY', label: 'Γενέθλια', icon: 'cake' },
+  { value: 'DRASI', label: 'Δράσεις', icon: 'hiking' },
+  { value: 'SYGGENTRWSH', label: 'Συγκεντρώσεις', icon: 'schedule' },
+  { value: 'SYMVOULIO', label: 'Συμβούλια', icon: 'forum' },
+];
+
+/** Πηγές του ημερολογίου Τοπικού: κάθε κλάδος χωριστά, το Τοπικό, τα στελέχη. */
+const sourceOptions = computed(() => [
+  ...auth.kladoi.map((k) => ({ value: `KLADOS:${k.type}`, label: k.label, color: k.color })),
+  { value: 'TOPIKO', label: 'Τοπικό', color: '#546e7a' },
+  { value: 'STELEXON', label: 'Στελέχη', color: '#8d6e63' },
+]);
+
+function sourceKey(event: CalendarEvent): string {
+  return event.source === 'KLADOS' ? `KLADOS:${event.kladosType}` : event.source;
+}
+
+/**
+ * Κρατάμε τι **έκρυψε** ο χρήστης, όχι τι διάλεξε: ένας κλάδος ή τύπος που
+ * προστίθεται αργότερα φαίνεται από μόνος του. Ανά συσκευή, όπως το θέμα.
+ */
+const FILTERS_KEY = 'trifylli.calendar.filters';
+
+function readHidden(): { kinds: Kind[]; sources: string[] } {
+  try {
+    const stored = JSON.parse(localStorage.getItem(FILTERS_KEY) ?? 'null') as {
+      kinds?: unknown;
+      sources?: unknown;
+    } | null;
+    return {
+      kinds: Array.isArray(stored?.kinds) ? (stored.kinds as Kind[]) : [],
+      sources: Array.isArray(stored?.sources) ? (stored.sources as string[]) : [],
+    };
+  } catch {
+    return { kinds: [], sources: [] };
+  }
+}
+
+const stored = readHidden();
+const hiddenKinds = ref<Kind[]>(stored.kinds);
+const hiddenSources = ref<string[]>(stored.sources);
+
+watch(
+  [hiddenKinds, hiddenSources],
+  () => {
+    try {
+      localStorage.setItem(FILTERS_KEY, JSON.stringify({ kinds: hiddenKinds.value, sources: hiddenSources.value }));
+    } catch {
+      // Χωρίς storage (ιδιωτικό παράθυρο) τα φίλτρα ισχύουν μόνο γι' αυτή τη σελίδα.
+    }
+  },
+  { deep: true },
+);
+
+function toggle<T>(hidden: T[], value: T): void {
+  const index = hidden.indexOf(value);
+  if (index >= 0) hidden.splice(index, 1);
+  else hidden.push(value);
+}
 
 /** Το παράθυρο του αιτήματος: ο μήνας στην προβολή μήνα, 90 ημέρες στη λίστα. */
 const range = computed(() => {
@@ -137,16 +215,21 @@ const { data, loading, error, stale, reload } = useAsyncData(
       params: {
         from: range.value.from.toISOString(),
         to: range.value.to.toISOString(),
-        ...(effectiveKlados.value ? { klados: effectiveKlados.value } : {}),
+        ...(routeKlados.value ? { klados: routeKlados.value } : {}),
       },
     }),
   {
     cacheKey: 'calendar',
-    watchSources: [view, effectiveKlados, anchor],
+    watchSources: [view, routeKlados, anchor],
   },
 );
 
-const events = computed(() => data.value ?? []);
+const events = computed(() =>
+  (data.value ?? []).filter(
+    (event) =>
+      !hiddenKinds.value.includes(event.kind) && (inKlados.value || !hiddenSources.value.includes(sourceKey(event))),
+  ),
+);
 const isEmpty = computed(() => !loading.value && events.value.length === 0);
 
 const grouped = computed(() => {
@@ -215,17 +298,60 @@ function formatDayHeading(iso: string): string {
   });
 }
 
-const KIND_ICON: Record<CalendarEvent['kind'], string> = {
-  DRASI: 'hiking',
-  SYGGENTRWSH: 'schedule',
-  SYMVOULIO: 'forum',
-};
-
-// Το KLADOS_META χρησιμοποιείται από το API για τα χρώματα· εδώ μόνο ως τύπος.
-void KLADOS_META;
+const KIND_ICON = Object.fromEntries(KIND_OPTIONS.map((option) => [option.value, option.icon])) as Record<Kind, string>;
 </script>
 
 <style scoped lang="scss">
+.cal-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+
+  & + & {
+    margin-top: 6px;
+  }
+}
+
+/* Απαλά «χάπια» χωρίς περίγραμμα: ενεργό = χρώμα κλάδου, κρυμμένο = σβηστό. */
+.cal-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 999px;
+  padding: 4px 12px;
+  font: inherit;
+  font-size: 0.8125rem;
+  background: var(--tint-soft);
+  color: var(--text-soft);
+  cursor: pointer;
+  transition:
+    background-color 0.15s,
+    color 0.15s;
+
+  &:focus-visible {
+    outline: 2px solid var(--klados-color);
+    outline-offset: 2px;
+  }
+
+  &--on {
+    background: var(--klados-color);
+    color: var(--klados-on);
+    font-weight: 500;
+  }
+}
+
+.cal-chip__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1.5px var(--surface);
+}
+
+.cal-chip:not(.cal-chip--on) .cal-chip__dot {
+  opacity: 0.45;
+}
+
 .calendar-grid {
   display: grid;
   grid-template-columns: repeat(7, minmax(0, 1fr));

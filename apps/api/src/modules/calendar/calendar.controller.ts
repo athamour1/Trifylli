@@ -18,13 +18,13 @@ export class CalendarController {
   @RequireCapability('calendar:read')
   @ApiOperation({
     summary: 'Γεγονότα διαστήματος',
-    description: 'Δράσεις, συγκεντρώσεις και συμβούλια σε ένα ενιαίο σχήμα.',
+    description: 'Δράσεις, συγκεντρώσεις, συμβούλια και γενέθλια μελών σε ένα ενιαίο σχήμα.',
   })
   events(@CurrentUser() user: RequestUser, @Query() query: KladosRequiredRangeDto) {
     if (query.from >= query.to) {
       throw new BadRequestException('Το `from` πρέπει να προηγείται του `to`.');
     }
-    return this.calendar.events(user, query.from, query.to, query.klados);
+    return this.calendar.events(user, query.from, query.to, query.klados, { birthdays: true });
   }
 
   @Get('upcoming')
