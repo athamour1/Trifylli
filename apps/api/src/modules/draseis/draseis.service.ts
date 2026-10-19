@@ -627,6 +627,10 @@ export class DraseisService {
       return created;
     };
 
+    // Φιλοξενούμενα Τοπικά και εξωτερικά στελέχη δεν έχουν κλάδο μας: δική τους
+    // γραμμή, ώστε τα σύνολα να είναι όλοι οι συμμετέχοντες.
+    const others = { stelexi: 0, kataskinotes: 0, total: 0 };
+
     for (const participant of participants) {
       // Συμμετέχοντας σε δύο κλάδους (στέλεχος που καλύπτει και άλλο κλάδο)
       // μετριέται στον πρώτο κατά σειρά ηλικίας, ώστε τα σύνολα να αθροίζουν.
@@ -634,9 +638,8 @@ export class DraseisService {
         .map((m) => m.klados.type as KladosType)
         .sort((a, b) => KLADOS_META[a].order - KLADOS_META[b].order);
       const type = types[0];
-      if (!type) continue;
 
-      const entry = bucket(type);
+      const entry = type ? bucket(type) : others;
       if (participant.kind === MemberKind.MELOS) entry.kataskinotes += 1;
       else entry.stelexi += 1;
       entry.total += 1;
@@ -659,10 +662,11 @@ export class DraseisService {
       drasiId: drasi.id,
       title: drasi.title,
       perKlados,
+      others,
       totals: {
-        stelexi: perKlados.reduce((sum, k) => sum + k.stelexi, 0),
-        kataskinotes: perKlados.reduce((sum, k) => sum + k.kataskinotes, 0),
-        total: perKlados.reduce((sum, k) => sum + k.total, 0),
+        stelexi: perKlados.reduce((sum, k) => sum + k.stelexi, others.stelexi),
+        kataskinotes: perKlados.reduce((sum, k) => sum + k.kataskinotes, others.kataskinotes),
+        total: perKlados.reduce((sum, k) => sum + k.total, others.total),
       },
     };
   }

@@ -283,6 +283,9 @@ export interface KataskinosiStats {
     total: number;
     ylikoCheckedOut: { ylikoId: string; name: string; qty: number }[];
   }[];
+  /** Όσοι δεν ανήκουν σε κλάδο μας: φιλοξενούμενα Τοπικά, εξωτερικά στελέχη. */
+  others: { stelexi: number; kataskinotes: number; total: number };
+  /** Όλοι οι συμμετέχοντες — οι κλάδοι μαζί με τους `others`. */
   totals: { stelexi: number; kataskinotes: number; total: number };
 }
 

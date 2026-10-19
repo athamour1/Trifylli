@@ -224,7 +224,7 @@
 
               <!-- Το φύλλο που ζητά το Τοπικό πριν την αναχώρηση. -->
               <div class="text-subtitle2 q-mb-xs">Στοιχεία ανά κλάδο</div>
-              <PageState :loading="statsLoading" :empty="!stats?.perKlados.length" class="q-mb-md">
+              <PageState :loading="statsLoading" :empty="!stats?.totals.total" class="q-mb-md">
             <q-markup-table v-if="stats" flat bordered class="tf-stack tf-stack--compact">
               <thead>
                 <tr>
@@ -253,6 +253,13 @@
                       {{ y.name }} × {{ y.qty }}
                     </q-chip>
                   </td>
+                </tr>
+                <tr v-if="stats.others?.total">
+                  <td class="text-left tf-stack__head">Φιλοξενούμενοι &amp; εξωτερικοί</td>
+                  <td class="text-right" data-label="Στελέχη">{{ stats.others.stelexi }}</td>
+                  <td class="text-right" data-label="Κατασκηνωτές">{{ stats.others.kataskinotes }}</td>
+                  <td class="text-right text-weight-bold" data-label="Σύνολο">{{ stats.others.total }}</td>
+                  <td class="tf-stack__hide" />
                 </tr>
                 <tr class="bg-grey-2">
                   <td class="text-left text-weight-bold tf-stack__head">ΣΥΝΟΛΟ</td>
