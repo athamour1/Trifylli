@@ -18,7 +18,7 @@ try {
 }
 
 export default defineConfig((ctx) => ({
-  boot: ['error-reporting', 'theme', 'fonts', 'api', 'auth', 'components'],
+  boot: ['error-reporting', 'analytics', 'theme', 'fonts', 'api', 'auth', 'components'],
 
   css: ['app.scss'],
 
@@ -49,6 +49,11 @@ export default defineConfig((ctx) => ({
       SENTRY_ENVIRONMENT: process.env.VITE_SENTRY_ENVIRONMENT ?? '',
       SENTRY_EXTRAS: process.env.VITE_SENTRY_EXTRAS ?? '',
       SENTRY_TRACES_SAMPLE_RATE: process.env.VITE_SENTRY_TRACES_SAMPLE_RATE ?? '',
+      // Session replay (OpenReplay) και analytics (Umami) για `quasar dev`.
+      OPENREPLAY_URL: process.env.VITE_OPENREPLAY_URL ?? '',
+      OPENREPLAY_PROJECT_KEY: process.env.VITE_OPENREPLAY_PROJECT_KEY ?? '',
+      UMAMI_URL: process.env.VITE_UMAMI_URL ?? '',
+      UMAMI_WEBSITE_ID: process.env.VITE_UMAMI_WEBSITE_ID ?? '',
       APP_VERSION,
     },
 

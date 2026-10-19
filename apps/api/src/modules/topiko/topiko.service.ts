@@ -5,6 +5,7 @@ import {
   KLADOS_LABEL,
   KLADOS_META,
   MEMBER_KIND_LABEL,
+  TRACKING_NOTICE_VERSION,
   YLIKO_CATEGORY_LABEL,
   accountRoleLabel,
   isSuperAdmin,
@@ -20,6 +21,18 @@ export class TopikoService {
   constructor(private readonly prisma: PrismaService) {}
 
   /** Το προφίλ του συνδεδεμένου χρήστη — η πρώτη κλήση κάθε φόρτωσης της PWA. */
+  /** Η αποδοχή της ενημέρωσης για replay/analytics — ποια έκδοση, πότε. */
+  async acceptTrackingNotice(user: RequestUser, version: number) {
+    if (version !== TRACKING_NOTICE_VERSION) {
+      throw new BadRequestException('Η ενημέρωση έχει αλλάξει — ανανέωσε τη σελίδα.');
+    }
+    await this.prisma.user.update({
+      where: { id: user.id },
+      data: { trackingNoticeVersion: version, trackingNoticeAcceptedAt: new Date() },
+    });
+    return { version, accepted: true };
+  }
+
   async me(user: RequestUser) {
     const topiko = await this.prisma.topiko.findUnique({
       where: { id: user.topikoId },
@@ -29,6 +42,11 @@ export class TopikoService {
     const period = await this.prisma.period.findFirst({
       where: { topikoId: user.topikoId, isCurrent: true },
       select: { id: true, label: true, syndromiAmount: true },
+    });
+
+    const notice = await this.prisma.user.findUnique({
+      where: { id: user.id },
+      select: { trackingNoticeVersion: true },
     });
 
     return {
@@ -53,6 +71,11 @@ export class TopikoService {
       },
       topiko,
       currentPeriod: period ? { ...period, syndromiAmount: Number(period.syndromiAmount) } : null,
+      /** Αποδέχτηκε την τρέχουσα ενημέρωση για replay/analytics; (βλ. `acceptTrackingNotice`) */
+      trackingNotice: {
+        version: TRACKING_NOTICE_VERSION,
+        accepted: notice?.trackingNoticeVersion === TRACKING_NOTICE_VERSION,
+      },
       /** Στατικά λεξικά ετικετών — η PWA τα αποθηκεύει και δουλεύει offline. */
       labels: {
         klados: KLADOS_LABEL,

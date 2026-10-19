@@ -3,6 +3,7 @@ import type { Router } from 'vue-router';
 import * as Sentry from '@sentry/vue';
 import { extrasOptions, startExtras } from './error-reporting-extras';
 import { prepareEvent } from './error-scrub';
+import { onReplayUrl } from './replay-link';
 import { onReportingUser } from './reporting-user';
 
 /**
@@ -52,5 +53,7 @@ export function initErrorReporting(
     beforeSend: (event, hint) => prepareEvent(event, hint, { keepBreadcrumbs: !!extras }),
   });
   onReportingUser((id) => Sentry.setUser(id ? { id } : null));
+  // Από το issue στο replay της ίδιας συνεδρίας (OpenReplay, ROADMAP §6).
+  onReplayUrl((url) => Sentry.setTag('openreplay', url ?? undefined));
   if (extras) startExtras();
 }

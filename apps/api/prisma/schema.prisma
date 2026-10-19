@@ -326,6 +326,11 @@ model User {
   /// Ο κλάδος που διαχειρίζεται, όταν είναι `KLADOS_ADMIN`.
   adminKladosId   String?      @db.Uuid
   lastLoginAt     DateTime?
+  /// Ενημέρωση για την καταγραφή συνεδριών (replay) και τα ανώνυμα analytics:
+  /// ποια έκδοση του κειμένου αποδέχτηκε και πότε. Νέα έκδοση ⇒ ξαναρωτά
+  /// (`TRACKING_NOTICE_VERSION` στο shared). Βλ. docs/monitoring.md §5.
+  trackingNoticeVersion    Int?
+  trackingNoticeAcceptedAt DateTime?
   status          MemberStatus @default(ENERGO)
   source          DataSource   @default(LOCAL)
   /// Φιλοξενούμενος σε δράση, όχι μέλος του μητρώου μας: `GUEST` = από άλλο

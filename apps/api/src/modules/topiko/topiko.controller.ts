@@ -7,7 +7,7 @@ import { AccountsService } from '../accounts/accounts.service';
 import { CapabilityGuard } from '../../common/auth/capability.guard';
 import { CurrentUser, RequireCapability, SuperAdminOnly } from '../../common/auth/decorators';
 import type { RequestUser } from '../../common/auth/types';
-import { UpdateKladosDto, UpdateMembershipDto } from './dto/topiko.dto';
+import { AcceptTrackingNoticeDto, UpdateKladosDto, UpdateMembershipDto } from './dto/topiko.dto';
 import { TopikoService } from './topiko.service';
 
 @ApiTags('Τοπικό & Κλάδοι')
@@ -42,6 +42,19 @@ export class TopikoController {
   async passwordLink(@CurrentUser() user: RequestUser) {
     const result = await this.accounts.inviteSelf(user);
     await this.audit.record(user, 'account.password_link', 'user', user.id);
+    return result;
+  }
+
+  @Post('me/tracking-notice')
+  @ApiOperation({
+    summary: 'Αποδοχή της ενημέρωσης για καταγραφή συνεδριών και analytics',
+    description:
+      'Μία φορά ανά λογαριασμό και έκδοση κειμένου: γράφει ποια έκδοση αποδέχτηκε και πότε. ' +
+      'Η καταγραφή συνεδριών (replay) της PWA ξεκινά μόνο μετά από αυτό.',
+  })
+  async acceptTrackingNotice(@CurrentUser() user: RequestUser, @Body() dto: AcceptTrackingNoticeDto) {
+    const result = await this.topiko.acceptTrackingNotice(user, dto.version);
+    await this.audit.record(user, 'account.tracking_notice', 'user', user.id);
     return result;
   }
 

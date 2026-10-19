@@ -53,3 +53,10 @@ export class UpdateMembershipDto {
   @IsDate()
   leftAt?: Date;
 }
+
+export class AcceptTrackingNoticeDto {
+  @ApiProperty({ description: 'Η έκδοση του κειμένου που είδε ο χρήστης (`trackingNotice.version` του /me).' })
+  @IsInt()
+  @Min(1)
+  version!: number;
+}

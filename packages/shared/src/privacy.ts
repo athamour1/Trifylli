@@ -55,3 +55,10 @@ export function scrubText(text: string): string {
   // Πρώτα τα URL (φεύγει το query, μαζί με ό,τι email είχε μέσα), μετά τα emails.
   return scrubEmails(text.replace(/(?:[a-z][a-z0-9+.-]*:\/\/|\/)[^\s"'<>]*/gi, (url) => scrubUrlPath(url)));
 }
+
+/**
+ * Έκδοση του κειμένου ενημέρωσης για την καταγραφή συνεδριών (replay) και τα
+ * analytics. Όταν αλλάζει ουσιαστικά το κείμενο ή το τι καταγράφεται, αυξάνεται
+ * — και κάθε λογαριασμός ξαναβλέπει το μήνυμα στην επόμενη είσοδο.
+ */
+export const TRACKING_NOTICE_VERSION = 1;

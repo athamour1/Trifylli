@@ -31,6 +31,8 @@ COPY infra/authentik/branding /config/authentik-branding/
 COPY infra/authentik/email-templates /config/authentik-templates/
 COPY infra/postgres/init /config/postgres-init/
 COPY infra/garage/garage.toml /config/garage/garage.toml
+# OpenReplay (profile replay): nginx template, σχήματα βάσεων, buckets.
+COPY infra/openreplay /config/openreplay/
 RUN ln -s /config/garage/garage.toml /etc/garage.toml
 COPY infra/garage/bootstrap.sh /usr/local/bin/garage-init
 COPY .env.prod.example /config/env.example

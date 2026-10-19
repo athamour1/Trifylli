@@ -177,6 +177,9 @@ importers:
       '@hocuspocus/provider':
         specifier: ^4.7.1
         version: 4.7.1(y-protocols@1.0.7(yjs@13.6.33))(yjs@13.6.33)
+      '@openreplay/tracker':
+        specifier: 18.2.0
+        version: 18.2.0
       '@quasar/extras':
         specifier: ^1.18.0
         version: 1.18.0
@@ -1746,6 +1749,13 @@ packages:
   '@noble/hashes@1.8.0':
     resolution: {integrity: sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A==}
     engines: {node: ^14.21.3 || >=16}
+
+  '@openreplay/network-proxy@1.2.8':
+    resolution: {integrity: sha512-mCynH+RL19hz4hbldc1vat2ZX064tuvkE/qhxJ7IBS713X+U/YkPVB8MpXtbvTLqn6SaextNzB9X5sfdQRzMoA==}
+
+  '@openreplay/tracker@18.2.0':
+    resolution: {integrity: sha512-ygQpbJFw1Eqg62b+STv3ClZzp3FGMkkUJrciY/GNcJ4Ue7DbYmHxzO1uVVfgBmxR30FQv9NM00fFeM/F2QCkWA==}
+    engines: {node: '>=14.0'}
 
   '@opentelemetry/api@1.9.1':
     resolution: {integrity: sha512-gLyJlPHPZYdAk1JENA9LeHejZe1Ti77/pTeFm/nMXmQH/HFZlcS/O2XJB+L8fkbrNSqhdtlvjBVjxwUYanNH5Q==}
@@ -3576,6 +3586,9 @@ packages:
 
   error-ex@1.3.4:
     resolution: {integrity: sha512-sqQamAnR14VgCr1A618A3sGrygcpK+HEbenA/HiEAkkUwcZIIB/tgWqHFxWgOyDh4nB4JCRimh79dR5Ywc9MDQ==}
+
+  error-stack-parser-es@2.0.1:
+    resolution: {integrity: sha512-J36ntO+rMQVRuR/umlmxmfLi4TpWwtmTnHoJoXTiC2xDNazs0VDPKcX6pbhZMDd2HFtH9isMBJXMdbki+A++Pg==}
 
   es-abstract-get@1.0.0:
     resolution: {integrity: sha512-6PMWXpdhshVvFp+FoWYs1EvG1Nj0tvk0dZM+XcK0xMEM1czRVcP6ohqPWHy6qPagSpC8j4+p89WXlT+xXJs/fg==}
@@ -5990,6 +6003,9 @@ packages:
     engines: {node: '>= 16'}
     hasBin: true
 
+  web-vitals@5.3.0:
+    resolution: {integrity: sha512-q6LWsLatGYZp5VGBIOvbTj6JBV2nOmC8KvWztXBmwJcfFAzhwKwbOxhUH306XY3CcaZDUlSmSuNPBsCn0bFu+g==}
+
   web-vitals@6.2.3:
     resolution: {integrity: sha512-Dmy+vdO1UPMqXiAtZSNayhl4f794Bxfd94W4HIj2HlYtczEQfEOon969memlcpcHrTuOKLa5baFjX7WbgmOq+A==}
 
@@ -7816,6 +7832,14 @@ snapshots:
       reflect-metadata: 0.2.2
 
   '@noble/hashes@1.8.0': {}
+
+  '@openreplay/network-proxy@1.2.8': {}
+
+  '@openreplay/tracker@18.2.0':
+    dependencies:
+      '@openreplay/network-proxy': 1.2.8
+      error-stack-parser-es: 2.0.1
+      web-vitals: 5.3.0
 
   '@opentelemetry/api@1.9.1': {}
 
@@ -9661,6 +9685,8 @@ snapshots:
   error-ex@1.3.4:
     dependencies:
       is-arrayish: 0.2.1
+
+  error-stack-parser-es@2.0.1: {}
 
   es-abstract-get@1.0.0:
     dependencies:
@@ -12224,6 +12250,8 @@ snapshots:
       minimist: 1.2.8
     transitivePeerDependencies:
       - supports-color
+
+  web-vitals@5.3.0: {}
 
   web-vitals@6.2.3: {}
 

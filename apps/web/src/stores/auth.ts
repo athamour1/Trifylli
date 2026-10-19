@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import type { AccountRole, Capability, KladosGrants, KladosType } from '@trifylli/shared';
 import { can as canDo, KLADOS_LABEL } from '@trifylli/shared';
-import { get } from '../lib/api';
+import { get, post } from '../lib/api';
 import { setReportingUser } from '../lib/reporting-user';
 import { useOfflineStore } from './offline';
 
@@ -23,6 +23,8 @@ interface MeResponse {
   topiko: { id: string; name: string; location: string | null; timezone: string } | null;
   currentPeriod: { id: string; label: string; syndromiAmount: number } | null;
   labels: Record<string, Record<string, string>>;
+  /** Αποδέχτηκε την τρέχουσα ενημέρωση για καταγραφή συνεδριών και analytics; */
+  trackingNotice?: { version: number; accepted: boolean };
 }
 
 /**
@@ -56,6 +58,9 @@ export const useAuthStore = defineStore('auth', {
 
     roleLabel: (state) => state.profile?.user.roleLabel ?? '',
 
+    /** Χρειάζεται να δει (ξανά) την ενημέρωση για καταγραφή συνεδριών; */
+    trackingNoticePending: (state) => state.profile?.trackingNotice?.accepted === false,
+
     accessProfile: (state) =>
       state.profile
         ? { role: state.profile.user.role, adminKlados: state.profile.user.adminKlados, grants: state.profile.user.grants ?? null }
@@ -76,6 +81,14 @@ export const useAuthStore = defineStore('auth', {
       } finally {
         this.loading = false;
       }
+    },
+
+    /** Αποδοχή της ενημέρωσης — μετά από αυτό ξεκινά η καταγραφή συνεδριών. */
+    async acceptTrackingNotice(): Promise<void> {
+      const notice = this.profile?.trackingNotice;
+      if (!notice) return;
+      await post('/me/tracking-notice', { version: notice.version });
+      notice.accepted = true;
     },
 
     /** Ίδιοι κανόνες με τα guards του API. */

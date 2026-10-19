@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { Notify } from 'quasar';
 import type { User } from 'oidc-client-ts';
 import { setAccessToken, setUnauthorizedHandler } from '../lib/api';
+import { stopReplay } from '../lib/replay';
 import { setReportingUser } from '../lib/reporting-user';
 import { disablePush } from '../lib/push';
 import { useOfflineStore } from './offline';
@@ -194,6 +195,7 @@ export const useSessionStore = defineStore('session', {
       setAccessToken(null);
       this.user = null;
       setReportingUser(null);
+      stopReplay();
       await useOfflineStore().purgeLocalData();
       await clearLocalSession();
     },

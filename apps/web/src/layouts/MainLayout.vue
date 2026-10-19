@@ -186,6 +186,8 @@
         </transition>
       </router-view>
     </q-page-container>
+
+    <TrackingNotice />
   </q-layout>
 </template>
 
@@ -195,6 +197,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { KLADOS_LABEL_SHORT, type KladosType } from '@trifylli/shared';
 import { useQuasar, type QDrawer } from 'quasar';
 import NotificationBell from '../components/NotificationBell.vue';
+import TrackingNotice from '../components/TrackingNotice.vue';
 import { kladosVars } from '../lib/klados-theme';
 import { useKladosThemeStore } from '../stores/klados-theme';
 import { useAuthStore } from '../stores/auth';

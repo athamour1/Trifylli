@@ -11,6 +11,74 @@ name: trifylli
 # Για δοκιμή από κινητό στο ίδιο δίκτυο: `DEV_BIND_ADDR=0.0.0.0` στο .env —
 # συνειδητά και προσωρινά.
 
+# ─────────────────── OpenReplay (session replay) — profile: replay ───────────────────
+# Οι μεταβλητές που μοιράζονται όλα τα services του OpenReplay (βάσεις, S3,
+# μυστικά). Ό,τι αφορά ένα μόνο service (HTTP_PORT, BUCKET_NAME, …) μένει σε
+# εκείνο: σε άλλο θα άλλαζε τη συμπεριφορά του. Πρότυπο: infra/openreplay/README.md.
+x-replay-env: &replay-env
+  version_number: v1.28.0
+  LICENSE_KEY: ''
+  LOGLEVEL: INFO
+  PYTHONUNBUFFERED: '0'
+  SITE_URL: &replay-url http://replay.localhost:8090
+  pg_host: postgresql.db.svc.cluster.local
+  pg_port: '5432'
+  pg_dbname: postgres
+  pg_user: postgres
+  pg_password: trifylli-dev-replay
+  POSTGRES_STRING: postgres://postgres:trifylli-dev-replay@postgresql.db.svc.cluster.local:5432/postgres?sslmode=disable
+  REDIS_STRING: redis://redis-master.db.svc.cluster.local:6379
+  ch_host: clickhouse-openreplay-clickhouse.db.svc.cluster.local
+  ch_port: '9000'
+  ch_port_http: '8123'
+  ch_username: default
+  ch_user: default
+  ch_password: ''
+  ch_db: default
+  CH_USERNAME: default
+  CH_PASSWORD: ''
+  CLICKHOUSE_STRING: clickhouse-openreplay-clickhouse.db.svc.cluster.local:9000/default
+  CLICKHOUSE_HTTP_STRING: clickhouse-openreplay-clickhouse.db.svc.cluster.local:8123/default
+  KAFKA_SERVERS: kafka.db.svc.cluster.local:9092
+  KAFKA_USE_SSL: 'false'
+  # Οι υπηρεσίες μιλούν με το S3 μέσω του δημόσιου URL (ο nginx τους το
+  # προωθεί στο RustFS) — γι' αυτό το `replay.localhost` είναι alias του nginx.
+  AWS_ENDPOINT: *replay-url
+  S3_HOST: *replay-url
+  AWS_ACCESS_KEY_ID: trifylli-dev-replay-s3
+  AWS_SECRET_ACCESS_KEY: trifylli-dev-replay-s3-secret
+  S3_KEY: trifylli-dev-replay-s3
+  S3_SECRET: trifylli-dev-replay-s3-secret
+  AWS_REGION: us-east-1
+  AWS_DEFAULT_REGION: us-east-1
+  JWT_SECRET: trifylli-dev-replay-jwt
+  JWT_REFRESH_SECRET: trifylli-dev-replay-jwt-refresh
+  JWT_SPOT_SECRET: trifylli-dev-replay-jwt-spot
+  JWT_SPOT_REFRESH_SECRET: trifylli-dev-replay-jwt-spot-refresh
+  ASSIST_JWT_SECRET: trifylli-dev-replay-assist-jwt
+  ASSIST_KEY: trifylli-dev-replay-assist-key
+  ASSIST_URL: http://assist-openreplay.app.svc.cluster.local:9001/assist/%s
+  ASSETS_ORIGIN: http://replay.localhost:8090/sessions-assets
+
+x-replay-app: &replay-app
+  profiles: ['replay']
+  restart: unless-stopped
+  volumes:
+    - replay-shared:/mnt/efs
+  depends_on:
+    replay-postgres:
+      condition: service_healthy
+    replay-redis:
+      condition: service_healthy
+    replay-clickhouse:
+      condition: service_healthy
+    replay-minio:
+      condition: service_healthy
+    replay-db-init:
+      condition: service_completed_successfully
+    replay-ch-init:
+      condition: service_completed_successfully
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -247,6 +315,11 @@ services:
       SENTRY_DSN: ${WEB_SENTRY_DSN:-}
       SENTRY_ENVIRONMENT: development
       SENTRY_EXTRAS: 'true'
+      # Session replay (profile `replay`) και analytics (profile `analytics`).
+      OPENREPLAY_URL: ${OPENREPLAY_URL:-}
+      OPENREPLAY_PROJECT_KEY: ${OPENREPLAY_PROJECT_KEY:-}
+      UMAMI_URL: ${UMAMI_URL:-}
+      UMAMI_WEBSITE_ID: ${UMAMI_WEBSITE_ID:-}
     ports:
       - '${DEV_BIND_ADDR:-127.0.0.1}:${WEB_PORT:-8080}:80'
     depends_on:
@@ -354,8 +427,427 @@ services:
       mailpit:
         condition: service_healthy
 
+  # ─────────────────── Analytics (Umami) — profile: analytics ───────────────────
+  #   docker compose --profile analytics up -d umami
+  # UI: http://localhost:8083 (πρώτη είσοδος admin / umami — άλλαξέ τον). Μετά
+  # «Add website» → το website id στο `VITE_UMAMI_WEBSITE_ID`. Ανώνυμο, χωρίς
+  # cookies· βάση `umami` στον ίδιο Postgres. Μόνιμο — δεν είναι από τα extras.
+  umami-db:
+    image: postgres:16-alpine
+    profiles: ['analytics']
+    restart: 'no'
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER:-trifylli}
+      PGPASSWORD: ${POSTGRES_PASSWORD:-trifylli}
+      PGDATABASE: ${POSTGRES_DB:-trifylli}
+    command:
+      - sh
+      - -c
+      - psql -tAc "SELECT 1 FROM pg_database WHERE datname = 'umami'" | grep -q 1 || createdb umami
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  umami:
+    image: ghcr.io/umami-software/umami:3.4.0
+    profiles: ['analytics']
+    restart: unless-stopped
+    init: true
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-trifylli}:${POSTGRES_PASSWORD:-trifylli}@postgres:5432/umami
+      APP_SECRET: trifylli-dev-umami-secret
+      DISABLE_TELEMETRY: '1'
+    ports:
+      - '${DEV_BIND_ADDR:-127.0.0.1}:${UMAMI_PORT:-8083}:3000'
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:3000/api/heartbeat || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    depends_on:
+      umami-db:
+        condition: service_completed_successfully
+
+  # ─────────────────── OpenReplay (session replay) — profile: replay ───────────────────
+  #   docker compose --profile replay up -d
+  # UI: http://replay.localhost:8090 — ο πρώτος λογαριασμός που γράφεται είναι ο
+  # owner (μετά «Add project» → project key στο `VITE_OPENREPLAY_PROJECT_KEY`).
+  # ~20 containers, ~8 GB RAM. Δικό του δίκτυο (`replay`): τα ονόματα των
+  # υπηρεσιών του (redis, postgresql, minio) θα συγκρούονταν με τα δικά μας.
+  # Πρότυπο: OpenReplay v1.28.0 scripts/docker-compose — infra/openreplay/README.md.
+  replay-fs-permission:
+    image: debian:stable-slim
+    profiles: ['replay']
+    restart: 'no'
+    volumes:
+      - replay-shared:/mnt/efs
+      - replay-minio:/mnt/minio
+      - replay-postgres:/mnt/postgres
+    entrypoint: ['/bin/bash', '-c', 'chown -R 1001:1001 /mnt/efs /mnt/postgres && chown -R 10001:10001 /mnt/minio']
+
+  replay-postgres:
+    image: ghcr.io/openreplay/postgres:17
+    profiles: ['replay']
+    restart: unless-stopped
+    volumes:
+      - replay-postgres:/bitnami/postgresql
+    networks:
+      replay:
+        aliases: [postgresql, postgresql.db.svc.cluster.local]
+    environment:
+      POSTGRESQL_PASSWORD: trifylli-dev-replay
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    depends_on:
+      replay-fs-permission:
+        condition: service_completed_successfully
+
+  replay-clickhouse:
+    image: clickhouse/clickhouse-server:26.2-alpine
+    profiles: ['replay']
+    restart: unless-stopped
+    volumes:
+      - replay-clickhouse:/var/lib/clickhouse
+    networks:
+      replay:
+        aliases: [clickhouse, clickhouse-openreplay-clickhouse.db.svc.cluster.local]
+    environment:
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: ''
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: '1'
+    healthcheck:
+      test: ['CMD-SHELL', "clickhouse-client --query 'SELECT 1'"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  replay-redis:
+    image: ghcr.io/openreplay/valkey:8
+    profiles: ['replay']
+    restart: unless-stopped
+    volumes:
+      - replay-redis:/data
+    networks:
+      replay:
+        aliases: [redis, redis-master.db.svc.cluster.local]
+    environment:
+      ALLOW_EMPTY_PASSWORD: 'yes'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  replay-minio:
+    image: docker.io/rustfs/rustfs:1.0.0-beta.1
+    profiles: ['replay']
+    restart: unless-stopped
+    volumes:
+      - replay-minio:/data
+    networks:
+      replay:
+        aliases: [minio, minio.db.svc.cluster.local]
+    environment:
+      RUSTFS_ACCESS_KEY: trifylli-dev-replay-s3
+      RUSTFS_SECRET_KEY: trifylli-dev-replay-s3-secret
+      RUSTFS_ADDRESS: '0.0.0.0:9000'
+      RUSTFS_CONSOLE_ENABLE: 'false'
+      RUSTFS_VOLUMES: /data
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -so /dev/null http://localhost:9000/ || exit 1']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    depends_on:
+      replay-fs-permission:
+        condition: service_completed_successfully
+
+  # Buckets (+ διαγραφή εγγραφών στις 30 ημέρες) και σχήματα βάσεων — σε κάθε
+  # `up`· όλα είναι ασφαλή στην επανάληψη (το σχήμα του Postgres σταματά αν υπάρχει).
+  replay-minio-init:
+    image: ghcr.io/openreplay/minio:2025
+    profiles: ['replay']
+    restart: 'no'
+    user: root
+    networks: [replay]
+    volumes:
+      - ./infra/openreplay/minio.sh:/tmp/minio.sh:ro
+    environment:
+      MINIO_HOST: http://minio.db.svc.cluster.local:9000
+      MINIO_ACCESS_KEY: trifylli-dev-replay-s3
+      MINIO_SECRET_KEY: trifylli-dev-replay-s3-secret
+    entrypoint: ['/bin/bash', '/tmp/minio.sh', 'init']
+    depends_on:
+      replay-minio:
+        condition: service_healthy
+
+  replay-db-init:
+    image: ghcr.io/openreplay/postgres:17
+    profiles: ['replay']
+    restart: 'no'
+    networks: [replay]
+    volumes:
+      - ./infra/openreplay/init_pg_schema.sql:/tmp/init_schema.sql:ro
+    environment:
+      PGHOST: postgresql
+      PGPORT: '5432'
+      PGDATABASE: postgres
+      PGUSER: postgres
+      PGPASSWORD: trifylli-dev-replay
+    entrypoint: ['psql', '-v', 'ON_ERROR_STOP=1', '-f', '/tmp/init_schema.sql']
+    depends_on:
+      replay-postgres:
+        condition: service_healthy
+      replay-minio-init:
+        condition: service_completed_successfully
+
+  replay-ch-init:
+    image: clickhouse/clickhouse-server:26.2-alpine
+    profiles: ['replay']
+    restart: 'no'
+    networks: [replay]
+    volumes:
+      - ./infra/openreplay/init_ch_schema.sql:/tmp/init_schema.sql:ro
+    entrypoint: ['/bin/sh', '-c', 'clickhouse-client -h clickhouse --user default --port 9000 --multiquery < /tmp/init_schema.sql || true']
+    depends_on:
+      replay-clickhouse:
+        condition: service_healthy
+
+  replay-nginx:
+    image: nginx:1.27-alpine
+    profiles: ['replay']
+    restart: unless-stopped
+    volumes:
+      - ./infra/openreplay/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+    environment:
+      REPLAY_LISTEN_PORT: '8090'
+    networks:
+      replay:
+        # Το δημόσιο όνομα δείχνει στον nginx και ΜΕΣΑ στο δίκτυο: οι υπηρεσίες
+        # φτάνουν το S3 μέσω του `REPLAY_URL`. Ο browser λύνει μόνος του το
+        # `*.localhost` στο 127.0.0.1.
+        aliases: [nginx, replay.localhost]
+    ports:
+      - '${DEV_BIND_ADDR:-127.0.0.1}:8090:8090'
+
+  replay-alerts:
+    <<: *replay-app
+    image: public.ecr.aws/p1t3u8a3/alerts:${REPLAY_VERSION:-v1.28.0}
+    networks:
+      replay:
+        aliases: [alerts-openreplay, alerts-openreplay.app.svc.cluster.local]
+    environment:
+      <<: *replay-env
+      EMAIL_HOST: ''
+      EMAIL_PORT: '587'
+      EMAIL_USER: ''
+      EMAIL_PASSWORD: ''
+      EMAIL_USE_TLS: 'true'
+      EMAIL_USE_SSL: 'false'
+      EMAIL_SSL_KEY: ''
+      EMAIL_SSL_CERT: ''
+      EMAIL_FROM: 'OpenReplay <replay@trifylli.local>'
+
+  replay-api:
+    <<: *replay-app
+    image: public.ecr.aws/p1t3u8a3/api:${REPLAY_VERSION:-v1.28.0}
+    networks:
+      replay:
+        aliases: [api-openreplay, api-openreplay.app.svc.cluster.local]
+    environment:
+      <<: *replay-env
+      BUCKET_NAME: mobs
+      TOKEN_SECRET: trifylli-dev-replay-token-api
+      REDIS_CACHE_ENABLED: 'false'
+
+  replay-images:
+    <<: *replay-app
+    image: public.ecr.aws/p1t3u8a3/images:${REPLAY_VERSION:-v1.28.0}
+    networks:
+      replay:
+        aliases: [images-openreplay, images-openreplay.app.svc.cluster.local]
+    environment:
+      <<: *replay-env
+      BUCKET_NAME: mobs
+      TOKEN_SECRET: trifylli-dev-replay-token
+      FS_CLEAN_HRS: '24'
+
+  replay-sink:
+    <<: *replay-app
+    image: public.ecr.aws/p1t3u8a3/sink:${REPLAY_VERSION:-v1.28.0}
+    networks:
+      replay:
+        aliases: [sink-openreplay, sink-openreplay.app.svc.cluster.local]
+    environment:
+      <<: *replay-env
+
+  replay-sourcemapreader:
+    <<: *replay-app
+    image: public.ecr.aws/p1t3u8a3/sourcemapreader:${REPLAY_VERSION:-v1.28.0}
+    networks:
+      replay:
+        aliases: [sourcemapreader-openreplay, sourcemapreader-openreplay.app.svc.cluster.local]
+    environment:
+      <<: *replay-env
+      SMR_HOST: '0.0.0.0'
+      S3_HOST: 'http://minio.db.svc.cluster.local:9000'
+
+  replay-spot:
+    <<: *replay-app
+    image: public.ecr.aws/p1t3u8a3/spot:${REPLAY_VERSION:-v1.28.0}
+    networks:
+      replay:
+        aliases: [spot-openreplay, spot-openreplay.app.svc.cluster.local]
+    environment:
+      <<: *replay-env
+      BUCKET_NAME: spots
+      TOKEN_SECRET: trifylli-dev-replay-token-api
+      CACHE_ASSETS: 'true'
+      FS_CLEAN_HRS: '24'
+
+  replay-storage:
+    <<: *replay-app
+    image: public.ecr.aws/p1t3u8a3/storage:${REPLAY_VERSION:-v1.28.0}
+    networks:
+      replay:
+        aliases: [storage-openreplay, storage-openreplay.app.svc.cluster.local]
+    environment:
+      <<: *replay-env
+      BUCKET_NAME: mobs
+      FS_CLEAN_HRS: '24'
+
+  replay-assets:
+    <<: *replay-app
+    image: public.ecr.aws/p1t3u8a3/assets:${REPLAY_VERSION:-v1.28.0}
+    networks:
+      replay:
+        aliases: [assets-openreplay, assets-openreplay.app.svc.cluster.local]
+    environment:
+      <<: *replay-env
+      BUCKET_NAME: sessions-assets
+
+  replay-assist:
+    <<: *replay-app
+    image: public.ecr.aws/p1t3u8a3/assist:${REPLAY_VERSION:-v1.28.0}
+    networks:
+      replay:
+        aliases: [assist-openreplay, assist-openreplay.app.svc.cluster.local]
+    environment:
+      <<: *replay-env
+      REDIS_URL: redis-master.db.svc.cluster.local
+      CLEAR_SOCKET_TIME: '720'
+      MAX_BACKPRESSURE_KB: '128'
+      debug: '0'
+      redis: 'false'
+
+  replay-canvases:
+    <<: *replay-app
+    image: public.ecr.aws/p1t3u8a3/canvases:${REPLAY_VERSION:-v1.28.0}
+    networks:
+      replay:
+        aliases: [canvases-openreplay, canvases-openreplay.app.svc.cluster.local]
+    environment:
+      <<: *replay-env
+      BUCKET_NAME: mobs
+      TOKEN_SECRET: trifylli-dev-replay-token
+      FS_CLEAN_HRS: '24'
+
+  replay-chalice:
+    <<: *replay-app
+    image: public.ecr.aws/p1t3u8a3/chalice:${REPLAY_VERSION:-v1.28.0}
+    networks:
+      replay:
+        aliases: [chalice-openreplay, chalice-openreplay.app.svc.cluster.local]
+    environment:
+      <<: *replay-env
+      EMAIL_HOST: ''
+      EMAIL_PORT: '587'
+      EMAIL_USER: ''
+      EMAIL_PASSWORD: ''
+      EMAIL_USE_TLS: 'true'
+      EMAIL_USE_SSL: 'false'
+      EMAIL_SSL_KEY: ''
+      EMAIL_SSL_CERT: ''
+      EMAIL_FROM: 'OpenReplay <replay@trifylli.local>'
+      sourcemaps_reader: 'http://sourcemapreader-openreplay.app.svc.cluster.local:9000/{}/sourcemaps'
+      CLUSTER_URL: svc.cluster.local
+      JWT_EXPIRATION: '86400'
+      jwt_algorithm: HS512
+      root_path: /api
+      sessions_region: us-east-1
+      ASSIST_RECORDS_BUCKET: records
+      sessions_bucket: mobs
+      IOS_VIDEO_BUCKET: mobs
+      sourcemaps_bucket: sourcemaps
+      js_cache_bucket: sessions-assets
+      CH_COMPRESSION: 'false'
+      SCIM_ACCESS_SECRET_KEY: trifylli-dev-replay-scim
+      SCIM_REFRESH_SECRET_KEY: trifylli-dev-replay-scim
+      SCIM_ACCESS_TOKEN_EXPIRE_SECONDS: '86400'
+      SAML2_MD_URL: ''
+      announcement_url: ''
+      assist_secret: ''
+      async_Token: ''
+      captcha_key: ''
+      captcha_server: ''
+      iceServers: ''
+      SKIP_H_SSL: 'True'
+
+  replay-db:
+    <<: *replay-app
+    image: public.ecr.aws/p1t3u8a3/db:${REPLAY_VERSION:-v1.28.0}
+    networks:
+      replay:
+        aliases: [db-openreplay, db-openreplay.app.svc.cluster.local]
+    environment:
+      <<: *replay-env
+
+  replay-ender:
+    <<: *replay-app
+    image: public.ecr.aws/p1t3u8a3/ender:${REPLAY_VERSION:-v1.28.0}
+    networks:
+      replay:
+        aliases: [ender-openreplay, ender-openreplay.app.svc.cluster.local]
+    environment:
+      <<: *replay-env
+
+  replay-frontend:
+    <<: *replay-app
+    image: public.ecr.aws/p1t3u8a3/frontend:${REPLAY_VERSION:-v1.28.0}
+    networks:
+      replay:
+        aliases: [frontend-openreplay, frontend-openreplay.app.svc.cluster.local]
+    environment:
+      <<: *replay-env
+      TRACKER_HOST: 'http://replay.localhost:8090/script'
+      HTTP_PORT: '80'
+
+  replay-http:
+    <<: *replay-app
+    image: public.ecr.aws/p1t3u8a3/http:${REPLAY_VERSION:-v1.28.0}
+    networks:
+      replay:
+        aliases: [http-openreplay, http-openreplay.app.svc.cluster.local]
+    environment:
+      <<: *replay-env
+      BUCKET_NAME: uxtesting-records
+      TOKEN_SECRET: trifylli-dev-replay-token
+      CACHE_ASSETS: 'true'
+
 volumes:
   postgres-data:
   authentik-media:
   garage-data:
   glitchtip-uploads:
+  replay-postgres:
+  replay-clickhouse:
+  replay-redis:
+  replay-minio:
+  replay-shared:
+
+networks:
+  replay:
