@@ -104,7 +104,10 @@ server: δεν σου λέει ποτέ ότι έπεσε ο server.)
    (Vue). Τα DSN στο `API_SENTRY_DSN` (με host `glitchtip:8000` — εσωτερικά) και
    `WEB_SENTRY_DSN` (με τον δημόσιο host — το στέλνει ο browser).
 4. **CSP:** το «Security Endpoint» του `pwa` (Settings → Client Keys) στο
-   `CSP_REPORT_FORWARD_URL` (και εδώ αρκεί ο εσωτερικός host).
+   `CSP_REPORT_FORWARD_URL`, με τον εσωτερικό host. Βγαίνει και από το
+   `WEB_SENTRY_DSN` (`https://<κλειδί>@errors.<domain>/<project>`):
+   `http://glitchtip:8000/api/<project>/security/?glitchtip_key=<κλειδί>`. Το
+   κλειδί και ο αριθμός είναι του **PWA**, όχι του API.
 5. **Source maps της PWA:** token από Profile → Auth Tokens με
    `project:releases` στο `SOURCEMAP_UPLOAD_TOKEN`. Σε κάθε εκκίνηση το `web`
    ανεβάζει τα maps του image στο `pwa` (release `trifylli-web@<έκδοση>`) —
@@ -126,6 +129,26 @@ server: δεν σου λέει ποτέ ότι έπεσε ο server.)
 8. **Releases:** τα σφάλματα έχουν release (`trifylli-api@…`, `trifylli-web@…`).
    «Resolve in next release» κλείνει ένα issue ως την επόμενη έκδοση· αν
    ξαναφανεί μετά, ανοίγει ξανά ως regression.
+
+### Δοκιμή
+
+Στην εφαρμογή, συνδεδεμένος: F12 → Console (αν δεν αφήνει paste: γράψε
+`allow pasting`). Το `setTimeout` χρειάζεται — σφάλμα πεταμένο κατευθείαν στην
+κονσόλα δεν περνά από το error tracking.
+
+```js
+// α) φτάνει στο GlitchTip, με tag `replay`
+setTimeout(() => { throw new Error('Δοκιμή GlitchTip') })
+// β) σφάλμα μέσα στον κώδικα — για τα source maps
+setTimeout(() => document.querySelector('#q-app').__vue_app__.config.globalProperties.$router.push({ name: 'δεν-υπάρχει' }))
+```
+
+Σε λίγα δευτερόλεπτα, στο project PWA: το (β) εμφανίζεται ως «No error
+message» (το vue-router δεν δίνει μήνυμα σε production) με stack σε
+`vue-router.mjs` — αν βλέπεις `assets/index-….js:1:…`, τα source maps δεν
+ανέβηκαν (`docker logs <web> | grep "source maps"`). Tags: `release`, και
+`replay` με σύνδεσμο στη συνεδρία στο OpenObserve· breadcrumbs με τα τελευταία
+βήματα. 4xx του API και «εκτός σύνδεσης» **δεν** αναφέρονται, εσκεμμένα.
 
 ### Στήσιμο (dev)
 
@@ -214,8 +237,14 @@ docker logs trifylli-prod-api-1 2>&1 | grep <requestId>
 1. `replay` στο `COMPOSE_PROFILES`, `OPENOBSERVE_URL` (`https://observe.<domain>`),
    `OPENOBSERVE_ROOT_EMAIL` — τον κωδικό τον βγάζει το `gen-env`. Υποτομέας στον
    proxy: `observe.` → `trifylli-observe:5080`.
-2. Είσοδος με τον root → Ingestion → RUM → το token στο `OPENOBSERVE_RUM_TOKEN`
-   → `up -d web`.
+2. Είσοδος με τον root → **Data → Data sources** → RUM (στη v1.1.1 δεν
+   λέγεται «Ingestion») → το `clientToken` (`rum…`) στο `OPENOBSERVE_RUM_TOKEN`
+   → `up -d web`. Ή κατευθείαν από το API:
+   `curl -s -u '<root email>:<root κωδικός>' https://observe.<domain>/api/default/rumtoken`.
+
+Το «Source Maps» του OpenObserve μένει **άδειο**: αφορά μόνο το δικό του Error
+Tracking. Τα σφάλματα (με source maps) τα βλέπουμε στο GlitchTip· το
+OpenObserve το χρησιμοποιούμε για το replay, που δεν θέλει maps.
 
 Εγγραφές: 30 ημέρες (`ZO_COMPACT_DATA_RETENTION_DAYS`). Δεν μπαίνουν στα backups.
 

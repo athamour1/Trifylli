@@ -617,8 +617,11 @@ Garage, κρυπτογραφημένα (restic), εκτός server — μόλι�
 **Παρακολούθηση.** Heartbeats (Healthchecks ή Uptime Kuma) από τα backups, τα
 crons του API και έναν `watchdog` που κάθε 5' ελέγχει δίσκο και υπηρεσίες — και
 είναι ο «νεκρός διακόπτης» αν πέσει ο server. Error tracking με GlitchTip
-(profile `errors`), με καθαρισμένα events. Logs σε JSON με `requestId`. Οδηγίες
-και ποια checks να φτιάξεις: [`docs/monitoring.md`](docs/monitoring.md).
+(profile `errors`, με source maps της PWA και είσοδο με Authentik), καταγραφή
+συνεδριών με OpenObserve (profile `replay`, μόνο μετά το μήνυμα «Καταγραφή
+χρήσης») και ανώνυμα analytics με Umami (profile `analytics`). Logs σε JSON με
+`requestId`. Στήσιμο, βήματα μετά το πρώτο `up` και δοκιμή:
+[`docs/monitoring.md`](docs/monitoring.md).
 
 **Ένα domain, υποτομείς.** Η στοίβα δεν περιλαμβάνει TLS/reverse proxy — τον
 βάζει ο διαχειριστής μπροστά. Δύο τρόποι, και κανένας δεν ανοίγει θύρες στο LAN:

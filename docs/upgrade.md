@@ -64,10 +64,29 @@ dc() { docker compose -f docker-compose.prod.yml --env-file .env.prod "$@"; }
   `docker run --rm …/config:<TAG> gen-env | grep -E '^(OPENOBSERVE_|UMAMI_)'` και
   βάλ' τα στο `.env.prod`· στήσιμο στο [`monitoring.md`](monitoring.md) §5–6.
 
-**Στο `.env.prod` (προαιρετικά, [`monitoring.md`](monitoring.md) §3):**
-`CSP_REPORT_FORWARD_URL` (Security Endpoint του project «pwa»),
-`SOURCEMAP_UPLOAD_TOKEN` (source maps της PWA), και `SENTRY_EXTRAS=false` αν
-**δεν** τα θέλεις στο ζωντανό σύστημα.
+**Βήματα** (δοκιμασμένα στο πρώτο δημόσιο prod, 2026-10-19):
+
+1. **Ολόκληρο** το νέο `docker-compose.prod.yml` (όχι συγχώνευση με το παλιό).
+2. `.env.prod`: `TAG=v1.1.3`, `COMPOSE_PROFILES=errors,replay,analytics`, και οι
+   νέες μεταβλητές του `.env.prod.example` — τα μυστικά (`GLITCHTIP_OIDC_CLIENT_SECRET`,
+   `OPENOBSERVE_ROOT_PASSWORD`, `UMAMI_APP_SECRET`) με `openssl rand`, οι θύρες
+   (`OPENOBSERVE_PORT`, `UMAMI_PORT`) στο μοτίβο των υπολοίπων.
+   `CSP_REPORT_FORWARD_URL`: από το `WEB_SENTRY_DSN` ([`monitoring.md`](monitoring.md) §3).
+3. DNS + proxy για **δύο** νέους υποτομείς: `observe.` → `trifylli-observe:5080`,
+   `analytics.` → `trifylli-analytics:3000` (ή οι θύρες στο `BIND_ADDR`).
+4. `pull` + `up -d`. Το migration τρέχει μόνο του.
+5. Τα τρία που βγαίνουν μόνο από τα ίδια τα εργαλεία, και μετά `up -d web`:
+   * `SOURCEMAP_UPLOAD_TOKEN` — GlitchTip → Profile → Auth Tokens, `project:releases`
+     (για τα source maps — **όχι** για το SSO)·
+   * `OPENOBSERVE_RUM_TOKEN` — OpenObserve → Data → Data sources → RUM·
+   * `UMAMI_WEBSITE_ID` — Umami (`admin`/`umami` → **άλλαξε αμέσως** τον κωδικό)
+     → Settings → Websites → Add.
+6. **SSO του GlitchTip:** δεν θέλει τίποτα — αρκεί το email του χρήστη σου στο
+   GlitchTip να είναι ίδιο με του Authentik (αλλιώς άλλαξέ το και
+   `up glitchtip-sso`).
+7. Δοκιμή: [`monitoring.md`](monitoring.md) §3 «Δοκιμή».
+
+`SENTRY_EXTRAS=false` αν **δεν** θέλεις τα extras στο ζωντανό σύστημα.
 
 ---
 
