@@ -185,11 +185,11 @@ docker logs trifylli-prod-api-1 2>&1 | grep <requestId>
 
 ## 5. Καταγραφή συνεδριών (OpenObserve)
 
-> **Δοκιμάστηκε 2026-10-19** στο dev (OpenObserve Enterprise v1.1.1, Dex v2.46,
-> SDK `@openobserve/browser-rum` 0.4.3): μήνυμα ενημέρωσης → αποδοχή → εγγραφή
-> → αναπαραγωγή στο UI· «Login with SSO» με χρήστη της ομάδας
-> `trifylli-monitoring` (μπαίνει) και εκτός ομάδας («Permission denied»).
-> ~180 MB RAM σε ηρεμία (το OpenReplay που αντικατέστησε: ~2,3 GB, 24 containers).
+> **Δοκιμάστηκε 2026-10-19** στο dev (OpenObserve v1.1.1 open source, SDK
+> `@openobserve/browser-rum` 0.4.3): μήνυμα ενημέρωσης → αποδοχή → εγγραφή →
+> αναπαραγωγή στο UI, και από σφάλμα του GlitchTip (tag `replay`) στην ίδια
+> συνεδρία. Ένα container, ~200–300 MB RAM (το OpenReplay που αντικατέστησε:
+> ~2,3 GB, 24 containers).
 
 **Απόφαση του Τοπικού (2026-10-19):** χωρίς masking (`defaultPrivacyLevel:
 'allow'`): κείμενα, πεδία και emails φαίνονται στο replay. Οι κλήσεις δικτύου
@@ -203,24 +203,19 @@ docker logs trifylli-prod-api-1 2>&1 | grep <requestId>
 κείμενο ή αλλαγή στο τι καταγράφεται ⇒ `TRACKING_NOTICE_VERSION` +1 στο shared.
 Κάθε σφάλμα της PWA στο GlitchTip έχει tag `replay` με σύνδεσμο στην εγγραφή.
 
-**Ποιος βλέπει:** «Login with SSO» → Dex → Authentik, όπου η εφαρμογή
-`openobserve` επιτρέπεται **μόνο** στην ομάδα `trifylli-monitoring`
-(`infra/authentik/openobserve-oidc.yaml`)· όλοι οι άλλοι παίρνουν «Permission
-denied». Εφεδρικά: ο root λογαριασμός (`OPENOBSERVE_ROOT_*`). Το SSO είναι στην
-Enterprise έκδοση — δωρεάν έως 50 GB/ημέρα, χωρίς license key.
+**Ποιος βλέπει:** όποιος έχει λογαριασμό στο ίδιο το OpenObserve — ο root
+(`OPENOBSERVE_ROOT_*`) και όσους φτιάξεις στο IAM του. Open-source έκδοση
+(AGPL), χωρίς SSO: για ένα Τοπικό με έναν άνθρωπο που βλέπει τα replays, το SSO
+(Enterprise + Dex + δεύτερος υποτομέας) ήταν περισσότερος κόπος από όφελος.
+Κράτα τον κωδικό του root στο password manager· δεν περνά από το MFA του Authentik.
 
 ### Στήσιμο (παραγωγή)
 
 1. `replay` στο `COMPOSE_PROFILES`, `OPENOBSERVE_URL` (`https://observe.<domain>`),
-   `DEX_ISSUER` (`https://dex.<domain>/dex`), `OPENOBSERVE_OIDC_ISSUER`
-   (`https://sso.<domain>/application/o/openobserve/`), `OPENOBSERVE_ROOT_EMAIL`
-   — τα μυστικά τα βγάζει το `gen-env`. **Δύο** υποτομείς στον proxy:
-   `observe.` → `trifylli-observe:5080`, `dex.` → `trifylli-dex:5556`.
-2. Ο server πρέπει να φτάνει τα δημόσια `dex.` και `sso.` (το OpenObserve μιλά με
-   τον Dex, ο Dex με το Authentik).
-3. Authentik → Directory → Groups → `trifylli-monitoring` → πρόσθεσε τον εαυτό σου.
-4. OpenObserve (root) → Ingestion → RUM → το token στο `OPENOBSERVE_RUM_TOKEN` →
-   `up -d web`.
+   `OPENOBSERVE_ROOT_EMAIL` — τον κωδικό τον βγάζει το `gen-env`. Υποτομέας στον
+   proxy: `observe.` → `trifylli-observe:5080`.
+2. Είσοδος με τον root → Ingestion → RUM → το token στο `OPENOBSERVE_RUM_TOKEN`
+   → `up -d web`.
 
 Εγγραφές: 30 ημέρες (`ZO_COMPACT_DATA_RETENTION_DAYS`). Δεν μπαίνουν στα backups.
 
@@ -230,12 +225,9 @@ Enterprise έκδοση — δωρεάν έως 50 GB/ημέρα, χωρίς lic
 docker compose --profile replay up -d     # UI: http://localhost:5080
 ```
 
-Root: `admin@trifylli.gr` / `Trifylli-dev-1`· το token στο
-`VITE_OPENOBSERVE_RUM_TOKEN` του `apps/web/.env`. Το SSO δουλεύει και στο dev:
-μικροί socat (`openobserve-net`, `dex-net`) κρατούν το network namespace κάθε
-εφαρμογής και κάνουν το `localhost:5556` (Dex) και `localhost:9010` (Authentik)
-ορατά και μέσα από τα containers, στα ίδια URL με τον browser. Στο dev οι
-γραμματοσειρές/εικονίδια μπορεί να μη φαίνονται στο replay.
+`admin@trifylli.gr` / `Trifylli-dev-1`· το token στο `VITE_OPENOBSERVE_RUM_TOKEN`
+του `apps/web/.env`. Στο dev οι γραμματοσειρές/εικονίδια μπορεί να μη φαίνονται
+στο replay.
 
 ## 6. Analytics (Umami)
 

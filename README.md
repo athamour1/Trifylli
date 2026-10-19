@@ -644,7 +644,6 @@ crons του API και έναν `watchdog` που κάθε 5' ελέγχει δ
 | `ouch.example.gr` | OuchTracker — κάνει μόνο του proxy `/api` | `trifylli-ouch:80` | `OUCHTRACKER_WEB_PORT` (8081) |
 | `errors.example.gr` | GlitchTip — μόνο με `COMPOSE_PROFILES=errors` | `trifylli-errors:8000` | `GLITCHTIP_PORT` (8082) |
 | `observe.example.gr` | OpenObserve (καταγραφή συνεδριών) — μόνο με `COMPOSE_PROFILES=replay` | `trifylli-observe:5080` | `OPENOBSERVE_PORT` (5080) |
-| `dex.example.gr` | Dex, το SSO του OpenObserve — μόνο με `COMPOSE_PROFILES=replay` | `trifylli-dex:5556` | `DEX_PORT` (5556) |
 | `analytics.example.gr` | Umami — μόνο με `COMPOSE_PROFILES=analytics` | `trifylli-analytics:3000` | `UMAMI_PORT` (8083) |
 
 **WebSocket (συνεργασία σε πραγματικό χρόνο).** Το API δέχεται WebSocket στο
