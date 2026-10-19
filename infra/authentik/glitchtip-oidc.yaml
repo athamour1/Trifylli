@@ -1,0 +1,86 @@
+# Authentik blueprint για το GlitchTip (error tracking) — «Log in with Authentik».
+#
+# Confidential client: το GlitchTip είναι server (Django) και κρατά το secret.
+# Το Authentik απαντά μόνο στο «ποιος είσαι». Ποιος μπαίνει το αποφασίζει το
+# GlitchTip: η εγγραφή εκεί είναι κλειστή, οπότε ένα login από εδώ περνά ΜΟΝΟ
+# για όποιον έχει ήδη χρήστη στο GlitchTip με το ίδιο email (το glitchtip-sso
+# τους συνδέει σε κάθε `up`). Βλ. docs/monitoring.md §3.
+#
+# Η εφαρμογή δεν φαίνεται στη βιβλιοθήκη εφαρμογών του Authentik
+# (`meta_launch_url: blank://blank`): δεν αφορά τα στελέχη.
+version: 1
+metadata:
+  name: GlitchTip — OIDC provider & application
+  labels:
+    blueprints.goauthentik.io/instantiate: 'true'
+
+context:
+  # Το δημόσιο URL του GlitchTip (χωρίς τελικό «/»), όπως το `GLITCHTIP_DOMAIN`.
+  GLITCHTIP_URL: !Env [GLITCHTIP_DOMAIN, 'http://localhost:8082']
+  # Ίδια τιμή με το `GLITCHTIP_OIDC_CLIENT_SECRET` του glitchtip-sso.
+  GLITCHTIP_OIDC_CLIENT_SECRET: !Env [GLITCHTIP_OIDC_CLIENT_SECRET, 'trifylli-dev-glitchtip-oidc']
+
+entries:
+  # Πρώτη εκκίνηση: τα `!Find` πιο κάτω θέλουν αντικείμενα των default blueprints.
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: Default - Invalidation flow
+      required: true
+  - model: authentik_blueprints.metaapplyblueprint
+    attrs:
+      identifiers:
+        name: System - OAuth2 Provider - Scopes
+      required: true
+
+  # ── Ροή εξουσιοδότησης χωρίς βήμα συναίνεσης (ίδια λογική με το Trifylli) ──
+  - model: authentik_flows.flow
+    id: glitchtip-authorization-flow
+    identifiers:
+      slug: glitchtip-authorization
+    attrs:
+      name: GlitchTip — εξουσιοδότηση
+      title: Σύνδεση στο GlitchTip
+      designation: authorization
+      authentication: require_authenticated
+
+  - model: authentik_providers_oauth2.oauth2provider
+    id: glitchtip-provider
+    identifiers:
+      name: GlitchTip
+    attrs:
+      client_type: confidential
+      client_id: glitchtip
+      client_secret: !Context GLITCHTIP_OIDC_CLIENT_SECRET
+      # `sub` = email: έτσι το GlitchTip δένει τον λογαριασμό SSO με τον υπάρχοντα
+      # χρήστη του με το ίδιο email (configure-sso.py) — το UI του δεν έχει
+      # «σύνδεσε το Authentik», και η εγγραφή εκεί είναι κλειστή.
+      sub_mode: user_email
+      grant_types:
+        - authorization_code
+        - refresh_token
+      authorization_flow: !KeyOf glitchtip-authorization-flow
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-invalidation-flow]]
+      signing_key:
+        !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
+      property_mappings:
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, 'goauthentik.io/providers/oauth2/scope-openid']]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, 'goauthentik.io/providers/oauth2/scope-profile']]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, 'goauthentik.io/providers/oauth2/scope-email']]
+      # Η διαδρομή του allauth: /accounts/oidc/<provider_id>/login/callback/ —
+      # provider_id `authentik` (βλ. το glitchtip-sso στο compose).
+      redirect_uris:
+        - matching_mode: strict
+          url: !Format ['%s/accounts/oidc/authentik/login/callback/', !Context GLITCHTIP_URL]
+      access_token_validity: minutes=30
+
+  - model: authentik_core.application
+    id: glitchtip-app
+    identifiers:
+      slug: glitchtip
+    attrs:
+      name: GlitchTip
+      provider: !KeyOf glitchtip-provider
+      meta_description: Σφάλματα και απόδοση του Trifylli
+      meta_launch_url: blank://blank
+      open_in_new_tab: false

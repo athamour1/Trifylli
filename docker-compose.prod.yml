@@ -137,6 +137,7 @@ services:
       - garage-config:/sync/garage
       - backup-hooks:/sync/backup-hooks
       - openreplay-config:/sync/openreplay
+      - glitchtip-config:/sync/glitchtip
 
   postgres:
     image: postgres:16-alpine
@@ -200,6 +201,10 @@ services:
       # διαχωρίζει (partitions) το storage του κρυφού iframe και το SLO σπάει.
       TRIFYLLI_APP_URL: ${TRIFYLLI_APP_URL:?TRIFYLLI_APP_URL is required (π.χ. https://app.trifylli.gr/)}
       OUCHTRACKER_APP_URL: ${OUCHTRACKER_APP_URL:?OUCHTRACKER_APP_URL is required (π.χ. https://ouch.trifylli.gr/)}
+      # «Log in with Authentik» στο GlitchTip (glitchtip-oidc.yaml): redirect URI
+      # και το secret του client — ίδιο με του glitchtip-sso.
+      GLITCHTIP_DOMAIN: ${GLITCHTIP_DOMAIN:-}
+      GLITCHTIP_OIDC_CLIENT_SECRET: ${GLITCHTIP_OIDC_CLIENT_SECRET:-}
       AUTHENTIK_LOG_LEVEL: ${AUTHENTIK_LOG_LEVEL:-info}
       # ── Blueprint ασφάλειας (trifylli-security.yaml) ──
       # Το κλειδί του token του service account `trifylli-api` (ίδια τιμή με το
@@ -655,6 +660,31 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+
+  # «Log in with Authentik»: ο OIDC provider του GlitchTip από το περιβάλλον, και
+  # κάθε χρήστης του δεμένος με τον λογαριασμό του Authentik με το ίδιο email
+  # (infra/glitchtip/configure-sso.py, από το config image) — σε κάθε `up`.
+  # Ο client στο Authentik: infra/authentik/glitchtip-oidc.yaml.
+  glitchtip-sso:
+    image: glitchtip/glitchtip:${GLITCHTIP_VERSION:-6.2.6}
+    profiles: [errors]
+    restart: 'no'
+    <<: [*logging, *hardened]
+    environment:
+      SECRET_KEY: ${GLITCHTIP_SECRET_KEY:-}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-trifylli}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${GLITCHTIP_DB:-glitchtip}
+      VALKEY_URL: redis://:${REDIS_PASSWORD:?REDIS_PASSWORD is required}@redis:6379/1
+      GLITCHTIP_DOMAIN: ${GLITCHTIP_DOMAIN:-}
+      GLITCHTIP_OIDC_ISSUER: ${GLITCHTIP_OIDC_ISSUER:-}
+      GLITCHTIP_OIDC_CLIENT_SECRET: ${GLITCHTIP_OIDC_CLIENT_SECRET:-}
+    volumes:
+      - glitchtip-config:/opt/glitchtip:ro
+    entrypoint: ['sh', '-c', './manage.py shell < /opt/glitchtip/configure-sso.py']
+    depends_on:
+      config:
+        condition: service_completed_successfully
+      glitchtip:
+        condition: service_started
 
   # ─────────────────── OuchTracker (φαρμακεία) ───────────────────
   # Μοιράζεται Postgres (δική του βάση), Authentik (SSO) και το ίδιο domain
@@ -1169,6 +1199,7 @@ volumes:
   garage-config:
   backup-hooks:
   openreplay-config:
+  glitchtip-config:
   # Δεδομένα.
   postgres-backups:
   postgres-predeploy:

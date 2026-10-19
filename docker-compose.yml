@@ -427,6 +427,40 @@ services:
       mailpit:
         condition: service_healthy
 
+  # «Log in with Authentik»: ο OIDC provider του GlitchTip από το περιβάλλον
+  # (infra/glitchtip/configure-sso.py) — σε κάθε `up`, ασφαλές στην επανάληψη.
+  glitchtip-sso:
+    image: glitchtip/glitchtip:${GLITCHTIP_VERSION:-6.2.6}
+    profiles: ['errors']
+    restart: 'no'
+    environment:
+      SECRET_KEY: trifylli-dev-glitchtip-secret-key-not-for-production
+      DATABASE_URL: postgresql://${POSTGRES_USER:-trifylli}:${POSTGRES_PASSWORD:-trifylli}@postgres:5432/glitchtip
+      VALKEY_URL: ''
+      GLITCHTIP_DOMAIN: http://localhost:${GLITCHTIP_PORT:-8082}
+      GLITCHTIP_OIDC_ISSUER: http://localhost:9010/application/o/glitchtip/
+      GLITCHTIP_OIDC_CLIENT_SECRET: trifylli-dev-glitchtip-oidc
+    volumes:
+      - ./infra/glitchtip:/opt/glitchtip:ro
+    entrypoint: ['sh', '-c', './manage.py shell < /opt/glitchtip/configure-sso.py']
+    depends_on:
+      glitchtip:
+        condition: service_started
+
+  # Μόνο στο dev: ο browser βλέπει το Authentik στο localhost:9010, και το
+  # GlitchTip πρέπει να το φτάνει στο ΙΔΙΟ URL (αλλιώς δεν ταιριάζει το issuer).
+  # Ο socat ζει στο network namespace του GlitchTip και κάνει το δικό του
+  # localhost:9010 → authentik-server:9000. Στην παραγωγή δεν χρειάζεται: εκεί
+  # το GlitchTip φτάνει το δημόσιο sso.<domain>.
+  glitchtip-sso-bridge:
+    image: alpine/socat:1.8.0.3
+    profiles: ['errors']
+    restart: unless-stopped
+    network_mode: service:glitchtip
+    command: ['TCP-LISTEN:9010,fork,reuseaddr,bind=127.0.0.1', 'TCP:authentik-server:9000']
+    depends_on:
+      - glitchtip
+
   # ─────────────────── Analytics (Umami) — profile: analytics ───────────────────
   #   docker compose --profile analytics up -d umami
   # UI: http://localhost:8083 (πρώτη είσοδος admin / umami — άλλαξέ τον). Μετά
