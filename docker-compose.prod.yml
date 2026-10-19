@@ -66,7 +66,6 @@ services:
       - postgres-init:/sync/postgres-init
       - garage-config:/sync/garage
       - backup-hooks:/sync/backup-hooks
-      - dex-config:/sync/dex
       - glitchtip-config:/sync/glitchtip
 
   postgres:
@@ -135,9 +134,6 @@ services:
       # και το secret του client — ίδιο με του glitchtip-sso.
       GLITCHTIP_DOMAIN: ${GLITCHTIP_DOMAIN:-}
       GLITCHTIP_OIDC_CLIENT_SECRET: ${GLITCHTIP_OIDC_CLIENT_SECRET:-}
-      # SSO του OpenObserve μέσω Dex (openobserve-oidc.yaml): redirect URI και secret.
-      DEX_ISSUER: ${DEX_ISSUER:-}
-      OPENOBSERVE_OIDC_CLIENT_SECRET: ${OPENOBSERVE_OIDC_CLIENT_SECRET:-}
       AUTHENTIK_LOG_LEVEL: ${AUTHENTIK_LOG_LEVEL:-info}
       # ── Blueprint ασφάλειας (trifylli-security.yaml) ──
       # Το κλειδί του token του service account `trifylli-api` (ίδια τιμή με το
@@ -714,13 +710,13 @@ services:
         condition: service_completed_successfully
 
   # ─────────────────── Καταγραφή συνεδριών (OpenObserve) — profile `replay` ───────────────────
-  # Προαιρετικό: COMPOSE_PROFILES=…,replay. Enterprise image — δωρεάν έως 50 GB/ημέρα,
-  # χωρίς license key· εκεί είναι το SSO. Είσοδος: «Login with SSO» (OpenObserve →
-  # Dex → Authentik, μόνο η ομάδα trifylli-monitoring) ή ο root λογαριασμός.
-  # Εγγραφές: 30 ημέρες, εκτός backups. Στο trifylli-public ως `trifylli-observe`
-  # (ο browser στέλνει RUM/replay). docs/monitoring.md §5, ROADMAP §6.
+  # Προαιρετικό: COMPOSE_PROFILES=…,replay. Open-source έκδοση (AGPL), χωρίς SSO:
+  # είσοδος με τον root λογαριασμό (OPENOBSERVE_ROOT_*) — όποιον άλλον χρειαστείς
+  # τον φτιάχνεις στο IAM του. Εγγραφές: 30 ημέρες, εκτός backups. Στο
+  # trifylli-public ως `trifylli-observe` (ο browser στέλνει RUM/replay).
+  # docs/monitoring.md §5, ROADMAP §6.
   openobserve:
-    image: o2cr.ai/openobserve/openobserve-enterprise:${OPENOBSERVE_VERSION:-v1.1.1}
+    image: o2cr.ai/openobserve/openobserve:${OPENOBSERVE_VERSION:-v1.1.1}
     profiles: [replay]
     restart: always
     <<: [*logging, *hardened]
@@ -732,18 +728,6 @@ services:
       ZO_COMPACT_DATA_RETENTION_DAYS: '30'
       # Μόνο η εφαρμογή στέλνει RUM/replay από τον browser.
       ZO_CORS_ALLOWED_ORIGINS: ${CORS_ORIGINS:-}
-      # ── SSO μέσω Dex (infra/dex/config.yaml) ──
-      O2_DEX_ENABLED: 'true'
-      O2_DEX_CLIENT_ID: openobserve
-      O2_DEX_CLIENT_SECRET: ${OPENOBSERVE_DEX_CLIENT_SECRET:-}
-      O2_DEX_BASE_URL: ${DEX_ISSUER:-}
-      O2_DEX_REDIRECT_URL: ${OPENOBSERVE_URL:-}/config/redirect
-      O2_CALLBACK_URL: ${OPENOBSERVE_URL:-}/web/cb
-      O2_DEX_SCOPES: openid profile email offline_access
-      O2_DEX_DEFAULT_ORG: default
-      # Όποιος περνά το Authentik είναι ήδη στην ομάδα trifylli-monitoring.
-      O2_DEX_DEFAULT_ROLE: admin
-      O2_DEX_NATIVE_LOGIN_ENABLED: 'true'
     volumes:
       - openobserve-data:/data
     ports:
@@ -752,34 +736,6 @@ services:
       default:
       public:
         aliases: [trifylli-observe]
-
-  # Ο Dex: η γέφυρα SSO του OpenObserve. Ο browser περνά από εδώ (υποτομέας dex.),
-  # οπότε είναι κι αυτός στο trifylli-public, ως `trifylli-dex`.
-  dex:
-    image: ghcr.io/dexidp/dex:${DEX_VERSION:-v2.46.0}
-    profiles: [replay]
-    restart: always
-    <<: [*logging, *hardened]
-    command: ['dex', 'serve', '/opt/dex/config.yaml']
-    environment:
-      DEX_EXPAND_ENV: 'false'
-      DEX_ISSUER: ${DEX_ISSUER:-}
-      OPENOBSERVE_URL: ${OPENOBSERVE_URL:-}
-      OPENOBSERVE_DEX_CLIENT_SECRET: ${OPENOBSERVE_DEX_CLIENT_SECRET:-}
-      OPENOBSERVE_OIDC_ISSUER: ${OPENOBSERVE_OIDC_ISSUER:-}
-      OPENOBSERVE_OIDC_CLIENT_SECRET: ${OPENOBSERVE_OIDC_CLIENT_SECRET:-}
-    volumes:
-      - dex-config:/opt/dex:ro
-      - dex-data:/var/dex
-    ports:
-      - '${BIND_ADDR:-127.0.0.1}:${DEX_PORT:-5556}:5556'
-    networks:
-      default:
-      public:
-        aliases: [trifylli-dex]
-    depends_on:
-      config:
-        condition: service_completed_successfully
 
 # Δύο δίκτυα με σταθερά subnets (τα ζητά το TRUSTED_PROXY_CIDRS του Authentik):
 #   default  — όλη η στοίβα, και οι βάσεις.
@@ -809,7 +765,6 @@ volumes:
   postgres-init:
   garage-config:
   backup-hooks:
-  dex-config:
   glitchtip-config:
   # Δεδομένα.
   postgres-backups:
@@ -823,6 +778,5 @@ volumes:
   redis-data:
   authentik-media:
   garage-data:
-  # OpenObserve (profile replay): εγγραφές (30 ημέρες, εκτός backups) και Dex.
+  # OpenObserve (profile replay): εγγραφές (30 ημέρες, εκτός backups).
   openobserve-data:
-  dex-data:

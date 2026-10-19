@@ -443,12 +443,11 @@ services:
 
   # ─────────────────── Καταγραφή συνεδριών (OpenObserve) — profile: replay ───────────────────
   #   docker compose --profile replay up -d
-  # UI: http://localhost:5080 — «Login with SSO» (μόνο η ομάδα trifylli-monitoring
-  # του Authentik) ή root admin@trifylli.gr / Trifylli-dev-1. Το RUM token
-  # (Ingestion → RUM) στο `VITE_OPENOBSERVE_RUM_TOKEN`. Enterprise image: δωρεάν
-  # έως 50 GB/ημέρα, χωρίς license key — εκεί είναι το SSO. ROADMAP §6.
+  # UI: http://localhost:5080 — admin@trifylli.gr / Trifylli-dev-1. Το RUM token
+  # (Ingestion → RUM) στο `VITE_OPENOBSERVE_RUM_TOKEN`. Open-source έκδοση (AGPL),
+  # χωρίς SSO: για ένα Τοπικό αρκεί ο λογαριασμός του OpenObserve. ROADMAP §6.
   openobserve:
-    image: o2cr.ai/openobserve/openobserve-enterprise:${OPENOBSERVE_VERSION:-v1.1.1}
+    image: o2cr.ai/openobserve/openobserve:${OPENOBSERVE_VERSION:-v1.1.1}
     profiles: ['replay']
     restart: unless-stopped
     environment:
@@ -460,70 +459,10 @@ services:
       ZO_COMPACT_DATA_RETENTION_DAYS: '30'
       # Ο browser στέλνει RUM/replay από την εφαρμογή (quasar dev :9000, container :8080).
       ZO_CORS_ALLOWED_ORIGINS: http://localhost:9000,http://localhost:8080
-      # ── SSO μέσω Dex ──
-      O2_DEX_ENABLED: 'true'
-      O2_DEX_CLIENT_ID: openobserve
-      O2_DEX_CLIENT_SECRET: trifylli-dev-openobserve-dex
-      O2_DEX_BASE_URL: http://localhost:5556/dex
-      O2_DEX_REDIRECT_URL: http://localhost:5080/config/redirect
-      O2_CALLBACK_URL: http://localhost:5080/web/cb
-      O2_DEX_SCOPES: openid profile email offline_access
-      O2_DEX_DEFAULT_ORG: default
-      # Όποιος περνά το Authentik είναι ήδη στην ομάδα trifylli-monitoring.
-      O2_DEX_DEFAULT_ROLE: admin
-      O2_DEX_NATIVE_LOGIN_ENABLED: 'true'
     volumes:
       - openobserve-data:/data
-    # Στο namespace του openobserve-net (εκεί η θύρα και το όνομα).
-    network_mode: service:openobserve-net
-    depends_on:
-      - openobserve-net
-
-  # Μόνο στο dev: ο browser βλέπει τον Dex στο localhost:5556 και το Authentik στο
-  # localhost:9010· τα containers πρέπει να τα φτάνουν στα ΙΔΙΑ URL (αλλιώς δεν
-  # ταιριάζουν issuer και redirects). Ένας socat κρατά το network namespace κάθε
-  # εφαρμογής (θύρες και όνομα δηλώνονται σε αυτόν) — όπως το glitchtip-sso-bridge.
-  # Στην παραγωγή όλοι φτάνουν τα δημόσια ονόματα.
-  openobserve-net:
-    image: alpine/socat:1.8.0.3
-    profiles: ['replay']
-    restart: unless-stopped
-    command: ['TCP-LISTEN:5556,fork,reuseaddr,bind=127.0.0.1', 'TCP:dex:5556']
-    networks:
-      default:
-        aliases: [openobserve]
     ports:
       - '${DEV_BIND_ADDR:-127.0.0.1}:5080:5080'
-
-  dex:
-    image: ghcr.io/dexidp/dex:${DEX_VERSION:-v2.46.0}
-    profiles: ['replay']
-    restart: unless-stopped
-    command: ['dex', 'serve', '/etc/dex/config.yaml']
-    environment:
-      DEX_EXPAND_ENV: 'false'
-      DEX_ISSUER: http://localhost:5556/dex
-      OPENOBSERVE_URL: http://localhost:5080
-      OPENOBSERVE_DEX_CLIENT_SECRET: trifylli-dev-openobserve-dex
-      OPENOBSERVE_OIDC_ISSUER: http://localhost:9010/application/o/openobserve/
-      OPENOBSERVE_OIDC_CLIENT_SECRET: trifylli-dev-openobserve-oidc
-    volumes:
-      - ./infra/dex/config.yaml:/etc/dex/config.yaml:ro
-      - dex-data:/var/dex
-    network_mode: service:dex-net
-    depends_on:
-      - dex-net
-
-  dex-net:
-    image: alpine/socat:1.8.0.3
-    profiles: ['replay']
-    restart: unless-stopped
-    command: ['TCP-LISTEN:9010,fork,reuseaddr,bind=127.0.0.1', 'TCP:authentik-server:9000']
-    networks:
-      default:
-        aliases: [dex]
-    ports:
-      - '${DEV_BIND_ADDR:-127.0.0.1}:5556:5556'
 
 volumes:
   postgres-data:
@@ -531,4 +470,3 @@ volumes:
   garage-data:
   glitchtip-uploads:
   openobserve-data:
-  dex-data:
