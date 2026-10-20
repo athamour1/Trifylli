@@ -372,8 +372,19 @@ export class DraseisFormsService {
         roles: { include: { user: { select: { firstName: true, lastName: true } } } },
       },
     });
-    // Υπεύθυνος Α' Βοηθειών: όποιος έχει το Φαρμακείο, αλλιώς ο Αρχηγός.
-    const firstAid = d.roles.find((r) => r.kind === 'FARMAKEIO') ?? d.roles.find((r) => r.kind === 'ARXIGOS');
+    // Υπεύθυνος Α' Βοηθειών: ο υπεύθυνος Φαρμακείου της δράσης, αλλιώς του κλάδου
+    // (υπευθυνότητα στο αρχηγείο), αλλιώς ο Αρχηγός της δράσης.
+    const fullName = (u: { firstName: string; lastName: string }) => `${u.firstName} ${u.lastName}`;
+    let firstAid = d.roles.filter((r) => r.kind === 'FARMAKEIO').map((r) => fullName(r.user));
+    if (!firstAid.length && d.kladosId) {
+      const duty = await this.prisma.kladosResponsibility.findMany({
+        where: { kladosId: d.kladosId, duty: 'FARMAKEIO' },
+        select: { user: { select: { firstName: true, lastName: true } } },
+        orderBy: { createdAt: 'asc' },
+      });
+      firstAid = duty.map((r) => fullName(r.user));
+    }
+    if (!firstAid.length) firstAid = d.roles.filter((r) => r.kind === 'ARXIGOS').map((r) => fullName(r.user));
     // Η Περιφέρεια δεν τηρείται τοπικά· το e-SEO τη δίνει ως γονέα του Τοπικού (best effort).
     let region: string | null = null;
     if (d.topiko.eseoCode) {
@@ -390,7 +401,7 @@ export class DraseisFormsService {
       dateEnd: d.dateEnd,
       topiko: d.topiko.name,
       region,
-      firstAid: firstAid ? `${firstAid.user.firstName} ${firstAid.user.lastName}` : null,
+      firstAid: firstAid.length ? firstAid.join(', ') : null,
       kladosLabel: d.klados ? KLADOS_LABEL[d.klados.type as KladosType] : null,
     };
   }
