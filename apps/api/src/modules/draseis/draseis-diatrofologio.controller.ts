@@ -22,6 +22,13 @@ export class DraseisDiatrofologioController {
     return this.diatrofologio.view(user, id);
   }
 
+  @Get('allergies')
+  @RequireDrasi('diatrofologio')
+  @ApiOperation({ summary: 'Αλλεργίες & διατροφή από τις δηλώσεις υγείας — για την κουζίνα (καταγράφεται)' })
+  foodNeeds(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.diatrofologio.foodNeeds(user, id);
+  }
+
   @Get(':itemId')
   @RequireDrasi('diatrofologio')
   meal(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Param('itemId', ParseUUIDPipe) itemId: string) {

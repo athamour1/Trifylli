@@ -1,11 +1,14 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { COLLAB_FIELDS, type DrasiDiatrofologioView, type DrasiMealSummary, type DrasiMealView, type DrasiScheduleItemView } from '@trifylli/shared';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { DrasiFormStatus, DrasiFormType, Prisma } from '@prisma/client';
+import { COLLAB_FIELDS, canSeeFoodNeeds, type DrasiFoodNeedsView, type KladosType, type DrasiDiatrofologioView, type DrasiMealSummary, type DrasiMealView, type DrasiScheduleItemView } from '@trifylli/shared';
+import { AuditService } from '../../common/audit/audit.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
 import { refuseCollabFields } from '../collab/collab-fields';
 import { DrasiAccessService } from './drasi-access.service';
 import { DraseisPlanService } from './draseis-plan.service';
 import { isMeal } from './diatrofologio';
+import { foodNeedsOf } from './food-needs';
 import type { UpdateMealDto } from './dto/drasi-diatrofologio.dto';
 
 /**
@@ -20,7 +23,50 @@ export class DraseisDiatrofologioService {
     private readonly prisma: PrismaService,
     private readonly access: DrasiAccessService,
     private readonly plan: DraseisPlanService,
+    private readonly audit: AuditService,
   ) {}
+
+  /** Αλλεργίες & διατροφή από τις υποβληθείσες δηλώσεις υγείας (F16). Καταγράφεται. */
+  async foodNeeds(user: RequestUser, id: string): Promise<DrasiFoodNeedsView> {
+    const access = user.drasiGrant?.drasiId === id ? user.drasiGrant.access : await this.access.accessFor(user, id);
+    if (!canSeeFoodNeeds(access)) {
+      throw new ForbiddenException('Τις αλλεργίες τις βλέπουν όσοι γράφουν στο διατροφολόγιο και το φαρμακείο της δράσης.');
+    }
+    const [expected, forms] = await Promise.all([
+      this.prisma.drasiParticipant.count({ where: { drasiId: id } }),
+      this.prisma.drasiForm.findMany({
+        where: { drasiId: id, type: DrasiFormType.YGEIA, status: DrasiFormStatus.SUBMITTED, data: { not: Prisma.DbNull } },
+        select: {
+          participantId: true,
+          data: true,
+          participant: {
+            select: {
+              user: { select: { firstName: true, lastName: true, memberships: { where: { leftAt: null }, select: { klados: { select: { type: true } } } } } },
+              groups: { select: { group: { select: { kind: true, name: true } } } },
+            },
+          },
+        },
+        orderBy: { participant: { user: { lastName: 'asc' } } },
+      }),
+    ]);
+    await this.audit.record(user, 'drasi.food.read', 'drasi', id, { count: forms.length });
+    const people = forms.flatMap((f) => {
+      const needs = foodNeedsOf((f.data as Record<string, unknown> | null) ?? {});
+      if (!needs.allergies && !needs.diet) return [];
+      const u = f.participant.user;
+      return [
+        {
+          participantId: f.participantId,
+          firstName: u.firstName,
+          lastName: u.lastName,
+          kladosType: (u.memberships[0]?.klados.type as KladosType | undefined) ?? null,
+          group: f.participant.groups.find((g) => g.group.kind !== 'SKINI')?.group.name ?? null,
+          ...needs,
+        },
+      ];
+    });
+    return { submitted: forms.length, expected, people };
+  }
 
   /** Όλες οι ημέρες του προγράμματος, με τα γεύματά τους. */
   async view(user: RequestUser, id: string): Promise<DrasiDiatrofologioView> {

@@ -623,6 +623,25 @@ export interface PublicFormView {
   signers: { name: string; role: SignerRole }[];
 }
 
+export interface DrasiFoodNeedsPerson {
+  participantId: string;
+  firstName: string;
+  lastName: string;
+  kladosType: KladosType | null;
+  /** Ενωμοτία/πεντάδα/… (όχι σκηνή). */
+  group: string | null;
+  /** Το κείμενο της δήλωσης· «ναι (χωρίς λεπτομέρειες)» αν λείπει· `null` = όχι. */
+  allergies: string | null;
+  diet: string | null;
+}
+
+export interface DrasiFoodNeedsView {
+  /** Πόσες δηλώσεις υγείας έχουν υποβληθεί / πόσοι συμμετέχοντες. */
+  submitted: number;
+  expected: number;
+  people: DrasiFoodNeedsPerson[];
+}
+
 export interface HealthSummaryEntry {
   participantId: string;
   user: { firstName: string; lastName: string; birthDate: string | null; kladosType: KladosType | null };

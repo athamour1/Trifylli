@@ -118,6 +118,14 @@ export function drasiCanReadHealth(access: DrasiAccess | null | undefined): bool
 }
 
 /**
+ * Ποιος βλέπει τις αλλεργίες στο διατροφολόγιο: όποιος γράφει σε αυτό ή βλέπει
+ * το φαρμακείο. Το διατροφολόγιο το βλέπει κάθε στέλεχος — οι αλλεργίες όχι.
+ */
+export function canSeeFoodNeeds(access: DrasiAccess | null | undefined): boolean {
+  return drasiCan(access, 'diatrofologio', 'edit') || drasiCanReadHealth(access);
+}
+
+/**
  * Πόσο αλλάζει κάποιος ένα κομμάτι της δράσης: όλο (ο ρόλος του δίνει `edit`),
  * μόνο ό,τι είναι δικό του (υπεύθυνος του στοιχείου του ωρολογίου, στέλεχος που
  * παίζει τον ρόλο του μύθου) ή τίποτα. Το δικό του θέλει πρόσβαση στη δράση:
