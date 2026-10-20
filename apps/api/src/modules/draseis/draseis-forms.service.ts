@@ -120,7 +120,13 @@ export class DraseisFormsService {
       };
     });
 
-    return { participants: rows, pending, total, emailEnabled: this.linkMailer.enabled };
+    return {
+      participants: rows,
+      pending,
+      total,
+      emailEnabled: this.linkMailer.enabled,
+      firstAid: await this.firstAid(id, drasi.kladosId),
+    };
   }
 
   /**
@@ -362,6 +368,32 @@ export class DraseisFormsService {
     return { filename: `${kind} - ${drasi.title}.pdf`, buffer: Buffer.from(await mergePdfs(parts)) };
   }
 
+  /**
+   * «Υπεύθυνος ή Στέλεχος Α' Βοηθειών» του πιστοποιητικού υγείας: ο υπεύθυνος
+   * Φαρμακείου της δράσης, αλλιώς του κλάδου (υπευθυνότητα στο αρχηγείο), αλλιώς
+   * ο Αρχηγός της δράσης. `null` ⇒ η γραμμή μένει για συμπλήρωση με το χέρι.
+   */
+  private async firstAid(drasiId: string, kladosId: string | null): Promise<string | null> {
+    const fullName = (r: { user: { firstName: string; lastName: string } }) => `${r.user.firstName} ${r.user.lastName}`;
+    const user = { select: { firstName: true, lastName: true } };
+    const roles = await this.prisma.drasiRole.findMany({
+      where: { drasiId, kind: { in: ['FARMAKEIO', 'ARXIGOS'] } },
+      select: { kind: true, user },
+      orderBy: { createdAt: 'asc' },
+    });
+    let names = roles.filter((r) => r.kind === 'FARMAKEIO').map(fullName);
+    if (!names.length && kladosId) {
+      const duty = await this.prisma.kladosResponsibility.findMany({
+        where: { kladosId, duty: 'FARMAKEIO' },
+        select: { user },
+        orderBy: { createdAt: 'asc' },
+      });
+      names = duty.map(fullName);
+    }
+    if (!names.length) names = roles.filter((r) => r.kind === 'ARXIGOS').map(fullName);
+    return names.length ? [...new Set(names)].join(', ') : null;
+  }
+
   /** Ό,τι είναι κοινό για όλα τα έντυπα μιας δράσης (Μέρος 1). */
   private async pdfContext(id: string): Promise<FilledFormInput['drasi']> {
     const d = await this.prisma.drasi.findUniqueOrThrow({
@@ -369,22 +401,8 @@ export class DraseisFormsService {
       include: {
         topiko: { select: { name: true, eseoCode: true } },
         klados: { select: { type: true } },
-        roles: { include: { user: { select: { firstName: true, lastName: true } } } },
       },
     });
-    // Υπεύθυνος Α' Βοηθειών: ο υπεύθυνος Φαρμακείου της δράσης, αλλιώς του κλάδου
-    // (υπευθυνότητα στο αρχηγείο), αλλιώς ο Αρχηγός της δράσης.
-    const fullName = (u: { firstName: string; lastName: string }) => `${u.firstName} ${u.lastName}`;
-    let firstAid = d.roles.filter((r) => r.kind === 'FARMAKEIO').map((r) => fullName(r.user));
-    if (!firstAid.length && d.kladosId) {
-      const duty = await this.prisma.kladosResponsibility.findMany({
-        where: { kladosId: d.kladosId, duty: 'FARMAKEIO' },
-        select: { user: { select: { firstName: true, lastName: true } } },
-        orderBy: { createdAt: 'asc' },
-      });
-      firstAid = duty.map((r) => fullName(r.user));
-    }
-    if (!firstAid.length) firstAid = d.roles.filter((r) => r.kind === 'ARXIGOS').map((r) => fullName(r.user));
     // Η Περιφέρεια δεν τηρείται τοπικά· το e-SEO τη δίνει ως γονέα του Τοπικού (best effort).
     let region: string | null = null;
     if (d.topiko.eseoCode) {
@@ -401,7 +419,7 @@ export class DraseisFormsService {
       dateEnd: d.dateEnd,
       topiko: d.topiko.name,
       region,
-      firstAid: firstAid.length ? firstAid.join(', ') : null,
+      firstAid: await this.firstAid(id, d.kladosId),
       kladosLabel: d.klados ? KLADOS_LABEL[d.klados.type as KladosType] : null,
     };
   }

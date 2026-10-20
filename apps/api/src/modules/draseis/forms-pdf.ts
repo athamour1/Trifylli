@@ -315,10 +315,18 @@ function fillYgeia(w: Writer, input: FilledFormInput, minor: boolean): void {
   w.erase(0, 206, 211, 56, 16);
   w.erase(0, 420, 211, 56, 16);
   w.erase(0, 346, 231, 118, 16);
+  // Το σβήσιμο κόβει και τις γραμμές από κάτω· ξαναμπαίνουν ολόκληρες, ώστε ό,τι
+  // μένει κενό (π.χ. χωρίς υπεύθυνο Φαρμακείου) να συμπληρώνεται με το χέρι.
+  // (Στο έντυπο στελέχους κάθονται ~0,6pt ψηλότερα.)
+  const dy = minor ? 0 : -0.6;
+  w.rule(0, 214.6, 373.3, 202.2 + dy);
+  w.rule(0, 188.3, 318.2, 223.4 + dy);
+  w.rule(0, 409.7, 568.1, 223.4 + dy);
+  w.rule(0, 342, 500.4, 244.1 + dy);
   w.text({ page: 0, x: 226, y: 204, w: 270 }, input.drasi.title);
   w.text({ page: 0, x: 208, y: 224, w: 110 }, dayMonth(input.drasi.dateStart));
   w.text({ page: 0, x: 423, y: 224, w: 100 }, dayMonth(input.drasi.dateEnd));
-  w.text({ page: 0, x: 350, y: 244, w: 170 }, input.drasi.firstAid);
+  w.text({ page: 0, x: 350, y: 244, w: 150 }, input.drasi.firstAid);
 
   // ── Προσωπικά στοιχεία ──
   w.text({ page: 0, x: 130, y: 326, w: 160 }, P.lastName);

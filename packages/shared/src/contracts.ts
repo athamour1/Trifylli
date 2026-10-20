@@ -581,6 +581,8 @@ export interface DrasiFormsMatrix {
   total: number;
   /** Στέλνει email ο server (SMTP ρυθμισμένο) — αλλιώς οι σύνδεσμοι μόνο αντιγράφονται. */
   emailEnabled: boolean;
+  /** Ποιος γράφεται «Υπεύθυνος Α' Βοηθειών» στο πιστοποιητικό υγείας — `null` ⇒ κανείς. */
+  firstAid: string | null;
 }
 
 /** Ο σύνδεσμος που βγαίνει ΜΙΑ φορά: στη βάση μένει μόνο το hash του token. */

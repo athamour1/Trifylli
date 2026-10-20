@@ -29,6 +29,12 @@
       {{ BACKUP_RETENTION_DAYS }} ακόμη.
     </q-banner>
 
+    <q-banner v-if="matrix && !matrix.firstAid" rounded class="bg-orange-1 text-orange-10 q-mb-md text-body2">
+      <template #avatar><q-icon name="medical_services" color="orange-8" /></template>
+      Δεν έχει οριστεί υπεύθυνος <b>Φαρμακείου</b> — στα πιστοποιητικά υγείας η γραμμή «Υπεύθυνος ή Στέλεχος Α΄ Βοηθειών»
+      θα βγει κενή. Όρισέ τον στο Αρχηγείο της δράσης.
+    </q-banner>
+
     <q-inner-loading :showing="loading" />
 
     <!-- `wrap-cells`: τρεις στήλες με chip, ημερομηνία και κουμπιά δεν χωρούν σε μία γραμμή στη στήλη περιεχομένου· καλύτερα να τυλίγουν παρά οριζόντια κύλιση. -->
