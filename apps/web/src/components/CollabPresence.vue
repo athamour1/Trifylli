@@ -72,10 +72,16 @@ function initials(name: string): string {
   min-width: 0;
 }
 .collab-presence__face {
-  font-size: 11px;
   font-weight: 700;
   border: 2px solid var(--surface);
   margin-left: -6px;
+
+  // Το Quasar δίνει στο περιεχόμενο το μισό του μεγέθους: δύο έντονα κεφαλαία
+  // («ΜΠ») ξεχείλιζαν από τον κύκλο. Σχετικό μέγεθος — χωρά και στα μικρά πρόσωπα.
+  :deep(.q-avatar__content) {
+    font-size: 0.4em;
+    letter-spacing: -0.02em;
+  }
 
   &:first-child {
     margin-left: 0;
