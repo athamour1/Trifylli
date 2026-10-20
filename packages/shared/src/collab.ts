@@ -85,6 +85,8 @@ export const collabDocument = {
   drasiItem: (drasiId: string, itemId: string) => `drasi:${drasiId}:item:${itemId}`,
   /** Γεύμα: η συνταγή, το μενού και το ποσολόγιο (βλ. `MEAL_DOC`). */
   drasiMeal: (drasiId: string, itemId: string) => `drasi:${drasiId}:meal:${itemId}`,
+  /** Παράλληλο γεύμα (F16): δική του συνταγή, μενού και ποσολόγιο — ίδια δομή με το γεύμα. */
+  drasiMealVariant: (drasiId: string, variantId: string) => `drasi:${drasiId}:mealvariant:${variantId}`,
   /**
    * Το δωμάτιο της δράσης: χωρίς περιεχόμενο — μόνο ποιος είναι εκεί και τα
    * μηνύματα «άλλαξε αυτό» (βλ. `CollabChange`). Κλείνει μαζί με τα έγγραφά της.

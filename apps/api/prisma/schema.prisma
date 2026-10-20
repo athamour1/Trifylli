@@ -686,6 +686,8 @@ model DrasiScheduleItem {
   yliko     DrasiScheduleYlikoItem[]
   /// Το μενού του, αν είναι γεύμα — βλ. `DrasiMeal`.
   meal      DrasiMeal?
+  /// Τα παράλληλα γεύματα (F16) — βλ. `DrasiMealVariant`.
+  mealVariants DrasiMealVariant[]
   delays    DrasiDelay[]
   reminders DrasiReminder[]
   epitropi  DrasiGroup?
@@ -854,6 +856,44 @@ model DrasiMealIngredient {
 
   @@index([itemId, order])
   @@map("drasi_meal_ingredient")
+}
+
+/// Παράλληλο γεύμα (F16): πλήρες γεύμα για ιδιαιτερότητες — μενού, συνταγή,
+/// ποσολόγιο στο δικό του κοινό έγγραφο (`drasi:<id>:mealvariant:<id>`).
+model DrasiMealVariant {
+  id             String   @id @default(uuid()) @db.Uuid
+  itemId         String   @db.Uuid
+  order          Int      @default(0)
+  label          String
+  /// Για ποιους: ids συμμετεχόντων (DrasiParticipant) — όσοι φύγουν αγνοούνται.
+  participantIds String[] @db.Uuid
+  menu           String?
+  recipe         String?
+  updatedAt      DateTime @updatedAt
+
+  item        DrasiScheduleItem             @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  ingredients DrasiMealVariantIngredient[]
+
+  @@index([itemId, order])
+  @@map("drasi_meal_variant")
+}
+
+/// Υλικό παράλληλου γεύματος — ίδια πεδία με το `DrasiMealIngredient`, δικός του
+/// πίνακας: η προβολή του κύριου γεύματος ξαναγράφει όλα τα δικά της υλικά.
+model DrasiMealVariantIngredient {
+  id         String    @id @default(uuid()) @db.Uuid
+  variantId  String    @db.Uuid
+  order      Int
+  label      String
+  qty        String    @default("")
+  bought     Boolean   @default(false)
+  boughtById String?   @db.Uuid
+  boughtAt   DateTime?
+
+  variant DrasiMealVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@index([variantId, order])
+  @@map("drasi_meal_variant_ingredient")
 }
 
 /// Το υλικό ενός στοιχείου του ωρολογίου: λίστα όπως στις συγκεντρώσεις (όνομα,

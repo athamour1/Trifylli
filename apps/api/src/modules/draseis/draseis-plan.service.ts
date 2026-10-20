@@ -261,9 +261,12 @@ export class DraseisPlanService {
     await this.access.load(user, id, 'write');
     const item = await this.prisma.drasiScheduleItem.findFirst({ where: { id: itemId, drasiId: id } });
     if (!item) throw new NotFoundException('Το στοιχείο του ωρολογίου δεν βρέθηκε.');
+    // Μαζί του και τα έγγραφα των παράλληλων γευμάτων του (οι γραμμές σβήνονται με cascade).
+    const variants = await this.prisma.drasiMealVariant.findMany({ where: { itemId }, select: { id: true } });
     await Promise.all([
       this.collab.remove(collabDocument.drasiItem(id, itemId)),
       this.collab.remove(collabDocument.drasiMeal(id, itemId)),
+      ...variants.map((v) => this.collab.remove(collabDocument.drasiMealVariant(id, v.id))),
     ]);
     await this.prisma.drasiScheduleItem.delete({ where: { id: itemId } });
     return { deleted: true };

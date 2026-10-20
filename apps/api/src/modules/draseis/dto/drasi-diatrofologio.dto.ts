@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { ArrayMaxSize, IsArray, IsBoolean, IsOptional, IsString, MaxLength, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsBoolean, IsInt, IsOptional, IsString, IsUUID, Matches, MaxLength, Min, ValidateNested } from 'class-validator';
 
 /** Γραμμή του ποσολογίου. */
 export class MealIngredientDto {
@@ -42,4 +42,36 @@ export class UpdateMealDto {
   @ValidateNested({ each: true })
   @Type(() => MealIngredientDto)
   ingredients?: MealIngredientDto[];
+}
+
+/** Νέο παράλληλο γεύμα. */
+export class CreateMealVariantDto {
+  @ApiProperty({ description: 'Το όνομά του, π.χ. «Χωρίς γλουτένη».' })
+  @IsString()
+  @Matches(/\S/)
+  @MaxLength(80)
+  label!: string;
+}
+
+/** Όνομα, σειρά και «για ποιους» ενός παράλληλου — ό,τι δεν δίνεται μένει όπως είναι. */
+export class UpdateMealVariantDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @Matches(/\S/)
+  @MaxLength(80)
+  label?: string;
+
+  @ApiPropertyOptional({ type: [String], description: 'Ids συμμετεχόντων — αντικαθιστά τη λίστα· όσοι δεν είναι στη δράση πέφτουν.' })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(300)
+  @IsUUID(undefined, { each: true })
+  participantIds?: string[];
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  order?: number;
 }

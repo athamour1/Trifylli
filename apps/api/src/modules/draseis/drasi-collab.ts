@@ -270,7 +270,7 @@ export class DrasiCollab implements OnModuleInit {
         people: ([drasiId]) => this.people(drasiId!),
       },
     ];
-    return [...specs.map(textDocument), this.itemType(), this.mealType(), this.roomType()];
+    return [...specs.map(textDocument), this.itemType(), this.mealType(), this.mealVariantType(), this.roomType()];
   }
 
   /**
@@ -447,6 +447,90 @@ export class DrasiCollab implements OnModuleInit {
           kind: 'meal',
           watchers: async () => [
             ...new Set([...(await this.assignees(itemId!)), ...(await this.holders(drasiId!, [DrasiRoleKind.MAGEIRISSA, DrasiRoleKind.TROFODOSIA]))]),
+          ],
+        });
+      },
+      people: ([drasiId]) => this.people(drasiId!),
+    };
+  }
+
+  /**
+   * Παράλληλο γεύμα (F16, `drasi:<id>:mealvariant:<id>`): ίδια δομή με το γεύμα
+   * (`MEAL_DOC`), δικός του πίνακας υλικών. Όνομα, σειρά και «για ποιους» με REST.
+   */
+  private mealVariantType(): CollabDocumentType {
+    const prisma = this.prisma;
+    const load = async (drasiId: string, variantId: string) => {
+      const variant = await prisma.drasiMealVariant.findFirst({
+        where: { id: variantId, item: { drasiId } },
+        select: {
+          recipe: true,
+          menu: true,
+          ingredients: {
+            orderBy: { order: 'asc' },
+            select: { id: true, order: true, label: true, qty: true, bought: true, boughtById: true, boughtAt: true },
+          },
+        },
+      });
+      if (!variant) return null;
+      return {
+        recipe: variant.recipe,
+        menu: variant.menu,
+        ingredients: variant.ingredients.map(({ boughtById, boughtAt, ...row }) => ({ ...row, boughtBy: boughtById, boughtAt: boughtAt?.toISOString() ?? null })),
+      };
+    };
+    return {
+      kind: 'drasi:mealvariant',
+      arity: 2,
+      schema: MEAL_DOC.schema,
+      access: async (user, [drasiId, variantId]) => {
+        const variant = await prisma.drasiMealVariant.findFirst({ where: { id: variantId, item: { drasiId } }, select: { id: true } });
+        if (!variant) return null;
+        return this.scope(user, drasiId!, { view: 'diatrofologio', edit: 'diatrofologio' });
+      },
+      seed: async (doc, [drasiId, variantId]) => {
+        const meal = await load(drasiId!, variantId!);
+        if (meal) seedMeal(doc, meal);
+        return Boolean(meal);
+      },
+      upgrade: async (doc, [drasiId, variantId]) => {
+        const meal = await load(drasiId!, variantId!);
+        if (meal) upgradeMeal(doc, meal);
+        return Boolean(meal);
+      },
+      project: async (doc, [drasiId, variantId]) => {
+        const write = normalizeMeal(readMeal(doc));
+        await prisma.$transaction(async (tx) => {
+          // Σβησμένο στο μεταξύ (το έγγραφο κλείνει μετά τη γραμμή): τίποτα να γραφτεί.
+          const { count } = await tx.drasiMealVariant.updateMany({
+            where: { id: variantId, item: { drasiId } },
+            data: { recipe: write.recipe, menu: write.menu },
+          });
+          if (!count) return;
+          await tx.drasiMealVariantIngredient.deleteMany({ where: { variantId } });
+          if (write.ingredients.length) {
+            await tx.drasiMealVariantIngredient.createMany({ data: write.ingredients.map((y) => ({ ...y, variantId: variantId! })) });
+          }
+        });
+      },
+      snapshot: (doc) => ({ ...readMeal(doc) }),
+      present: presentMeal,
+      restore: restoreMeal,
+      approval: this.approval(MEAL_DOC.recipe),
+      // Όπως το γεύμα: οι υπεύθυνοι του στοιχείου, η μαγείρισσα και η τροφοδοσία.
+      about: async ([drasiId, variantId]) => {
+        const variant = await prisma.drasiMealVariant.findFirst({
+          where: { id: variantId, item: { drasiId } },
+          select: { label: true, item: { select: { id: true, title: true } } },
+        });
+        if (!variant) return null;
+        const itemId = variant.item.id;
+        return this.about(drasiId!, {
+          where: (drasi) => `στο «${variant.label}» του γεύματος «${variant.item.title}» — δράση ${drasi}`,
+          link: `diatrofologio/${itemId}/${variantId}`,
+          kind: 'meal',
+          watchers: async () => [
+            ...new Set([...(await this.assignees(itemId)), ...(await this.holders(drasiId!, [DrasiRoleKind.MAGEIRISSA, DrasiRoleKind.TROFODOSIA]))]),
           ],
         });
       },

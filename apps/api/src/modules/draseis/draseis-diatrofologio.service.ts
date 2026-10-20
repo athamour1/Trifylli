@@ -1,15 +1,28 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { DrasiFormStatus, DrasiFormType, Prisma } from '@prisma/client';
-import { COLLAB_FIELDS, canSeeFoodNeeds, type DrasiFoodNeedsView, type KladosType, type DrasiDiatrofologioView, type DrasiMealSummary, type DrasiMealView, type DrasiScheduleItemView } from '@trifylli/shared';
+import {
+  COLLAB_FIELDS,
+  canSeeFoodNeeds,
+  collabDocument,
+  type DrasiFoodNeedsView,
+  type KladosType,
+  type DrasiDiatrofologioView,
+  type DrasiMealSummary,
+  type DrasiMealVariantView,
+  type DrasiMealView,
+  type DrasiScheduleItemView,
+} from '@trifylli/shared';
 import { AuditService } from '../../common/audit/audit.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
 import { refuseCollabFields } from '../collab/collab-fields';
+import { CollabService } from '../collab/collab.service';
 import { DrasiAccessService } from './drasi-access.service';
 import { DraseisPlanService } from './draseis-plan.service';
 import { isMeal } from './diatrofologio';
 import { foodNeedsOf } from './food-needs';
-import type { UpdateMealDto } from './dto/drasi-diatrofologio.dto';
+import { mealPortions } from './meal-portions';
+import type { UpdateMealDto, UpdateMealVariantDto } from './dto/drasi-diatrofologio.dto';
 
 /**
  * Το διατροφολόγιο μιας δράσης. Τα γεύματα δεν είναι δικά του: είναι τα στοιχεία
@@ -24,6 +37,7 @@ export class DraseisDiatrofologioService {
     private readonly access: DrasiAccessService,
     private readonly plan: DraseisPlanService,
     private readonly audit: AuditService,
+    private readonly collab: CollabService,
   ) {}
 
   /** Αλλεργίες & διατροφή από τις υποβληθείσες δηλώσεις υγείας (F16). Καταγράφεται. */
@@ -87,10 +101,13 @@ export class DraseisDiatrofologioService {
 
   async meal(user: RequestUser, id: string, itemId: string): Promise<DrasiMealView> {
     const item = await this.mealItem(user, id, itemId);
-    const meal = await this.prisma.drasiMeal.findUnique({
-      where: { itemId },
-      include: { ingredients: { orderBy: { order: 'asc' } } },
-    });
+    const [meal, parallel] = await Promise.all([
+      this.prisma.drasiMeal.findUnique({
+        where: { itemId },
+        include: { ingredients: { orderBy: { order: 'asc' } } },
+      }),
+      this.variants(user, id, itemId),
+    ]);
     return {
       itemId: item.id,
       date: item.date,
@@ -102,7 +119,88 @@ export class DraseisDiatrofologioService {
       menu: meal?.menu ?? null,
       recipe: meal?.recipe ?? null,
       ingredients: (meal?.ingredients ?? []).map((y) => ({ id: y.id, label: y.label, qty: y.qty, bought: y.bought })),
+      ...parallel,
     };
+  }
+
+  /** Νέο παράλληλο γεύμα, στο τέλος — άδειο, για κανέναν ακόμα. */
+  async addVariant(user: RequestUser, id: string, itemId: string, label: string): Promise<DrasiMealVariantView> {
+    await this.access.load(user, id, 'write');
+    await this.mealItem(user, id, itemId);
+    const last = await this.prisma.drasiMealVariant.aggregate({ where: { itemId }, _max: { order: true } });
+    const row = await this.prisma.drasiMealVariant.create({
+      data: { itemId, label: label.trim(), order: (last._max.order ?? -1) + 1, participantIds: [] },
+      select: { id: true },
+    });
+    return this.variant(user, id, itemId, row.id);
+  }
+
+  /** Όνομα, σειρά, «για ποιους» — μόνο συμμετέχοντες της δράσης. Μενού, συνταγή, ποσολόγιο: στο έγγραφό του. */
+  async updateVariant(user: RequestUser, id: string, itemId: string, vid: string, dto: UpdateMealVariantDto): Promise<DrasiMealVariantView> {
+    await this.access.load(user, id, 'write');
+    const found = await this.prisma.drasiMealVariant.findFirst({ where: { id: vid, itemId, item: { drasiId: id } }, select: { id: true } });
+    if (!found) throw new NotFoundException('Το παράλληλο γεύμα δεν βρέθηκε.');
+    const data: Prisma.DrasiMealVariantUpdateInput = {};
+    if (dto.label !== undefined) data.label = dto.label.trim();
+    if (dto.order !== undefined) data.order = dto.order;
+    if (dto.participantIds !== undefined) {
+      const rows = await this.prisma.drasiParticipant.findMany({ where: { drasiId: id, id: { in: dto.participantIds } }, select: { id: true } });
+      const known = new Set(rows.map((r) => r.id));
+      data.participantIds = [...new Set(dto.participantIds)].filter((pid) => known.has(pid));
+    }
+    await this.prisma.drasiMealVariant.update({ where: { id: vid }, data });
+    return this.variant(user, id, itemId, vid);
+  }
+
+  /** Σβήνει το παράλληλο — και το κοινό του έγγραφο. */
+  async removeVariant(user: RequestUser, id: string, itemId: string, vid: string) {
+    await this.access.load(user, id, 'write');
+    const { count } = await this.prisma.drasiMealVariant.deleteMany({ where: { id: vid, itemId, item: { drasiId: id } } });
+    if (!count) throw new NotFoundException('Το παράλληλο γεύμα δεν βρέθηκε.');
+    await this.collab.remove(collabDocument.drasiMealVariant(id, vid));
+    return { deleted: true };
+  }
+
+  /**
+   * Τα παράλληλα ενός γεύματος και οι μερίδες. Τα ονόματα του «για ποιους» μόνο σε
+   * όποιον βλέπει και τις αλλεργίες· οι άλλοι βλέπουν πόσοι.
+   */
+  private async variants(
+    user: RequestUser,
+    id: string,
+    itemId: string,
+  ): Promise<{ variants: DrasiMealVariantView[]; portions: DrasiMealView['portions'] }> {
+    const [access, rows, participants] = await Promise.all([
+      user.drasiGrant?.drasiId === id ? user.drasiGrant.access : this.access.accessFor(user, id),
+      this.prisma.drasiMealVariant.findMany({
+        where: { itemId },
+        orderBy: [{ order: 'asc' }, { label: 'asc' }],
+        include: { ingredients: { orderBy: { order: 'asc' } } },
+      }),
+      this.prisma.drasiParticipant.findMany({ where: { drasiId: id }, select: { id: true } }),
+    ]);
+    const present = new Set(participants.map((p) => p.id));
+    const portions = mealPortions([...present], rows);
+    const names = canSeeFoodNeeds(access);
+    return {
+      variants: rows.map((v, i) => ({
+        id: v.id,
+        label: v.label,
+        order: v.order,
+        participantIds: names ? [...new Set(v.participantIds)].filter((pid) => present.has(pid)) : null,
+        count: portions.perVariant[i] ?? 0,
+        menu: v.menu,
+        recipe: v.recipe,
+        ingredients: v.ingredients.map((y) => ({ id: y.id, label: y.label, qty: y.qty, bought: y.bought })),
+      })),
+      portions: { main: portions.main, total: present.size },
+    };
+  }
+
+  private async variant(user: RequestUser, id: string, itemId: string, vid: string): Promise<DrasiMealVariantView> {
+    const view = (await this.variants(user, id, itemId)).variants.find((v) => v.id === vid);
+    if (!view) throw new NotFoundException('Το παράλληλο γεύμα δεν βρέθηκε.');
+    return view;
   }
 
   /**

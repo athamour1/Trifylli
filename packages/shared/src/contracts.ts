@@ -1036,6 +1036,23 @@ export interface DrasiMealView {
   /** Η συνταγή — Markdown με εικόνες. */
   recipe: string | null;
   ingredients: DrasiMealIngredient[];
+  /** Τα παράλληλα γεύματα, με τη σειρά τους. */
+  variants: DrasiMealVariantView[];
+  /** Μερίδες: `main` το κύριο (όλοι μείον όσοι έχουν παράλληλο), `total` όλοι οι συμμετέχοντες. */
+  portions: { main: number; total: number };
+}
+
+/** Παράλληλο γεύμα (F16): πλήρες γεύμα για ιδιαιτερότητες, στο δικό του κοινό έγγραφο. */
+export interface DrasiMealVariantView {
+  id: string;
+  label: string;
+  order: number;
+  /** Για ποιους — `null` όταν ο χρήστης δεν βλέπει αλλεργίες (βλέπει μόνο `count`). */
+  participantIds: string[] | null;
+  count: number;
+  menu: string | null;
+  recipe: string | null;
+  ingredients: DrasiMealIngredient[];
 }
 
 export interface DrasiScheduleStelexos {
