@@ -142,7 +142,7 @@
             {{ scheduleCaption({ kindLabel: DRASI_SCHEDULE_KIND_LABEL[row.kind], location: row.location, responsibles: row.responsibles }, $q.screen.xs) }}
           </div>
           <!--
-            Κολατσιό μέσα στο στοιχείο: μπαίνει στο διατροφολόγιο. Χωρίς: γκρι
+            Ετικέτα γεύματος της ημέρας: μπαίνει στο διατροφολόγιο. Χωρίς: γκρι
             κρουασάν. Με: το ίδιο κουμπί γίνεται πορτοκαλί ετικέτα (πάτα για αλλαγή).
           -->
           <q-btn
@@ -159,17 +159,17 @@
             :icon="row.snack ? undefined : 'bakery_dining'"
             :label="row.snack ? DRASI_SNACK_LABEL[row.snack] : undefined"
             :color="row.snack ? 'orange-7' : 'grey-5'"
-            :aria-label="row.snack ? `Κολατσιό: ${DRASI_SNACK_LABEL[row.snack]}` : 'Κολατσιό'"
+            :aria-label="row.snack ? `Ετικέτα γεύματος: ${DRASI_SNACK_LABEL[row.snack]}` : 'Ετικέτα γεύματος'"
           >
-            <q-tooltip v-if="!row.snack">Κολατσιό</q-tooltip>
+            <q-tooltip v-if="!row.snack">Ετικέτα γεύματος</q-tooltip>
             <q-menu auto-close>
               <q-list dense>
-                <q-item-label header>Κολατσιό</q-item-label>
+                <q-item-label header>Γεύμα της ημέρας</q-item-label>
                 <q-item v-for="sn in snackOptions" :key="sn.value" clickable :active="sn.value === row.snack" active-class="text-klados" @click="row.snack = sn.value">
                   <q-item-section>{{ sn.label }}</q-item-section>
                 </q-item>
                 <q-item v-if="row.snack" clickable @click="row.snack = null">
-                  <q-item-section class="text-grey-7">Χωρίς κολατσιό</q-item-section>
+                  <q-item-section class="text-grey-7">Χωρίς ετικέτα</q-item-section>
                 </q-item>
               </q-list>
             </q-menu>

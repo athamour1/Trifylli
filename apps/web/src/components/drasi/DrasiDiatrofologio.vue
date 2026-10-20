@@ -11,7 +11,7 @@
         <SegmentedToggle v-model="dayKey" dense unelevated toggle-color="klados" toggle-text-color="klados-on" :options="dayOptions" />
       </div>
       <div class="text-caption text-grey-7 q-mb-md">
-        Τα γεύματα έρχονται από το πρόγραμμα: κάθε στοιχείο «Γεύμα», και όσα έχουν ετικέτα δεκατιανό ή απογευματινό.
+        Τα γεύματα έρχονται από το πρόγραμμα: κάθε στοιχείο «Γεύμα», και όσα έχουν ετικέτα γεύματος (πρωινό, δεκατιανό, μεσημεριανό, απογευματινό, βραδινό).
       </div>
 
       <q-card v-if="meals.length" flat bordered>
@@ -27,7 +27,7 @@
               <div class="text-caption text-grey-6">{{ hm(m.endsAt) }}</div>
             </q-item-section>
             <q-item-section avatar>
-              <q-icon :name="m.snack ? 'bakery_dining' : 'restaurant'" color="orange-7" />
+              <q-icon :name="m.snack === 'DEKATIANO' || m.snack === 'APOGEVMATINO' ? 'bakery_dining' : 'restaurant'" color="orange-7" />
             </q-item-section>
             <q-item-section>
               <q-item-label>

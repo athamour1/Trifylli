@@ -308,8 +308,11 @@ export const DRASI_SCHEDULE_STATUS_LABEL: Record<DrasiScheduleStatus, string> = 
 };
 
 export const DRASI_SNACK_LABEL: Record<DrasiSnack, string> = {
+  PROINO: 'Πρωινό',
   DEKATIANO: 'Δεκατιανό',
+  MESIMERIANO: 'Μεσημεριανό',
   APOGEVMATINO: 'Απογευματινό',
+  VRADINO: 'Βραδινό',
 };
 
 export const DRASI_REVIEW_KIND_LABEL: Record<DrasiReviewKind, string> = {

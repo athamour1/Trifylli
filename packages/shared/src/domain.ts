@@ -801,8 +801,11 @@ export type DrasiScheduleStatus = (typeof DrasiScheduleStatus)[keyof typeof Dras
  * στο διατροφολόγιο μαζί με τα «Γεύματα».
  */
 export const DrasiSnack = {
+  PROINO: 'PROINO',
   DEKATIANO: 'DEKATIANO',
+  MESIMERIANO: 'MESIMERIANO',
   APOGEVMATINO: 'APOGEVMATINO',
+  VRADINO: 'VRADINO',
 } as const;
 export type DrasiSnack = (typeof DrasiSnack)[keyof typeof DrasiSnack];
 

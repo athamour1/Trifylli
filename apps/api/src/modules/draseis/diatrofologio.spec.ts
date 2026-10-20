@@ -11,6 +11,11 @@ describe('isMeal', () => {
     expect(isMeal({ kind: 'METAKINISI', snack: 'APOGEVMATINO' })).toBe(true);
   });
 
+  it('και ό,τι έχει ετικέτα πρωινό, μεσημεριανό ή βραδινό', () => {
+    expect(isMeal({ kind: 'DRASTIRIOTITA', snack: 'PROINO' })).toBe(true);
+    expect(isMeal({ kind: 'GEVMA', snack: 'VRADINO' })).toBe(true);
+  });
+
   it('τα υπόλοιπα όχι', () => {
     expect(isMeal({ kind: 'DRASTIRIOTITA', snack: null })).toBe(false);
     expect(isMeal({ kind: 'XEKOURASI', snack: null })).toBe(false);
