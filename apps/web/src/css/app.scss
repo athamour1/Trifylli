@@ -53,10 +53,16 @@ body {
 // είναι ενεργά, οπότε χωρίς ρητό `color` ένα toggle μέσα σε κλάδο έμενε πράσινο
 // (π.χ. το «Μόνο με υπόλοιπο» στις Συνδρομές). Οι κλάσεις χρώματος της Quasar
 // (`color="deep-orange-7"`) είναι `!important`, άρα μια ρητή επιλογή υπερισχύει.
+// Στο σκοτεινό η Quasar ξαναβάφει με πιο ειδικό κανόνα (`.q-checkbox--dark …`),
+// οπότε τον καλύπτουμε κι αυτόν — αλλιώς το τσεκ της φόρμας γονέα έμενε πράσινο.
 .q-toggle__inner--truthy,
 .q-checkbox__inner--truthy,
 .q-checkbox__inner--indet,
-.q-radio__inner--truthy {
+.q-radio__inner--truthy,
+.q-toggle--dark .q-toggle__inner--truthy,
+.q-checkbox--dark .q-checkbox__inner--truthy,
+.q-checkbox--dark .q-checkbox__inner--indet,
+.q-radio--dark .q-radio__inner--truthy {
   color: var(--klados-ink);
 }
 
