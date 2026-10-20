@@ -549,7 +549,10 @@ const router = useRouter();
 
 /** Ανοιχτό στοιχείο της δράσης (βλ. `meta.drasiChild` στις διαδρομές) και ποιο. */
 const child = computed(() => route.meta.drasiChild ?? null);
-const childKey = computed(() => String(route.params.itemId ?? route.params.symvoulioId ?? ''));
+// Το συμβούλιο παίρνει το `childKey` και ως id του· το γεύμα ξαναστήνεται και ανά παράλληλο.
+const childKey = computed(() =>
+  route.params.itemId ? `${String(route.params.itemId)}:${String(route.params.variantId ?? '')}` : String(route.params.symvoulioId ?? ''),
+);
 
 /** Η ενότητα ζει στη διαδρομή (ή είναι εκείνη του ανοιχτού στοιχείου)· άγνωστη ή κενή ⇒ Επισκόπηση. */
 const section = computed(() => {

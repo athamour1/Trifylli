@@ -270,7 +270,7 @@ const routes: RouteRecordRaw[] = [
         meta: { title: 'Προγραμματικό', drasiChild: 'programmatiko', drasiSection: 'programmatika' },
       },
       {
-        path: 'draseis/:id/diatrofologio/:itemId',
+        path: 'draseis/:id/diatrofologio/:itemId/:variantId?',
         name: 'drasi-gevma',
         component: DrasiPage,
         meta: { title: 'Γεύμα', drasiChild: 'gevma', drasiSection: 'diatrofologio' },

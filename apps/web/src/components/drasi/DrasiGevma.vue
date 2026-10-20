@@ -4,6 +4,8 @@
     στο προγραμματικό) και το ποσολόγιο. Το γεύμα το ορίζει το πρόγραμμα· εδώ
     γράφουν μαγείρισσα και τροφοδοσία — μαζί, ζωντανά: όλα είναι ένα κοινό
     έγγραφο (`drasi:<id>:meal:<id>`) που σώζεται μόνο του.
+    Τα παράλληλα γεύματα (π.χ. «Χωρίς γλουτένη») είναι καρτέλες: το καθένα με το
+    δικό του έγγραφο (`drasi:<id>:mealvariant:<id>`), ίδιας μορφής με το κύριο.
   -->
   <div>
     <PageState :loading="loading && !meal" :error="error" :stale="stale" @retry="reload">
@@ -22,13 +24,41 @@
               <div class="text-caption text-grey-7">
                 {{ formatDateLong(meal.date) }} · {{ hm(meal.startsAt) }}–{{ hm(meal.endsAt) }}
               </div>
+              <div class="text-caption text-grey-7">{{ portionsCaption(meal.portions.main, meal.variants) }}</div>
             </div>
             <div class="col-12 col-sm-auto row items-center q-gutter-sm">
               <CollabPresence :peers="peers" />
               <SaveStatus v-if="editable" :status="saveState" />
               <DocumentHistory :document="docName" :writable="textEditable" />
+              <q-btn v-if="variant && editable" flat round dense icon="more_vert" color="klados">
+                <q-tooltip>Το παράλληλο</q-tooltip>
+                <q-menu auto-close>
+                  <q-list dense style="min-width: 160px">
+                    <q-item clickable @click="renameVariant">
+                      <q-item-section avatar><q-icon name="edit" size="xs" /></q-item-section>
+                      <q-item-section>Μετονομασία</q-item-section>
+                    </q-item>
+                    <q-item clickable class="text-negative" @click="removeVariant">
+                      <q-item-section avatar><q-icon name="delete" size="xs" /></q-item-section>
+                      <q-item-section>Διαγραφή</q-item-section>
+                    </q-item>
+                  </q-list>
+                </q-menu>
+              </q-btn>
             </div>
           </div>
+        </div>
+
+        <!-- ── Καρτέλες: το κύριο και τα παράλληλα ── -->
+        <div v-if="meal.variants.length || editable" class="row items-center q-gutter-sm q-mb-md">
+          <SegmentedToggle
+            v-if="meal.variants.length"
+            :model-value="variantId ?? ''"
+            :options="variantTabs(meal.portions.main, meal.variants)"
+            dense
+            @update:model-value="(value: unknown) => goVariant(String(value ?? ''))"
+          />
+          <q-btn v-if="editable" flat dense no-caps color="klados" icon="add" label="Παράλληλο" @click="addVariant" />
         </div>
 
         <CollabBanner :status="status" :ready="ready" :editable="editable" target="στο γεύμα" />
@@ -53,6 +83,18 @@
                 placeholder="π.χ. Μακαρόνια με κιμά, σαλάτα, φρούτο"
                 @update:model-value="(value) => setMenu(doc, String(value ?? ''))"
               />
+              <MealVariantPeople
+                v-if="variant && variant.participantIds !== null"
+                class="q-mt-md"
+                :drasi-id="drasiId"
+                :item-id="itemId"
+                :variant-id="variant.id"
+                :participant-ids="variant.participantIds"
+                :participants="drasi.participants ?? []"
+                :editable="editable"
+                :can-see-needs="canSeeFoodNeeds(drasi.access)"
+                @saved="reload"
+              />
             </q-card-section>
           </q-card>
 
@@ -74,7 +116,7 @@
               />
               <MarkdownField
                 v-else
-                :model-value="meal.recipe ?? ''"
+                :model-value="(variant ? variant.recipe : meal.recipe) ?? ''"
                 readonly
                 :klados="drasi.klados?.type ?? null"
                 empty-text="Δεν έχει γραφτεί συνταγή."
@@ -155,13 +197,16 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, shallowRef, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useQuasar } from 'quasar';
 import {
   DRASI_SNACK_LABEL,
   MEAL_DOC,
   ROW_LIMITS,
+  canSeeFoodNeeds,
   collabDocument,
   drasiCan,
   type DrasiAccess,
+  type DrasiMealVariantView,
   type DrasiMealView,
   type DrasiStatus,
   type IngredientSnapshot,
@@ -174,13 +219,17 @@ import ApprovalBar from '../collab/ApprovalBar.vue';
 import MarkdownField from '../MarkdownField.vue';
 import PageState from '../PageState.vue';
 import SaveStatus from '../SaveStatus.vue';
+import SegmentedToggle from '../SegmentedToggle.vue';
+import MealVariantPeople from './MealVariantPeople.vue';
 import { useAsyncData } from '../../composables/useAsyncData';
 import { useCollabDoc, useCollabMe } from '../../composables/useCollabDoc';
 import { useComments } from '../../composables/useComments';
-import { get } from '../../lib/api';
+import { useLiveReload } from '../../composables/useLiveChanges';
+import { ApiError, del, get, patch, post } from '../../lib/api';
 import { addIngredientAfter, hasSchema, readMealDoc, removeIngredient, setMenu, updateIngredient } from '../../lib/drasi-docs';
 import { formatDateLong } from '../../lib/format';
 import { keepFocus } from '../../lib/keep-focus';
+import { portionsCaption, variantTabs } from '../../lib/meal-variants';
 import { useAuthStore } from '../../stores/auth';
 import { useKladosThemeStore } from '../../stores/klados-theme';
 
@@ -193,14 +242,19 @@ interface DrasiHead {
   status: DrasiStatus;
   klados: { type: KladosType } | null;
   access: DrasiAccess;
+  /** Για το «για ποιους» των παράλληλων. */
+  participants?: { id: string; user: { firstName: string; lastName: string } }[];
 }
 
 const route = useRoute();
 const router = useRouter();
 const kladosTheme = useKladosThemeStore();
 const drasiId = String(route.params.id);
-// Η σελίδα ξαναστήνεται για κάθε γεύμα (βλ. το `key` στο MainLayout).
+// Η σελίδα ξαναστήνεται για κάθε γεύμα και κάθε παράλληλο (βλ. το `childKey` στο DrasiPage).
 const itemId = String(route.params.itemId);
+/** Η ανοιχτή καρτέλα: `null` = το κύριο γεύμα. */
+const variantId = route.params.variantId ? String(route.params.variantId) : null;
+const $q = useQuasar();
 
 const hm = (iso: string): string => {
   const d = new Date(iso);
@@ -220,6 +274,20 @@ const { data, loading, error, stale, reload } = useAsyncData(
 );
 const drasi = computed(() => data.value?.drasi ?? null);
 const meal = computed(() => data.value?.meal ?? null);
+/** Το ανοιχτό παράλληλο, αν είμαστε σε παράλληλο. */
+const variant = computed(() => (variantId ? (meal.value?.variants.find((v) => v.id === variantId) ?? null) : null));
+
+// Παράλληλα που προστέθηκαν/μετονομάστηκαν/σβήστηκαν αλλού: εμφανίζονται χωρίς ανανέωση.
+useLiveReload(['diatrofologio'], reload);
+
+// Το παράλληλο σβήστηκε (εδώ ή αλλού): πίσω στο κύριο. Όχι πάνω σε παλιό αντίγραφο συσκευής.
+watch(
+  () => (variantId && meal.value && !stale.value && !variant.value ? true : false),
+  (gone) => {
+    if (gone) goVariant('');
+  },
+  { immediate: true },
+);
 
 watch(
   () => (drasi.value ? (drasi.value.klados?.type ?? null) : undefined),
@@ -231,7 +299,7 @@ watch(
 const editable = computed(() => !!drasi.value && drasi.value.status !== 'KLEISTI' && drasiCan(drasi.value.access, 'diatrofologio', 'edit'));
 
 // ── Το γεύμα: κοινό έγγραφο, σώζει μόνο του ──
-const docName = collabDocument.drasiMeal(drasiId, itemId);
+const docName = variantId ? collabDocument.drasiMealVariant(drasiId, variantId) : collabDocument.drasiMeal(drasiId, itemId);
 const auth = useAuthStore();
 const { doc, awareness, ready, writable, status, peers, saveState } = useCollabDoc(docName, useCollabMe());
 
@@ -267,9 +335,10 @@ const fieldsEditable = computed(() => textEditable.value && schemaOk.value);
 /** Ό,τι δείχνει η σελίδα: το έγγραφο όταν έχει τα πεδία, αλλιώς ό,τι έφερε το `GET`. */
 const view = computed<{ menu: string; ingredients: IngredientSnapshot[] }>(() => {
   if (ready.value && schemaOk.value && docMeal.value) return docMeal.value;
+  const source = variantId ? variant.value : meal.value;
   return {
-    menu: meal.value?.menu ?? '',
-    ingredients: (meal.value?.ingredients ?? []).map((y, order) => ({ ...y, order, boughtBy: null, boughtAt: null })),
+    menu: source?.menu ?? '',
+    ingredients: (source?.ingredients ?? []).map((y, order) => ({ ...y, order, boughtBy: null, boughtAt: null })),
   };
 });
 
@@ -297,5 +366,65 @@ function addRow(afterId: string | null): void {
 // ── Πλοήγηση ──
 function goBack(): void {
   void router.push({ name: 'drasi', params: { id: drasiId, section: 'diatrofologio' } });
+}
+/** Αλλαγή καρτέλας χωρίς νέα εγγραφή στο ιστορικό· `''` = το κύριο. */
+function goVariant(value: string): void {
+  if ((value || null) === variantId) return;
+  void router.replace({ name: 'drasi-gevma', params: { id: drasiId, itemId, variantId: value || undefined } });
+}
+
+// ── Παράλληλα γεύματα ──
+const variantsUrl = `/draseis/${drasiId}/diatrofologio/${itemId}/variants`;
+function notifyError(err: unknown): void {
+  $q.notify({ type: 'negative', message: err instanceof ApiError ? err.message : 'Αποτυχία.' });
+}
+function addVariant(): void {
+  $q.dialog({
+    title: 'Νέο παράλληλο',
+    prompt: { model: '', type: 'text', placeholder: 'π.χ. Χωρίς γλουτένη', isValid: (v: string) => v.trim().length > 0 },
+    cancel: { label: 'Άκυρο', flat: true },
+    ok: { label: 'Προσθήκη', color: 'klados' },
+  }).onOk(async (label: string) => {
+    try {
+      const created = await post<DrasiMealVariantView>(variantsUrl, { label: label.trim() });
+      goVariant(created.id);
+    } catch (err) {
+      notifyError(err);
+    }
+  });
+}
+function renameVariant(): void {
+  const current = variant.value;
+  if (!current) return;
+  $q.dialog({
+    title: 'Μετονομασία',
+    prompt: { model: current.label, type: 'text', isValid: (v: string) => v.trim().length > 0 },
+    cancel: { label: 'Άκυρο', flat: true },
+    ok: { label: 'Αποθήκευση', color: 'klados' },
+  }).onOk(async (label: string) => {
+    try {
+      await patch(`${variantsUrl}/${current.id}`, { label: label.trim() });
+      await reload();
+    } catch (err) {
+      notifyError(err);
+    }
+  });
+}
+function removeVariant(): void {
+  const current = variant.value;
+  if (!current) return;
+  $q.dialog({
+    title: 'Διαγραφή παράλληλου',
+    message: `Το «${current.label}» θα διαγραφεί μαζί με το μενού, τη συνταγή και το ποσολόγιό του. Συνέχεια;`,
+    cancel: { label: 'Άκυρο', flat: true },
+    ok: { label: 'Διαγραφή', color: 'negative' },
+  }).onOk(async () => {
+    try {
+      await del(`${variantsUrl}/${current.id}`);
+      goVariant('');
+    } catch (err) {
+      notifyError(err);
+    }
+  });
 }
 </script>
