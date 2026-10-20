@@ -431,6 +431,8 @@ export class DraseisFormsService {
     if (form.status === DrasiFormStatus.SENT) {
       await this.prisma.drasiForm.update({ where: { id: form.id }, data: { status: DrasiFormStatus.OPENED, openedAt: new Date() } });
       this.logger.log(`Έντυπο ${form.id} ανοίχτηκε (${ip ?? '-'}).`);
+      // «Το άνοιξε»: η δράση το βλέπει αμέσως, όπως και την υποβολή.
+      this.collab.broadcast(collabDocument.drasiRoom(form.drasiId), { topic: 'forms', by: null, origin: null });
     }
     const isMinor = minorAt(form.participant.user.birthDate, form.drasi.dateStart, form.participant.kind);
     const u = form.participant.user;

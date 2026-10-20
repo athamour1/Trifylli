@@ -423,6 +423,7 @@ export class DraseisReviewService {
     if (ctx.invite?.status === DrasiFormStatus.SENT) {
       await this.prisma.drasiReviewInvite.update({ where: { id: ctx.invite.id }, data: { status: DrasiFormStatus.OPENED, openedAt: new Date() } });
       this.logger.log(`Αξιολόγηση ${ctx.invite.id} ανοίχτηκε (${ip ?? '-'}).`);
+      this.collab.broadcast(collabDocument.drasiRoom(ctx.drasi.id), { topic: 'review', by: null, origin: null });
     }
     return this.publicView(ctx, await this.guestOf(ctx, guestId));
   }
