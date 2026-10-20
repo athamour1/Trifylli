@@ -52,7 +52,6 @@ export const TOPIKO_LINKS = [
   { name: 'meloi', title: 'Μητρώο μελών', icon: 'contacts' },
   { name: 'syndromes', title: 'Συνδρομές', icon: 'euro' },
   { name: 'tamio', title: 'Ταμείο Τοπικού', icon: 'account_balance' },
-  { name: 'farmakeio', title: 'Φαρμακείο', icon: 'medical_services' },
   { name: 'farmakeia', title: 'Φαρμακεία', icon: 'local_pharmacy' },
   { name: 'integrations', title: 'Ενσωματώσεις', icon: 'cloud_sync' },
   { name: 'accounts', title: 'Λογαριασμοί', icon: 'admin_panel_settings' },
@@ -357,12 +356,8 @@ const routes: RouteRecordRaw[] = [
         component: () => import('../pages/TamioPage.vue'),
         meta: { title: 'Ταμείο Τοπικού', icon: 'account_balance', superAdmin: true },
       },
-      {
-        path: 'farmakeio',
-        name: 'farmakeio',
-        component: () => import('../pages/FarmakeioPage.vue'),
-        meta: { title: 'Φαρμακείο', icon: 'medical_services', superAdmin: true },
-      },
+      // Το παλιό απόθεμα (αντίγραφο του OuchTracker) έδωσε τη θέση του στα Φαρμακεία.
+      { path: 'farmakeio', redirect: { name: 'farmakeia' } },
       {
         path: 'farmakeia',
         name: 'farmakeia',
