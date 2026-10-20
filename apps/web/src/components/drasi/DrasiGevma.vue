@@ -24,7 +24,7 @@
               <div class="text-caption text-grey-7">
                 {{ formatDateLong(meal.date) }} · {{ hm(meal.startsAt) }}–{{ hm(meal.endsAt) }}
               </div>
-              <div class="text-caption text-grey-7">{{ portionsCaption(meal.portions.main, meal.variants) }}</div>
+              <div class="text-caption text-grey-7">{{ portionsCaption(mainPortions, variants) }}</div>
             </div>
             <div class="col-12 col-sm-auto row items-center q-gutter-sm">
               <CollabPresence :peers="peers" />
@@ -50,11 +50,11 @@
         </div>
 
         <!-- ── Καρτέλες: το κύριο και τα παράλληλα ── -->
-        <div v-if="meal.variants.length || editable" class="row items-center q-gutter-sm q-mb-md">
+        <div v-if="variants.length || editable" class="row items-center q-gutter-sm q-mb-md">
           <SegmentedToggle
-            v-if="meal.variants.length"
+            v-if="variants.length"
             :model-value="variantId ?? ''"
-            :options="variantTabs(meal.portions.main, meal.variants)"
+            :options="variantTabs(mainPortions, variants)"
             dense
             @update:model-value="(value: unknown) => goVariant(String(value ?? ''))"
           />
@@ -116,7 +116,7 @@
               />
               <MarkdownField
                 v-else
-                :model-value="(variant ? variant.recipe : meal.recipe) ?? ''"
+                :model-value="(variantId ? (variant?.recipe ?? null) : meal.recipe) ?? ''"
                 readonly
                 :klados="drasi.klados?.type ?? null"
                 empty-text="Δεν έχει γραφτεί συνταγή."
@@ -274,8 +274,11 @@ const { data, loading, error, stale, reload } = useAsyncData(
 );
 const drasi = computed(() => data.value?.drasi ?? null);
 const meal = computed(() => data.value?.meal ?? null);
+// Παλιό αντίγραφο συσκευής δεν έχει τα πεδία των παράλληλων.
+const variants = computed(() => meal.value?.variants ?? []);
+const mainPortions = computed(() => meal.value?.portions?.main ?? 0);
 /** Το ανοιχτό παράλληλο, αν είμαστε σε παράλληλο. */
-const variant = computed(() => (variantId ? (meal.value?.variants.find((v) => v.id === variantId) ?? null) : null));
+const variant = computed(() => (variantId ? (variants.value.find((v) => v.id === variantId) ?? null) : null));
 
 // Παράλληλα που προστέθηκαν/μετονομάστηκαν/σβήστηκαν αλλού: εμφανίζονται χωρίς ανανέωση.
 useLiveReload(['diatrofologio'], reload);

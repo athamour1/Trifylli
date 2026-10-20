@@ -24,7 +24,7 @@
         Κανένα γεύμα με ποσολόγιο αυτή την ημέρα — τα υλικά γράφονται στο Διατροφολόγιο.
       </div>
       <q-card v-for="meal in mealsWithIngredients" :key="`${meal.itemId}:${meal.variantId ?? ''}`" flat bordered class="q-mb-sm">
-        <q-item dense clickable :to="{ name: 'drasi-gevma', params: { id: drasiId, itemId: meal.itemId } }">
+        <q-item dense clickable :to="{ name: 'drasi-gevma', params: { id: drasiId, itemId: meal.itemId, variantId: meal.variantId ?? undefined } }">
           <q-item-section>
             <q-item-label class="text-weight-medium">{{ meal.title }} <q-badge v-if="meal.variantLabel" outline :label="meal.variantLabel" /></q-item-label>
             <q-item-label caption>{{ hm(meal.startsAt) }} · {{ countBought(meal.ingredients) }}/{{ meal.ingredients.length }}</q-item-label>

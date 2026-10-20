@@ -217,7 +217,7 @@ export class DraseisDiatrofologioService {
   private async mealItem(user: RequestUser, id: string, itemId: string): Promise<DrasiScheduleItemView> {
     const item = (await this.plan.schedule(user, id)).find((i) => i.id === itemId);
     if (!item) throw new NotFoundException('Το στοιχείο του ωρολογίου δεν βρέθηκε.');
-    if (!isMeal(item)) throw new BadRequestException('Δεν είναι γεύμα — βάλε στο πρόγραμμα είδος «Γεύμα» ή ετικέτα κολατσιού.');
+    if (!isMeal(item)) throw new BadRequestException('Δεν είναι γεύμα — βάλε στο πρόγραμμα είδος «Γεύμα» ή ετικέτα γεύματος.');
     return item;
   }
 }
