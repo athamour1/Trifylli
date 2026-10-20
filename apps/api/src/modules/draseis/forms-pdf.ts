@@ -41,6 +41,9 @@ export interface FilledFormInput {
 const ASSETS_DIR = path.resolve(__dirname, '../../../assets');
 const INK = rgb(0.1, 0.1, 0.4);
 const BLACK = rgb(0, 0, 0);
+/** Τα χρώματα του ίδιου του εντύπου: κείμενο (navy) και γραμμές συμπλήρωσης. */
+const FORM_NAVY = rgb(0, 32 / 255, 96 / 255);
+const FORM_LINE = rgb(91 / 255, 155 / 255, 213 / 255);
 
 interface Fonts {
   regular: PDFFont;
@@ -181,6 +184,48 @@ class Writer {
     if (lines.length > box.lines) shown[box.lines - 1] = `${shown[box.lines - 1]!.slice(0, -1)}…`;
     const p = this.page(box.page);
     shown.forEach((line, i) => p.drawText(line, { x: box.x, y: p.getHeight() - box.y - i * lineHeight, size, font, color: INK }));
+  }
+
+  /** Κείμενο του εντύπου (ετικέτα, τίτλος) στο χρώμα του — για ό,τι ξαναγράφουμε. Επιστρέφει πού τελειώνει. */
+  label(page: number, x: number, baseline: number, text: string, opts: { bold?: boolean; size?: number } = {}): number {
+    const font = opts.bold ? this.fonts.bold : this.fonts.regular;
+    const size = opts.size ?? 10;
+    const p = this.page(page);
+    p.drawText(text, { x, y: p.getHeight() - baseline, size, font, color: FORM_NAVY });
+    return x + font.widthOfTextAtSize(text, size);
+  }
+
+  /** Παράγραφος του εντύπου με αναδίπλωση· επιστρέφει τη baseline της τελευταίας γραμμής. */
+  paragraph(page: number, x: number, baseline: number, w: number, text: string, opts: { bold?: boolean; size?: number } = {}): number {
+    const font = opts.bold ? this.fonts.bold : this.fonts.regular;
+    const size = opts.size ?? 10;
+    const lines: string[] = [];
+    let cur = '';
+    for (const word of text.split(/\s+/)) {
+      const next = cur ? `${cur} ${word}` : word;
+      if (font.widthOfTextAtSize(next, size) <= w || !cur) cur = next;
+      else {
+        lines.push(cur);
+        cur = word;
+      }
+    }
+    if (cur) lines.push(cur);
+    const lineHeight = size * 1.25;
+    lines.forEach((line, i) => this.label(page, x, baseline + i * lineHeight, line, opts));
+    return baseline + (lines.length - 1) * lineHeight;
+  }
+
+  /** Γραμμή συμπλήρωσης του εντύπου. */
+  rule(page: number, x1: number, x2: number, y: number): void {
+    const p = this.page(page);
+    p.drawLine({ start: { x: x1, y: p.getHeight() - y }, end: { x: x2, y: p.getHeight() - y }, thickness: 0.75, color: FORM_LINE });
+  }
+
+  /** Ετικέτα + γραμμή ως το τέλος της στήλης + η τιμή πάνω στη γραμμή. */
+  field(page: number, x: number, baseline: number, end: number, label: string, value: string | null | undefined): void {
+    const start = this.label(page, x, baseline, label) + 4;
+    this.rule(page, start, end, baseline + 2);
+    this.text({ page, x: start + 2, y: baseline + 2, w: end - start - 2 }, value);
   }
 
   /** Τελεία μέσα σε κύκλο Ναι/Όχι. */
@@ -342,20 +387,49 @@ function fillYgeia(w: Writer, input: FilledFormInput, minor: boolean): void {
     w.text({ page: 2, x: 248, y: 616, w: 180 }, input.signerName);
     w.text({ page: 2, x: 97, y: 668, w: 420 }, numeric(input.dueAt));
   } else {
-    // Έντυπο στελέχους: το «Θα ήθελα να προσθέσω» και το 1ο άτομο είναι στο τέλος της σελίδας 2.
+    // Έντυπο στελέχους: το «Θα ήθελα να προσθέσω» μένει στο τέλος της σελίδας 2.
     w.box({ page: 1, x: 97, y: 699, w: 430, lines: 2 }, str(a.addendum));
-    w.text({ page: 1, x: 395, y: 745, w: 130 }, str(a.emergency1Name));
-    w.text({ page: 1, x: 375, y: 767, w: 150 }, str(a.emergency1Phone1));
-    w.text({ page: 2, x: 150, y: 142, w: 150 }, str(a.emergency1Phone2));
-    w.text({ page: 2, x: 238, y: 167, w: 75, size: 8 }, str(a.emergency1Relation));
-    w.text({ page: 2, x: 395, y: 164, w: 130 }, str(a.emergency2Name));
-    w.text({ page: 2, x: 395, y: 189, w: 130 }, str(a.emergency2Phone1));
-    w.text({ page: 2, x: 395, y: 214, w: 130 }, str(a.emergency2Phone2));
-    w.text({ page: 2, x: 335, y: 252, w: 190, size: 9 }, str(a.emergency2Relation));
+    staffEmergency(w, a);
     w.text({ page: 2, x: 408, y: 408, w: 110 }, numeric(input.submittedAt));
     w.text({ page: 2, x: 170, y: 445, w: 180 }, input.signerName);
     w.text({ page: 2, x: 97, y: 516, w: 420 }, numeric(input.dueAt));
   }
+}
+
+/**
+ * «Τηλέφωνα Έκτακτης Ανάγκης» στο έντυπο στελέχους. Στο πρωτότυπο του Σ.Ε.Ο. η
+ * ενότητα σπάει στα δύο: τίτλος και 1ο άτομο κάτω στη σελίδα 2, τα υπόλοιπα πάνω
+ * στη 3, με το «…κατά την διάρκεια της Κατασκήνωσης.» μοιρασμένο σε δύο στήλες.
+ * Σβήνουμε και τα δύο κομμάτια και την ξαναγράφουμε ολόκληρη στην αρχή της
+ * σελίδας 3, όπως είναι στο έντυπο γονέα: τίτλος, οδηγία, δύο άτομα δίπλα-δίπλα.
+ * Το λογότυπο της σελίδας 3 φτάνει ως y≈131 μόνο αριστερά από x≈88.
+ */
+function staffEmergency(w: Writer, a: Record<string, unknown>): void {
+  // Σελίδα 2: από τον τίτλο ως πάνω από το υποσέλιδο (το κουτί «Θα ήθελα…» τελειώνει στο 721).
+  w.erase(1, 85, 726, 450, 54);
+  // Σελίδα 3: το «Κατασκήνωσης.» δεξιά και το μισό μπλοκ, ως πάνω από τη «Συγκατάθεση» (285)
+  // και ως πριν από το περίγραμμα (568) — οι παλιές γραμμές φτάνουν ως το 546.
+  w.erase(2, 300, 114, 260, 16);
+  w.erase(2, 88, 129, 472, 125);
+
+  w.label(2, 90, 143, 'Τηλέφωνα Έκτακτης Ανάγκης', { bold: true, size: 10.5 });
+  const after = w.paragraph(
+    2,
+    90,
+    158,
+    435,
+    'Παρακαλώ, συμπληρώστε τα στοιχεία του προσώπου που μπορούμε να επικοινωνήσουμε οποιαδήποτε στιγμή, κατά την διάρκεια της Κατασκήνωσης.',
+    { bold: true, size: 8 },
+  );
+  const rows = [after + 22, after + 43, after + 64, after + 85];
+  const person = (n: 1 | 2, x: number, end: number) => {
+    w.field(2, x, rows[0]!, end, 'Ονοματεπώνυμο', str(a[`emergency${n}Name`]));
+    w.field(2, x, rows[1]!, end, 'Τηλέφωνο 1', str(a[`emergency${n}Phone1`]));
+    w.field(2, x, rows[2]!, end, 'Τηλέφωνο 2', str(a[`emergency${n}Phone2`]));
+    w.field(2, x, rows[3]!, end, 'Ποια είναι η σχέση του μαζί σας;', str(a[`emergency${n}Relation`]));
+  };
+  person(1, 90, 300);
+  person(2, 315, 525);
 }
 
 /** Πού κάθεται η εικόνα της υπογραφής: κουτί (x, κάτω άκρο από πάνω, w, h) στη γραμμή «Υπογραφή». */
