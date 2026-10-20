@@ -1,4 +1,4 @@
-import { guestTopikoKey } from '@trifylli/shared';
+import { guestTopikoKey, type DrasiGuestTopikoView, type KladosType } from '@trifylli/shared';
 
 export interface GuestTopikaPlan<T> {
   create: T[];
@@ -54,5 +54,31 @@ export function planGuestTopika<T extends { id?: string; topikoName: string }>(
     }),
     remove: [...free.keys()],
     duplicates: [],
+  };
+}
+
+/** Ό,τι χρειάζεται η προβολή ενός φιλοξενούμενου Τοπικού: και ο υπεύθυνός του ως άτομο. */
+export const guestTopikoInclude = {
+  contactUser: { select: { id: true, firstName: true, lastName: true, email: true, phone: true, accountRole: true } },
+} as const;
+
+export function toGuestTopikoView(row: {
+  id: string;
+  topikoName: string;
+  kladoi: string[];
+  contactName: string | null;
+  contactPhone: string | null;
+  contactUser: { id: string; firstName: string; lastName: string; email: string | null; phone: string | null; accountRole: string | null } | null;
+}): DrasiGuestTopikoView {
+  const c = row.contactUser;
+  return {
+    id: row.id,
+    topikoName: row.topikoName,
+    kladoi: row.kladoi as KladosType[],
+    contactName: row.contactName,
+    contactPhone: row.contactPhone,
+    contact: c
+      ? { userId: c.id, firstName: c.firstName, lastName: c.lastName, email: c.email, phone: c.phone, hasAccount: c.accountRole !== null }
+      : null,
   };
 }

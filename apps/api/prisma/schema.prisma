@@ -392,6 +392,7 @@ model User {
   commentsResolved        Comment[]                  @relation("CommentResolver")
   ypiresiesResponsible    DrasiYpiresiaResponsible[]
   drasiFeesCollected      DrasiParticipant[]         @relation("DrasiFeeCollector")
+  guestTopikoContacts     DrasiGuestTopiko[]         @relation("GuestTopikoContact")
   drasiPaymentsCollected  DrasiPayment[]             @relation("DrasiPaymentCollector")
   drasiLedger             DrasiLedgerEntry[]         @relation("DrasiLedgerUser")
   drasiLedgerAuthored     DrasiLedgerEntry[]         @relation("DrasiLedgerAuthor")
@@ -1213,11 +1214,17 @@ model DrasiGuestTopiko {
   topikoName   String
   /// Ποιοι κλάδοι τους έρχονται — τιμές, όχι FK: δεν υπάρχουν εγγραφές `Klados` γι' αυτούς.
   kladoi       KladosType[]
+  /// Το όνομα και το τηλέφωνο του υπευθύνου, για εμφάνιση (καρτέλες, ντοσιέ).
   contactName  String?
   contactPhone String?
+  /// Ο υπεύθυνος ως άτομο: φιλοξενούμενο στέλεχος της δράσης από αυτό το Τοπικό.
+  /// Εισπράττει από τους δικούς του (`DrasiParticipant.collectorId`) και από τα
+  /// «Εξωτερικά στελέχη» μπορεί να πάρει λογαριασμό — το ίδιο άτομο.
+  contactUserId String?     @db.Uuid
   createdAt    DateTime     @default(now())
 
   drasi         Drasi                @relation(fields: [drasiId], references: [id], onDelete: Cascade)
+  contactUser   User?                @relation("GuestTopikoContact", fields: [contactUserId], references: [id], onDelete: SetNull)
   externalYliko DrasiExternalYliko[]
 
   @@index([drasiId])

@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { guestTopikaErrors, guestTopikaPayload, type GuestTopikoForm } from '../src/components/drasi/types';
+import { guestTopikaErrors, guestTopikaPayload, toGuestTopikoForm, type GuestTopikoForm } from '../src/components/drasi/types';
 
 const card = (over: Partial<GuestTopikoForm>): GuestTopikoForm => ({
   key: 'k',
   topikoName: '',
   kladoi: [],
-  contactName: '',
+  contactFirstName: '',
+  contactLastName: '',
+  contactEmail: '',
   contactPhone: '',
+  contactHasAccount: false,
   ...over,
 });
 
@@ -32,16 +35,28 @@ describe('guestTopikaErrors', () => {
   });
 });
 
+describe('υπεύθυνος Τοπικού', () => {
+  it('μισός υπεύθυνος δεν αποθηκεύεται: θέλει επώνυμο και όνομα', () => {
+    expect(guestTopikaErrors([card({ topikoName: 'Ελευσίνα', contactFirstName: 'Πηνελόπη' })])[0]).toMatch(/επώνυμο/);
+    expect(guestTopikaErrors([card({ topikoName: 'Ελευσίνα', contactFirstName: 'Π', contactLastName: 'Γ', contactEmail: 'όχι-email' })])[0]).toMatch(/email/);
+  });
+
+  it('παλιά εγγραφή με μόνο «Όνομα Επώνυμο»: σπάει στα δύο πεδία', () => {
+    const form = toGuestTopikoForm({ id: 'g', topikoName: 'ΤΤ Ελευσίνας', kladoi: [], contactName: 'Πηνελόπη Γιακοβάκη', contactPhone: null, contact: null });
+    expect(form).toMatchObject({ contactFirstName: 'Πηνελόπη', contactLastName: 'Γιακοβάκη' });
+  });
+});
+
 describe('guestTopikaPayload', () => {
   it('στέλνει μόνο τα πεδία του API — το κλειδί της κάρτας μένει στη φόρμα', () => {
     const payload = guestTopikaPayload([
-      card({ key: 'a', id: 'a', topikoName: ' Χαλάνδρι ', kladoi: ['ODIGOI'], contactName: ' Μαρία ', contactPhone: '69 ' }),
+      card({ key: 'a', id: 'a', topikoName: ' Χαλάνδρι ', kladoi: ['ODIGOI'], contactFirstName: ' Μαρία ', contactLastName: 'Π. ', contactPhone: '69 ' }),
       card({ key: 'new-1', topikoName: 'Ελευσίνα' }),
     ]);
     expect(payload).toEqual({
       items: [
-        { id: 'a', topikoName: 'Χαλάνδρι', kladoi: ['ODIGOI'], contactName: 'Μαρία', contactPhone: '69' },
-        { topikoName: 'Ελευσίνα', kladoi: [], contactName: undefined, contactPhone: undefined },
+        { id: 'a', topikoName: 'Χαλάνδρι', kladoi: ['ODIGOI'], contactFirstName: 'Μαρία', contactLastName: 'Π.', contactEmail: undefined, contactPhone: '69' },
+        { topikoName: 'Ελευσίνα', kladoi: [], contactFirstName: undefined, contactLastName: undefined, contactEmail: undefined, contactPhone: undefined },
       ],
     });
     expect(Object.keys(payload.items[1]!)).not.toContain('id');
@@ -49,7 +64,7 @@ describe('guestTopikaPayload', () => {
 
   it('οι κάρτες που δεν συμπληρώθηκαν δεν στέλνονται', () => {
     expect(guestTopikaPayload([card({ key: 'new-1' }), card({ key: 'new-2', topikoName: 'Μαρούσι' })]).items).toEqual([
-      { topikoName: 'Μαρούσι', kladoi: [], contactName: undefined, contactPhone: undefined },
+      { topikoName: 'Μαρούσι', kladoi: [], contactFirstName: undefined, contactLastName: undefined, contactEmail: undefined, contactPhone: undefined },
     ]);
   });
 });

@@ -7,6 +7,7 @@ import { AuthentikClient } from '../integrations/authentik.client';
 import { DrasiAccessService } from './drasi-access.service';
 import type { CreateDrasiExternalDto } from './dto/drasi-externals.dto';
 import { accessEmailProblem } from './external-access';
+import { assignGuestCollectors } from './guest-collectors';
 
 /**
  * Μαρκάρει τους εξωτερικούς ως «φιλοξενούμενους»: έτσι μένουν εκτός μητρώου,
@@ -94,7 +95,7 @@ export class DraseisExternalsService {
     }
     if (problem === 'external') {
       throw new ConflictException(
-        'Υπάρχει ήδη εξωτερικό στέλεχος με αυτό το email — πρόσθεσέ το από το «Νέο εξωτερικό στέλεχος» και βγάλε τον φιλοξενούμενο από τους συμμετέχοντες.',
+        'Υπάρχει ήδη εξωτερικό στέλεχος με αυτό το email — πρόσθεσέ το από τους φιλοξενούμενους και βγάλε αυτόν από τους συμμετέχοντες.',
       );
     }
 
@@ -147,6 +148,7 @@ export class DraseisExternalsService {
       create: { drasiId: id, userId: person.id, kind: MemberKind.STELEXOS, feeKind: DrasiFeeKind.STELEXOS },
       update: { kind: MemberKind.STELEXOS },
     });
+    await assignGuestCollectors(this.prisma, id);
 
     const external = (await this.list(user, id)).find((e) => e.userId === person.id)!;
     try {

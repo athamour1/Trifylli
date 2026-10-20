@@ -6,6 +6,7 @@ import {
   IsArray,
   IsBoolean,
   IsDate,
+  IsEmail,
   IsEnum,
   IsNumber,
   IsOptional,
@@ -273,11 +274,29 @@ export class GuestTopikoDto {
   @IsEnum(KladosType, { each: true })
   kladoi!: KladosType[];
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: 'Παλιά μορφή (μόνο όνομα) — όταν δεν δίνονται επώνυμο/όνομα.' })
   @IsOptional()
   @IsString()
   @MaxLength(120)
   contactName?: string;
+
+  @ApiPropertyOptional({ description: 'Ο υπεύθυνος: με επώνυμο και όνομα γίνεται φιλοξενούμενο στέλεχος της δράσης.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  contactFirstName?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  contactLastName?: string;
+
+  @ApiPropertyOptional({ description: 'Για λογαριασμό αργότερα, από τα «Εξωτερικά στελέχη».' })
+  @IsOptional()
+  @IsEmail({}, { message: 'Μη έγκυρο email υπευθύνου.' })
+  @MaxLength(200)
+  contactEmail?: string;
 
   @ApiPropertyOptional()
   @IsOptional()

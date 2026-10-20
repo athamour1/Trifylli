@@ -13,6 +13,7 @@ import {
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
 import { DrasiAccessService } from './drasi-access.service';
+import { assignGuestCollectors } from './guest-collectors';
 import type { CreateGroupDto, CreateGuestDto, SetGroupMembersDto, UpdateGroupDto } from './dto/drasi-groups.dto';
 
 const memberUserSelect = {
@@ -28,7 +29,7 @@ const memberUserSelect = {
  * Σήμα «μέλος άλλου Τοπικού» στο `User.guestTopikoCode` (τα εξωτερικά στελέχη
  * έχουν `EXT`). Από ποιο Τοπικό έρχεται το λέει το `guestTopikoName`.
  */
-const GUEST_MARK = 'GUEST';
+export const GUEST_MARK = 'GUEST';
 
 /**
  * Φιλοξενούμενοι από άλλα Τοπικά (F3) και ομάδες — πεντάδες, φωλιές, ενωμοτίες,
@@ -102,6 +103,7 @@ export class DraseisGroupsService {
       },
       include: { _count: { select: { participations: true } } },
     });
+    await assignGuestCollectors(this.prisma, id);
     return toGuestView(created);
   }
 

@@ -6,6 +6,7 @@ import {
   collabDocument,
   DRASI_ROLE_LABEL,
   drasiCan,
+  guestTopikoKey,
   KLADOS_LABEL,
   KLADOS_META,
   type DrasiAccess,
@@ -25,7 +26,9 @@ import { CollabService } from '../collab/collab.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { DrasiAccessService, viaOwnKlados } from './drasi-access.service';
 import { defaultFeeKind } from './draseis-finance.service';
-import { planGuestTopika } from './guest-topika';
+import { GUEST_MARK } from './draseis-groups.service';
+import { assignGuestCollectors } from './guest-collectors';
+import { guestTopikoInclude, planGuestTopika, toGuestTopikoView } from './guest-topika';
 import type {
   AddParticipantsDto,
   CreateDrasiDto,
@@ -189,7 +192,7 @@ export class DraseisService {
       include: {
         klados: { select: { type: true, name: true } },
         kladoi: { select: { klados: { select: { type: true } } } },
-        guestTopika: { orderBy: { topikoName: 'asc' } },
+        guestTopika: { orderBy: { topikoName: 'asc' }, include: guestTopikoInclude },
         roles: {
           include: { user: { select: roleUserSelect } },
           orderBy: [{ kind: 'asc' }, { user: { lastName: 'asc' } }],
@@ -230,7 +233,13 @@ export class DraseisService {
 
     // Τι μπορεί ο χρήστης εδώ — το UI δείχνει μόνο τις ενότητες του ρόλου του.
     const access = user.drasiGrant?.drasiId === id ? user.drasiGrant.access : await this.drasiAccess.accessFor(user, id);
-    return { ...drasi, kladoi, access, birthdays: await this.birthdays(id, drasi.dateStart, drasi.dateEnd, access) };
+    return {
+      ...drasi,
+      kladoi,
+      guestTopika: drasi.guestTopika.map(toGuestTopikoView),
+      access,
+      birthdays: await this.birthdays(id, drasi.dateStart, drasi.dateEnd, access),
+    };
   }
 
   /**
@@ -413,7 +422,10 @@ export class DraseisService {
   async setGuestTopika(user: RequestUser, id: string, dto: SetGuestTopikaDto) {
     await this.assertAccess(user, id);
 
-    const stored = await this.prisma.drasiGuestTopiko.findMany({ where: { drasiId: id }, select: { id: true, topikoName: true } });
+    const stored = await this.prisma.drasiGuestTopiko.findMany({
+      where: { drasiId: id },
+      select: { id: true, topikoName: true, contactUserId: true },
+    });
     const plan = planGuestTopika(stored, dto.items);
     if (plan.duplicates.length) {
       throw new BadRequestException(`Το ίδιο Τοπικό δύο φορές: ${plan.duplicates.join(', ')}.`);
@@ -422,7 +434,6 @@ export class DraseisService {
     const fields = (item: SetGuestTopikaDto['items'][number]) => ({
       topikoName: item.topikoName.trim().replace(/\s+/g, ' '),
       kladoi: item.kladoi,
-      contactName: item.contactName?.trim() || null,
       contactPhone: item.contactPhone?.trim() || null,
     });
     await this.prisma.$transaction([
@@ -431,7 +442,124 @@ export class DraseisService {
       this.prisma.drasiGuestTopiko.createMany({ data: plan.create.map((item) => ({ drasiId: id, ...fields(item) })) }),
     ]);
 
-    return this.prisma.drasiGuestTopiko.findMany({ where: { drasiId: id }, orderBy: { topikoName: 'asc' } });
+    // Ο υπεύθυνος κάθε Τοπικού: με επώνυμο και όνομα γίνεται (ή μένει) το ίδιο
+    // φιλοξενούμενο στέλεχος της δράσης — χωρίς δεύτερη εγγραφή. Αλλιώς μένει
+    // μόνο το όνομα, όπως πριν.
+    const rows = await this.prisma.drasiGuestTopiko.findMany({ where: { drasiId: id }, select: { id: true, topikoName: true } });
+    const rowByKey = new Map(rows.map((row) => [guestTopikoKey(row.topikoName), row.id]));
+    const previous = new Map(stored.map((row) => [row.id, row.contactUserId]));
+    for (const item of dto.items) {
+      const rowId = rowByKey.get(guestTopikoKey(item.topikoName));
+      if (!rowId) continue;
+      const before = previous.get(rowId) ?? null;
+      const firstName = item.contactFirstName?.trim();
+      const lastName = item.contactLastName?.trim();
+      if (!firstName || !lastName) {
+        await this.prisma.drasiGuestTopiko.update({
+          where: { id: rowId },
+          data: { contactUserId: null, contactName: item.contactName?.trim() || null },
+        });
+        continue;
+      }
+      const contactId = await this.resolveGuestContact(user, id, fields(item).topikoName, {
+        firstName,
+        lastName,
+        email: item.contactEmail,
+        phone: item.contactPhone,
+        previousId: before,
+      });
+      await this.prisma.drasiGuestTopiko.update({
+        where: { id: rowId },
+        data: { contactUserId: contactId, contactName: `${firstName} ${lastName}` },
+      });
+      // Νέος υπεύθυνος: όσοι εισέπραττε ο προηγούμενος περνούν σε αυτόν.
+      if (before && before !== contactId) {
+        await this.prisma.drasiParticipant.updateMany({
+          where: { drasiId: id, collectorId: before, userId: { not: contactId } },
+          data: { collectorId: contactId },
+        });
+      }
+    }
+    await assignGuestCollectors(this.prisma, id);
+    this.accessChanged(id);
+
+    return (await this.prisma.drasiGuestTopiko.findMany({ where: { drasiId: id }, orderBy: { topikoName: 'asc' }, include: guestTopikoInclude })).map(
+      toGuestTopikoView,
+    );
+  }
+
+  /**
+   * Το άτομο του υπευθύνου ενός φιλοξενούμενου Τοπικού. Το ίδιο άτομο όπου υπάρχει
+   * ήδη: όποιος έχει αυτό το email (φιλοξενούμενος ή εξωτερικός), ο προηγούμενος
+   * υπεύθυνος με το ίδιο όνομα (π.χ. νέο τηλέφωνο), ή φιλοξενούμενο στέλεχος της
+   * δράσης με το ίδιο όνομα από το ίδιο Τοπικό. Αλλιώς νέο φιλοξενούμενο στέλεχος.
+   * Μπαίνει στους συμμετέχοντες.
+   * Email δεν αλλάζει σε όποιον έχει ήδη λογαριασμό: είναι το κλειδί του Authentik.
+   */
+  private async resolveGuestContact(
+    user: RequestUser,
+    drasiId: string,
+    topikoName: string,
+    contact: { firstName: string; lastName: string; email?: string; phone?: string; previousId: string | null },
+  ): Promise<string> {
+    const email = contact.email?.trim().toLowerCase() || null;
+    const phone = contact.phone?.trim() || null;
+    const topikoKey = guestTopikoKey(topikoName);
+    const nameKey = (first: string, last: string) => guestTopikoKey(`${first} ${last}`);
+    const select = { id: true, accountRole: true, guestTopikoCode: true } as const;
+
+    let person: { id: string; accountRole: AccountRole | null; guestTopikoCode: string | null } | null = null;
+    if (email) {
+      const owner = await this.prisma.user.findFirst({ where: { topikoId: user.topikoId, email }, select });
+      if (owner && !owner.guestTopikoCode) {
+        throw new BadRequestException(`Το email ${email} ανήκει σε μέλος του μητρώου μας — ο υπεύθυνος άλλου Τοπικού θέλει δικό του.`);
+      }
+      person = owner;
+    }
+    // Ο προηγούμενος υπεύθυνος μόνο αν είναι όντως αυτός (ίδιο όνομα): άλλο όνομα
+    // σημαίνει άλλο άτομο — όχι μετονομασία του προηγούμενου σε κάποιον άλλο.
+    if (!person && contact.previousId) {
+      const previous = await this.prisma.user.findFirst({
+        where: { id: contact.previousId, topikoId: user.topikoId, guestTopikoCode: { not: null } },
+        select: { ...select, firstName: true, lastName: true },
+      });
+      if (previous && nameKey(previous.firstName, previous.lastName) === nameKey(contact.firstName, contact.lastName)) person = previous;
+    }
+    if (!person) {
+      const staff = await this.prisma.drasiParticipant.findMany({
+        where: { drasiId, kind: MemberKind.STELEXOS, user: { guestTopikoCode: { not: null } } },
+        select: { user: { select: { ...select, firstName: true, lastName: true, guestTopikoName: true } } },
+      });
+      const wanted = nameKey(contact.firstName, contact.lastName);
+      person =
+        staff
+          .map((s) => s.user)
+          .find((u) => !!u.guestTopikoName && guestTopikoKey(u.guestTopikoName) === topikoKey && nameKey(u.firstName, u.lastName) === wanted) ??
+        null;
+    }
+
+    const data = {
+      firstName: contact.firstName,
+      lastName: contact.lastName,
+      phone,
+      // Ο εξωτερικός κρατά το «από πού έρχεται» του· ο φιλοξενούμενος ακολουθεί το Τοπικό.
+      ...(person?.accountRole ? {} : { guestTopikoName: topikoName, ...(email ? { email } : {}) }),
+    };
+    const id = person
+      ? (await this.prisma.user.update({ where: { id: person.id }, data, select: { id: true } })).id
+      : (
+          await this.prisma.user.create({
+            data: { ...data, topikoId: user.topikoId, kind: MemberKind.STELEXOS, guestTopikoCode: GUEST_MARK, email },
+            select: { id: true },
+          })
+        ).id;
+
+    await this.prisma.drasiParticipant.upsert({
+      where: { drasiId_userId: { drasiId, userId: id } },
+      create: { drasiId, userId: id, kind: MemberKind.STELEXOS, feeKind: defaultFeeKind(MemberKind.STELEXOS) },
+      update: {},
+    });
+    return id;
   }
 
   // ───────────────────────── Wizard: αρχηγείο & υπηρεσίες ─────────────────────────
@@ -606,6 +734,7 @@ export class DraseisService {
       }),
     );
 
+    await assignGuestCollectors(this.prisma, id);
     this.accessChanged(id);
     return { added: valid.length };
   }

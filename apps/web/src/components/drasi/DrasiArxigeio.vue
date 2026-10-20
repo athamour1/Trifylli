@@ -292,7 +292,7 @@ function removeExternal(e: DrasiExternalView): void {
 const accessDialog = reactive({ open: false, saving: false, userId: '', name: '', email: '' });
 const accessEmailInvalid = computed(() => !!accessDialog.email.trim() && !looksLikeEmail(accessDialog.email));
 function openAccess(e: DrasiExternalView): void {
-  Object.assign(accessDialog, { open: true, saving: false, userId: e.userId, name: `${e.lastName} ${e.firstName}`.trim(), email: '' });
+  Object.assign(accessDialog, { open: true, saving: false, userId: e.userId, name: `${e.lastName} ${e.firstName}`.trim(), email: e.email ?? '' });
 }
 async function grantAccess(): Promise<void> {
   accessDialog.saving = true;

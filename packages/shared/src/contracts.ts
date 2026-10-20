@@ -352,6 +352,19 @@ export interface DrasiGuestTopikoView {
   kladoi: KladosType[];
   contactName: string | null;
   contactPhone: string | null;
+  /**
+   * Ο υπεύθυνος ως άτομο — φιλοξενούμενο στέλεχος της δράσης, υπεύθυνος είσπραξης
+   * των δικών του. `null` για παλιές εγγραφές με μόνο όνομα (`contactName`).
+   */
+  contact: {
+    userId: string;
+    firstName: string;
+    lastName: string;
+    email: string | null;
+    phone: string | null;
+    /** Έχει ήδη λογαριασμό (εξωτερικό στέλεχος). */
+    hasAccount: boolean;
+  } | null;
 }
 
 // ───────────────────────── Δράσεις: ταμείο & κόστη (F1, F2, F4) ─────────────────────────

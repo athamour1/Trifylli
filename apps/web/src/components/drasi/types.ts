@@ -15,35 +15,70 @@ export interface GuestTopikoForm {
   id?: string;
   topikoName: string;
   kladoi: KladosType[];
-  contactName: string;
+  /**
+   * Ο υπεύθυνος: με επώνυμο και όνομα γίνεται φιλοξενούμενο στέλεχος της δράσης
+   * (υπεύθυνος είσπραξης των δικών του). Λογαριασμό παίρνει από τα «Εξωτερικά στελέχη».
+   */
+  contactFirstName: string;
+  contactLastName: string;
+  contactEmail: string;
   contactPhone: string;
+  /** Ο υπεύθυνος έχει ήδη λογαριασμό: το email του δεν αλλάζει από εδώ. */
+  contactHasAccount: boolean;
 }
 
 let newCards = 0;
 
 export function emptyGuestTopiko(): GuestTopikoForm {
   newCards += 1;
-  return { key: `new-${newCards}`, topikoName: '', kladoi: [], contactName: '', contactPhone: '' };
+  return {
+    key: `new-${newCards}`,
+    topikoName: '',
+    kladoi: [],
+    contactFirstName: '',
+    contactLastName: '',
+    contactEmail: '',
+    contactPhone: '',
+    contactHasAccount: false,
+  };
 }
 
 export function toGuestTopikoForm(g: DrasiGuestTopikoView): GuestTopikoForm {
+  // Παλιές εγγραφές: μόνο ένα «Όνομα Επώνυμο» — η πρώτη λέξη όνομα, οι υπόλοιπες επώνυμο.
+  const [legacyFirst = '', ...legacyLast] = (g.contactName ?? '').trim().split(/\s+/).filter(Boolean);
   return {
     key: g.id,
     id: g.id,
     topikoName: g.topikoName,
     kladoi: [...g.kladoi],
-    contactName: g.contactName ?? '',
-    contactPhone: g.contactPhone ?? '',
+    contactFirstName: g.contact?.firstName ?? legacyFirst,
+    contactLastName: g.contact?.lastName ?? legacyLast.join(' '),
+    contactEmail: g.contact?.email ?? '',
+    contactPhone: g.contact?.phone ?? g.contactPhone ?? '',
+    contactHasAccount: g.contact?.hasAccount ?? false,
   };
 }
 
+const hasContact = (g: GuestTopikoForm): boolean =>
+  !!(g.contactFirstName.trim() || g.contactLastName.trim() || g.contactEmail.trim() || g.contactPhone.trim());
+
 /** Κάρτα που δεν συμπληρώθηκε καθόλου — δεν μετράει. */
 function isBlank(g: GuestTopikoForm): boolean {
-  return !g.topikoName.trim() && !g.contactName.trim() && !g.contactPhone.trim() && g.kladoi.length === 0;
+  return !g.topikoName.trim() && !hasContact(g) && g.kladoi.length === 0;
+}
+
+/** Τι λείπει από τον υπεύθυνο, ανά πεδίο: είτε κανένα στοιχείο είτε επώνυμο και όνομα. */
+export function guestContactErrors(g: GuestTopikoForm): { firstName?: string; lastName?: string; email?: string } {
+  if (!hasContact(g)) return {};
+  return {
+    ...(g.contactFirstName.trim() ? {} : { firstName: 'Το όνομα του υπευθύνου.' }),
+    ...(g.contactLastName.trim() ? {} : { lastName: 'Το επώνυμο του υπευθύνου.' }),
+    ...(g.contactEmail.trim() && !looksLikeEmail(g.contactEmail) ? { email: 'Μη έγκυρο email.' } : {}),
+  };
 }
 
 /** Ανά κάρτα, τι εμποδίζει την αποθήκευση: όνομα που λείπει ή Τοπικό που υπάρχει ήδη πιο πάνω. */
-export function guestTopikaErrors(list: readonly GuestTopikoForm[]): (string | null)[] {
+export function guestTopikaNameErrors(list: readonly GuestTopikoForm[]): (string | null)[] {
   const seen = new Set<string>();
   return list.map((g) => {
     if (isBlank(g)) return null;
@@ -52,6 +87,17 @@ export function guestTopikaErrors(list: readonly GuestTopikoForm[]): (string | n
     if (seen.has(key)) return 'Αυτό το Τοπικό υπάρχει ήδη πιο πάνω.';
     seen.add(key);
     return null;
+  });
+}
+
+/** Το πρώτο πρόβλημα κάθε κάρτας — όνομα Τοπικού ή στοιχεία υπευθύνου. */
+export function guestTopikaErrors(list: readonly GuestTopikoForm[]): (string | null)[] {
+  const names = guestTopikaNameErrors(list);
+  return list.map((g, i) => {
+    if (names[i]) return names[i];
+    const contact = guestContactErrors(g);
+    const first = contact.lastName ?? contact.firstName ?? contact.email;
+    return first ? `${g.topikoName.trim()}: ${first}` : null;
   });
 }
 
@@ -64,7 +110,9 @@ export function guestTopikaPayload(list: readonly GuestTopikoForm[]) {
         ...(g.id ? { id: g.id } : {}),
         topikoName: g.topikoName.trim(),
         kladoi: g.kladoi,
-        contactName: g.contactName.trim() || undefined,
+        contactFirstName: g.contactFirstName.trim() || undefined,
+        contactLastName: g.contactLastName.trim() || undefined,
+        contactEmail: g.contactEmail.trim() || undefined,
         contactPhone: g.contactPhone.trim() || undefined,
       })),
   };
