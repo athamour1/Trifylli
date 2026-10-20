@@ -211,6 +211,7 @@ import { ApiError, del, get, patch, post } from '../lib/api';
 import { formatDate, formatEuro, toISODate } from '../lib/format';
 import { useAuthStore } from '../stores/auth';
 import DateField from './DateField.vue';
+import { useTopikoReload } from '../composables/useLiveChanges';
 
 const props = defineProps<{
   ylikoId: string;
@@ -304,6 +305,8 @@ async function load(): Promise<void> {
 }
 onMounted(load);
 watch(() => props.ylikoId, load);
+// Ζωντανά: κρατήσεις, χρεώσεις, συντήρηση που καταχωρούν άλλοι (και από τις δράσεις).
+useTopikoReload(['yliko', 'draseis', 'treasury'], load);
 
 /** Λήψη του QR σε υψηλή ανάλυση — για εκτύπωση ετικέτας σε σκηνές κ.λπ. */
 async function downloadQr(): Promise<void> {

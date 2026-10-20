@@ -18,6 +18,7 @@ import {
   DRASI_REVIEW_SCALE_MAX,
   FORM_LINK_TTL_DAYS,
   can,
+  collabDocument,
   drasiCan,
   isSuperAdmin,
   type DrasiReviewAnswerValue,
@@ -33,6 +34,7 @@ import {
   type PublicReviewView,
 } from '@trifylli/shared';
 import { AuditService } from '../../common/audit/audit.service';
+import { CollabService } from '../collab/collab.service';
 import { AppConfigToken } from '../../common/config/config.module';
 import type { AppConfig } from '../../common/config/configuration';
 import { PrismaService } from '../../common/prisma/prisma.service';
@@ -82,6 +84,7 @@ export class DraseisReviewService {
     private readonly audit: AuditService,
     @Inject(AppConfigToken) private readonly config: AppConfig,
     private readonly linkMailer: LinkMailer,
+    private readonly collab: CollabService,
   ) {}
 
   // ── Ρυθμίσεις ──
@@ -447,6 +450,8 @@ export class DraseisReviewService {
       await this.prisma.drasiReviewInvite.update({ where: { id: ctx.invite.id }, data: { status: DrasiFormStatus.SUBMITTED, answeredAt: new Date() } });
     }
     this.logger.log(`Αξιολόγηση ${ctx.invite ? ctx.invite.id : 'κοινός σύνδεσμος'} υποβλήθηκε (${ip ?? '-'}).`);
+    // Από δημόσιο σύνδεσμο (χωρίς λογαριασμό): η δράση μαθαίνει την απάντηση από εδώ.
+    this.collab.broadcast(collabDocument.drasiRoom(ctx.drasi.id), { topic: 'review', by: null, origin: null });
     return this.publicView(ctx, guest);
   }
 

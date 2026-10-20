@@ -84,6 +84,7 @@ import type { KladosType } from '@trifylli/shared';
 import { readableOn } from '../lib/color';
 import PageState from '../components/PageState.vue';
 import { useAsyncData } from '../composables/useAsyncData';
+import { useTopikoReload } from '../composables/useLiveChanges';
 import { get } from '../lib/api';
 
 interface KladosCard {
@@ -103,4 +104,6 @@ interface KladosCard {
 const { data, loading, error, stale, reload } = useAsyncData(() => get<KladosCard[]>('/kladoi'), {
   cacheKey: 'kladoi',
 });
+// Ζωντανά: αλλαγές στους κλάδους, στα μέλη και στους διαχειριστές τους.
+useTopikoReload(['kladoi', 'meloi', 'accounts'], reload);
 </script>

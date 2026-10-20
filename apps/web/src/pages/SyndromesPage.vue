@@ -240,6 +240,7 @@ import {
 } from '@trifylli/shared';
 import PageState from '../components/PageState.vue';
 import { useAsyncData } from '../composables/useAsyncData';
+import { useTopikoReload } from '../composables/useLiveChanges';
 import { useKladosScope } from '../composables/useKladosScope';
 import { ApiError, get, post, put } from '../lib/api';
 import { formatDate, formatEuro, toISODate } from '../lib/format';
@@ -393,12 +394,16 @@ async function loadDebtors(): Promise<void> {
   }
 }
 
+/** Η καρτέλα που φαίνεται. */
+function loadTab(): Promise<void> | undefined {
+  if (tab.value === 'members') return loadMembers();
+  if (tab.value === 'cash') return loadCash();
+  if (tab.value === 'debtors') return loadDebtors();
+}
 // Φόρτωση ανά tab (και όταν αλλάζει ο κλάδος).
-watch([tab, klados], ([t]) => {
-  if (t === 'members') void loadMembers();
-  else if (t === 'cash') void loadCash();
-  else if (t === 'debtors') void loadDebtors();
-}, { immediate: true });
+watch([tab, klados], () => void loadTab(), { immediate: true });
+// Ζωντανά: εισπράξεις, παραδόσεις μετρητών και μέλη που αλλάζουν άλλοι (και ο συγχρονισμός).
+useTopikoReload(['syndromes', 'meloi', 'integrations', 'treasury'], () => Promise.all([reload(), loadTab()]));
 
 // ── Είσπραξη (dialog) ──
 const paymentDialog = ref(false);

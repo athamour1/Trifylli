@@ -27,6 +27,7 @@
 import { onMounted, ref } from 'vue';
 import { KLADOS_META, type KladosType } from '@trifylli/shared';
 import TreasuryView from '../components/TreasuryView.vue';
+import { useTopikoReload } from '../composables/useLiveChanges';
 import { useKladosScope } from '../composables/useKladosScope';
 import { useAuthStore } from '../stores/auth';
 import { get } from '../lib/api';
@@ -45,7 +46,7 @@ interface Overview {
 }
 const overview = ref<Overview[]>([]);
 
-onMounted(async () => {
+async function loadOverview(): Promise<void> {
   if (!inKlados.value && auth.isSuperAdmin) {
     try {
       overview.value = await get<Overview[]>('/treasury/overview');
@@ -53,7 +54,10 @@ onMounted(async () => {
       overview.value = [];
     }
   }
-});
+}
+onMounted(loadOverview);
+// Ζωντανά: τα υπόλοιπα των κλάδων αλλάζουν με κάθε κίνηση και είσπραξη.
+useTopikoReload(['treasury', 'syndromes', 'yliko'], loadOverview);
 
 /** Το θετικό υπόλοιπο στο (αναγνώσιμο) χρώμα του κλάδου· το αρνητικό μένει κόκκινο (class). */
 function balanceStyle(kladosType: KladosType | null): Record<string, string> {

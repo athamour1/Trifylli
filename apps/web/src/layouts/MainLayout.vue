@@ -25,6 +25,8 @@
         </q-chip>
 
         <NotificationBell v-if="auth.user?.id" :key="auth.user.id" :user-id="auth.user.id" />
+        <!-- Ό,τι αλλάζουν οι άλλοι στο Τοπικό φτάνει σε κάθε σελίδα (οι εξωτερικοί βλέπουν μόνο τη δράση τους). -->
+        <TopikoLive v-if="auth.topiko?.id && !auth.isExternal" :key="auth.topiko.id" :topiko-id="auth.topiko.id" />
 
         <q-btn flat dense round icon="account_circle">
           <q-menu>
@@ -197,6 +199,7 @@ import { useRoute, useRouter } from 'vue-router';
 import { KLADOS_LABEL_SHORT, type KladosType } from '@trifylli/shared';
 import { useQuasar, type QDrawer } from 'quasar';
 import NotificationBell from '../components/NotificationBell.vue';
+import TopikoLive from '../components/TopikoLive.vue';
 import TrackingNotice from '../components/TrackingNotice.vue';
 import { kladosVars } from '../lib/klados-theme';
 import { useKladosThemeStore } from '../stores/klados-theme';

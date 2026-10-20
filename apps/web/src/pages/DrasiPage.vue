@@ -671,7 +671,7 @@ const room = useCollabDoc(collabDocument.drasiRoom(id), useCollabMe(), { persist
 const roomPeers = room.peers;
 provideLiveChanges({ subscribe: room.onChange, setFocus: room.setFocus, peerFocus: room.peerFocus });
 // Η ίδια η δράση: κεφαλίδα, επισκόπηση, αρχηγείο, ρυθμίσεις.
-useLiveReload(['drasi', 'roles', 'kladoi', 'guest-topika', 'closed', 'settings', 'slots', 'rotate', 'participants', 'guests', 'ypiresies'], reload, {
+useLiveReload(['drasi', 'delete', 'roles', 'kladoi', 'guest-topika', 'closed', 'settings', 'slots', 'rotate', 'participants', 'guests', 'ypiresies'], reload, {
   subscribe: room.onChange,
 });
 // Ό,τι αλλάζουν οι άλλοι όσο είσαι εδώ: σημαδάκι στην ενότητα (αν δεν είσαι σε αυτήν) και νέα ροή.

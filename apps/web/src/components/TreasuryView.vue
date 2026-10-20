@@ -223,6 +223,7 @@ import { ApiError, del, get, getBlob, post, upload } from '../lib/api';
 import { formatDate, formatEuro, toISODate } from '../lib/format';
 import { useAuthStore } from '../stores/auth';
 import DateField from './DateField.vue';
+import { useTopikoReload } from '../composables/useLiveChanges';
 
 const props = defineProps<{ klados: KladosType | null }>();
 
@@ -259,6 +260,8 @@ async function load(): Promise<void> {
   }
 }
 watch(() => [props.klados, filters.kind], load, { immediate: true });
+// Ζωντανά: κινήσεις που καταχωρούν άλλοι, και ό,τι φτάνει από συνδρομές και συντήρηση υλικού.
+useTopikoReload(['treasury', 'syndromes', 'yliko'], load);
 
 // ── Κατηγορίες / δωρητής ──
 const categoryOptions = computed(() => {

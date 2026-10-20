@@ -122,6 +122,7 @@ import { KLADOS_LABEL, type CalendarEvent } from '@trifylli/shared';
 import { readableOn } from '../lib/color';
 import PageState from '../components/PageState.vue';
 import { useAsyncData } from '../composables/useAsyncData';
+import { useTopikoReload } from '../composables/useLiveChanges';
 import { get } from '../lib/api';
 import { formatTime } from '../lib/format';
 import { useKladosScope } from '../composables/useKladosScope';
@@ -223,6 +224,8 @@ const { data, loading, error, stale, reload } = useAsyncData(
     watchSources: [view, routeKlados, anchor],
   },
 );
+// Ζωντανά: νέες, μετακινημένες ή σβησμένες εκδηλώσεις από άλλους.
+useTopikoReload(['draseis', 'syggentrwseis', 'symvoulia', 'calendar'], reload);
 
 const events = computed(() =>
   (data.value ?? []).filter(

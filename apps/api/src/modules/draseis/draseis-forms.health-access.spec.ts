@@ -37,7 +37,7 @@ function setup(type: 'YGEIA' | 'SYMMETOXI') {
   const prisma = { drasiForm: { findFirst: async () => form, findMany: async () => [form] } };
   const access = { load: async () => ({ id: DRASI, title: 'Κατασκήνωση', dateStart: new Date('2026-11-14') }) };
   const audit = { record: async (_user: unknown, action: string) => void audited.push(action) };
-  const service = new DraseisFormsService(prisma as never, access as never, {} as never, audit as never, {} as never, {} as never, {} as never, {} as never);
+  const service = new DraseisFormsService(prisma as never, access as never, {} as never, audit as never, {} as never, {} as never, {} as never, {} as never, {} as never);
   return { service, audited };
 }
 

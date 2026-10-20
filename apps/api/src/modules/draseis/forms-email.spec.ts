@@ -38,7 +38,7 @@ function setup(enabled = true) {
   const access = { load: async () => ({ id: DRASI }) };
   const audit = { record: async () => undefined };
   const config = { CORS_ORIGINS: 'https://app.example.org/' };
-  const service = new DraseisFormsService(prisma as never, access as never, {} as never, audit as never, {} as never, config as never, {} as never, linkMailer as never);
+  const service = new DraseisFormsService(prisma as never, access as never, {} as never, audit as never, {} as never, config as never, {} as never, linkMailer as never, {} as never);
   return { service, mailed, updates };
 }
 

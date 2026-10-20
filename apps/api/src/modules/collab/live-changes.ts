@@ -1,5 +1,6 @@
-import { Inject, Injectable, SetMetadata, type CallHandler, type ExecutionContext, type NestInterceptor } from '@nestjs/common';
+import { Inject, Injectable, SetMetadata, type CallHandler, type ExecutionContext, type NestInterceptor, type OnModuleInit } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { AccountRole } from '@prisma/client';
 import { COLLAB_CLIENT_HEADER, collabDocument } from '@trifylli/shared';
 import type { Request } from 'express';
 import { tap, type Observable } from 'rxjs';
@@ -48,6 +49,27 @@ export function liveRoom(
   return { name: room.name(id), topic };
 }
 
+/**
+ * Ενότητες του API που δεν αλλάζουν τίποτα που δείχνει μια σελίδα σε άλλον:
+ * του ίδιου του χρήστη (ειδοποιήσεις, «διάβασα», ρυθμίσεις), τα σχόλια και οι
+ * εγκρίσεις (φτάνουν ήδη στο έγγραφό τους), τα αρχεία (μπαίνουν κάπου μετά).
+ */
+const SILENT_TOPICS = new Set(['notifications', 'comments', 'approvals', 'files', 'versions', 'reads', 'me']);
+
+/**
+ * Τι άλλαξε για το δωμάτιο του Τοπικού: η ενότητα του API (`/api/meloi/:id` →
+ * `meloi`)· κάτω από κλάδο (`/api/kladoi/:klados/arxigeio`), η ενότητα του
+ * κλάδου. `null` για ό,τι δεν αφορά άλλους (`SILENT_TOPICS`).
+ */
+export function topikoTopic(path: string | undefined, apiPrefix = 'api'): string | null {
+  if (!path) return null;
+  const prefix = apiPrefix.split('/').filter(Boolean);
+  const parts = path.split('/').filter(Boolean);
+  if (prefix.every((part, index) => parts[index] === part)) parts.splice(0, prefix.length);
+  const topic = parts[0] === 'kladoi' && parts[2] && !parts[2].startsWith(':') ? parts[2] : parts[0];
+  return topic && !topic.startsWith(':') && !SILENT_TOPICS.has(topic) ? topic : null;
+}
+
 /** Η καρτέλα που κάνει το αίτημα (`COLLAB_CLIENT_HEADER`) — `null` αν λείπει ή δεν μοιάζει με id. */
 export function clientOrigin(header: unknown): string | null {
   return typeof header === 'string' && CLIENT_ID.test(header) ? header : null;
@@ -86,14 +108,40 @@ export class LiveChangesInterceptor implements NestInterceptor {
     if (context.getType() !== 'http') return next.handle();
     const req = context.switchToHttp().getRequest<Request & { user?: RequestUser }>();
     if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next.handle();
-    const room = liveRoom((req.route as { path?: string } | undefined)?.path, req.params, this.config.API_PREFIX);
-    if (!room) return next.handle();
+    const path = (req.route as { path?: string } | undefined)?.path;
+    const room = liveRoom(path, req.params, this.config.API_PREFIX);
+    // Οι δημόσιες φόρμες (χωρίς χρήστη) δεν ξέρουν Τοπικό· η δράση τους ενημερώνεται από το δωμάτιό της.
+    const topic = req.user ? topikoTopic(path, this.config.API_PREFIX) : null;
+    if (!room && !topic) return next.handle();
     const origin = clientOrigin(req.headers[COLLAB_CLIENT_HEADER.toLowerCase()]);
     const quiet = this.reflector.get<boolean | undefined>(QUIET_CHANGE, context.getHandler()) === true;
+    const by = req.user?.id ?? null;
     return next.handle().pipe(
-      tap(() =>
-        this.collab.apiChanged({ room: room.name, topic: room.topic, verb: verbOf(req.method, req.path), by: req.user?.id ?? null, origin, quiet }),
-      ),
+      tap(() => {
+        if (room) this.collab.apiChanged({ room: room.name, topic: room.topic, verb: verbOf(req.method, req.path), by, origin, quiet });
+        if (topic) this.collab.topikoChanged(req.user!.topikoId, topic, { by, origin });
+      }),
     );
+  }
+}
+
+/**
+ * Το δωμάτιο του Τοπικού (βλ. `collabDocument.topiko`): μπαίνει κάθε λογαριασμός
+ * του Τοπικού, όχι οι εξωτερικοί — εκείνοι βλέπουν μόνο τη δράση τους. Δεν έχει
+ * περιεχόμενο· μεταφέρει μόνο το «άλλαξε αυτό», τα δεδομένα τα φέρνει το GET.
+ */
+@Injectable()
+export class TopikoLiveRoom implements OnModuleInit {
+  constructor(private readonly collab: CollabService) {}
+
+  onModuleInit(): void {
+    this.collab.registry.register({
+      kind: 'topiko',
+      arity: 1,
+      room: true,
+      access: async (user, [topikoId]) => (user.topikoId === topikoId && user.role !== AccountRole.EXTERNAL ? 'read' : null),
+      seed: async () => true,
+      project: async () => undefined,
+    });
   }
 }

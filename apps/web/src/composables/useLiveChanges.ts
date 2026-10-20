@@ -1,6 +1,7 @@
 import type { CollabChange, CollabPresenceUser } from '@trifylli/shared';
 import { inject, onBeforeUnmount, provide, type InjectionKey, type Ref } from 'vue';
 import { concernsMe } from '../lib/live-changes';
+import { subscribeTopiko } from '../lib/topiko-live';
 
 /** «Άκου τα άλλαξε-αυτό» — επιστρέφει το «σταμάτα» (βλ. `useCollabDoc().onChange`). */
 export type SubscribeChanges = (handler: (change: CollabChange) => void) => () => void;
@@ -49,7 +50,7 @@ export function useLiveReload(
   reload: () => unknown,
   options: { busy?: () => boolean; subscribe?: SubscribeChanges | null } = {},
 ): void {
-  const subscribe = options.subscribe ?? inject(LIVE_ROOM, null)?.subscribe ?? null;
+  const subscribe = options.subscribe !== undefined ? options.subscribe : (inject(LIVE_ROOM, null)?.subscribe ?? null);
   if (!subscribe) return;
   let timer: ReturnType<typeof setTimeout> | null = null;
   const later = (delay: number): void => {
@@ -68,4 +69,14 @@ export function useLiveReload(
     stop();
     if (timer) clearTimeout(timer);
   });
+}
+
+/**
+ * Ζωντανή ανανέωση σελίδας του κλάδου ή του Τοπικού (μέλη, υλικό, ταμείο…):
+ * ξαναφορτώνει όταν κάποιος άλλος αλλάζει κάτι σε μία από τις ενότητες του API
+ * `topics` (`meloi`, `yliko`, `treasury`, …). Ό,τι γίνεται μέσα σε μια δράση
+ * φτάνει ως `draseis`. Ίδιοι κανόνες με το `useLiveReload`.
+ */
+export function useTopikoReload(topics: readonly string[], reload: () => unknown, options: { busy?: () => boolean } = {}): void {
+  useLiveReload(topics, reload, { ...options, subscribe: subscribeTopiko });
 }

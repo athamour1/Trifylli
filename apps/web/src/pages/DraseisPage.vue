@@ -110,6 +110,7 @@ import {
 } from '@trifylli/shared';
 import PageState from '../components/PageState.vue';
 import { useAsyncData } from '../composables/useAsyncData';
+import { useTopikoReload } from '../composables/useLiveChanges';
 import { get } from '../lib/api';
 import { formatDateRange } from '../lib/format';
 import { useAuthStore } from '../stores/auth';
@@ -164,6 +165,8 @@ const { data, loading, error, stale, reload } = useAsyncData(
     }),
   { cacheKey: 'draseis', watchSources: [typeFilter, klados] },
 );
+// Ζωντανά: νέες δράσεις, αλλαγές και αρχειοθετήσεις από άλλους.
+useTopikoReload(['draseis'], reload);
 
 const TYPE_COLOR: Record<DrasiType, string> = {
   MONOIMERI: 'teal-6',

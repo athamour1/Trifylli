@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { liveRoom, verbOf } from './live-changes';
+import { liveRoom, topikoTopic, verbOf } from './live-changes';
 
 const ID = '3f2b8c1e-9a4d-4f6b-8e2a-1c5d7e9f0a3b';
 
@@ -44,5 +44,30 @@ describe('τι έγινε, από τη μέθοδο', () => {
     expect(verbOf('PATCH', '/api/draseis/x/schedule/y')).toBe('change');
     expect(verbOf('PUT', '/api/draseis/x/roles')).toBe('change');
     expect(verbOf('DELETE', '/api/draseis/x/groups/y')).toBe('remove');
+  });
+});
+
+describe('τι άλλαξε για το δωμάτιο του Τοπικού', () => {
+  it('η ενότητα του API — και για αλλαγές μέσα σε οντότητα', () => {
+    expect(topikoTopic('/api/meloi/:id')).toBe('meloi');
+    expect(topikoTopic('/api/yliko/:id/bookings')).toBe('yliko');
+    expect(topikoTopic('/api/draseis')).toBe('draseis');
+    expect(topikoTopic('/api/draseis/:id/schedule/:itemId')).toBe('draseis');
+  });
+
+  it('κάτω από κλάδο: η ενότητα του κλάδου· ο ίδιος ο κλάδος: «kladoi»', () => {
+    expect(topikoTopic('/api/kladoi/:klados/arxigeio')).toBe('arxigeio');
+    expect(topikoTopic('/api/kladoi/:klados')).toBe('kladoi');
+  });
+
+  it('ό,τι αφορά μόνο τον χρήστη ή φτάνει ήδη στο έγγραφό του: τίποτα', () => {
+    for (const path of ['/api/notifications/:id/read', '/api/comments', '/api/approvals/:id', '/api/files', '/api/me/tracking-notice', '/api/reads']) {
+      expect(topikoTopic(path)).toBeNull();
+    }
+    expect(topikoTopic(undefined)).toBeNull();
+  });
+
+  it('με άλλο πρόθεμα API', () => {
+    expect(topikoTopic('/v1/syndromes/:id', 'v1')).toBe('syndromes');
   });
 });

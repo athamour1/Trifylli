@@ -4,7 +4,7 @@ import { CollabAuthService } from './collab-auth.service';
 import { CollabHistoryController } from './collab-history.controller';
 import { CollabHistoryService } from './collab-history.service';
 import { CollabService } from './collab.service';
-import { LiveChangesInterceptor } from './live-changes';
+import { LiveChangesInterceptor, TopikoLiveRoom } from './live-changes';
 
 /**
  * Συνεργασία σε πραγματικό χρόνο (βλ. docs/synergasia.md). Global: κάθε module
@@ -16,7 +16,13 @@ import { LiveChangesInterceptor } from './live-changes';
 @Global()
 @Module({
   controllers: [CollabHistoryController],
-  providers: [CollabAuthService, CollabService, CollabHistoryService, { provide: APP_INTERCEPTOR, useClass: LiveChangesInterceptor }],
+  providers: [
+    CollabAuthService,
+    CollabService,
+    CollabHistoryService,
+    TopikoLiveRoom,
+    { provide: APP_INTERCEPTOR, useClass: LiveChangesInterceptor },
+  ],
   exports: [CollabService, CollabHistoryService],
 })
 export class CollabModule {}

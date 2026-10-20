@@ -25,6 +25,7 @@ import {
   COLLAB_PROTOCOL,
   CollabRejection,
   collabColor,
+  collabDocument,
   collabShortName,
   type CollabChange,
   type CollabPresenceUser,
@@ -498,6 +499,14 @@ export class CollabService implements OnApplicationBootstrap, BeforeApplicationS
   apiChanged(change: ApiChange): void {
     this.broadcast(change.room, { topic: change.topic, by: change.by, origin: change.origin, ...(change.quiet ? { quiet: true } : {}) });
     for (const listener of this.apiListeners) listener(change);
+  }
+
+  /**
+   * «Άλλαξε αυτό» σε όλο το Τοπικό (βλ. `collabDocument.topiko`): μετά από κάθε
+   * αλλαγή μέσω API, και από εργασίες χωρίς αίτημα (π.χ. συγχρονισμός e-SEO).
+   */
+  topikoChanged(topikoId: string, topic: string, from: { by?: string | null; origin?: string | null } = {}): void {
+    this.broadcast(collabDocument.topiko(topikoId), { topic, by: from.by ?? null, origin: from.origin ?? null });
   }
 
   /** Ακούει τις αλλαγές μέσω API (βλ. `apiChanged`). */

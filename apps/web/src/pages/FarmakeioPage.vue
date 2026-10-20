@@ -102,6 +102,7 @@ import { onMounted, ref } from 'vue';
 import { useQuasar } from 'quasar';
 import PageState from '../components/PageState.vue';
 import { useAsyncData } from '../composables/useAsyncData';
+import { useTopikoReload } from '../composables/useLiveChanges';
 import { ApiError, get, post } from '../lib/api';
 import { formatDate, formatDateTime } from '../lib/format';
 import { useAuthStore } from '../stores/auth';
@@ -143,13 +144,16 @@ const { data, loading, error, stale, reload } = useAsyncData(() => get<Inventory
   cacheKey: 'farmakeio',
 });
 
-onMounted(async () => {
+async function loadIncidents(): Promise<void> {
   try {
     incidents.value = await get<Incident[]>('/farmakeio/incidents');
   } catch {
     incidents.value = [];
   }
-});
+}
+onMounted(loadIncidents);
+// Ζωντανά: ο συγχρονισμός και οι αλλαγές που κάνουν άλλοι στο απόθεμα.
+useTopikoReload(['farmakeio'], () => Promise.all([reload(), loadIncidents()]));
 
 async function sync(): Promise<void> {
   syncing.value = true;

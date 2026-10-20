@@ -5,6 +5,7 @@ import { JobMonitor } from '../../common/jobs/job-monitor';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
 import { assertScopeAccess } from '../../common/util/klados-scope';
+import { CollabService } from '../collab/collab.service';
 import { OuchtrackerClient } from '../integrations/ouchtracker.client';
 import type { LendPharmacyDto, LinkPharmacyDto } from './dto/pharmacy.dto';
 
@@ -24,6 +25,7 @@ export class PharmaciesService {
     private readonly prisma: PrismaService,
     private readonly ouchtracker: OuchtrackerClient,
     private readonly jobs: JobMonitor,
+    private readonly collab: CollabService,
   ) {}
 
   /** Τα φαρμακεία που βλέπει μια εμβέλεια: τα δικά της + όσα της έχουν δανειστεί. */
@@ -256,7 +258,7 @@ export class PharmaciesService {
   async autoReturnOverdue() {
     const due = await this.prisma.kitLoan.findMany({
       where: { returnedAt: null, dueAt: { not: null, lt: new Date() } },
-      include: { kit: { select: { id: true, ouchtrackerKitId: true } } },
+      include: { kit: { select: { id: true, ouchtrackerKitId: true, topikoId: true } } },
     });
     const run = this.jobs.start('pharmacy-returns');
     for (const loan of due) {
@@ -270,6 +272,8 @@ export class PharmaciesService {
         run.fail(error, `δανεισμός ${loan.id}`);
       }
     }
+    // Τα φαρμακεία γύρισαν στον κάτοχό τους: όποιος τα έχει ανοιχτά το βλέπει.
+    for (const topikoId of new Set(due.map((loan) => loan.kit.topikoId))) this.collab.topikoChanged(topikoId, 'pharmacies');
     await run.finish(`${due.length} ληγμένοι δανεισμοί`);
   }
 

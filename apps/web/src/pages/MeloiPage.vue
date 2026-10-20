@@ -167,6 +167,7 @@ import PageState from '../components/PageState.vue';
 import ConsentMark from '../components/ConsentMark.vue';
 import MemberDetailInline from '../components/MemberDetailInline.vue';
 import { useAsyncData } from '../composables/useAsyncData';
+import { useTopikoReload } from '../composables/useLiveChanges';
 import { get } from '../lib/api';
 import { useKladosScope } from '../composables/useKladosScope';
 
@@ -259,6 +260,8 @@ const { data, loading, error, stale, reload } = useAsyncData(
     }),
   { cacheKey: 'meloi', watchSources: [filters, effectiveKladoi] },
 );
+// Ζωντανά: αλλαγές μελών από άλλους, συνδρομές και ο συγχρονισμός e-SEO.
+useTopikoReload(['meloi', 'integrations', 'syndromes'], reload);
 
 function filterByName(rows: readonly MemberSummary[], terms: string): readonly MemberSummary[] {
   const t = (terms ?? '').trim().toLowerCase();

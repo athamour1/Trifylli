@@ -123,6 +123,7 @@ import {
 } from '@trifylli/shared';
 import PageState from '../components/PageState.vue';
 import { useAsyncData } from '../composables/useAsyncData';
+import { useTopikoReload } from '../composables/useLiveChanges';
 import { ApiError, del, get, post } from '../lib/api';
 import { formatDate } from '../lib/format';
 import { kladosVars } from '../lib/klados-theme';
@@ -166,6 +167,8 @@ const { data, loading, error, stale, reload } = useAsyncData(
     }),
   { cacheKey: 'symvoulia', watchSources: [klados] },
 );
+// Ζωντανά: νέα συμβούλια (και της δράσης), οριστικοποιήσεις, αρχειοθετήσεις από άλλους.
+useTopikoReload(['symvoulia', 'draseis'], reload);
 
 const visible = computed(() => {
   const rows = data.value ?? [];

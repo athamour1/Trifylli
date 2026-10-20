@@ -207,6 +207,7 @@ import {
 } from '@trifylli/shared';
 import PageState from '../components/PageState.vue';
 import { useAsyncData } from '../composables/useAsyncData';
+import { useTopikoReload } from '../composables/useLiveChanges';
 import { get } from '../lib/api';
 import { formatDate, formatEuro } from '../lib/format';
 
@@ -253,6 +254,8 @@ const { data, loading, error, stale, reload } = useAsyncData(
   () => get<MemberDetail>(`/meloi/${id}`),
   { forbiddenPage: true, cacheKey: `melos:${id}` },
 );
+// Ζωντανά: ό,τι αλλάζει στο μέλος: στοιχεία, πρόοδος, συνδρομή, αρχηγείο, συγχρονισμός.
+useTopikoReload(['meloi', 'proodos', 'syndromes', 'integrations', 'arxigeio'], reload);
 
 const SYNDROMI_COLOR: Record<SyndromiStatus, string> = {
   PLIROMENI: 'positive',

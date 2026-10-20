@@ -452,7 +452,8 @@ const stelexiOptions = computed(() =>
 );
 
 // Ζωντανά: ό,τι αλλάζουν οι άλλοι εμφανίζεται χωρίς ανανέωση της σελίδας.
-useLiveReload(['treasury', 'ledger', 'budget', 'payments', 'participants'], reload);
+// Και η αγορά υλικού (`yliko`), που γράφει έξοδο στο ταμείο.
+useLiveReload(['treasury', 'ledger', 'budget', 'payments', 'participants', 'yliko'], reload);
 onMounted(async () => {
   await reload();
   try {

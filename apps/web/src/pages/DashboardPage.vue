@@ -144,6 +144,7 @@ import { DRASI_ROLE_LABEL, KLADOS_LABEL, type CalendarEvent, type CollabPresence
 import CollabPresence from '../components/CollabPresence.vue';
 import PageState from '../components/PageState.vue';
 import { useAsyncData } from '../composables/useAsyncData';
+import { useTopikoReload } from '../composables/useLiveChanges';
 import { get } from '../lib/api';
 import { useAuthStore } from '../stores/auth';
 import { useOfflineStore } from '../stores/offline';
@@ -165,6 +166,8 @@ const { data, loading, error, stale, reload } = useAsyncData(
   () => get<Dashboard>('/calendar/dashboard'),
   { cacheKey: 'dashboard', immediate: !auth.isExternal },
 );
+// Ζωντανά: ό,τι αλλάζουν οι άλλοι στις δράσεις, συγκεντρώσεις, συμβούλια και στα μέλη.
+useTopikoReload(['draseis', 'syggentrwseis', 'symvoulia', 'meloi'], () => Promise.all([reload(), loadMine()]));
 const myDraseis = ref<MyDrasiView[]>([]);
 /** Ποιοι δουλεύουν τώρα σε κάθε δράση — ανανεώνεται κάθε λεπτό όσο είσαι εδώ. */
 const presence = ref<Record<string, CollabPresenceUser[]>>({});
@@ -179,12 +182,15 @@ async function loadPresence(): Promise<void> {
   }
 }
 let presenceTimer: ReturnType<typeof setInterval> | null = null;
-onMounted(async () => {
+async function loadMine(): Promise<void> {
   try {
     myDraseis.value = await get<MyDrasiView[]>('/draseis/mine');
   } catch {
     // Χωρίς τη λίστα, η Αρχική δουλεύει όπως πριν.
   }
+}
+onMounted(async () => {
+  await loadMine();
   void loadPresence();
   presenceTimer = setInterval(() => void loadPresence(), 60_000);
 });

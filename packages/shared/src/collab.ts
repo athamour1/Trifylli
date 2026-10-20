@@ -98,6 +98,12 @@ export const collabDocument = {
   syggentrwsh: (id: string) => `syggentrwsh:${id}`,
   /** Το δωμάτιο ενός χρήστη: εκεί φτάνουν αμέσως οι ειδοποιήσεις του (μόνο ο ίδιος μπαίνει). */
   user: (userId: string) => `user:${userId}`,
+  /**
+   * Το δωμάτιο του Τοπικού: κάθε αλλαγή μέσω API φτάνει εδώ ως «άλλαξε αυτό»
+   * (θέμα = η ενότητα του API, π.χ. `meloi`, `yliko`), ώστε κάθε σελίδα του
+   * κλάδου και του Τοπικού να ξαναφορτώνει μόνη της. Χωρίς περιεχόμενο.
+   */
+  topiko: (topikoId: string) => `topiko:${topikoId}`,
 } as const;
 
 /**

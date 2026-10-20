@@ -172,6 +172,7 @@ import { computed, ref, watch } from 'vue';
 import { useQuasar } from 'quasar';
 import PageState from '../components/PageState.vue';
 import { useAsyncData } from '../composables/useAsyncData';
+import { useTopikoReload } from '../composables/useLiveChanges';
 import { ApiError, post, get, put } from '../lib/api';
 import { formatDateTime } from '../lib/format';
 import { OUCHTRACKER_URL } from '../lib/runtime-config';
@@ -220,6 +221,8 @@ const { data, loading, error, stale, reload } = useAsyncData(
   () => get<IntegrationsStatus>('/integrations/status'),
   { cacheKey: 'integrations-status' },
 );
+// Ζωντανά: ο συγχρονισμός που ξεκίνησε άλλος (ή το cron) και οι ρυθμίσεις.
+useTopikoReload(['integrations'], reload);
 
 const syncing = ref(false);
 const lastSummary = ref<SyncSummary | null>(null);

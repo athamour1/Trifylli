@@ -122,6 +122,7 @@ import { useQuasar } from 'quasar';
 import { KLADOS_LABEL, type KladosType } from '@trifylli/shared';
 import PageState from '../components/PageState.vue';
 import { useAsyncData } from '../composables/useAsyncData';
+import { useTopikoReload } from '../composables/useLiveChanges';
 import { ApiError, del, get, post } from '../lib/api';
 import { formatDate } from '../lib/format';
 import { kladosVars } from '../lib/klados-theme';
@@ -160,6 +161,8 @@ const { data, loading, error, stale, reload } = useAsyncData(
     }),
   { cacheKey: 'syggentrwseis', watchSources: [effectiveKlados] },
 );
+// Ζωντανά: νέες συγκεντρώσεις, αλλαγές και παρουσίες από άλλους.
+useTopikoReload(['syggentrwseis', 'parousiologio'], reload);
 
 /**
  * Δημιουργεί τη συγκέντρωση και πάει στη σελίδα σχεδιασμού.

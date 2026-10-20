@@ -104,6 +104,7 @@ import {
 } from '@trifylli/shared';
 import PageState from '../components/PageState.vue';
 import { useAsyncData } from '../composables/useAsyncData';
+import { useTopikoReload } from '../composables/useLiveChanges';
 import { useKladosScope } from '../composables/useKladosScope';
 import { ApiError, get, put } from '../lib/api';
 import { useAuthStore } from '../stores/auth';
@@ -119,6 +120,8 @@ const { data, loading, error, stale, reload } = useAsyncData(
   () => get<ArxigeioView>(`/kladoi/${klados.value}/arxigeio`),
   { cacheKey: `arxigeio:${klados.value}`, watchSources: [klados] },
 );
+// Ζωντανά: υπευθυνότητες, στελέχη και λογαριασμοί που αλλάζουν άλλοι.
+useTopikoReload(['arxigeio', 'meloi', 'integrations', 'accounts'], reload);
 
 const initials = (m: ArxigeioMember): string => `${m.firstName.charAt(0)}${m.lastName.charAt(0)}`.toUpperCase();
 const sortedDuties = (duties: KladosDuty[]): KladosDuty[] => DUTIES.filter((d) => duties.includes(d));

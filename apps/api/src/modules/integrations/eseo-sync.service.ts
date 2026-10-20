@@ -3,6 +3,7 @@ import { Cron } from '@nestjs/schedule';
 import { DataSource, MemberKind, MemberStatus, Prisma, SyndromiStatus } from '@prisma/client';
 import { deriveLeaderProfile } from '@trifylli/shared';
 import { JobMonitor } from '../../common/jobs/job-monitor';
+import { CollabService } from '../collab/collab.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AppConfigToken } from '../../common/config/config.module';
 import type { AppConfig } from '../../common/config/configuration';
@@ -43,6 +44,7 @@ export class EseoSyncService {
     private readonly eseo: EseoClient,
     @Inject(AppConfigToken) private readonly config: AppConfig,
     private readonly jobs: JobMonitor,
+    private readonly collab: CollabService,
   ) {}
 
   /**
@@ -203,6 +205,8 @@ export class EseoSyncService {
       throw error;
     } finally {
       this.running = false;
+      // Όποιος έχει ανοιχτά τα μέλη, το μητρώο ή τον συγχρονισμό τα βλέπει να ενημερώνονται.
+      for (const topic of ['meloi', 'integrations']) this.collab.topikoChanged(topikoId, topic);
     }
   }
 

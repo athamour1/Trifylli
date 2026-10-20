@@ -229,6 +229,7 @@ import ExternalAccounts from '../components/ExternalAccounts.vue';
 import PageState from '../components/PageState.vue';
 import StelexiAccess from '../components/StelexiAccess.vue';
 import { useAsyncData } from '../composables/useAsyncData';
+import { useTopikoReload } from '../composables/useLiveChanges';
 import { readableOn } from '../lib/color';
 import { ApiError, del, get, patch, post } from '../lib/api';
 import { formatDateTime } from '../lib/format';
@@ -259,6 +260,8 @@ const { data, loading, error, stale, reload } = useAsyncData(
   () => get<AccountsResponse>('/accounts'),
   { cacheKey: 'accounts' },
 );
+// Ζωντανά: λογαριασμοί που δημιουργούν, αλλάζουν ή ανακαλούν άλλοι.
+useTopikoReload(['accounts', 'arxigeio', 'kladoi', 'meloi'], reload);
 
 const assignable = ref<AssignableKlados[]>([]);
 const dialog = ref(false);

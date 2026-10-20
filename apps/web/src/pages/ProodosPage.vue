@@ -102,6 +102,7 @@ import MegaloiProodos from '../components/MegaloiProodos.vue';
 import PouliaProodos from '../components/PouliaProodos.vue';
 import AsteriaProodos from '../components/AsteriaProodos.vue';
 import { useAsyncData } from '../composables/useAsyncData';
+import { useTopikoReload } from '../composables/useLiveChanges';
 import { ApiError, get, put } from '../lib/api';
 import { useAuthStore } from '../stores/auth';
 import { useKladosScope } from '../composables/useKladosScope';
@@ -150,6 +151,10 @@ const { data, loading, error, stale, reload } = useAsyncData(
   () => get<Grid>(`/proodos/klados/${klados.value}/grid`),
   { cacheKey: 'proodos', watchSources: [klados] },
 );
+// Ζωντανά: σημάνσεις προόδου από άλλους, νέα ή ανενεργά μέλη.
+// Όσο ένα δικό σου πάτημα ταξιδεύει, η ανανέωση περιμένει — αλλιώς θα το γύριζε πίσω.
+let pending = 0;
+useTopikoReload(['proodos', 'meloi', 'integrations'], reload, { busy: () => pending > 0 });
 
 /** Τα τρία στάδια κυκλικά: ένα πάτημα ανά αλλαγή, χωρίς διάλογο. */
 const NEXT: Record<ProodosStatus, ProodosStatus> = {
@@ -163,6 +168,7 @@ async function cycle(memberId: string, cell: Cell): Promise<void> {
   const previous = cell.status;
   cell.status = next; // αισιόδοξη ενημέρωση
 
+  pending += 1;
   try {
     await put(`/proodos/member/${memberId}`, { goalId: cell.goalId, status: next });
   } catch (err) {
@@ -171,6 +177,8 @@ async function cycle(memberId: string, cell: Cell): Promise<void> {
       type: 'negative',
       message: err instanceof ApiError ? err.message : 'Αποτυχία καταχώρησης.',
     });
+  } finally {
+    pending -= 1;
   }
 }
 

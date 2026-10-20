@@ -17,6 +17,7 @@ import {
   FORM_LINK_TTL_DAYS,
   HEALTH_DATA_RETENTION_DAYS,
   KLADOS_LABEL,
+  collabDocument,
   drasiCanReadHealth,
   formFieldApplies,
   type DrasiFormField,
@@ -29,6 +30,7 @@ import {
   type PublicFormView,
 } from '@trifylli/shared';
 import { AuditService } from '../../common/audit/audit.service';
+import { CollabService } from '../collab/collab.service';
 import { AppConfigToken } from '../../common/config/config.module';
 import type { AppConfig } from '../../common/config/configuration';
 import { JobMonitor } from '../../common/jobs/job-monitor';
@@ -68,6 +70,7 @@ export class DraseisFormsService {
     @Inject(AppConfigToken) private readonly config: AppConfig,
     private readonly jobs: JobMonitor,
     private readonly linkMailer: LinkMailer,
+    private readonly collab: CollabService,
   ) {}
 
   // ───────────────────────── Για τα στελέχη ─────────────────────────
@@ -514,6 +517,8 @@ export class DraseisFormsService {
       },
     });
     this.logger.log(`Έντυπο ${form.id} (${form.type}) υποβλήθηκε από ${ip ?? '-'}.`);
+    // Ο γονέας δεν έχει λογαριασμό (ούτε δωμάτιο): η δράση μαθαίνει την υποβολή από εδώ.
+    this.collab.broadcast(collabDocument.drasiRoom(form.drasiId), { topic: 'forms', by: null, origin: null });
     return { submitted: true };
   }
 

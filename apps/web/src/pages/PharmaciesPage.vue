@@ -228,6 +228,7 @@ import { get, post, del } from '../lib/api';
 import { formatDate } from '../lib/format';
 import { OUCHTRACKER_URL } from '../lib/runtime-config';
 import DateField from '../components/DateField.vue';
+import { useTopikoReload } from '../composables/useLiveChanges';
 
 const TOPIKO = '__TOPIKO__';
 
@@ -286,6 +287,8 @@ async function load() {
 
 onMounted(load);
 watch(klados, load);
+// Ζωντανά: δανεισμοί, επιστροφές (και οι αυτόματες) και συνδέσεις που κάνουν άλλοι.
+useTopikoReload(['pharmacies', 'farmakeio'], load);
 
 function openInOuch(kit: KitView) {
   if (!ouchBase) return;

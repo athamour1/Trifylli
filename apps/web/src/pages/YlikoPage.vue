@@ -269,6 +269,7 @@ import {
 import PageState from '../components/PageState.vue';
 import YlikoDetail from '../components/YlikoDetail.vue';
 import { useAsyncData } from '../composables/useAsyncData';
+import { useTopikoReload } from '../composables/useLiveChanges';
 import { ApiError, del, get, patch, post } from '../lib/api';
 import { inkOnWhiteLarge } from '../lib/color';
 import { formatDate, toISODate } from '../lib/format';
@@ -323,6 +324,8 @@ const { data, loading, error, stale, reload } = useAsyncData(
     }),
   { cacheKey: 'yliko', watchSources: [filters, routeKlados] },
 );
+// Ζωντανά: είδη, κρατήσεις και χρεώσεις που κάνουν άλλοι — και από τις δράσεις.
+useTopikoReload(['yliko', 'draseis'], reload);
 
 // ── Σημεία αποθήκευσης ──
 const storagePoints = ref<StoragePoint[]>([]);
