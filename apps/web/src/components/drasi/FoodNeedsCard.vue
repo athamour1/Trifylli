@@ -1,6 +1,6 @@
 <template>
   <!-- Αλλεργίες & διατροφή από τις δηλώσεις υγείας (F16): κλειστή εξ ορισμού,
-       φορτώνει μόλις ανοίξει — κάθε άνοιγμα καταγράφεται στο API. -->
+       φορτώνει σε κάθε άνοιγμα — κάθε άνοιγμα καταγράφεται στο API. -->
   <q-card flat bordered class="q-mb-md">
     <q-expansion-item v-model="open" icon="no_food" :label="label" header-class="text-weight-medium">
       <q-card-section class="q-pt-none">
@@ -41,8 +41,9 @@ const data = ref<DrasiFoodNeedsView | null>(null);
 const label = computed(() => (data.value ? `Αλλεργίες & διατροφή · ${data.value.people.length} άτομα` : 'Αλλεργίες & διατροφή'));
 
 watch(open, async (isOpen) => {
-  if (!isOpen || data.value) return;
+  if (!isOpen) return;
   loading.value = true;
+  error.value = null;
   try {
     data.value = await get<DrasiFoodNeedsView>(`/draseis/${props.drasiId}/diatrofologio/allergies`);
   } catch (err) {
