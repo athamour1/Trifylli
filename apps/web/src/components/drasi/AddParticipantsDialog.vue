@@ -31,10 +31,10 @@
       <template v-if="source === 'registry'">
         <q-card-section class="q-pt-none">
           <div class="row q-col-gutter-sm">
-            <div class="col-12 col-sm-5">
+            <div v-if="filters.kind !== 'OTHER'" class="col-12 col-sm-5">
               <q-select v-model="filters.klados" :options="kladosOptions" label="Κλάδος" outlined dense emit-value map-options color="klados" />
             </div>
-            <div class="col-12 col-sm-7">
+            <div class="col-12" :class="{ 'col-sm-7': filters.kind !== 'OTHER' }">
               <q-input v-model="filters.q" label="Αναζήτηση" outlined dense clearable color="klados" debounce="300">
                 <template #prepend><q-icon name="search" /></template>
               </q-input>
@@ -51,8 +51,13 @@
               { label: 'Όλοι', value: '' },
               { label: 'Παιδιά', value: 'MELOS' },
               { label: 'Στελέχη', value: 'STELEXOS' },
+              { label: 'Στελέχη άλλων κλάδων', value: 'OTHER' },
             ]"
           />
+          <div v-if="filters.kind === 'OTHER'" class="text-caption text-grey-7 q-mt-sm">
+            Στελέχη του Τοπικού από κλάδους που δεν είναι στη δράση. Μπαίνουν ως στελέχη της δράσης, βλέπουν μόνο αυτήν
+            — τίποτα άλλο από τον κλάδο της — και η πρόσβαση λήγει όταν κλείσει η δράση.
+          </div>
         </q-card-section>
 
         <q-card-section class="col scroll q-pt-none">
@@ -65,11 +70,12 @@
               <q-item-section side><q-checkbox v-model="selected" :val="m.id" color="klados" /></q-item-section>
               <q-item-section>
                 <q-item-label>{{ m.lastName }} {{ m.firstName }}</q-item-label>
-                <q-item-label caption>
-                  {{ MEMBER_KIND_LABEL[m.kind] }}
-                  <span v-if="m.kladosType"> · {{ KLADOS_LABEL[m.kladosType] }}</span>
-                  <span v-if="m.age !== null"> · {{ m.age }} ετών</span>
-                </q-item-label>
+                <q-item-label caption>{{ m.caption }}</q-item-label>
+              </q-item-section>
+              <q-item-section v-if="m.noAccount" side>
+                <q-badge color="grey-7" label="Χωρίς λογαριασμό">
+                  <q-tooltip>Μπαίνει στους συμμετέχοντες, αλλά για να δει τη δράση στην εφαρμογή θέλει λογαριασμό — ενεργοποίηση από Λογαριασμοί → Στελέχη.</q-tooltip>
+                </q-badge>
               </q-item-section>
             </q-item>
           </q-list>
@@ -193,6 +199,7 @@ import {
   MEMBER_KIND_LABEL,
   type DrasiExternalCreated,
   type DrasiGuestTopikoView,
+  type DrasiOtherStelexosView,
   type GuestMemberView,
   type KladosType,
   type MemberSummary,
@@ -226,20 +233,50 @@ const selectedGuests = ref<string[]>([]);
 const loading = ref(false);
 const members = ref<MemberSummary[]>([]);
 const selected = ref<string[]>([]);
-const filters = reactive({ klados: '' as KladosType | '', q: '', kind: '' as '' | 'MELOS' | 'STELEXOS' });
+const filters = reactive({ klados: '' as KladosType | '', q: '', kind: '' as '' | 'MELOS' | 'STELEXOS' | 'OTHER' });
+/** «Στελέχη άλλων κλάδων»: δική τους λίστα από τη δράση — ο Αρχηγός δεν βλέπει το μητρώο τους. */
+const others = ref<DrasiOtherStelexosView[]>([]);
 
 const kladosOptions = computed(() => [
   { label: 'Όλοι οι κλάδοι', value: '' },
   ...props.kladoi.map((k) => ({ label: KLADOS_LABEL[k], value: k })),
 ]);
+/** Μία μορφή για τις δύο πηγές: όνομα, λεζάντα, και αν λείπει λογαριασμός. */
 const candidates = computed(() => {
   const existing = new Set(props.existingIds);
-  return members.value.filter((m) => !existing.has(m.id));
+  if (filters.kind === 'OTHER') {
+    return others.value
+      .filter((o) => !existing.has(o.id))
+      .map((o) => ({
+        id: o.id,
+        firstName: o.firstName,
+        lastName: o.lastName,
+        caption: [MEMBER_KIND_LABEL.STELEXOS, o.kladoi.map((k) => KLADOS_LABEL[k]).join(', ')].filter(Boolean).join(' · '),
+        noAccount: !o.hasAccount,
+      }));
+  }
+  return members.value
+    .filter((m) => !existing.has(m.id))
+    .map((m) => ({
+      id: m.id,
+      firstName: m.firstName,
+      lastName: m.lastName,
+      caption: [MEMBER_KIND_LABEL[m.kind], m.kladosType ? KLADOS_LABEL[m.kladosType] : null, m.age !== null ? `${m.age} ετών` : null]
+        .filter(Boolean)
+        .join(' · '),
+      noAccount: false,
+    }));
 });
 
 async function load(): Promise<void> {
   loading.value = true;
   try {
+    if (filters.kind === 'OTHER') {
+      others.value = await get<DrasiOtherStelexosView[]>(`/draseis/${props.drasiId}/other-klados-stelexi`, {
+        params: filters.q ? { q: filters.q } : {},
+      });
+      return;
+    }
     const page = await get<Paginated<MemberSummary>>('/meloi', {
       params: {
         pageSize: 300,

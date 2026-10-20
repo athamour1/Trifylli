@@ -29,6 +29,7 @@ import {
   AddParticipantsDto,
   CreateDrasiDto,
   DeleteDrasiDto,
+  OtherKladosStelexiQueryDto,
   SetDrasiClosedDto,
   QueryDraseisDto,
   SetDrasiKladoiDto,
@@ -250,6 +251,17 @@ export class DraseisController {
   }
 
   // ───────────────────────── Συμμετέχοντες ─────────────────────────
+
+  @Get(':id/other-klados-stelexi')
+  @RequireDrasi('participants', 'edit')
+  @ApiOperation({ summary: 'Στελέχη άλλων κλάδων του Τοπικού — υποψήφιοι συμμετέχοντες' })
+  otherKladosStelexi(
+    @CurrentUser() user: RequestUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() query: OtherKladosStelexiQueryDto,
+  ) {
+    return this.draseis.otherKladosStelexi(user, id, query.q);
+  }
 
   @Post(':id/participants')
   @RequireDrasi('participants', 'edit')

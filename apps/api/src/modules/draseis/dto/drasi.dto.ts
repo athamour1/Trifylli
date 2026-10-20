@@ -349,3 +349,12 @@ export class SetDrasiClosedDto {
   @IsBoolean()
   closed!: boolean;
 }
+
+/** Στελέχη άλλων κλάδων για την προσθήκη συμμετεχόντων. */
+export class OtherKladosStelexiQueryDto {
+  @ApiPropertyOptional({ description: 'Αναζήτηση σε όνομα/επώνυμο.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(80)
+  q?: string;
+}

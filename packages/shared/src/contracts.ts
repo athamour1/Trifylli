@@ -1077,6 +1077,19 @@ export interface DrasiExternalCreated {
   inviteError: string | null;
 }
 
+/**
+ * Στέλεχος του Τοπικού από κλάδο που δεν είναι στη δράση — υποψήφιος συμμετέχων.
+ * Λίγα στοιχεία: ο Αρχηγός της δράσης δεν βλέπει το μητρώο εκείνου του κλάδου.
+ */
+export interface DrasiOtherStelexosView {
+  id: string;
+  firstName: string;
+  lastName: string;
+  kladoi: KladosType[];
+  /** Έχει λογαριασμό στην εφαρμογή — αλλιώς ενεργοποιείται από Λογαριασμοί → Στελέχη. */
+  hasAccount: boolean;
+}
+
 /** Δράση όπου ο χρήστης είναι στέλεχος — για την Αρχική («Οι δράσεις μου»). */
 export interface MyDrasiView {
   id: string;

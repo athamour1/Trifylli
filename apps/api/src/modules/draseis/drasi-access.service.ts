@@ -1,9 +1,19 @@
 import { ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { AccountRole, DrasiStatus, MemberKind } from '@prisma/client';
-import { can, drasiAccess, isSuperAdmin, type DrasiAccess, type DrasiRoleKind, type KladosType } from '@trifylli/shared';
+import { can, drasiAccess, isSuperAdmin, type AccessProfile, type DrasiAccess, type DrasiRoleKind, type KladosType } from '@trifylli/shared';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
 import { accessProfileOf, assertKladosAccess, scopedKladoi } from '../../common/util/klados-scope';
+
+/**
+ * Βλέπει ο χρήστης τη δράση από τον κλάδο του — τον διοργανωτή ή κλάδο που
+ * συμμετέχει (δράση Τοπικού χωρίς κλάδους: όποιος βλέπει ημερολόγιο κάπου);
+ * Αλλιώς μπαίνει μόνο ως στέλεχος της δράσης: στέλεχος άλλου κλάδου του
+ * Τοπικού ή εξωτερικός, και η πρόσβασή του λήγει με το κλείσιμο της δράσης.
+ */
+export function viaOwnKlados(profile: AccessProfile, kladoi: readonly KladosType[]): boolean {
+  return kladoi.length ? kladoi.some((klados) => can(profile, 'calendar:read', klados)) : can(profile, 'calendar:read');
+}
 
 /**
  * Ο έλεγχος εμβέλειας μιας δράσης, κοινός για όλα τα services της.
@@ -37,13 +47,16 @@ export class DrasiAccessService {
       },
     });
     if (!drasi) throw new NotFoundException('Η δράση δεν βρέθηκε.');
-    // Εξωτερικός: η πρόσβαση λήγει με το κλείσιμο (ή την αρχειοθέτηση) της δράσης.
-    if (user.role === AccountRole.EXTERNAL && (drasi.status === DrasiStatus.KLEISTI || drasi.archivedAt)) {
-      return drasiAccess({ full: false, staff: false, roles: [] });
-    }
     const profile = accessProfileOf(user);
     const organiser = drasi.klados?.type as KladosType | undefined;
     const full = isSuperAdmin(profile) || can(profile, 'drasi:write', organiser);
+    // Εξωτερικός ή στέλεχος άλλου κλάδου: μπήκε μόνο μέσω της δράσης, και η
+    // πρόσβαση λήγει με το κλείσιμο (ή την αρχειοθέτηση) της.
+    const drasiKladoi = [organiser, ...drasi.kladoi.map((k) => k.klados.type as KladosType)].filter((k): k is KladosType => !!k);
+    const ended = drasi.status === DrasiStatus.KLEISTI || !!drasi.archivedAt;
+    if (ended && !full && (user.role === AccountRole.EXTERNAL || !viaOwnKlados(profile, drasiKladoi))) {
+      return drasiAccess({ full: false, staff: false, roles: [] });
+    }
     const participatingAdmin = drasi.kladoi.some((k) => can(profile, 'drasi:write', k.klados.type as KladosType));
     return drasiAccess({
       full,

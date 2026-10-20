@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { AccountRole, CheckoutStatus, DrasiStatus, DrasiType, MemberKind, Prisma } from '@prisma/client';
+import { AccountRole, CheckoutStatus, DrasiStatus, DrasiType, MemberKind, MemberStatus, Prisma } from '@prisma/client';
 import {
   can,
   COLLAB_FIELDS,
@@ -9,6 +9,7 @@ import {
   KLADOS_LABEL,
   KLADOS_META,
   type DrasiAccess,
+  type DrasiOtherStelexosView,
   type DrasiRoleKind,
   type KataskinosiStats,
   type MyDrasiView,
@@ -22,7 +23,7 @@ import { birthdaysIn } from '../calendar/birthdays';
 import { refuseCollabFields } from '../collab/collab-fields';
 import { CollabService } from '../collab/collab.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { DrasiAccessService } from './drasi-access.service';
+import { DrasiAccessService, viaOwnKlados } from './drasi-access.service';
 import { defaultFeeKind } from './draseis-finance.service';
 import { planGuestTopika } from './guest-topika';
 import type {
@@ -133,7 +134,8 @@ export class DraseisService {
 
   /**
    * Οι δράσεις όπου ο χρήστης είναι στέλεχος (ρόλος στο αρχηγείο ή στέλεχος στους
-   * συμμετέχοντες). Για τον εξωτερικό: μόνο οι ανοιχτές — αυτές που του δίνουν πρόσβαση.
+   * συμμετέχοντες). Για τον εξωτερικό και το στέλεχος άλλου κλάδου: μόνο οι
+   * ανοιχτές — αυτές που του δίνουν πρόσβαση (βλ. `viaOwnKlados`).
    */
   async mine(user: RequestUser): Promise<MyDrasiView[]> {
     const rows = await this.prisma.drasi.findMany({
@@ -157,10 +159,17 @@ export class DraseisService {
         dateStart: true,
         dateEnd: true,
         klados: { select: { type: true } },
+        kladoi: { select: { klados: { select: { type: true } } } },
         roles: { where: { userId: user.id }, select: { kind: true } },
       },
     });
-    return rows.map((d) => ({
+    const profile = accessProfileOf(user);
+    const visible = rows.filter((d) => {
+      if (d.status !== DrasiStatus.KLEISTI) return true;
+      const kladoi = [d.klados?.type, ...d.kladoi.map((k) => k.klados.type)].filter((k): k is KladosType => !!k);
+      return viaOwnKlados(profile, kladoi);
+    });
+    return visible.map((d) => ({
       id: d.id,
       title: d.title,
       type: d.type,
@@ -513,6 +522,53 @@ export class DraseisService {
     await this.prisma.drasiRole.deleteMany({ where: { drasiId: id, kind, userId } });
     this.accessChanged(id);
     return { removed: true };
+  }
+
+  /**
+   * Στελέχη του Τοπικού από κλάδους που δεν είναι στη δράση — η επιλογή «Στελέχη
+   * άλλων κλάδων» στην προσθήκη συμμετεχόντων. Μπαίνουν ως στελέχη της δράσης,
+   * βλέπουν μόνο αυτήν, και η πρόσβαση λήγει με το κλείσιμό της (βλ. `viaOwnKlados`).
+   */
+  async otherKladosStelexi(user: RequestUser, id: string, q?: string): Promise<DrasiOtherStelexosView[]> {
+    const drasi = await this.assertAccess(user, id);
+    const joined = await this.prisma.drasiKlados.findMany({ where: { drasiId: id }, select: { klados: { select: { type: true } } } });
+    const drasiKladoi = [drasi.klados?.type, ...joined.map((k) => k.klados.type)].filter((k): k is KladosType => !!k);
+    const term = q?.trim();
+    const rows = await this.prisma.user.findMany({
+      where: {
+        topikoId: user.topikoId,
+        archivedAt: null,
+        guestTopikoCode: null,
+        status: MemberStatus.ENERGO,
+        participations: { none: { drasiId: id } },
+        memberships: {
+          some: { leftAt: null, kind: MemberKind.STELEXOS, klados: { type: { notIn: drasiKladoi } } },
+          // Όποιος είναι και σε κλάδο της δράσης φαίνεται ήδη στο μητρώο της.
+          none: { leftAt: null, klados: { type: { in: drasiKladoi } } },
+        },
+        ...(term
+          ? { OR: [{ firstName: { contains: term, mode: 'insensitive' } }, { lastName: { contains: term, mode: 'insensitive' } }] }
+          : {}),
+      },
+      orderBy: [{ lastName: 'asc' }, { firstName: 'asc' }],
+      take: 200,
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        accountRole: true,
+        memberships: { where: { leftAt: null }, select: { klados: { select: { type: true } } } },
+      },
+    });
+    return rows.map((row) => ({
+      id: row.id,
+      firstName: row.firstName,
+      lastName: row.lastName,
+      kladoi: row.memberships
+        .map((m) => m.klados.type as KladosType)
+        .sort((a, b) => KLADOS_META[a].order - KLADOS_META[b].order),
+      hasAccount: row.accountRole !== null,
+    }));
   }
 
   async addParticipants(user: RequestUser, id: string, dto: AddParticipantsDto) {
