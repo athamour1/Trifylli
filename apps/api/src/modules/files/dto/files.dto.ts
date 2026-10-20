@@ -1,4 +1,4 @@
-import { IsEnum, IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsEnum, IsIn, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 import { FilePurpose, KladosType } from '@trifylli/shared';
 
 export class UploadFileDto {
@@ -19,4 +19,12 @@ export class UploadFileDto {
   @IsString()
   @MaxLength(160)
   collabDocument?: string;
+
+  /**
+   * Απόδειξη δράσης (ταμείο, πληρωμή, αγορά υλικού): την ανεβάζει όποιος
+   * καταχωρεί εκεί και τη βλέπει όποιος βλέπει το ταμείο της — όχι ο κλάδος.
+   */
+  @IsOptional()
+  @IsUUID()
+  drasiId?: string;
 }

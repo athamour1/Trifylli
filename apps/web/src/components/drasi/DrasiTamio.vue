@@ -574,10 +574,8 @@ async function submitEntry(kind: EntryKind): Promise<void> {
   try {
     let receiptFileId: string | undefined;
     if (entry.file) {
-      const ref = await upload<{ id: string }>('/files', entry.file, {
-        purpose: 'RECEIPT',
-        ...(props.organiser ? { kladosType: props.organiser } : {}),
-      });
+      // Δεμένη με τη δράση: την ανεβάζει ο Ταμίας και τη βλέπει όποιος βλέπει το ταμείο της.
+      const ref = await upload<{ id: string }>('/files', entry.file, { purpose: 'RECEIPT', drasiId: props.drasiId });
       receiptFileId = ref.id;
     }
     await post(`/draseis/${props.drasiId}/treasury`, {

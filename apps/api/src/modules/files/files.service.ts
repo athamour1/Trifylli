@@ -4,12 +4,16 @@ import type { Prisma } from '@prisma/client';
 import { randomUUID } from 'node:crypto';
 import { sniffMime } from './sniff';
 import {
+  collabDocument,
+  drasiCan,
+  drasiCanReadHealth,
   FilePurpose,
   MARKDOWN_IMAGE_MIME_TYPES,
   MAX_MARKDOWN_IMAGE_BYTES,
   MAX_RECEIPT_BYTES,
   RECEIPT_MIME_TYPES,
   type Capability,
+  type DrasiPerm,
   type KladosType,
   type StoredFileRef,
 } from '@trifylli/shared';
@@ -19,7 +23,11 @@ import { StorageService } from '../../common/storage/storage.service';
 import type { RequestUser } from '../../common/auth/types';
 import { assertScopeAccess } from '../../common/util/klados-scope';
 import { CollabService } from '../collab/collab.service';
+import { DrasiAccessService } from '../draseis/drasi-access.service';
 import type { UploadFileDto } from './dto/files.dto';
+
+/** Με ποια ενότητα της δράσης ανεβαίνει απόδειξη: ταμείο, πληρωμές, αγορές υλικού. */
+const DRASI_RECEIPT_PERMS: readonly DrasiPerm[] = ['tamio', 'payments', 'yliko'];
 
 /** Ποιο δικαίωμα απαιτείται για ανάγνωση/εγγραφή ανά σκοπό αρχείου. */
 const PURPOSE_CAPS: Record<string, { read: Capability; write: Capability }> = {
@@ -55,6 +63,7 @@ export class FilesService {
     private readonly storage: StorageService,
     private readonly jobs: JobMonitor,
     private readonly collab: CollabService,
+    private readonly drasiAccess: DrasiAccessService,
   ) {}
 
   /**
@@ -175,6 +184,7 @@ export class FilesService {
       );
     }
 
+    let kladosId: string | null;
     if (dto.collabDocument) {
       // Εικόνα κοινού εγγράφου: την ανεβάζει όποιος γράφει στο έγγραφο — και ένα
       // εξωτερικό στέλεχος ή ένα στέλεχος άλλου κλάδου που γράφει το προγραμματικό του.
@@ -182,10 +192,21 @@ export class FilesService {
       if ((await this.collab.documentAccess(user, dto.collabDocument)) !== 'write') {
         throw new ForbiddenException('Δεν γράφεις σε αυτό το κείμενο.');
       }
+      kladosId = await this.resolveKladosId(user, dto.kladosType);
+    } else if (dto.drasiId) {
+      // Απόδειξη δράσης: την ανεβάζει όποιος καταχωρεί έξοδα ή πληρωμές στη δράση
+      // (ο Ταμίας, η αγορά υλικού) — όχι μόνο ο διαχειριστής του ταμείου του κλάδου.
+      if (dto.purpose !== FilePurpose.RECEIPT) throw new BadRequestException('Μόνο αποδείξεις δένονται με δράση.');
+      const access = await this.drasiAccess.accessFor(user, dto.drasiId).catch(() => null);
+      if (!DRASI_RECEIPT_PERMS.some((perm) => drasiCan(access, perm, 'edit'))) {
+        throw new ForbiddenException('Δεν καταχωρείς έξοδα σε αυτή τη δράση.');
+      }
+      const drasi = await this.prisma.drasi.findUniqueOrThrow({ where: { id: dto.drasiId }, select: { kladosId: true } });
+      kladosId = drasi.kladosId;
     } else {
       assertScopeAccess(user, caps.write, dto.kladosType);
+      kladosId = await this.resolveKladosId(user, dto.kladosType);
     }
-    const kladosId = await this.resolveKladosId(user, dto.kladosType);
 
     const objectKey = `${dto.purpose.toLowerCase()}/${user.topikoId}/${randomUUID()}-${safeName(file.originalname)}`;
     await this.storage.put(objectKey, file.buffer, actualMime);
@@ -210,21 +231,94 @@ export class FilesService {
   async openForDownload(user: RequestUser, id: string) {
     const file = await this.prisma.storedFile.findFirst({
       where: { id, topikoId: user.topikoId },
-      include: { klados: { select: { type: true } } },
+      include: {
+        klados: { select: { type: true } },
+        treasuryEntry: { select: { drasiId: true } },
+        drasiPayment: { select: { participant: { select: { drasiId: true } } } },
+        drasiForm: { select: { drasiId: true, type: true } },
+      },
     });
     if (!file) throw new NotFoundException('Το αρχείο δεν βρέθηκε.');
-    if (file.collabDocument) {
-      // Τη βλέπει όποιος βλέπει το έγγραφο όπου ανέβηκε.
-      if (!(await this.collab.documentAccess(user, file.collabDocument))) {
-        throw new ForbiddenException('Δεν έχετε πρόσβαση σε αυτό το αρχείο.');
-      }
-    } else {
-      const caps = PURPOSE_CAPS[file.purpose];
-      assertScopeAccess(user, caps?.read ?? 'treasury:read', file.klados?.type as KladosType | undefined);
-    }
+    if (!(await this.canRead(user, file))) throw new ForbiddenException('Δεν έχετε πρόσβαση σε αυτό το αρχείο.');
 
     const { stream } = await this.storage.getStream(file.objectKey);
     return { stream, filename: file.filename, contentType: file.contentType, size: file.size };
+  }
+
+  /**
+   * Το αρχείο το βλέπει όποιος βλέπει αυτό στο οποίο ανήκει: το κοινό έγγραφο
+   * της εικόνας, την ενότητα της δράσης της απόδειξης ή της υπογραφής — όχι ο
+   * κλάδος του διοργανωτή, που κόβει στελέχη άλλων κλάδων, εξωτερικούς και
+   * (στις δράσεις του Τοπικού) όλους εκτός από τον υπερδιαχειριστή.
+   */
+  private async canRead(user: RequestUser, file: DownloadableFile): Promise<boolean> {
+    if (file.collabDocument) return Boolean(await this.collab.documentAccess(user, file.collabDocument));
+    const owner = drasiOwner(file);
+    if (owner) {
+      const access = await this.drasiAccess.accessFor(user, owner.drasiId).catch(() => null);
+      return drasiCan(access, owner.perm) && (!owner.health || drasiCanReadHealth(access));
+    }
+    // Ανέβηκε αλλά δεν έχει μπει ακόμα πουθενά (π.χ. η απόδειξη πριν από την καταχώριση).
+    if (file.createdById === user.id) return true;
+    const caps = PURPOSE_CAPS[file.purpose];
+    try {
+      assertScopeAccess(user, caps?.read ?? 'treasury:read', file.klados?.type as KladosType | undefined);
+      return true;
+    } catch {
+      return file.purpose === FilePurpose.MARKDOWN && this.adoptDocument(user, file.id);
+    }
+  }
+
+  /**
+   * Εικόνα Markdown από πριν από τα κοινά έγγραφα (χωρίς `collabDocument`): τη
+   * βλέπει όποιος βλέπει ένα από τα κείμενα που την αναφέρουν. Όταν την αναφέρει
+   * ένα μόνο κείμενο, δένεται μαζί του — ώστε η επόμενη φορά να είναι ένας έλεγχος.
+   */
+  private async adoptDocument(user: RequestUser, fileId: string): Promise<boolean> {
+    const documents = await this.documentsReferencing(user.topikoId, fileId);
+    let allowed = false;
+    for (const name of documents) {
+      if (await this.collab.documentAccess(user, name)) {
+        allowed = true;
+        break;
+      }
+    }
+    if (documents.length === 1) {
+      await this.prisma.storedFile.updateMany({ where: { id: fileId, collabDocument: null }, data: { collabDocument: documents[0] } });
+    }
+    return allowed;
+  }
+
+  /** Τα κοινά έγγραφα του Τοπικού που αναφέρουν την εικόνα στο κείμενό τους. */
+  private async documentsReferencing(topikoId: string, fileId: string): Promise<string[]> {
+    const needle = { contains: `trifylli:${fileId}` };
+    const drasi = { topikoId };
+    const [draseis, characters, items, meals, variants, sections, blocks, symvoulia] = await Promise.all([
+      this.prisma.drasi.findMany({
+        where: { topikoId, OR: [{ description: needle }, { mythosText: needle }] },
+        select: { id: true, description: true, mythosText: true },
+      }),
+      this.prisma.drasiCharacter.findMany({ where: { lore: needle, drasi }, select: { id: true, drasiId: true } }),
+      this.prisma.drasiScheduleItem.findMany({ where: { description: needle, drasi }, select: { id: true, drasiId: true } }),
+      this.prisma.drasiMeal.findMany({ where: { recipe: needle, item: { drasi } }, select: { itemId: true, item: { select: { drasiId: true } } } }),
+      this.prisma.drasiMealVariant.findMany({ where: { recipe: needle, item: { drasi } }, select: { id: true, item: { select: { drasiId: true } } } }),
+      this.prisma.syggentrwshSection.findMany({ where: { notes: needle, syggentrwsh: { klados: { topikoId } } }, select: { syggentrwshId: true } }),
+      this.prisma.timelineBlock.findMany({ where: { description: needle, syggentrwsh: { klados: { topikoId } } }, select: { syggentrwshId: true } }),
+      this.prisma.symvoulio.findMany({ where: { topikoId, OR: [{ agenda: needle }, { minutes: needle }] }, select: { id: true } }),
+    ]);
+    const names = [
+      ...draseis.flatMap((d) => [
+        ...(d.description?.includes(needle.contains) ? [collabDocument.drasiSettings(d.id)] : []),
+        ...(d.mythosText?.includes(needle.contains) ? [collabDocument.drasiMythos(d.id)] : []),
+      ]),
+      ...characters.map((c) => collabDocument.drasiCharacter(c.drasiId, c.id)),
+      ...items.map((i) => collabDocument.drasiItem(i.drasiId, i.id)),
+      ...meals.map((m) => collabDocument.drasiMeal(m.item.drasiId, m.itemId)),
+      ...variants.map((v) => collabDocument.drasiMealVariant(v.item.drasiId, v.id)),
+      ...[...sections, ...blocks].map((s) => collabDocument.syggentrwsh(s.syggentrwshId)),
+      ...symvoulia.map((s) => collabDocument.symvoulio(s.id)),
+    ];
+    return [...new Set(names)];
   }
 
   async remove(user: RequestUser, id: string) {
@@ -335,6 +429,30 @@ function toRef(f: {
     size: f.size,
     createdAt: f.createdAt.toISOString(),
   };
+}
+
+/** Ό,τι χρειάζεται ο έλεγχος ανάγνωσης: το αρχείο και πού έχει μπει. */
+interface DownloadableFile {
+  id: string;
+  purpose: string;
+  createdById: string | null;
+  collabDocument: string | null;
+  klados: { type: string } | null;
+  treasuryEntry?: { drasiId: string | null } | null;
+  drasiPayment?: { participant: { drasiId: string } } | null;
+  drasiForm?: { drasiId: string; type: string } | null;
+}
+
+/**
+ * Η δράση και η ενότητά της, όταν το αρχείο έχει μπει σε δράση: απόδειξη στο
+ * ταμείο της ή σε πληρωμή (Ταμείο), υπογραφή εντύπου (Έντυπα· και Φαρμακείο
+ * για τα έντυπα υγείας, όπως οι απαντήσεις τους). Αλλιώς `null`.
+ */
+export function drasiOwner(file: DownloadableFile): { drasiId: string; perm: DrasiPerm; health: boolean } | null {
+  if (file.treasuryEntry?.drasiId) return { drasiId: file.treasuryEntry.drasiId, perm: 'tamio', health: false };
+  if (file.drasiPayment) return { drasiId: file.drasiPayment.participant.drasiId, perm: 'tamio', health: false };
+  if (file.drasiForm) return { drasiId: file.drasiForm.drasiId, perm: 'entypa', health: file.drasiForm.type === 'YGEIA' };
+  return null;
 }
 
 function describeMimes(mimes: readonly string[]): string {

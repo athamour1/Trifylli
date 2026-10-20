@@ -362,7 +362,7 @@ async function submitPurchase(): Promise<void> {
   try {
     let receiptFileId: string | undefined;
     if (purchase.file) {
-      const ref = await upload<{ id: string }>('/files', purchase.file, { purpose: 'RECEIPT', ...(props.organiser ? { kladosType: props.organiser } : {}) });
+      const ref = await upload<{ id: string }>('/files', purchase.file, { purpose: 'RECEIPT', drasiId: props.drasiId });
       receiptFileId = ref.id;
     }
     await post(`/draseis/${props.drasiId}/yliko/shopping/${purchaseTarget.value.id}/purchase`, {

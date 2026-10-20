@@ -189,6 +189,7 @@
             placeholder="Ποιος είναι, από πού έρχεται, τι θέλει, πώς μιλά, τι ξέρει που οι άλλοι δεν ξέρουν…"
             :min-height="160"
             :klados="organiser"
+            :document="collabDocument.drasiMythos(drasiId)"
           />
         </q-card-section>
         <q-card-actions align="right">

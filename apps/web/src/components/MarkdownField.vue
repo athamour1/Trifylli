@@ -100,6 +100,11 @@ const props = withDefaults(
     minHeight?: number;
     /** Εμβέλεια των εικόνων (κλάδος ή `null` για Τοπικό). */
     klados?: KladosType | null;
+    /**
+     * Κοινό έγγραφο όπου ανήκουν οι εικόνες (τις βλέπει όποιος το βλέπει) — για
+     * κείμενο που γράφεται εδώ πριν αποκτήσει δικό του έγγραφο (π.χ. νέος ρόλος).
+     */
+    document?: string | null;
   }>(),
   {
     label: 'Σημειώσεις',
@@ -108,6 +113,7 @@ const props = withDefaults(
     emptyText: 'Καμία σημείωση.',
     minHeight: 96,
     klados: null,
+    document: null,
   },
 );
 
@@ -124,6 +130,7 @@ const { html, uploading, dragActive, uploadFiles, onPaste, onDragEnter, onDragOv
     klados: () => props.klados,
     insert: insertAtCursor,
     accepts: () => !props.readonly && mode.value === 'edit',
+    document: () => props.document,
   });
 
 function textarea(): HTMLTextAreaElement | null {
