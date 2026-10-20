@@ -26,7 +26,6 @@
               </div>
             </div>
             <div class="col-12 col-sm-auto row items-center q-gutter-sm">
-              <CollabPresence :peers="peers" faces-only />
               <SaveStatus v-if="editable" :status="worstSaveState(saveStatus, collabSaveState)" @retry="saveNow" />
               <DocumentHistory :document="docName" :writable="textEditable" />
             </div>
@@ -179,7 +178,6 @@ import {
   type ItemYlikoSnapshot,
 } from '@trifylli/shared';
 import CollabBanner from '../CollabBanner.vue';
-import CollabPresence from '../CollabPresence.vue';
 import DocumentHistory from '../collab/DocumentHistory.vue';
 import ApprovalBar from '../collab/ApprovalBar.vue';
 import MarkdownField from '../MarkdownField.vue';
@@ -296,7 +294,6 @@ const {
   ready,
   writable,
   status: collabStatus,
-  peers,
   saveState: collabSaveState,
 } = useCollabDoc(docName, useCollabMe());
 

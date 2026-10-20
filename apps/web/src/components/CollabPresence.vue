@@ -18,7 +18,7 @@
       </q-avatar>
     </div>
     <!-- Στενό σημείο (κεφαλίδα, κινητό): το κείμενο κόβεται με «…», τα πρόσωπα μένουν. -->
-    <span v-if="!compact && !facesOnly" class="text-caption text-grey-7 q-ml-sm gt-xs ellipsis collab-presence__summary">
+    <span v-if="!compact" class="text-caption text-grey-7 q-ml-sm gt-xs ellipsis collab-presence__summary">
       {{ summary }}
       <q-tooltip>{{ summary }}</q-tooltip>
     </span>
@@ -38,13 +38,8 @@ const props = withDefaults(
     peers: CollabPresenceUser[];
     /** Μικρά πρόσωπα χωρίς κείμενο — π.χ. δίπλα σε μια γραμμή που επεξεργάζεται κάποιος. */
     compact?: boolean;
-    /**
-     * Κανονικά πρόσωπα, χωρίς τη φράση «Εδώ και…»: εκεί όπου στριμώχνει τον
-     * τίτλο και τη λέει ήδη η κεφαλίδα της δράσης από πάνω.
-     */
-    facesOnly?: boolean;
   }>(),
-  { compact: false, facesOnly: false },
+  { compact: false },
 );
 
 const MAX_FACES = 4;
@@ -83,8 +78,10 @@ function initials(name: string): string {
 }
 .collab-presence__face {
   font-weight: 700;
-  border: 2px solid var(--surface);
-  margin-left: -6px;
+  // Δαχτυλίδι και όχι περίγραμμα: το περίγραμμα έτρωγε χώρο μέσα στον κύκλο και
+  // τα αρχικά έφευγαν ~1.5px δεξιά-κάτω από το κέντρο.
+  box-shadow: 0 0 0 2px var(--surface);
+  margin-left: -4px;
 
   // Το Quasar δίνει στο περιεχόμενο το μισό του μεγέθους: δύο έντονα κεφαλαία
   // («ΜΠ») ξεχείλιζαν από τον κύκλο. Σχετικό μέγεθος — χωρά και στα μικρά πρόσωπα.

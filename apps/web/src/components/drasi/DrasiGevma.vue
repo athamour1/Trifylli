@@ -27,7 +27,6 @@
               <div class="text-caption text-grey-7">{{ portionsCaption(mainPortions, variants) }}</div>
             </div>
             <div class="col-12 col-sm-auto row items-center q-gutter-sm">
-              <CollabPresence :peers="peers" faces-only />
               <SaveStatus v-if="editable" :status="saveState" />
               <DocumentHistory :document="docName" :writable="textEditable" />
               <q-btn v-if="variant && editable" flat round dense icon="more_vert" color="klados">
@@ -213,7 +212,6 @@ import {
   type KladosType,
 } from '@trifylli/shared';
 import CollabBanner from '../CollabBanner.vue';
-import CollabPresence from '../CollabPresence.vue';
 import DocumentHistory from '../collab/DocumentHistory.vue';
 import ApprovalBar from '../collab/ApprovalBar.vue';
 import MarkdownField from '../MarkdownField.vue';
@@ -304,7 +302,7 @@ const editable = computed(() => !!drasi.value && drasi.value.status !== 'KLEISTI
 // ── Το γεύμα: κοινό έγγραφο, σώζει μόνο του ──
 const docName = variantId ? collabDocument.drasiMealVariant(drasiId, variantId) : collabDocument.drasiMeal(drasiId, itemId);
 const auth = useAuthStore();
-const { doc, awareness, ready, writable, status, peers, saveState } = useCollabDoc(docName, useCollabMe());
+const { doc, awareness, ready, writable, status, saveState } = useCollabDoc(docName, useCollabMe());
 
 /** Το γεύμα όπως είναι τώρα στο έγγραφο — ξαναδιαβάζεται σε κάθε αλλαγή, δική μας ή άλλων. */
 const docMeal = shallowRef<ReturnType<typeof readMealDoc> | null>(null);
