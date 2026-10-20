@@ -105,6 +105,7 @@ import { EditorState, StateEffect, StateField } from '@codemirror/state';
 import { Decoration, EditorView, keymap, placeholder as placeholderText, type DecorationSet } from '@codemirror/view';
 import { defaultKeymap } from '@codemirror/commands';
 import { yCollab, yUndoManagerKeymap } from 'y-codemirror.next';
+import { quietCursors } from '../lib/quiet-cursors';
 import type { Awareness } from 'y-protocols/awareness';
 import { UndoManager, type Doc, type Text as YText } from 'yjs';
 import { COMMENT_LIMITS, type CommentAnchor, type KladosType } from '@trifylli/shared';
@@ -359,6 +360,9 @@ const theme = EditorView.theme({
   '.cm-line': { padding: '0 12px' },
   '.cm-placeholder': { color: 'var(--text-soft)' },
   // Το όνομα πάνω από τον κέρσορα των άλλων φαίνεται πάντα — όχι μόνο στο hover.
+  // Με πολλούς κέρσορες, μόνο όσων μόλις κουνήθηκαν (`quietCursors`).
+  '.cm-ySelectionCaret--quiet > .cm-ySelectionInfo': { opacity: '0' },
+  '.cm-ySelectionCaret--quiet:hover > .cm-ySelectionInfo': { opacity: '1' },
   '.cm-ySelectionInfo': {
     opacity: '1',
     fontFamily: 'inherit',
@@ -404,6 +408,7 @@ function buildEditor(): void {
           ...defaultKeymap,
         ]),
         yCollab(ytext, props.awareness ?? null, { undoManager }),
+        ...(props.awareness ? [quietCursors(props.awareness)] : []),
         commentMarks,
         EditorView.lineWrapping,
         placeholderText(props.placeholder),

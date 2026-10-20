@@ -27,7 +27,7 @@
               <div class="text-caption text-grey-7">{{ portionsCaption(mainPortions, variants) }}</div>
             </div>
             <div class="col-12 col-sm-auto row items-center q-gutter-sm">
-              <CollabPresence :peers="peers" />
+              <CollabPresence :peers="peers" faces-only />
               <SaveStatus v-if="editable" :status="saveState" />
               <DocumentHistory :document="docName" :writable="textEditable" />
               <q-btn v-if="variant && editable" flat round dense icon="more_vert" color="klados">

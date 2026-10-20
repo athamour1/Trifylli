@@ -12,10 +12,13 @@
         {{ initials(peer.fullName || peer.name) }}
         <q-tooltip>{{ peer.fullName || peer.name }}</q-tooltip>
       </q-avatar>
-      <q-avatar v-if="hidden" :size="compact ? '20px' : '26px'" class="collab-presence__face collab-presence__more">+{{ hidden }}</q-avatar>
+      <q-avatar v-if="hidden" :size="compact ? '20px' : '26px'" class="collab-presence__face collab-presence__more">
+        +{{ hidden }}
+        <q-tooltip>{{ rest }}</q-tooltip>
+      </q-avatar>
     </div>
     <!-- Στενό σημείο (κεφαλίδα, κινητό): το κείμενο κόβεται με «…», τα πρόσωπα μένουν. -->
-    <span v-if="!compact" class="text-caption text-grey-7 q-ml-sm gt-xs ellipsis collab-presence__summary">
+    <span v-if="!compact && !facesOnly" class="text-caption text-grey-7 q-ml-sm gt-xs ellipsis collab-presence__summary">
       {{ summary }}
       <q-tooltip>{{ summary }}</q-tooltip>
     </span>
@@ -35,13 +38,20 @@ const props = withDefaults(
     peers: CollabPresenceUser[];
     /** Μικρά πρόσωπα χωρίς κείμενο — π.χ. δίπλα σε μια γραμμή που επεξεργάζεται κάποιος. */
     compact?: boolean;
+    /**
+     * Κανονικά πρόσωπα, χωρίς τη φράση «Εδώ και…»: εκεί όπου στριμώχνει τον
+     * τίτλο και τη λέει ήδη η κεφαλίδα της δράσης από πάνω.
+     */
+    facesOnly?: boolean;
   }>(),
-  { compact: false },
+  { compact: false, facesOnly: false },
 );
 
 const MAX_FACES = 4;
 const shown = computed(() => props.peers.slice(0, MAX_FACES));
 const hidden = computed(() => Math.max(0, props.peers.length - MAX_FACES));
+/** Όσοι δεν χωρούν στα πρόσωπα — στο «+N». */
+const rest = computed(() => props.peers.slice(MAX_FACES).map((p) => p.fullName || p.name).join(', '));
 
 const summary = computed(() => {
   const names = props.peers.map((p) => p.name.split(' ')[0]);

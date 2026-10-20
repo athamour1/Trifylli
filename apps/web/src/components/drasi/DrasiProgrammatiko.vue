@@ -26,7 +26,7 @@
               </div>
             </div>
             <div class="col-12 col-sm-auto row items-center q-gutter-sm">
-              <CollabPresence :peers="peers" />
+              <CollabPresence :peers="peers" faces-only />
               <SaveStatus v-if="editable" :status="worstSaveState(saveStatus, collabSaveState)" @retry="saveNow" />
               <DocumentHistory :document="docName" :writable="textEditable" />
             </div>
