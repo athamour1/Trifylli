@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DrasiScheduleItemView, DrasiScheduleView } from '@trifylli/shared';
-import { kanbanColumns, moveCard } from '../src/lib/programmatika';
+import { kanbanColumns, kanbanFocus, kanbanPeers, moveCard } from '../src/lib/programmatika';
 
 function item(id: string, over: Partial<DrasiScheduleItemView> = {}): DrasiScheduleItemView {
   return {
@@ -62,5 +62,33 @@ describe('kanban προγραμματικών', () => {
     expect(kanbanColumns(v).DONE.map((c) => c.id)).toEqual(['a']);
     expect(moveCard(v, 'a', 'DONE')).toBe(false);
     expect(moveCard(v, 'missing', 'TODO')).toBe(false);
+  });
+});
+
+describe('ποιος σέρνει ποια κάρτα', () => {
+  const maria = { id: 'u-1', name: 'Μαρία Π.', fullName: 'Μαρία Παπά', color: '#c00' };
+  const nikos = { id: 'u-2', name: 'Νίκος Γ.', fullName: 'Νίκος Γεωργίου', color: '#00c' };
+
+  it('η κάρτα που κρατά και η στήλη από πάνω της — με όσα γράφει το kanbanFocus', () => {
+    const { cards, columns } = kanbanPeers([
+      { user: maria, focus: kanbanFocus('card-1', 'DONE') },
+      { user: nikos, focus: kanbanFocus('card-2', null) },
+    ]);
+    expect(cards.get('card-1')).toEqual([maria]);
+    expect(cards.get('card-2')).toEqual([nikos]);
+    expect(columns.get('DONE')).toEqual([maria]);
+    expect(columns.size).toBe(1);
+  });
+
+  it('ό,τι δεν είναι κάρτα (γραμμή ωρολογίου, καμία εστίαση, άγνωστη στήλη) αγνοείται· ο ίδιος από δύο καρτέλες μετρά μία φορά', () => {
+    const { cards, columns } = kanbanPeers([
+      { user: maria, focus: 'schedule:card-1' },
+      { user: nikos, focus: null },
+      { user: nikos, focus: 'kanban:card-3>ARCHIVE' },
+      { user: nikos, focus: 'kanban:card-3' },
+    ]);
+    expect([...cards.keys()]).toEqual(['card-3']);
+    expect(cards.get('card-3')).toEqual([nikos]);
+    expect(columns.size).toBe(0);
   });
 });

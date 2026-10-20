@@ -1,4 +1,4 @@
-import type { DrasiScheduleItemView, DrasiScheduleStatus, DrasiScheduleView } from '@trifylli/shared';
+import type { CollabPresenceUser, DrasiScheduleItemView, DrasiScheduleStatus, DrasiScheduleView } from '@trifylli/shared';
 
 /** Οι στήλες του kanban, με τη σειρά τους. */
 export const KANBAN_STATUSES: readonly DrasiScheduleStatus[] = ['TODO', 'IN_PROGRESS', 'DONE'];
@@ -24,4 +24,36 @@ export function moveCard(view: DrasiScheduleView, itemId: string, status: DrasiS
   if (!item || item.status === status) return false;
   item.status = status;
   return true;
+}
+
+/**
+ * Τι λέει στους άλλους όποιος σέρνει μια κάρτα (παρουσία του δωματίου, `focus`):
+ * ποια κάρτα κρατά και, αν περνά πάνω από στήλη, ποια.
+ */
+export function kanbanFocus(cardId: string, over: DrasiScheduleStatus | null): string {
+  return `kanban:${cardId}${over ? `>${over}` : ''}`;
+}
+
+/**
+ * Ποιοι σέρνουν τώρα κάρτες: ανά κάρτα όσοι την κρατούν, ανά στήλη όσοι
+ * περνούν από πάνω της. Ό,τι δεν είναι κάρτα του kanban αγνοείται.
+ */
+export function kanbanPeers(peers: readonly { user: CollabPresenceUser; focus: string | null }[]): {
+  cards: Map<string, CollabPresenceUser[]>;
+  columns: Map<DrasiScheduleStatus, CollabPresenceUser[]>;
+} {
+  const cards = new Map<string, CollabPresenceUser[]>();
+  const columns = new Map<DrasiScheduleStatus, CollabPresenceUser[]>();
+  const add = <K>(map: Map<K, CollabPresenceUser[]>, key: K, user: CollabPresenceUser): void => {
+    const list = map.get(key) ?? [];
+    if (!list.some((u) => u.id === user.id)) map.set(key, [...list, user]);
+  };
+  for (const { user, focus } of peers) {
+    if (!focus?.startsWith('kanban:')) continue;
+    const [cardId, over] = focus.slice('kanban:'.length).split('>');
+    if (!cardId) continue;
+    add(cards, cardId, user);
+    if (over && (KANBAN_STATUSES as readonly string[]).includes(over)) add(columns, over as DrasiScheduleStatus, user);
+  }
+  return { cards, columns };
 }

@@ -1,5 +1,5 @@
 import type { CollabChange, CollabPresenceUser } from '@trifylli/shared';
-import { inject, onBeforeUnmount, provide, type InjectionKey, type Ref } from 'vue';
+import { computed, inject, onBeforeUnmount, provide, type InjectionKey, type Ref } from 'vue';
 import { concernsMe } from '../lib/live-changes';
 import { subscribeTopiko } from '../lib/topiko-live';
 
@@ -37,6 +37,20 @@ export function useRowPresence(area: string) {
   }
   onBeforeUnmount(() => focusRow(null));
   return { editorsOf, focusRow };
+}
+
+/**
+ * Η παρουσία του δωματίου όπως είναι — για σελίδες που λένε μόνες τους πού
+ * βρίσκονται (π.χ. το kanban: ποια κάρτα σέρνεις και πάνω από ποια στήλη).
+ */
+export function useRoomFocus() {
+  const room = inject(LIVE_ROOM, null);
+  const peerFocus = computed(() => room?.peerFocus.value ?? []);
+  function setFocus(focus: string | null): void {
+    room?.setFocus(focus);
+  }
+  onBeforeUnmount(() => setFocus(null));
+  return { peerFocus, setFocus };
 }
 
 /**
