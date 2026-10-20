@@ -46,7 +46,7 @@ const ref = (id: string) => `Δες: ![σχέδιο](trifylli:${id})`;
 const fileId = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
 function setup(
-  content: Partial<Record<'drasi' | 'drasiScheduleItem' | 'drasiMeal' | 'drasiCharacter', Row[]>>,
+  content: Partial<Record<'drasi' | 'drasiScheduleItem' | 'drasiMeal' | 'drasiMealVariant' | 'drasiCharacter', Row[]>>,
   fileCount: number,
   collab: { live?: string[]; access?: 'write' | 'read' | null } = {},
 ) {
@@ -68,6 +68,7 @@ function setup(
     drasi: table(content.drasi ?? []),
     drasiScheduleItem: table(content.drasiScheduleItem ?? []),
     drasiMeal: table(content.drasiMeal ?? []),
+    drasiMealVariant: table(content.drasiMealVariant ?? []),
     drasiCharacter: table(content.drasiCharacter ?? []),
   };
   const storage = { enabled: true, delete: async () => undefined, put: async () => undefined, getStream: async () => ({ stream: 'bytes' }) };
@@ -89,7 +90,7 @@ const DOC = `drasi:${fileId(90)}:item:${fileId(91)}`;
 const member = { id: 'u-1', topikoId: TOPIKO, role: 'EXTERNAL', adminKlados: null, grants: null, kladoi: [] } as never;
 
 describe('FilesService — εικόνες Markdown των δράσεων', () => {
-  it('η νυχτερινή σάρωση κρατά όσες αναφέρονται σε περιγραφή, μύθο, lore, προγραμματικό, συνταγή', async () => {
+  it('η νυχτερινή σάρωση κρατά όσες αναφέρονται σε περιγραφή, μύθο, lore, προγραμματικό, συνταγή (και παράλληλου γεύματος)', async () => {
     const { service, storedFile } = setup(
       {
         drasi: [
@@ -99,14 +100,15 @@ describe('FilesService — εικόνες Markdown των δράσεων', () =>
         drasiCharacter: [{ lore: ref(fileId(3)), drasi: live }],
         drasiScheduleItem: [{ description: ref(fileId(4)), drasi: live }],
         drasiMeal: [{ recipe: ref(fileId(5)), item: { drasi: live } }],
+        drasiMealVariant: [{ recipe: ref(fileId(6)), item: { drasi: live } }],
       },
-      6,
+      7,
     );
 
     const removed = await service.sweepOrphanMarkdownImages();
 
     expect(removed).toBe(1);
-    expect(storedFile.rows.map((f) => f.id)).toEqual([1, 2, 3, 4, 5].map(fileId));
+    expect(storedFile.rows.map((f) => f.id)).toEqual([1, 2, 3, 4, 5, 6].map(fileId));
   });
 
   it('δράση στο αρχείο: οι εικόνες της δεν μετράνε πια ως ζωντανές', async () => {

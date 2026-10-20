@@ -133,7 +133,7 @@ export class FilesService {
    * εδώ — αλλιώς η νυχτερινή σάρωση θεωρεί τις εικόνες του ορφανές και τις σβήνει.
    */
   private async drasiMarkdownTexts(drasi: Prisma.DrasiWhereInput, needle: string): Promise<(string | null)[]> {
-    const [draseis, characters, items, meals] = await Promise.all([
+    const [draseis, characters, items, meals, variants] = await Promise.all([
       this.prisma.drasi.findMany({
         where: { ...drasi, OR: [{ description: { contains: needle } }, { mythosText: { contains: needle } }] },
         select: { description: true, mythosText: true },
@@ -141,12 +141,14 @@ export class FilesService {
       this.prisma.drasiCharacter.findMany({ where: { lore: { contains: needle }, drasi }, select: { lore: true } }),
       this.prisma.drasiScheduleItem.findMany({ where: { description: { contains: needle }, drasi }, select: { description: true } }),
       this.prisma.drasiMeal.findMany({ where: { recipe: { contains: needle }, item: { drasi } }, select: { recipe: true } }),
+      this.prisma.drasiMealVariant.findMany({ where: { recipe: { contains: needle }, item: { drasi } }, select: { recipe: true } }),
     ]);
     return [
       ...draseis.flatMap((d) => [d.description, d.mythosText]),
       ...characters.map((c) => c.lore),
       ...items.map((i) => i.description),
       ...meals.map((m) => m.recipe),
+      ...variants.map((v) => v.recipe),
     ];
   }
 
