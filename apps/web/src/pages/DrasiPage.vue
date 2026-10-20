@@ -312,7 +312,7 @@
             </q-tab-panel>
 
             <q-tab-panel name="diatrofologio" class="q-pa-none">
-              <DrasiDiatrofologio :drasi-id="id" />
+              <DrasiDiatrofologio :drasi-id="id" :access="data.access" />
             </q-tab-panel>
 
             <q-tab-panel name="trofodosia" class="q-pa-none">

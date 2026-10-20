@@ -7,6 +7,7 @@
   <div>
     <q-inner-loading :showing="loading && !view" />
     <template v-if="view">
+      <FoodNeedsCard v-if="canSeeFoodNeeds(access)" :drasi-id="drasiId" />
       <div class="row items-center q-mb-sm q-gutter-sm">
         <SegmentedToggle v-model="dayKey" dense unelevated toggle-color="klados" toggle-text-color="klados-on" :options="dayOptions" />
       </div>
@@ -68,13 +69,14 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue';
 import { useQuasar } from 'quasar';
-import { DRASI_SNACK_LABEL, type ApprovalSummaryRow, type DrasiDiatrofologioView } from '@trifylli/shared';
+import { canSeeFoodNeeds, DRASI_SNACK_LABEL, type ApprovalSummaryRow, type DrasiAccess, type DrasiDiatrofologioView } from '@trifylli/shared';
 import { ApiError, get } from '../../lib/api';
 import { APPROVAL_META, approvalsByItem } from '../../lib/approvals';
 import { formatDate } from '../../lib/format';
 import { useLiveReload } from '../../composables/useLiveChanges';
+import FoodNeedsCard from './FoodNeedsCard.vue';
 
-const props = defineProps<{ drasiId: string }>();
+const props = defineProps<{ drasiId: string; access: DrasiAccess }>();
 const $q = useQuasar();
 
 const view = ref<DrasiDiatrofologioView | null>(null);
