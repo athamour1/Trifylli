@@ -146,17 +146,26 @@
                   </q-breadcrumbs>
                 </q-item-section>
                 <q-item-section side top>
-                  <q-btn
-                    v-if="canAdvance(p)"
-                    dense flat no-caps color="klados" icon="arrow_forward"
-                    :label="PAYMENT_HANDLING_SHORT[nextStage(p.handlingStatus)!]"
-                    @click="advance(p)"
-                  />
-                  <div v-else-if="waitsForEforos(p)" class="text-caption text-grey-6 text-right" style="max-width: 110px">
-                    <q-icon name="hourglass_empty" size="14px" /> Αναμονή Εφόρου
-                  </div>
-                  <div v-else-if="!nextStage(p.handlingStatus)" class="text-caption text-positive row items-center no-wrap">
-                    <q-icon name="check_circle" size="16px" class="q-mr-xs" /> Ολοκληρώθηκε
+                  <div class="row items-center no-wrap">
+                    <q-btn
+                      v-if="canUndo(p)"
+                      dense flat round size="sm" color="grey-7" icon="undo"
+                      @click="confirmUndo(p)"
+                    >
+                      <q-tooltip>Αναίρεση «{{ PAYMENT_HANDLING_SHORT[p.handlingStatus] }}»</q-tooltip>
+                    </q-btn>
+                    <q-btn
+                      v-if="canAdvance(p)"
+                      dense flat no-caps color="klados" icon="arrow_forward"
+                      :label="PAYMENT_HANDLING_SHORT[nextStage(p.handlingStatus)!]"
+                      @click="advance(p)"
+                    />
+                    <div v-else-if="waitsForEforos(p)" class="text-caption text-grey-6 text-right" style="max-width: 110px">
+                      <q-icon name="hourglass_empty" size="14px" /> Αναμονή Εφόρου
+                    </div>
+                    <div v-else-if="!nextStage(p.handlingStatus)" class="text-caption text-positive row items-center no-wrap">
+                      <q-icon name="check_circle" size="16px" class="q-mr-xs" /> Ολοκληρώθηκε
+                    </div>
                   </div>
                 </q-item-section>
               </q-item>
@@ -362,12 +371,35 @@ function waitsForEforos(p: Cash['items'][number]): boolean {
 async function advance(p: Cash['items'][number]): Promise<void> {
   const next = nextStage(p.handlingStatus);
   if (!next) return;
+  await setHandling(p, next);
+}
+async function setHandling(p: Cash['items'][number], status: PaymentHandlingStatus): Promise<void> {
   try {
-    await put(`/syndromes/payments/${p.paymentId}/handling`, { handlingStatus: next });
+    await put(`/syndromes/payments/${p.paymentId}/handling`, { handlingStatus: status });
     await loadCash();
   } catch (err) {
     $q.notify({ type: 'negative', message: err instanceof ApiError ? err.message : 'Αποτυχία.' });
   }
+}
+function prevStage(s: PaymentHandlingStatus): PaymentHandlingStatus | null {
+  const i = PAYMENT_HANDLING_FLOW.indexOf(s);
+  return i > 0 ? (PAYMENT_HANDLING_FLOW[i - 1] ?? null) : null;
+}
+/** Αναίρεση του τελευταίου σταδίου — ο κλάδος μόνο ό,τι είναι στα δικά του στάδια. */
+function canUndo(p: Cash['items'][number]): boolean {
+  if (!canManage.value || !prevStage(p.handlingStatus)) return false;
+  return auth.isSuperAdmin || PAYMENT_HANDLING_KLADOS_STAGES.includes(p.handlingStatus);
+}
+function confirmUndo(p: Cash['items'][number]): void {
+  const prev = prevStage(p.handlingStatus);
+  if (!prev) return;
+  $q.dialog({
+    title: 'Αναίρεση σταδίου',
+    message: `Είσαι σίγουρος/η ότι θέλεις να αναιρέσεις «${PAYMENT_HANDLING_LABEL[p.handlingStatus]}» για ${p.memberName} (${formatEuro(p.amount)}); Θα επιστρέψει στο «${PAYMENT_HANDLING_LABEL[prev]}».`,
+    cancel: { label: 'Άκυρο', flat: true },
+    ok: { label: 'Αναίρεση', color: 'negative' },
+    persistent: true,
+  }).onOk(() => void setHandling(p, prev));
 }
 
 // ── Οφειλέτες ──

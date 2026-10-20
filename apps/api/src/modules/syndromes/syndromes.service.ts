@@ -213,6 +213,7 @@ export class SyndromesService {
       where: { id: paymentId, syndromi: { period: { topikoId: user.topikoId } } },
       select: {
         id: true,
+        handlingStatus: true,
         syndromi: {
           select: {
             user: {
@@ -227,8 +228,12 @@ export class SyndromesService {
     this.assertKladosInScope(user, kladosType);
 
     // Ο κλάδος προχωρά μόνο μέχρι την παράδοση στον Έφορο· κατάθεση/τακτοποίηση
-    // τις κάνει ο Τοπικός Έφορος (υπερδιαχειριστής).
-    if (!PAYMENT_HANDLING_KLADOS_STAGES.includes(status)) {
+    // τις κάνει ο Τοπικός Έφορος (υπερδιαχειριστής) — και μόνο αυτός τις αναιρεί.
+    const current = payment.handlingStatus as PaymentHandlingStatus | null;
+    if (
+      !PAYMENT_HANDLING_KLADOS_STAGES.includes(status) ||
+      (current && !PAYMENT_HANDLING_KLADOS_STAGES.includes(current))
+    ) {
       assertScopeAccess(user, 'syndromes:manage', null);
     }
 
