@@ -40,6 +40,7 @@ function setup() {
     ingredients: [{ id: ROW, order: 0, label: 'Μακαρόνια', qty: '2 kg', bought: false, boughtBy: null, boughtAt: null }],
   });
   const prisma = {
+    drasiMealVariant: { findMany: async () => [] },
     drasiMeal: {
       findMany: async () => [
         {

@@ -9,7 +9,7 @@ describe('τροφοδοσία', () => {
   it('η πρόοδος της ημέρας μετρά και τα υλικά των γευμάτων και τα επιπλέον', () => {
     const day: DrasiTrofodosiaDay = {
       date: '2026-11-14',
-      meals: [{ itemId: 'm', title: 'Μεσημεριανό', kind: 'GEVMA', snack: null, startsAt: '', ingredients: [ingredient(true), ingredient(false)] }],
+      meals: [{ itemId: 'm', title: 'Μεσημεριανό', kind: 'GEVMA', snack: null, startsAt: '', variantId: null, variantLabel: null, ingredients: [ingredient(true), ingredient(false)] }],
       extras: [extra(true), extra(false), extra(false)],
     };
     expect(dayProgress(day)).toEqual({ bought: 2, total: 5 });

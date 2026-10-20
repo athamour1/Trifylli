@@ -23,10 +23,10 @@
       <div v-if="!mealsWithIngredients.length" class="text-caption text-grey-6 q-mb-md">
         Κανένα γεύμα με ποσολόγιο αυτή την ημέρα — τα υλικά γράφονται στο Διατροφολόγιο.
       </div>
-      <q-card v-for="meal in mealsWithIngredients" :key="meal.itemId" flat bordered class="q-mb-sm">
+      <q-card v-for="meal in mealsWithIngredients" :key="`${meal.itemId}:${meal.variantId ?? ''}`" flat bordered class="q-mb-sm">
         <q-item dense clickable :to="{ name: 'drasi-gevma', params: { id: drasiId, itemId: meal.itemId } }">
           <q-item-section>
-            <q-item-label class="text-weight-medium">{{ meal.title }}</q-item-label>
+            <q-item-label class="text-weight-medium">{{ meal.title }} <q-badge v-if="meal.variantLabel" outline :label="meal.variantLabel" /></q-item-label>
             <q-item-label caption>{{ hm(meal.startsAt) }} · {{ countBought(meal.ingredients) }}/{{ meal.ingredients.length }}</q-item-label>
           </q-item-section>
           <q-item-section side><q-icon name="chevron_right" /></q-item-section>
@@ -41,7 +41,7 @@
                 color="positive"
                 dense
                 :aria-label="`Αγοράστηκε: ${y.label}`"
-                @update:model-value="(v: boolean) => tickIngredient(meal.itemId, y, v)"
+                @update:model-value="(v: boolean) => tickIngredient(meal.itemId, meal.variantId, y, v)"
               />
             </q-item-section>
             <q-item-section>
@@ -165,11 +165,12 @@ const mealsWithIngredients = computed(() => current.value?.meals.filter((m) => m
 
 // ── «Αγοράστηκε» — αμέσως στην οθόνη· αν ο server αρνηθεί, γυρίζει πίσω ──
 const busy = reactive(new Set<string>());
-async function tickIngredient(itemId: string, y: DrasiTrofodosiaIngredient, bought: boolean): Promise<void> {
+async function tickIngredient(itemId: string, variantId: string | null, y: DrasiTrofodosiaIngredient, bought: boolean): Promise<void> {
   busy.add(y.id);
   y.bought = bought;
   try {
-    await put(`/draseis/${props.drasiId}/trofodosia/meals/${itemId}/ingredients/${y.id}/bought`, { bought });
+    const base = `/draseis/${props.drasiId}/trofodosia/meals/${itemId}`;
+    await put(`${base}${variantId ? `/variants/${variantId}` : ''}/ingredients/${y.id}/bought`, { bought });
   } catch (err) {
     y.bought = !bought;
     notifyError(err, 'Αποτυχία.');

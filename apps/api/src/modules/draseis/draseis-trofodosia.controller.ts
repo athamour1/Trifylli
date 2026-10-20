@@ -70,4 +70,18 @@ export class DraseisTrofodosiaController {
   ) {
     return this.trofodosia.setIngredientBought(user, id, itemId, ingredientId, dto.bought);
   }
+
+  @Put('meals/:itemId/variants/:variantId/ingredients/:ingredientId/bought')
+  @RequireDrasi('purchase', 'edit')
+  @ApiOperation({ summary: '«Αγοράστηκε» ενός υλικού παράλληλου γεύματος' })
+  setVariantIngredientBought(
+    @CurrentUser() user: RequestUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('itemId', ParseUUIDPipe) itemId: string,
+    @Param('variantId', ParseUUIDPipe) variantId: string,
+    @Param('ingredientId', ParseUUIDPipe) ingredientId: string,
+    @Body() dto: SetBoughtDto,
+  ) {
+    return this.trofodosia.setVariantIngredientBought(user, id, itemId, variantId, ingredientId, dto.bought);
+  }
 }

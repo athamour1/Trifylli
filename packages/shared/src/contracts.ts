@@ -961,6 +961,9 @@ export interface DrasiTrofodosiaDay {
     kind: DrasiScheduleKind;
     snack: DrasiSnack | null;
     startsAt: string;
+    /** Παράλληλο γεύμα (π.χ. «Χωρίς γλουτένη»)· `null` στο κύριο. */
+    variantId: string | null;
+    variantLabel: string | null;
     ingredients: DrasiTrofodosiaIngredient[];
   }[];
   extras: DrasiFoodPurchaseView[];

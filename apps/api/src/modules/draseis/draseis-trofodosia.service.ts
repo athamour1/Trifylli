@@ -19,6 +19,7 @@ import type { CreateFoodPurchaseDto, UpdateFoodPurchaseDto } from './dto/drasi-t
 
 const PERSON = { select: { id: true, firstName: true, lastName: true } } as const;
 const PURCHASE_INCLUDE = { requestedBy: PERSON, boughtBy: PERSON } as const;
+type Ingredient = { id: string; label: string; qty: string; bought: boolean; boughtById: string | null; boughtAt: Date | null };
 type PurchaseRow = Prisma.DrasiFoodPurchaseGetPayload<{ include: typeof PURCHASE_INCLUDE }>;
 
 /**
@@ -42,12 +43,19 @@ export class DraseisTrofodosiaService {
     // Και τα ποσολόγια που γράφονται αυτή τη στιγμή: το `scheduleView` τα σώζει πρώτα.
     const schedule = await this.plan.scheduleView(user, id);
     const mealIds = schedule.days.flatMap((d) => d.items).filter(isMeal).map((i) => i.id);
-    const [meals, extras] = await Promise.all([
+    const [meals, variants, extras] = await Promise.all([
       this.prisma.drasiMeal.findMany({ where: { itemId: { in: mealIds } }, include: { ingredients: { orderBy: { order: 'asc' } } } }),
+      this.prisma.drasiMealVariant.findMany({
+        where: { itemId: { in: mealIds } },
+        include: { ingredients: { orderBy: { order: 'asc' } } },
+        orderBy: [{ order: 'asc' }, { label: 'asc' }],
+      }),
       this.prisma.drasiFoodPurchase.findMany({ where: { drasiId: id }, orderBy: [{ date: 'asc' }, { createdAt: 'asc' }], include: PURCHASE_INCLUDE }),
     ]);
     // Ποιος αγόρασε ένα υλικό γεύματος: id από το κοινό έγγραφο (χωρίς FK).
-    const buyerIds = [...new Set(meals.flatMap((m) => m.ingredients.map((y) => y.boughtById)).filter((v): v is string => !!v))];
+    const buyerIds = [
+      ...new Set([...meals, ...variants].flatMap((m) => m.ingredients.map((y) => y.boughtById)).filter((v): v is string => !!v)),
+    ];
     const buyers = new Map((await this.prisma.user.findMany({ where: { id: { in: buyerIds } }, ...PERSON })).map((u) => [u.id, u]));
     const byItem = new Map(meals.map((m) => [m.itemId, m]));
     const itemsByDate = new Map(schedule.days.map((d) => [d.date, d.items]));
@@ -56,23 +64,33 @@ export class DraseisTrofodosiaService {
     return {
       days: dates.map((date) => ({
         date,
-        meals: (itemsByDate.get(date) ?? []).filter(isMeal).map((item) => ({
-          itemId: item.id,
-          title: item.title,
-          kind: item.kind,
-          snack: item.snack,
-          startsAt: item.startsAt,
-          ingredients: (byItem.get(item.id)?.ingredients ?? [])
-            .filter((y) => y.label.trim())
-            .map((y) => ({
-              id: y.id,
-              label: y.label,
-              qty: y.qty,
-              bought: y.bought,
-              boughtBy: (y.boughtById && buyers.get(y.boughtById)) || null,
-              boughtAt: y.boughtAt?.toISOString() ?? null,
-            })),
-        })),
+        meals: (itemsByDate.get(date) ?? []).filter(isMeal).flatMap((item) => {
+          const line = (ingredients: Ingredient[], variant: { id: string; label: string } | null) => ({
+            itemId: item.id,
+            title: item.title,
+            kind: item.kind,
+            snack: item.snack,
+            startsAt: item.startsAt,
+            variantId: variant?.id ?? null,
+            variantLabel: variant?.label ?? null,
+            ingredients: ingredients
+              .filter((y) => y.label.trim())
+              .map((y) => ({
+                id: y.id,
+                label: y.label,
+                qty: y.qty,
+                bought: y.bought,
+                boughtBy: (y.boughtById && buyers.get(y.boughtById)) || null,
+                boughtAt: y.boughtAt?.toISOString() ?? null,
+              })),
+          });
+          // Τα παράλληλα ακολουθούν το κύριο γεύμα· χωρίς υλικά δεν έχουν τι να αγοραστεί.
+          const parallel = variants
+            .filter((v) => v.itemId === item.id)
+            .map((v) => line(v.ingredients, v))
+            .filter((l) => l.ingredients.length);
+          return [line(byItem.get(item.id)?.ingredients ?? [], null), ...parallel];
+        }),
         extras: extras.filter((e) => dayKey(e.date) === date).map(toView),
       })),
     };
@@ -143,9 +161,34 @@ export class DraseisTrofodosiaService {
    */
   async setIngredientBought(user: RequestUser, id: string, itemId: string, ingredientId: string, bought: boolean): Promise<{ bought: boolean }> {
     await this.access.load(user, id, 'write');
+    await this.assertMeal(id, itemId);
+    return this.tick(user, collabDocument.drasiMeal(id, itemId), ingredientId, bought);
+  }
+
+  /** Το ίδιο τικ για ένα υλικό παράλληλου γεύματος — στο δικό του κοινό έγγραφο. */
+  async setVariantIngredientBought(
+    user: RequestUser,
+    id: string,
+    itemId: string,
+    variantId: string,
+    ingredientId: string,
+    bought: boolean,
+  ): Promise<{ bought: boolean }> {
+    await this.access.load(user, id, 'write');
+    await this.assertMeal(id, itemId);
+    const owned = await this.prisma.drasiMealVariant.count({ where: { id: variantId, itemId, item: { drasiId: id } } });
+    if (!owned) throw new NotFoundException('Το παράλληλο γεύμα δεν βρέθηκε.');
+    return this.tick(user, collabDocument.drasiMealVariant(id, variantId), ingredientId, bought);
+  }
+
+  private async assertMeal(id: string, itemId: string): Promise<void> {
     const item = await this.prisma.drasiScheduleItem.findFirst({ where: { id: itemId, drasiId: id }, select: { kind: true, snack: true } });
     if (!item || !isMeal(item)) throw new NotFoundException('Το γεύμα δεν βρέθηκε.');
-    const connection = await this.collab.hocuspocus.openDirectConnection(collabDocument.drasiMeal(id, itemId), {
+  }
+
+  /** Άμεση σύνδεση στο έγγραφο: το τικ γράφεται εκεί, όχι στη βάση. */
+  private async tick(user: RequestUser, documentName: string, ingredientId: string, bought: boolean): Promise<{ bought: boolean }> {
+    const connection = await this.collab.hocuspocus.openDirectConnection(documentName, {
       requestId: 'trofodosia',
       userId: user.id,
       user: { id: user.id, name: collabShortName(user.firstName, user.lastName), fullName: `${user.firstName} ${user.lastName}`, color: collabColor(user.id) },
