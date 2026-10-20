@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { NotFoundException } from '@nestjs/common';
+import { Doc } from 'yjs';
+import { collabDocument } from '@trifylli/shared';
+import { readMeal, seedMeal } from './drasi-docs';
 import type { RequestUser } from '../../common/auth/types';
 import { DraseisTrofodosiaService } from './draseis-trofodosia.service';
 
@@ -10,7 +13,7 @@ const VID2 = '00000000-0000-4000-8000-000000000004';
 
 const ing = (id: string, label: string, qty = '') => ({ id, order: 0, label, qty, bought: false, boughtById: null, boughtAt: null });
 
-function setup() {
+function setup(collab: unknown = {}) {
   const prisma = {
     drasiMeal: { findMany: async () => [{ itemId: ITEM, ingredients: [ing('i-1', 'ρύζι', '1 kg')] }] },
     drasiMealVariant: {
@@ -27,7 +30,7 @@ function setup() {
   const item = { id: ITEM, date: '2026-07-01', title: 'Μεσημεριανό', kind: 'GEVMA', snack: null, startsAt: '' };
   const plan = { scheduleView: async () => ({ days: [{ date: '2026-07-01', items: [item] }] }) };
   const access = { load: async () => ({}) };
-  const service = new DraseisTrofodosiaService(prisma as never, access as never, plan as never, {} as never);
+  const service = new DraseisTrofodosiaService(prisma as never, access as never, plan as never, collab as never);
   return service;
 }
 
@@ -43,5 +46,28 @@ describe('τροφοδοσία — παράλληλα γεύματα', () => {
 
   it('το τικ ενός παράλληλου που δεν ανήκει στο γεύμα δίνει 404', async () => {
     await expect(setup().setVariantIngredientBought({ id: 'u-1' } as RequestUser, DRASI, ITEM, VID2, 'x', true)).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('το τικ γράφεται στο έγγραφο του παράλληλου, όχι του κύριου γεύματος', async () => {
+    const doc = new Doc();
+    seedMeal(doc, {
+      recipe: '',
+      menu: '',
+      ingredients: [{ id: 'v-1', order: 0, label: 'ζυμαρικά χ.γ.', qty: '500 g', bought: false, boughtBy: null, boughtAt: null }],
+    });
+    const names: string[] = [];
+    const collab = {
+      hocuspocus: {
+        openDirectConnection: async (name: string) => {
+          names.push(name);
+          return { transact: async (fn: (d: Doc) => void) => fn(doc), disconnect: async () => undefined };
+        },
+      },
+    };
+    const res = await setup(collab).setVariantIngredientBought({ id: 'u-1', firstName: 'Μαρία', lastName: 'Δ' } as RequestUser, DRASI, ITEM, VID, 'v-1', true);
+    expect(res).toEqual({ bought: true });
+    expect(names).toEqual([collabDocument.drasiMealVariant(DRASI, VID)]);
+    expect(names[0]).not.toBe(collabDocument.drasiMeal(DRASI, ITEM));
+    expect(readMeal(doc).ingredients[0]).toMatchObject({ id: 'v-1', bought: true, boughtBy: 'u-1' });
   });
 });
