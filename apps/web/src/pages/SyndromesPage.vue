@@ -251,7 +251,7 @@ import PageState from '../components/PageState.vue';
 import { useAsyncData } from '../composables/useAsyncData';
 import { useTopikoReload } from '../composables/useLiveChanges';
 import { useKladosScope } from '../composables/useKladosScope';
-import { ApiError, get, post, put } from '../lib/api';
+import { ApiError, del, get, post, put } from '../lib/api';
 import { formatDate, formatEuro, toISODate } from '../lib/format';
 import { useAuthStore } from '../stores/auth';
 import DateField from '../components/DateField.vue';
@@ -381,18 +381,38 @@ async function setHandling(p: Cash['items'][number], status: PaymentHandlingStat
     $q.notify({ type: 'negative', message: err instanceof ApiError ? err.message : 'Αποτυχία.' });
   }
 }
+async function undoCollection(p: Cash['items'][number]): Promise<void> {
+  try {
+    await del(`/syndromes/payments/${p.paymentId}`);
+    await Promise.all([loadCash(), reload()]);
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err instanceof ApiError ? err.message : 'Αποτυχία.' });
+  }
+}
 function prevStage(s: PaymentHandlingStatus): PaymentHandlingStatus | null {
   const i = PAYMENT_HANDLING_FLOW.indexOf(s);
   return i > 0 ? (PAYMENT_HANDLING_FLOW[i - 1] ?? null) : null;
 }
-/** Αναίρεση του τελευταίου σταδίου — ο κλάδος μόνο ό,τι είναι στα δικά του στάδια. */
+/**
+ * Αναίρεση του τελευταίου σταδίου — ο κλάδος μόνο ό,τι είναι στα δικά του στάδια.
+ * Η αναίρεση της είσπραξης σβήνει την πληρωμή (η συνδρομή ξαναγίνεται οφειλή).
+ */
 function canUndo(p: Cash['items'][number]): boolean {
-  if (!canManage.value || !prevStage(p.handlingStatus)) return false;
+  if (!canManage.value) return false;
   return auth.isSuperAdmin || PAYMENT_HANDLING_KLADOS_STAGES.includes(p.handlingStatus);
 }
 function confirmUndo(p: Cash['items'][number]): void {
   const prev = prevStage(p.handlingStatus);
-  if (!prev) return;
+  if (!prev) {
+    $q.dialog({
+      title: 'Αναίρεση είσπραξης',
+      message: `Είσαι σίγουρος/η ότι θέλεις να αναιρέσεις την είσπραξη για ${p.memberName} (${formatEuro(p.amount)}); Η πληρωμή θα διαγραφεί και το ποσό θα ξαναμπεί στην οφειλή.`,
+      cancel: { label: 'Άκυρο', flat: true },
+      ok: { label: 'Αναίρεση', color: 'negative' },
+      persistent: true,
+    }).onOk(() => void undoCollection(p));
+    return;
+  }
   $q.dialog({
     title: 'Αναίρεση σταδίου',
     message: `Είσαι σίγουρος/η ότι θέλεις να αναιρέσεις «${PAYMENT_HANDLING_LABEL[p.handlingStatus]}» για ${p.memberName} (${formatEuro(p.amount)}); Θα επιστρέψει στο «${PAYMENT_HANDLING_LABEL[prev]}».`,

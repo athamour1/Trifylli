@@ -261,6 +261,11 @@ export class SyndromesService {
       user,
       payment.syndromi.user.memberships[0]?.klados.type as KladosType | undefined,
     );
+    // Μετρητά που έχει ήδη πάρει ο Έφορος (κατάθεση/τακτοποίηση) τα σβήνει μόνο αυτός.
+    const current = payment.handlingStatus as PaymentHandlingStatus | null;
+    if (current && !PAYMENT_HANDLING_KLADOS_STAGES.includes(current)) {
+      assertScopeAccess(user, 'syndromes:manage', null);
+    }
 
     return this.prisma.$transaction(async (tx) => {
       await tx.payment.delete({ where: { id: paymentId } });
