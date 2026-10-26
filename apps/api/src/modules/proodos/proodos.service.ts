@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { MemberKind, ProodosStatus } from '@prisma/client';
-import { PROODOS_STATUS_LABEL, type KladosType } from '@trifylli/shared';
+import { KLADOS_META, PROODOS_STATUS_LABEL, type KladosType } from '@trifylli/shared';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import type { RequestUser } from '../../common/auth/types';
 import { assertKladosAccess, scopedKladoi } from '../../common/util/klados-scope';
@@ -192,9 +192,11 @@ export class ProodosService {
     };
   }
 
-  // ────── Καρτέλα Ατομικής Προόδου (entries) — Οδηγοί & Μεγάλοι Οδηγοί ──────
+  // ────── Καρτέλα Ατομικής Προόδου (entries) — όλοι οι κλάδοι ──────
   // Το backend μόνο αποθηκεύει/επιστρέφει εγγραφές και ελέγχει εμβέλεια· η
   // σύνοψη (Κορυφές / Πυξίδες) υπολογίζεται στο UI, γιατί διαφέρει ανά κλάδο.
+  // Κάθε κλάδος έχει τη δική του καρτέλα: όταν το παιδί περάσει σε επόμενο
+  // κλάδο ξεκινά από την αρχή και οι παλιές εγγραφές μένουν ως ιστορικό.
 
   /** Φορτώνει μέλος ελέγχοντας Τοπικό + εμβέλεια κλάδου του χρήστη. */
   private async memberInScope(user: RequestUser, memberId: string) {
@@ -237,7 +239,7 @@ export class ProodosService {
         firstName: true,
         lastName: true,
         memberships: { where: { kladosId, leftAt: null }, select: { subUnit: true } },
-        proodosEntries: { select: { kind: true, category: true } },
+        proodosEntries: { where: { kladosId }, select: { kind: true, category: true } },
       },
     });
 
@@ -250,24 +252,58 @@ export class ProodosService {
     }));
   }
 
-  /** Η Καρτέλα Ατομικής Προόδου ενός μέλους — πλήρεις εγγραφές. */
-  async card(user: RequestUser, memberId: string) {
+  /**
+   * Η Καρτέλα Ατομικής Προόδου ενός μέλους στον κλάδο — πλήρεις εγγραφές — και
+   * το ιστορικό του από προηγούμενους κλάδους, με τη σειρά των κλάδων.
+   */
+  async card(user: RequestUser, klados: KladosType, memberId: string) {
+    assertKladosAccess(user, klados);
+    const kladosId = await this.kladosId(user, klados);
     const member = await this.memberInScope(user, memberId);
-    const entries = await this.prisma.proodosEntry.findMany({
-      where: { userId: memberId },
-      orderBy: [{ passedAt: 'asc' }, { createdAt: 'asc' }],
-    });
+
+    const [all, left] = await this.prisma.$transaction([
+      this.prisma.proodosEntry.findMany({
+        where: { userId: memberId },
+        include: { klados: { select: { type: true } } },
+        orderBy: [{ passedAt: 'asc' }, { createdAt: 'asc' }],
+      }),
+      this.prisma.membership.findMany({
+        where: { userId: memberId, leftAt: { not: null } },
+        select: { kladosId: true, leftAt: true },
+      }),
+    ]);
+
+    const leftAt = new Map(left.map((m) => [m.kladosId, m.leftAt]));
+    const history = new Map<string, { klados: KladosType | null; leftAt: Date | null; entries: typeof all }>();
+    for (const entry of all) {
+      if (entry.kladosId === kladosId) continue;
+      const key = entry.kladosId ?? '';
+      const group = history.get(key) ?? {
+        klados: (entry.klados?.type as KladosType | undefined) ?? null,
+        leftAt: entry.kladosId ? (leftAt.get(entry.kladosId) ?? null) : null,
+        entries: [],
+      };
+      group.entries.push(entry);
+      history.set(key, group);
+    }
+
+    const order = (k: KladosType | null) => (k ? KLADOS_META[k].order : 0);
     return {
       member: { id: member.id, firstName: member.firstName, lastName: member.lastName },
-      entries,
+      entries: all.filter((e) => e.kladosId === kladosId),
+      history: [...history.values()].sort((a, b) => order(a.klados) - order(b.klados)),
     };
   }
 
-  async addEntry(user: RequestUser, memberId: string, dto: ProodosEntryDto) {
+  async addEntry(user: RequestUser, klados: KladosType, memberId: string, dto: ProodosEntryDto) {
+    assertKladosAccess(user, klados);
+    const kladosId = await this.kladosId(user, klados);
     await this.memberInScope(user, memberId);
+    await this.assertCurrentKlados(memberId, kladosId);
     return this.prisma.proodosEntry.create({
       data: {
         userId: memberId,
+        kladosId,
         kind: dto.kind,
         category: dto.category ?? null,
         title: dto.title,
@@ -280,10 +316,11 @@ export class ProodosService {
   async updateEntry(user: RequestUser, entryId: string, dto: UpdateEntryDto) {
     const entry = await this.prisma.proodosEntry.findUnique({
       where: { id: entryId },
-      select: { id: true, userId: true },
+      select: { id: true, userId: true, kladosId: true },
     });
     if (!entry) throw new NotFoundException('Η εγγραφή δεν βρέθηκε.');
     await this.memberInScope(user, entry.userId);
+    await this.assertCurrentKlados(entry.userId, entry.kladosId);
 
     return this.prisma.proodosEntry.update({
       where: { id: entryId },
@@ -299,12 +336,26 @@ export class ProodosService {
   async deleteEntry(user: RequestUser, entryId: string) {
     const entry = await this.prisma.proodosEntry.findUnique({
       where: { id: entryId },
-      select: { id: true, userId: true },
+      select: { id: true, userId: true, kladosId: true },
     });
     if (!entry) throw new NotFoundException('Η εγγραφή δεν βρέθηκε.');
     await this.memberInScope(user, entry.userId);
+    await this.assertCurrentKlados(entry.userId, entry.kladosId);
     await this.prisma.proodosEntry.delete({ where: { id: entryId } });
     return { deleted: true };
+  }
+
+  /** Γράφουμε μόνο στην καρτέλα του κλάδου όπου είναι τώρα μέλος· οι άλλες είναι ιστορικό. */
+  private async assertCurrentKlados(memberId: string, kladosId: string | null): Promise<void> {
+    const current = kladosId
+      ? await this.prisma.membership.findFirst({
+          where: { userId: memberId, kladosId, leftAt: null, kind: MemberKind.MELOS },
+          select: { id: true },
+        })
+      : null;
+    if (!current) {
+      throw new BadRequestException('Η καρτέλα ανήκει σε προηγούμενο κλάδο και μένει μόνο ως ιστορικό.');
+    }
   }
 
   private async kladosId(user: RequestUser, type: KladosType): Promise<string> {

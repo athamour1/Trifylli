@@ -118,7 +118,12 @@ export class MeloiService {
     const member = await this.prisma.user.findFirst({
       where: { id, topikoId: user.topikoId },
       include: {
-        memberships: { include: { klados: { select: { type: true, name: true } } } },
+        // Μόνο οι τωρινοί κλάδοι: όποιος πέρασε σε επόμενο κλάδο δεν φαίνεται πια στον παλιό.
+        memberships: {
+          where: { leftAt: null },
+          include: { klados: { select: { type: true, name: true } } },
+          orderBy: { joinedAt: 'asc' },
+        },
         syndromes: { include: { period: true, payments: { orderBy: { paidAt: 'desc' } } } },
         guardians: true,
         licenses: { orderBy: [{ status: 'asc' }, { expirationDate: 'desc' }] },

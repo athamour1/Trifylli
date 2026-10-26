@@ -148,7 +148,7 @@ export class DraseisReviewService {
   }
 
   private async isStelexos(userId: string): Promise<boolean> {
-    return (await this.prisma.membership.count({ where: { userId, kind: MemberKind.STELEXOS } })) > 0;
+    return (await this.prisma.membership.count({ where: { userId, leftAt: null, kind: MemberKind.STELEXOS } })) > 0;
   }
 
   private toQuestionView(q: QuestionRow): DrasiReviewQuestionView {

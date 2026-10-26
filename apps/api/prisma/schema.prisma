@@ -279,6 +279,7 @@ model Klados {
   symvoulia          Symvoulio[]
   syggentrwseis      Syggentrwsh[]
   proodosGoals       ProodosGoal[]
+  proodosEntries     ProodosEntry[]
   checkouts          YlikoCheckout[]
   storedFiles        StoredFile[]
   treasuryEntries    TreasuryEntry[]
@@ -425,7 +426,11 @@ model Membership {
   /// γιατί ένας ενήλικος μπορεί να είναι στέλεχος σε έναν κλάδο και βοηθός
   /// σε άλλον.
   kind     MemberKind @default(MELOS)
+  /// `ESEO` όταν την άνοιξε ο συγχρονισμός (τύπος μέλους ή πτυχίο-ρόλος): τότε
+  /// την κλείνει κι αυτός όταν αλλάξει κλάδος/ρόλος. Τις `LOCAL` δεν τις αγγίζει.
+  source   DataSource @default(LOCAL)
   joinedAt DateTime   @default(now())
+  /// Έξοδος από τον κλάδο (π.χ. πέρασμα σε επόμενο κλάδο) — η εγγραφή μένει ως ιστορικό.
   leftAt   DateTime?
 
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -1519,6 +1524,9 @@ model ProodosRecord {
 model ProodosEntry {
   id        String    @id @default(uuid()) @db.Uuid
   userId    String    @db.Uuid
+  /// Ο κλάδος της καρτέλας. Σε κάθε κλάδο το παιδί ξεκινά από την αρχή· οι
+  /// εγγραφές προηγούμενων κλάδων μένουν ως ιστορικό (μόνο για ανάγνωση).
+  kladosId  String?   @db.Uuid
   /// `YPOSCHESI` | `MONOPATI` | `PTYCHIO` | `PTYCHIO_ODIGISMOU` (βλ. shared).
   kind      String
   /// Για τα Μονοπάτια: μία από τις 4 θεματικές ενότητες. Αλλιώς `null`.
@@ -1531,9 +1539,11 @@ model ProodosEntry {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  klados Klados? @relation(fields: [kladosId], references: [id], onDelete: SetNull)
 
   @@index([userId, kind])
+  @@index([kladosId, userId])
   @@map("proodos_entry")
 }
 

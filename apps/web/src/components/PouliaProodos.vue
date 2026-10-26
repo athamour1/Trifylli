@@ -166,6 +166,8 @@
             </q-list>
             <div v-else class="text-caption text-grey-5">Κανένα ακόμη.</div>
           </div>
+
+          <ProodosHistory v-if="card.history.length" :history="card.history" />
         </q-card-section>
 
         <q-inner-loading :showing="cardLoading" />
@@ -215,6 +217,7 @@ import {
   type KladosType,
 } from '@trifylli/shared';
 import PageState from './PageState.vue';
+import ProodosHistory, { type ProodosHistoryGroup } from './ProodosHistory.vue';
 import { useAsyncData } from '../composables/useAsyncData';
 import { ApiError, del, get, post } from '../lib/api';
 import { formatDate } from '../lib/format';
@@ -243,6 +246,7 @@ interface MemberRow {
 interface Card {
   member: { id: string; firstName: string; lastName: string };
   entries: Entry[];
+  history: ProodosHistoryGroup[];
 }
 type Summary = ReturnType<typeof summarize>;
 
@@ -295,7 +299,7 @@ async function openCard(memberId: string): Promise<void> {
   cardOpen.value = true;
   cardLoading.value = true;
   try {
-    card.value = await get<Card>(`/proodos/card/member/${memberId}`);
+    card.value = await get<Card>(`/proodos/card/POULIA/member/${memberId}`);
   } catch (err) {
     $q.notify({ type: 'negative', message: err instanceof ApiError ? err.message : 'Αποτυχία φόρτωσης.' });
     cardOpen.value = false;
@@ -361,7 +365,7 @@ async function submitForm(): Promise<void> {
   saving.value = true;
   formError.value = null;
   try {
-    await post(`/proodos/card/member/${card.value.member.id}/entry`, {
+    await post(`/proodos/card/POULIA/member/${card.value.member.id}/entry`, {
       kind: form.kind,
       category: form.kind === 'VIMA' ? form.category : undefined,
       title: form.title.trim() || 'Υπόσχεση',
@@ -393,7 +397,7 @@ function removeEntry(entry: Entry): void {
 }
 
 async function refreshCard(): Promise<void> {
-  if (card.value) card.value = await get<Card>(`/proodos/card/member/${card.value.member.id}`);
+  if (card.value) card.value = await get<Card>(`/proodos/card/POULIA/member/${card.value.member.id}`);
   await reload();
 }
 </script>

@@ -9,6 +9,9 @@ import { AppConfigToken } from '../../common/config/config.module';
 import type { AppConfig } from '../../common/config/configuration';
 import { eseoTypeToIdiotita, eseoTypeToMemberKind, isKnownEseoType, mapEseoTypeToKlados } from './member-type';
 import { EseoClient, type NormalizedEseoMember } from './eseo.client';
+import { planChildPlacement, planLeaderPlacement, type MembershipLite } from './membership-plan';
+
+const MEMBERSHIP_LITE = { id: true, kladosId: true, kind: true, source: true, leftAt: true } as const;
 
 export interface SyncSummary {
   created: number;
@@ -29,9 +32,11 @@ export interface SyncSummary {
  *    επικοινωνία, ημ. γέννησης, κατάσταση). Η πρόσβαση στην εφαρμογή **δεν**
  *    έρχεται από εκεί: τους λογαριασμούς τους ορίζει ο υπερδιαχειριστής και ο
  *    συγχρονισμός δεν αγγίζει ποτέ το `accountRole`.
- *  * **Τοπικές αλλαγές δεν χάνονται**: ο κλάδος/υποομάδα (`Membership`) τίθεται
- *    μόνο όταν το μέλος δεν έχει ήδη τοποθέτηση — το e-SEO δεν ξέρει ποιος
- *    ανήκει σε ποια εξάδα.
+ *  * **Το e-SEO αποφασίζει τον κλάδο, η εφαρμογή την υποομάδα**: όταν αλλάζει
+ *    ο τύπος μέλους (π.χ. Πουλί → Οδηγός) ή τα πτυχία-ρόλοι ενός στελέχους, η
+ *    παλιά τοποθέτηση κλείνει (`leftAt`) και ανοίγει νέα χωρίς εξάδα. Όσο ο
+ *    κλάδος μένει ίδιος, η εξάδα/ενωμοτία που όρισαν τα στελέχη δεν πειράζεται.
+ *    Η ατομική πρόοδος είναι ανά κλάδο, οπότε η παλιά μένει ως ιστορικό.
  *  * **Idempotent**: κλειδί το `eseoId`, οπότε επανεκτέλεση δεν διπλασιάζει.
  */
 @Injectable()
@@ -220,7 +225,7 @@ export class EseoSyncService {
 
     let existing = await this.prisma.user.findUnique({
       where: { eseoId: member.eseoId },
-      select: { id: true, topikoId: true, memberships: { select: { id: true } } },
+      select: { id: true, topikoId: true, memberships: { select: MEMBERSHIP_LITE } },
     });
 
     // Λογαριασμός που φτιάχτηκε πριν από τον συγχρονισμό (π.χ. ο υπερδιαχειριστής
@@ -235,7 +240,7 @@ export class EseoSyncService {
         existing = await this.prisma.user.update({
           where: { id: account.id },
           data: { eseoId: member.eseoId },
-          select: { id: true, topikoId: true, memberships: { select: { id: true } } },
+          select: { id: true, topikoId: true, memberships: { select: MEMBERSHIP_LITE } },
         });
       }
     }
@@ -288,19 +293,17 @@ export class EseoSyncService {
       select: { id: true },
     });
 
-    // Τοποθέτηση σε κλάδο μόνο για μέλη που δεν έχουν καμία: το e-SEO δεν ξέρει
-    // υποομάδες και μια επανατοποθέτηση θα έσβηνε δουλειά των στελεχών.
+    // Ο κλάδος ακολουθεί τον τύπο του e-SEO (Πουλί → Οδηγός κλείνει τα Πουλιά)·
+    // η εξάδα μένει όσο ο κλάδος δεν αλλάζει.
     const klados = mapEseoTypeToKlados(member.type);
-    if (klados && (!existing || existing.memberships.length === 0)) {
-      const kladosId = kladosIdByType.get(klados);
-      if (kladosId) {
-        await this.prisma.membership.upsert({
-          where: { userId_kladosId: { userId: user.id, kladosId } },
-          create: { userId: user.id, kladosId, kind },
-          update: {},
-        });
-      }
-    }
+    const memberships = existing?.memberships ?? [];
+    const plan = planChildPlacement(memberships, {
+      known: isKnownEseoType(member.type),
+      kind,
+      kladosId: klados ? (kladosIdByType.get(klados) ?? null) : null,
+    });
+    await this.closeMemberships(plan.close);
+    if (plan.ensure) await this.ensureMembership(user.id, plan.ensure, MemberKind.MELOS, memberships);
 
     await this.syncGuardians(user.id, member);
     await this.syncSubscription(topikoId, user.id, member, billing);
@@ -308,36 +311,85 @@ export class EseoSyncService {
     return existing ? 'updated' : 'created';
   }
 
-  /** Κηδεμόνες από το e-SEO — idempotent ανά `eseoId` επαφής. */
   /**
-   * Τοποθετεί κάθε στέλεχος στον κλάδο που δείχνει το ενεργό ρόλος-πτυχίο του.
-   * Δεν πειράζει memberships που υπάρχουν ήδη (π.χ. υποομάδα που όρισαν χειροκίνητα).
+   * Τοποθετεί κάθε στέλεχος στον κλάδο που δείχνει το ενεργό ρόλος-πτυχίο του
+   * και κλείνει όσες τοποθετήσεις είχε ανοίξει το e-SEO για ρόλο που έληξε (π.χ.
+   * νέα εντολή: από Υπαρχηγός Σμήνους σε Αρχηγός Ομάδας). Όσες έβαλε κάποιος με
+   * το χέρι μένουν.
    */
   private async placeLeadersByLicenses(
     topikoId: string,
     kladosIdByType: Map<string, string>,
   ): Promise<void> {
     const leaders = await this.prisma.user.findMany({
-      where: { topikoId, archivedAt: null, licenses: { some: { status: 'ACTIVE' } } },
+      where: {
+        topikoId,
+        archivedAt: null,
+        OR: [
+          { licenses: { some: { status: 'ACTIVE' } } },
+          // Και όσοι δεν έχουν πια ενεργό πτυχίο, για να κλείσει ο κλάδος τους.
+          {
+            memberships: {
+              some: { leftAt: null, kind: MemberKind.STELEXOS, source: DataSource.ESEO },
+            },
+          },
+        ],
+      },
       select: {
         id: true,
         licenses: { where: { status: 'ACTIVE' }, select: { title: true, status: true } },
+        memberships: { select: MEMBERSHIP_LITE },
       },
     });
 
     for (const leader of leaders) {
       const profile = deriveLeaderProfile(leader.licenses);
-      for (const role of profile.kladosRoles) {
-        const kladosId = kladosIdByType.get(role.kladosType);
-        if (!kladosId) continue;
-        await this.prisma.membership.upsert({
-          where: { userId_kladosId: { userId: leader.id, kladosId } },
-          create: { userId: leader.id, kladosId, kind: MemberKind.STELEXOS },
-          update: {},
-        });
+      const desired = new Set(
+        profile.kladosRoles.flatMap((role) => kladosIdByType.get(role.kladosType) ?? []),
+      );
+      const plan = planLeaderPlacement(leader.memberships, desired);
+      await this.closeMemberships(plan.close);
+      for (const kladosId of plan.ensure) {
+        await this.ensureMembership(leader.id, kladosId, MemberKind.STELEXOS, leader.memberships);
       }
     }
   }
+
+  private async closeMemberships(ids: string[]): Promise<void> {
+    if (ids.length === 0) return;
+    await this.prisma.membership.updateMany({
+      where: { id: { in: ids }, leftAt: null },
+      data: { leftAt: new Date() },
+    });
+  }
+
+  /**
+   * Ανοιχτή τοποθέτηση του e-SEO στον κλάδο. Η ενεργή μένει όπως είναι (με την
+   * εξάδα της)· η κλειστή ξανανοίγει από την αρχή, χωρίς την παλιά εξάδα.
+   */
+  private async ensureMembership(
+    userId: string,
+    kladosId: string,
+    kind: MemberKind,
+    memberships: MembershipLite[],
+  ): Promise<void> {
+    const row = memberships.find((m) => m.kladosId === kladosId);
+    if (!row) {
+      await this.prisma.membership.create({
+        data: { userId, kladosId, kind, source: DataSource.ESEO },
+      });
+    } else if (row.leftAt) {
+      await this.prisma.membership.update({
+        where: { id: row.id },
+        data: { kind, source: DataSource.ESEO, leftAt: null, joinedAt: new Date(), subUnit: null },
+      });
+    } else if (row.kind === kind && row.source !== DataSource.ESEO) {
+      // Ο ρόλος/τύπος του e-SEO την καλύπτει πλέον — από εδώ και πέρα την κλείνει κι αυτό.
+      await this.prisma.membership.update({ where: { id: row.id }, data: { source: DataSource.ESEO } });
+    }
+  }
+
+  /** Κηδεμόνες από το e-SEO — idempotent ανά `eseoId` επαφής. */
 
   private async syncGuardians(userId: string, member: NormalizedEseoMember): Promise<void> {
     for (const g of member.guardians) {

@@ -82,22 +82,32 @@ export class ProodosController {
     return this.proodos.cardMembers(user, klados);
   }
 
-  @Get('card/member/:memberId')
+  @Get('card/:klados/member/:memberId')
   @RequireCapability('meloi:read')
-  @ApiOperation({ summary: 'Καρτέλα Ατομικής Προόδου μέλους' })
-  card(@CurrentUser() user: RequestUser, @Param('memberId', ParseUUIDPipe) memberId: string) {
-    return this.proodos.card(user, memberId);
+  @ApiParam({ name: 'klados', enum: KladosType })
+  @ApiOperation({
+    summary: 'Καρτέλα Ατομικής Προόδου μέλους',
+    description: 'Οι εγγραφές του κλάδου και το ιστορικό από προηγούμενους κλάδους (μόνο για ανάγνωση).',
+  })
+  card(
+    @CurrentUser() user: RequestUser,
+    @Param('klados') klados: KladosType,
+    @Param('memberId', ParseUUIDPipe) memberId: string,
+  ) {
+    return this.proodos.card(user, klados, memberId);
   }
 
-  @Post('card/member/:memberId/entry')
+  @Post('card/:klados/member/:memberId/entry')
   @RequireCapability('proodos:write')
+  @ApiParam({ name: 'klados', enum: KladosType })
   @ApiOperation({ summary: 'Προσθήκη εγγραφής προόδου' })
   addEntry(
     @CurrentUser() user: RequestUser,
+    @Param('klados') klados: KladosType,
     @Param('memberId', ParseUUIDPipe) memberId: string,
     @Body() dto: ProodosEntryDto,
   ) {
-    return this.proodos.addEntry(user, memberId, dto);
+    return this.proodos.addEntry(user, klados, memberId, dto);
   }
 
   @Put('card/entry/:entryId')
