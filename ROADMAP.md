@@ -351,3 +351,5 @@ GlitchTip για 30 ημέρες. Ο καθαρισμός (URL χωρίς query/
 * Ελληνικό locale για το Authentik (upstream· σήμερα «Log in», «Continue»).
 * `deny` ως τρίτη επιλογή MFA, όταν περάσουν όλοι από TOTP.
 * Ειδοποιήσεις (email/push) για συγκεντρώσεις και οφειλές.
+
+test
