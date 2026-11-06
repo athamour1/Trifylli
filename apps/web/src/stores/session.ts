@@ -122,7 +122,9 @@ export const useSessionStore = defineStore('session', {
         } else if (user?.expired) {
           // Ληγμένο (η εφαρμογή ξανανοίγει μετά από ώρες ή μέρες): το refresh
           // token φέρνει νέο access token — και νέο μήνα ζωής — χωρίς καμία οθόνη.
-          const renewed = await manager.signinSilent();
+          // Δύο καρτέλες που ανοίγουν μαζί (επαναφορά του browser) ανανεώνουν με
+          // το ίδιο refresh token· όποια φτάσει δεύτερη υιοθετεί το νέο της πρώτης.
+          const renewed = await manager.signinSilent().catch(() => adoptRenewedUser());
           if (renewed) {
             this.user = renewed;
             setAccessToken(renewed.access_token);
