@@ -17,7 +17,22 @@
           <div class="col row items-start justify-between q-col-gutter-sm">
             <div class="col-12 col-sm">
               <q-input v-model="form.title" :readonly="!editAll" borderless dense class="page-title" placeholder="Τι γίνεται" />
-              <div class="text-caption text-grey-7">
+              <div v-if="isExtra(item)" class="text-caption text-grey-7 row items-center q-gutter-x-sm">
+                <span><q-icon name="event_busy" size="16px" class="q-mr-xs" />Εκτός ωρολογίου · {{ formatDuration(item.durationMin) }}</span>
+                <!-- Μπαίνει στο τέλος μιας ημέρας· κρατά κείμενο, έγκριση, σχόλια, ιστορικό. -->
+                <q-btn v-if="editAll" flat dense no-caps size="sm" color="klados" icon="event" label="Βάλε στο ωρολόγιο" :loading="placing">
+                  <q-menu auto-close>
+                    <q-list dense style="min-width: 220px">
+                      <q-item-label header class="q-pb-xs">Στο τέλος της ημέρας</q-item-label>
+                      <q-item v-for="(day, i) in scheduleDays" :key="day.date" clickable @click="place(day.date)">
+                        <q-item-section>Ημέρα {{ i + 1 }} · {{ formatDateLong(day.date) }}</q-item-section>
+                        <q-item-section side class="text-caption">{{ day.items.length }}</q-item-section>
+                      </q-item>
+                    </q-list>
+                  </q-menu>
+                </q-btn>
+              </div>
+              <div v-else class="text-caption text-grey-7">
                 {{ formatDateLong(item.date) }} · {{ hm(item.startsAt) }}–{{ hm(item.endsAt) }}
                 · {{ formatDuration(item.durationMin) }}
               </div>
@@ -166,12 +181,12 @@ import {
   DRASI_SCHEDULE_KIND_LABEL,
   DrasiScheduleKind,
   ITEM_DOC,
+  PROGRAMMATIKO_KINDS,
   ROW_LIMITS,
   collabDocument,
   drasiEditScope,
   type DrasiAccess,
   type DrasiEditScope,
-  type DrasiScheduleItemView,
   type DrasiScheduleView,
   type DrasiStatus,
   type KladosType,
@@ -188,7 +203,8 @@ import { responsiblesLabel, SCHEDULE_KIND_COLOR as KIND_COLOR, SCHEDULE_KIND_ICO
 import { useAsyncData } from '../../composables/useAsyncData';
 import { useCollabDoc, useCollabMe } from '../../composables/useCollabDoc';
 import { useLiveReload } from '../../composables/useLiveChanges';
-import { ApiError, OfflineError, del, get, patch } from '../../lib/api';
+import { ApiError, OfflineError, del, get, patch, post } from '../../lib/api';
+import { findCard, isExtra, type KanbanCard } from '../../lib/programmatika';
 import { addItemYlikoAfter, hasSchema, readItemDoc, removeItemYliko, setLocation, updateItemYliko } from '../../lib/drasi-docs';
 import { formatDateLong, formatDuration } from '../../lib/format';
 import { useKladosThemeStore } from '../../stores/klados-theme';
@@ -220,14 +236,20 @@ const drasiId = String(route.params.id);
 // Η σελίδα ξαναστήνεται για κάθε στοιχείο (βλ. το `key` στο MainLayout).
 const itemId = String(route.params.itemId);
 
-const kindOptions = (Object.keys(DrasiScheduleKind) as DrasiScheduleKind[]).map((k) => ({ label: DRASI_SCHEDULE_KIND_LABEL[k], value: k }));
+/** Εκτός ωρολογίου μόνο είδη με προγραμματικό (όχι γεύμα, ξεκούραση, υπηρεσία). */
+const kindOptions = computed(() =>
+  (item.value && isExtra(item.value) ? PROGRAMMATIKO_KINDS : (Object.keys(DrasiScheduleKind) as DrasiScheduleKind[])).map((k) => ({
+    label: DRASI_SCHEDULE_KIND_LABEL[k],
+    value: k,
+  })),
+);
 const hm = (iso: string): string => {
   const d = new Date(iso);
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 };
 
 // ── Φόρτωση: η δράση (τίτλος, κλάδος, κατάσταση) και όλο το ωρολόγιο, για να
-//    βρούμε το στοιχείο με τις υπολογισμένες ώρες του ──
+//    βρούμε το στοιχείο με τις υπολογισμένες ώρες του — ή στα εκτός ωρολογίου ──
 const { data, loading, error, stale, reload } = useAsyncData(
   async () => {
     const [drasi, schedule] = await Promise.all([get<DrasiHead>(`/draseis/${drasiId}`), get<DrasiScheduleView>(`/draseis/${drasiId}/schedule`)]);
@@ -236,8 +258,10 @@ const { data, loading, error, stale, reload } = useAsyncData(
   { forbiddenPage: true, cacheKey: `drasi-schedule:${drasiId}` },
 );
 const drasi = computed(() => data.value?.drasi ?? null);
-const dayOf = computed(() => data.value?.schedule.days.find((d) => d.items.some((i) => i.id === itemId)) ?? null);
-const item = computed<DrasiScheduleItemView | null>(() => dayOf.value?.items.find((i) => i.id === itemId) ?? null);
+const item = computed<KanbanCard | null>(() => (data.value ? (findCard(data.value.schedule, itemId) ?? null) : null));
+const scheduleDays = computed(() => data.value?.schedule.days ?? []);
+/** Η διαδρομή του API: στοιχείο του ωρολογίου ή έξτρα. */
+const itemUrl = computed(() => `/draseis/${drasiId}/schedule/${item.value && isExtra(item.value) ? 'extras/' : ''}${itemId}`);
 
 watch(
   () => (drasi.value ? (drasi.value.klados?.type ?? null) : undefined),
@@ -409,7 +433,7 @@ async function saveNow(): Promise<void> {
     ...([...before].some((id) => !after.has(id)) ? { removeResponsibleIds: [...before].filter((id) => !after.has(id)) } : {}),
   };
   try {
-    if (Object.keys(body).length) await patch(`/draseis/${drasiId}/schedule/${itemId}`, body);
+    if (Object.keys(body).length) await patch(itemUrl.value, body);
     dirty.value = false;
     saveStatus.value = 'saved';
     // Οι ώρες στην κεφαλίδα ξαναβγαίνουν από τον server (άλλαξαν αν άλλαξαν τα λεπτά).
@@ -458,19 +482,37 @@ function goBack(): void {
   void router.push({ name: 'drasi', params: { id: drasiId, section: backSection.value } });
 }
 
+/** Το έξτρα μπαίνει στο τέλος μιας ημέρας — ίδια σελίδα, ίδιο έγγραφο, πια με ώρες. */
+const placing = ref(false);
+async function place(date: string): Promise<void> {
+  if (placing.value) return;
+  placing.value = true;
+  try {
+    await saveNow();
+    await post(`/draseis/${drasiId}/schedule/extras/${itemId}/place`, { date });
+    await reload();
+    $q.notify({ type: 'positive', message: `Μπήκε στο ωρολόγιο — ${formatDateLong(date)}.` });
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err instanceof ApiError ? err.message : 'Αποτυχία.' });
+  } finally {
+    placing.value = false;
+  }
+}
+
 function remove(): void {
   const it = item.value;
   if (!it) return;
+  const after = isExtra(it) ? '' : ' Τα επόμενα της ημέρας μετακινούνται νωρίτερα.';
   $q.dialog({
     title: 'Διαγραφή',
-    message: `«${form.title || it.title}» (${formatDuration(clampMin(form.durationMin))}) — μαζί με το προγραμματικό του. Τα επόμενα της ημέρας μετακινούνται νωρίτερα. Συνέχεια;`,
+    message: `«${form.title || it.title}» (${formatDuration(clampMin(form.durationMin))}) — μαζί με το προγραμματικό του.${after} Συνέχεια;`,
     cancel: { label: 'Άκυρο', flat: true },
     ok: { label: 'Διαγραφή', color: 'negative' },
   }).onOk(async () => {
     try {
       dirty.value = false;
       if (timer) clearTimeout(timer);
-      await del(`/draseis/${drasiId}/schedule/${it.id}`);
+      await del(itemUrl.value);
       goBack();
     } catch (err) {
       $q.notify({ type: 'negative', message: err instanceof ApiError ? err.message : 'Αποτυχία διαγραφής.' });

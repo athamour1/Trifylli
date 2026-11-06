@@ -1,26 +1,47 @@
-import type { CollabPresenceUser, DrasiScheduleItemView, DrasiScheduleStatus, DrasiScheduleView } from '@trifylli/shared';
+import {
+  isProgrammatiko,
+  type CollabPresenceUser,
+  type DrasiExtraItemView,
+  type DrasiScheduleItemView,
+  type DrasiScheduleStatus,
+  type DrasiScheduleView,
+} from '@trifylli/shared';
 
 /** Οι στήλες του kanban, με τη σειρά τους. */
 export const KANBAN_STATUSES: readonly DrasiScheduleStatus[] = ['TODO', 'IN_PROGRESS', 'DONE'];
 
+/** Κάρτα του kanban: στοιχείο του ωρολογίου ή προγραμματικό εκτός ωρολογίου. */
+export type KanbanCard = DrasiScheduleItemView | DrasiExtraItemView;
+
+/** Εκτός ωρολογίου: δεν έχει ημέρα και ώρα. */
+export const isExtra = (card: KanbanCard): card is DrasiExtraItemView => !('startsAt' in card);
+
 /**
- * Τα προγραμματικά σε στήλες ανά κατάσταση: όλα τα στοιχεία του ωρολογίου εκτός
- * από τα γεύματα (αυτά τα ετοιμάζει το διατροφολόγιο) — μια δραστηριότητα με
- * δεκατιανό μένει, είναι δραστηριότητα. Μέσα στη στήλη: με τη σειρά του ωρολογίου.
+ * Τα προγραμματικά σε στήλες ανά κατάσταση: τα στοιχεία του ωρολογίου που έχουν
+ * κείμενο να γραφτεί (`isProgrammatiko` — όχι γεύματα, ξεκούραση, υπηρεσίες,
+ * εκτός αν έχουν ήδη γραμμένο προγραμματικό) με τη σειρά του ωρολογίου, και μετά
+ * όσα είναι εκτός ωρολογίου, με τη σειρά που προστέθηκαν. Μια δραστηριότητα με
+ * δεκατιανό μένει: είναι δραστηριότητα.
  */
-export function kanbanColumns(view: DrasiScheduleView): Record<DrasiScheduleStatus, DrasiScheduleItemView[]> {
-  const columns: Record<DrasiScheduleStatus, DrasiScheduleItemView[]> = { TODO: [], IN_PROGRESS: [], DONE: [] };
+export function kanbanColumns(view: DrasiScheduleView): Record<DrasiScheduleStatus, KanbanCard[]> {
+  const columns: Record<DrasiScheduleStatus, KanbanCard[]> = { TODO: [], IN_PROGRESS: [], DONE: [] };
   const items = view.days
     .flatMap((day) => day.items)
-    .filter((item) => item.kind !== 'GEVMA')
+    .filter(isProgrammatiko)
     .sort((a, b) => a.startsAt.localeCompare(b.startsAt) || a.order - b.order);
   for (const item of items) columns[item.status].push(item);
+  for (const extra of [...view.extras].sort((a, b) => a.createdAt.localeCompare(b.createdAt))) columns[extra.status].push(extra);
   return columns;
+}
+
+/** Η κάρτα (του ωρολογίου ή έξτρα) με αυτό το id. */
+export function findCard(view: DrasiScheduleView, id: string): KanbanCard | undefined {
+  return view.days.flatMap((day) => day.items).find((i) => i.id === id) ?? view.extras.find((e) => e.id === id);
 }
 
 /** Η κάρτα αλλάζει στήλη στη μνήμη (πριν απαντήσει ο server) — `false` αν δεν άλλαξε τίποτα. */
 export function moveCard(view: DrasiScheduleView, itemId: string, status: DrasiScheduleStatus): boolean {
-  const item = view.days.flatMap((day) => day.items).find((i) => i.id === itemId);
+  const item = findCard(view, itemId);
   if (!item || item.status === status) return false;
   item.status = status;
   return true;

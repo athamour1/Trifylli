@@ -785,6 +785,23 @@ export const DrasiScheduleKind = {
 export type DrasiScheduleKind = (typeof DrasiScheduleKind)[keyof typeof DrasiScheduleKind];
 
 /**
+ * Τα είδη που έχουν προγραμματικό να γραφτεί — οι κάρτες του kanban
+ * «Προγραμματικά» και τα είδη ενός προγραμματικού εκτός ωρολογίου. Τα υπόλοιπα
+ * είναι απλές γραμμές του ωρολογίου: το γεύμα το ετοιμάζει το διατροφολόγιο,
+ * η ξεκούραση και η υπηρεσία δεν έχουν κείμενο.
+ */
+export const PROGRAMMATIKO_KINDS: readonly DrasiScheduleKind[] = ['DRASTIRIOTITA', 'METAKINISI', 'TELETI', 'ALLO'];
+
+/**
+ * Κάρτα του kanban: είδος με προγραμματικό — ή ξεκούραση/υπηρεσία που έχει ήδη
+ * γραμμένο κείμενο, για να μη «χαθεί». Το γεύμα ποτέ (είναι στο διατροφολόγιο).
+ */
+export function isProgrammatiko(item: { kind: DrasiScheduleKind; description: string | null }): boolean {
+  if (PROGRAMMATIKO_KINDS.includes(item.kind)) return true;
+  return item.kind !== 'GEVMA' && Boolean(item.description?.trim());
+}
+
+/**
  * Πού βρίσκεται η προετοιμασία ενός στοιχείου του ωρολογίου — οι στήλες του
  * kanban «Προγραμματικά». Τη μετακινούν ο Αρχηγός και το Πρόγραμμα.
  */

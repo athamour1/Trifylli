@@ -177,6 +177,7 @@ export class DraseisExternalsService {
     await this.prisma.$transaction([
       this.prisma.drasiRole.deleteMany({ where: { drasiId: id, userId } }),
       this.prisma.drasiScheduleAssignee.deleteMany({ where: { userId, item: { drasiId: id } } }),
+      this.prisma.drasiExtraAssignee.deleteMany({ where: { userId, extra: { drasiId: id } } }),
       this.prisma.drasiParticipant.deleteMany({ where: { drasiId: id, userId } }),
     ]);
     return { removed: true };

@@ -310,3 +310,78 @@ export class ExternalYlikoDto {
   @MaxLength(300)
   note?: string | null;
 }
+
+/** Νέο προγραμματικό εκτός ωρολογίου («έξτρα»), από το kanban. */
+export class CreateExtraItemDto {
+  @ApiProperty()
+  @IsString()
+  @Matches(/\S/, { message: 'Το προγραμματικό θέλει τίτλο.' })
+  @MaxLength(200)
+  title!: string;
+
+  @ApiPropertyOptional({ enum: DrasiScheduleKind, description: 'Μόνο είδη με προγραμματικό (όχι γεύμα, ξεκούραση, υπηρεσία).' })
+  @IsOptional()
+  @IsEnum(DrasiScheduleKind)
+  kind?: DrasiScheduleKind;
+
+  @ApiPropertyOptional({ minimum: 1, maximum: 1440, default: 30, description: 'Πόσο θα κρατήσει όταν μπει στο ωρολόγιο.' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(1440)
+  durationMin?: number;
+
+  @ApiPropertyOptional({ enum: DrasiScheduleStatus, description: 'Η στήλη του kanban όπου μπαίνει.' })
+  @IsOptional()
+  @IsEnum(DrasiScheduleStatus)
+  status?: DrasiScheduleStatus;
+}
+
+export class UpdateExtraItemDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @Matches(/\S/, { message: 'Το προγραμματικό θέλει τίτλο.' })
+  @MaxLength(200)
+  title?: string;
+
+  @ApiPropertyOptional({ enum: DrasiScheduleKind })
+  @IsOptional()
+  @IsEnum(DrasiScheduleKind)
+  kind?: DrasiScheduleKind;
+
+  @ApiPropertyOptional({ minimum: 1, maximum: 1440 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(1440)
+  durationMin?: number;
+
+  @ApiPropertyOptional({ enum: DrasiScheduleStatus })
+  @IsOptional()
+  @IsEnum(DrasiScheduleStatus)
+  status?: DrasiScheduleStatus;
+
+  @ApiPropertyOptional({ type: [String], format: 'uuid', description: 'Νέοι υπεύθυνοι (στελέχη της δράσης).' })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @IsUUID(undefined, { each: true })
+  addResponsibleIds?: string[];
+
+  @ApiPropertyOptional({ type: [String], format: 'uuid', description: 'Υπεύθυνοι που βγαίνουν.' })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @IsUUID(undefined, { each: true })
+  removeResponsibleIds?: string[];
+}
+
+/** Ένα έξτρα μπαίνει στο ωρολόγιο: στο τέλος αυτής της ημέρας. */
+export class PlaceExtraItemDto {
+  @ApiProperty({ description: 'YYYY-MM-DD — μία από τις ημέρες της δράσης.' })
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  date!: string;
+}

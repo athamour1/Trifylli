@@ -360,33 +360,37 @@ export class DrasiCollab implements OnModuleInit {
   /**
    * Το στοιχείο του ωρολογίου (`ITEM_DOC`): προγραμματικό, χώρος και υλικό. Το
    * Πρόγραμμα, και οι υπεύθυνοι του στοιχείου (`SCHEDULE_ITEM_OWN_FIELDS`).
+   * Το ίδιο έγγραφο έχει και ένα προγραμματικό εκτός ωρολογίου (`DrasiExtraItem`):
+   * όταν μπει στο ωρολόγιο κρατά το id του, άρα και το έγγραφο.
    */
   private itemType(): CollabDocumentType {
     const prisma = this.prisma;
+    const ylikoSelect = { orderBy: { order: 'asc' }, select: { id: true, order: true, label: true, qty: true, packed: true, packedById: true, packedAt: true } } as const;
     const load = async (drasiId: string, itemId: string) => {
-      const item = await prisma.drasiScheduleItem.findFirst({
-        where: { id: itemId, drasiId },
-        select: {
-          description: true,
-          location: true,
-          yliko: { orderBy: { order: 'asc' }, select: { id: true, order: true, label: true, qty: true, packed: true, packedById: true, packedAt: true } },
-        },
-      });
+      const where = { id: itemId, drasiId };
+      const select = { description: true, location: true, yliko: ylikoSelect } as const;
+      const item = (await prisma.drasiScheduleItem.findFirst({ where, select })) ?? (await prisma.drasiExtraItem.findFirst({ where, select }));
       if (!item) return null;
       return {
         ...item,
         yliko: item.yliko.map(({ packedById, packedAt, ...row }) => ({ ...row, packedBy: packedById, packedAt: packedAt?.toISOString() ?? null })),
       };
     };
+    /** Τίτλος, υπεύθυνοι και πού ανοίγει — από το ωρολόγιο ή από τα έξτρα. */
+    const head = async (drasiId: string, itemId: string) => {
+      const where = { id: itemId, drasiId };
+      const select = { title: true, assignees: { select: { userId: true } } } as const;
+      const item = await prisma.drasiScheduleItem.findFirst({ where, select });
+      if (item) return { ...item, link: `programma/${itemId}` };
+      const extra = await prisma.drasiExtraItem.findFirst({ where, select });
+      return extra ? { ...extra, link: `programmatika/${itemId}` } : null;
+    };
     return {
       kind: 'drasi:item',
       arity: 2,
       schema: ITEM_DOC.schema,
       access: async (user, [drasiId, itemId]) => {
-        const item = await prisma.drasiScheduleItem.findFirst({
-          where: { id: itemId, drasiId },
-          select: { assignees: { select: { userId: true } } },
-        });
+        const item = await head(drasiId!, itemId!);
         if (!item) return null;
         return this.scope(user, drasiId!, { view: 'programma', edit: 'programma' }, async () =>
           item.assignees.some((a) => a.userId === user.id),
@@ -405,15 +409,21 @@ export class DrasiCollab implements OnModuleInit {
       project: async (doc, [drasiId, itemId]) => {
         const write = normalizeItem(readItem(doc));
         await prisma.$transaction(async (tx) => {
-          const { count } = await tx.drasiScheduleItem.updateMany({
-            where: { id: itemId, drasiId },
-            data: { description: write.description, location: write.location },
-          });
-          if (!count) return;
+          const data = { description: write.description, location: write.location };
           // Ίδια id με το έγγραφο: η λίστα ξαναγράφεται, οι γραμμές κρατούν την ταυτότητά τους.
-          await tx.drasiScheduleYlikoItem.deleteMany({ where: { itemId } });
+          const { count } = await tx.drasiScheduleItem.updateMany({ where: { id: itemId, drasiId }, data });
+          if (count) {
+            await tx.drasiScheduleYlikoItem.deleteMany({ where: { itemId } });
+            if (write.yliko.length) {
+              await tx.drasiScheduleYlikoItem.createMany({ data: write.yliko.map((y) => ({ ...y, itemId: itemId! })) });
+            }
+            return;
+          }
+          const extra = await tx.drasiExtraItem.updateMany({ where: { id: itemId, drasiId }, data });
+          if (!extra.count) return;
+          await tx.drasiExtraYlikoItem.deleteMany({ where: { extraId: itemId } });
           if (write.yliko.length) {
-            await tx.drasiScheduleYlikoItem.createMany({ data: write.yliko.map((y) => ({ ...y, itemId: itemId! })) });
+            await tx.drasiExtraYlikoItem.createMany({ data: write.yliko.map((y) => ({ ...y, extraId: itemId! })) });
           }
         });
       },
@@ -423,13 +433,13 @@ export class DrasiCollab implements OnModuleInit {
       approval: this.approval(ITEM_DOC.description),
       // Τα σχόλια του προγραμματικού τα μαθαίνουν οι υπεύθυνοι του στοιχείου.
       about: async ([drasiId, itemId]) => {
-        const item = await prisma.drasiScheduleItem.findFirst({ where: { id: itemId, drasiId }, select: { title: true } });
+        const item = await head(drasiId!, itemId!);
         if (!item) return null;
         return this.about(drasiId!, {
           where: (drasi) => `στο «${item.title}» — δράση ${drasi}`,
-          link: `programma/${itemId}`,
+          link: item.link,
           kind: 'item',
-          watchers: () => this.assignees(itemId!),
+          watchers: async () => item.assignees.map((a) => a.userId),
         });
       },
       people: ([drasiId]) => this.people(drasiId!),

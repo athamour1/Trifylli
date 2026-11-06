@@ -8,7 +8,7 @@ const ITEM = '9a0b1c2d-3e4f-4a5b-8c6d-7e8f9a0b1c2d';
 const person = (id: string, firstName: string) => ({ id, firstName, lastName: 'Χ' });
 
 /** Μια δράση με ένα στοιχείο του ωρολογίου, στελέχη, ρόλους — και τα είδη της. */
-function setup() {
+function setup(where: 'schedule' | 'extra' = 'schedule') {
   const types = new Map<string, CollabDocumentType>();
   const roles = [
     { kind: 'ARXIGOS', user: person('u-arxigos', 'Άννα') },
@@ -16,7 +16,8 @@ function setup() {
   ];
   const prisma = {
     drasi: { findUnique: async () => ({ title: 'Κατασκήνωση' }) },
-    drasiScheduleItem: { findFirst: async () => ({ title: 'Πεζοπορία' }) },
+    drasiScheduleItem: { findFirst: async () => (where === 'schedule' ? { title: 'Πεζοπορία', assignees: [{ userId: 'u-maria' }] } : null) },
+    drasiExtraItem: { findFirst: async () => (where === 'extra' ? { title: 'Αν βρέξει', assignees: [{ userId: 'u-maria' }] } : null) },
     drasiScheduleAssignee: { findMany: async () => [{ userId: 'u-maria' }] },
     drasiRole: {
       findMany: async ({ where }: { where: { kind?: { in: string[] } } }) =>
@@ -41,6 +42,15 @@ describe('κοινά έγγραφα της δράσης — για τα σχόλ
       link: `/draseis/${DRASI}/programma/${ITEM}`,
       watchers: ['u-maria'],
       activity: { room: `drasi:${DRASI}:room`, topic: 'comment:item' },
+    });
+  });
+
+  it('προγραμματικό εκτός ωρολογίου: ανοίγει από τα προγραμματικά', async () => {
+    const about = await setup('extra')('drasi:item').about!([DRASI, ITEM]);
+    expect(about).toMatchObject({
+      title: 'στο «Αν βρέξει» — δράση «Κατασκήνωση»',
+      link: `/draseis/${DRASI}/programmatika/${ITEM}`,
+      watchers: ['u-maria'],
     });
   });
 

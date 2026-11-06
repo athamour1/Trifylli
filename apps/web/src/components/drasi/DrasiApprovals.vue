@@ -45,7 +45,9 @@ useLiveReload(['approvals', 'schedule'], load);
 const lines = computed(() => {
   const items = schedule.value?.days.flatMap((day) => day.items) ?? [];
   const byItem = approvalsByItem(approvals.value, props.drasiId);
-  const programmatika = items.filter((item) => item.hasProgramma || byItem.item.has(item.id)).map((item) => item.id);
+  // Και όσα είναι εκτός ωρολογίου: ίδιο έγγραφο, ίδια έγκριση.
+  const extras = schedule.value?.extras ?? [];
+  const programmatika = [...items, ...extras].filter((item) => item.hasProgramma || byItem.item.has(item.id)).map((item) => item.id);
   const meals = items.filter((item) => item.kind === 'GEVMA' || item.snack !== null).map((item) => item.id);
   return [
     { section: 'programma', label: 'Προγραμματικά', icon: 'description', counts: approvalCounts(programmatika, byItem.item), total: programmatika.length },

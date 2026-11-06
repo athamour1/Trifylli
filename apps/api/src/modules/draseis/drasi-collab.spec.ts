@@ -18,6 +18,8 @@ function setup(options: {
   status?: 'ENERGI' | 'KLEISTI';
   archived?: boolean;
   item?: { kind: string; snack: string | null; assignees: string[] } | null;
+  /** Προγραμματικό εκτός ωρολογίου με το id του εγγράφου. */
+  extra?: { assignees: string[] } | null;
   character?: { player: string | null } | null;
 }) {
   const types = new Map<string, CollabDocumentType>();
@@ -28,6 +30,9 @@ function setup(options: {
         options.item === null || options.item === undefined
           ? null
           : { ...options.item, assignees: options.item.assignees.map((userId) => ({ userId })) },
+    },
+    drasiExtraItem: {
+      findFirst: async () => (options.extra ? { title: 'Αν βρέξει', assignees: options.extra.assignees.map((userId) => ({ userId })) } : null),
     },
     drasiCharacter: {
       findFirst: async () =>
@@ -70,6 +75,12 @@ describe('κοινά κείμενα της δράσης — ποιος γράφ�
       'write',
     );
     expect(await setup({ who: { full: true }, item: null })('drasi:item', [DRASI, ITEM])).toBeNull();
+  });
+
+  it('προγραμματικό εκτός ωρολογίου: ο ίδιος κανόνας, στο ίδιο έγγραφο', async () => {
+    expect(await setup({ who: { staff: true }, item: null, extra: { assignees: ['u-me'] } })('drasi:item', [DRASI, ITEM])).toBe('write');
+    expect(await setup({ who: { staff: true }, item: null, extra: { assignees: [] } })('drasi:item', [DRASI, ITEM])).toBe('read');
+    expect(await setup({ who: { staff: true, roles: ['PROGRAMMA'] }, item: null, extra: { assignees: [] } })('drasi:item', [DRASI, ITEM])).toBe('write');
   });
 
   it('lore: το στέλεχος που παίζει τον ρόλο γράφει το δικό του', async () => {
@@ -115,10 +126,10 @@ describe('κοινά κείμενα της δράσης — ποιος γράφ�
 
 describe('στοιχείο και γεύμα — τι γράφεται στη βάση', () => {
   /** Μια βάση που κρατά ό,τι της γράφουν — μόνο όσα αγγίζει η προβολή. */
-  function recorder() {
+  function recorder(scheduled = true) {
     const calls: [string, unknown][] = [];
     const table = (name: string) => ({
-      updateMany: async (args: unknown) => (calls.push([`${name}.updateMany`, args]), { count: 1 }),
+      updateMany: async (args: unknown) => (calls.push([`${name}.updateMany`, args]), { count: name === 'item' && !scheduled ? 0 : 1 }),
       deleteMany: async (args: unknown) => (calls.push([`${name}.deleteMany`, args]), { count: 0 }),
       createMany: async (args: unknown) => (calls.push([`${name}.createMany`, args]), { count: 0 }),
       upsert: async (args: unknown) => (calls.push([`${name}.upsert`, args]), {}),
@@ -127,6 +138,8 @@ describe('στοιχείο και γεύμα — τι γράφεται στη β
     const tx = {
       drasiScheduleItem: table('item'),
       drasiScheduleYlikoItem: table('yliko'),
+      drasiExtraItem: table('extra'),
+      drasiExtraYlikoItem: table('extraYliko'),
       drasiMeal: table('meal'),
       drasiMealIngredient: table('ingredient'),
     };
@@ -150,6 +163,21 @@ describe('στοιχείο και γεύμα — τι γράφεται στη β
       ['item.updateMany', { where: { id: ITEM, drasiId: DRASI }, data: { description: 'Πορεία', location: 'Ξέφωτο' } }],
       ['yliko.deleteMany', { where: { itemId: ITEM } }],
       ['yliko.createMany', { data: [{ id: Y1, order: 0, label: 'Σχοινί', qty: 2, packed: false, packedById: null, packedAt: null, itemId: ITEM }] }],
+    ]);
+  });
+
+  it('προγραμματικό εκτός ωρολογίου: ό,τι δεν είναι στο ωρολόγιο σώζεται στο έξτρα με το ίδιο id', async () => {
+    const { calls, type } = recorder(false);
+    const doc = new Doc();
+    seedItem(doc, { description: 'Αν βρέξει', location: '', yliko: [{ id: Y1, order: 0, label: 'Τράπουλα', qty: 1, packed: true, packedBy: null, packedAt: null }] });
+
+    await type('drasi:item').project(doc, [DRASI, ITEM]);
+
+    expect(calls).toEqual([
+      ['item.updateMany', { where: { id: ITEM, drasiId: DRASI }, data: { description: 'Αν βρέξει', location: null } }],
+      ['extra.updateMany', { where: { id: ITEM, drasiId: DRASI }, data: { description: 'Αν βρέξει', location: null } }],
+      ['extraYliko.deleteMany', { where: { extraId: ITEM } }],
+      ['extraYliko.createMany', { data: [{ id: Y1, order: 0, label: 'Τράπουλα', qty: 1, packed: true, packedById: null, packedAt: null, extraId: ITEM }] }],
     ]);
   });
 

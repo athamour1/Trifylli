@@ -747,11 +747,12 @@ export class DraseisService {
     });
   }
 
-  /** Μαζί φεύγει και από τους υπεύθυνους του ωρολογίου της δράσης. */
+  /** Μαζί φεύγει και από τους υπεύθυνους των προγραμματικών της δράσης (μέσα κι έξω από το ωρολόγιο). */
   async removeParticipant(user: RequestUser, id: string, memberId: string) {
     await this.assertAccess(user, id);
     const [, removed] = await this.prisma.$transaction([
       this.prisma.drasiScheduleAssignee.deleteMany({ where: { userId: memberId, item: { drasiId: id } } }),
+      this.prisma.drasiExtraAssignee.deleteMany({ where: { userId: memberId, extra: { drasiId: id } } }),
       this.prisma.drasiParticipant.delete({ where: { drasiId_userId: { drasiId: id, userId: memberId } } }),
     ]);
     this.accessChanged(id);

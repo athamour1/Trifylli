@@ -46,7 +46,7 @@ const ref = (id: string) => `Δες: ![σχέδιο](trifylli:${id})`;
 const fileId = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
 function setup(
-  content: Partial<Record<'drasi' | 'drasiScheduleItem' | 'drasiMeal' | 'drasiMealVariant' | 'drasiCharacter', Row[]>>,
+  content: Partial<Record<'drasi' | 'drasiScheduleItem' | 'drasiExtraItem' | 'drasiMeal' | 'drasiMealVariant' | 'drasiCharacter', Row[]>>,
   fileCount: number,
   collab: { live?: string[]; access?: 'write' | 'read' | null } = {},
   drasi: { view?: string[]; edit?: string[] } | null = null,
@@ -68,6 +68,7 @@ function setup(
     symvoulio: table([]),
     drasi: table(content.drasi ?? []),
     drasiScheduleItem: table(content.drasiScheduleItem ?? []),
+    drasiExtraItem: table(content.drasiExtraItem ?? []),
     drasiMeal: table(content.drasiMeal ?? []),
     drasiMealVariant: table(content.drasiMealVariant ?? []),
     drasiCharacter: table(content.drasiCharacter ?? []),
@@ -116,6 +117,13 @@ describe('FilesService — εικόνες Markdown των δράσεων', () =>
 
     expect(removed).toBe(1);
     expect(storedFile.rows.map((f) => f.id)).toEqual([1, 2, 3, 4, 5, 6].map(fileId));
+  });
+
+  it('και όσες είναι σε προγραμματικό εκτός ωρολογίου', async () => {
+    const { service, storedFile } = setup({ drasiExtraItem: [{ description: ref(fileId(1)), drasi: live }] }, 2);
+
+    expect(await service.sweepOrphanMarkdownImages()).toBe(1);
+    expect(storedFile.rows.map((f) => f.id)).toEqual([fileId(1)]);
   });
 
   it('δράση στο αρχείο: οι εικόνες της δεν μετράνε πια ως ζωντανές', async () => {
@@ -254,6 +262,18 @@ describe('FilesService — παλιές εικόνες χωρίς κοινό έ�
     const { service, updates } = withLegacy([{ id: ITEM, drasiId: DRASI, description: ref(fileId(1)), drasi: { topikoId: TOPIKO } }], 'read');
 
     expect((await service.openForDownload(member, fileId(1))).filename).toBe('palia.png');
+    expect(updates).toEqual([{ collabDocument: `drasi:${DRASI}:item:${ITEM}` }]);
+  });
+
+  it('σε προγραμματικό εκτός ωρολογίου: δένεται με το ίδιο έγγραφο με τα στοιχεία του ωρολογίου', async () => {
+    const ctx = setup({ drasiExtraItem: [{ id: ITEM, drasiId: DRASI, description: ref(fileId(1)), drasi: { topikoId: TOPIKO } }] }, 0, { access: 'read' });
+    const updates: Row[] = [];
+    Object.assign(ctx.prisma.storedFile, {
+      findFirst: async () => legacy,
+      updateMany: async ({ data }: { data: Row }) => (updates.push(data), { count: 1 }),
+    });
+
+    expect((await ctx.service.openForDownload(member, fileId(1))).filename).toBe('palia.png');
     expect(updates).toEqual([{ collabDocument: `drasi:${DRASI}:item:${ITEM}` }]);
   });
 

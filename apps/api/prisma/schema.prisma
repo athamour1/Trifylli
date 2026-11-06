@@ -400,6 +400,7 @@ model User {
   drasiLedger             DrasiLedgerEntry[]         @relation("DrasiLedgerUser")
   drasiLedgerAuthored     DrasiLedgerEntry[]         @relation("DrasiLedgerAuthor")
   scheduleDuties          DrasiScheduleAssignee[]
+  extraDuties             DrasiExtraAssignee[]
   drasiShopping           DrasiShoppingItem[]        @relation("ShoppingAssignee")
   drasiExternalYliko      DrasiExternalYliko[]       @relation("ExternalYlikoResponsible")
   drasiReviews            DrasiReviewAnswer[]        @relation("DrasiReviewAuthor")
@@ -620,6 +621,7 @@ model Drasi {
   reviewInvites   DrasiReviewInvite[]
   reviewGuests    DrasiReviewGuest[]
   schedule        DrasiScheduleItem[]
+  extras          DrasiExtraItem[]
   activity        DrasiActivity[]
   visits          DrasiVisit[]
   delays          DrasiDelay[]
@@ -705,6 +707,63 @@ model DrasiScheduleItem {
 
   @@index([drasiId, date, order])
   @@map("drasi_schedule_item")
+}
+
+/// Προγραμματικό εκτός ωρολογίου («έξτρα»): κάτι που ετοιμάζεται στο kanban
+/// «Προγραμματικά» χωρίς ημέρα και ώρα (π.χ. εναλλακτική αν βρέξει). Ίδιο κοινό
+/// έγγραφο με τα στοιχεία του ωρολογίου (`drasi:<id>:item:<id>`, με το id του)·
+/// όταν μπει στο ωρολόγιο γίνεται `DrasiScheduleItem` με το ΙΔΙΟ id, οπότε
+/// κείμενο, έγκριση, σχόλια και ιστορικό μένουν όπως ήταν.
+model DrasiExtraItem {
+  id          String              @id @default(uuid()) @db.Uuid
+  drasiId     String              @db.Uuid
+  title       String
+  kind        DrasiScheduleKind   @default(DRASTIRIOTITA)
+  status      DrasiScheduleStatus @default(TODO)
+  /// Πόσο θα κρατήσει όταν μπει στο ωρολόγιο.
+  durationMin Int                 @default(30)
+  location    String?
+  /// Το προγραμματικό — Markdown.
+  description String?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  drasi     Drasi                 @relation(fields: [drasiId], references: [id], onDelete: Cascade)
+  assignees DrasiExtraAssignee[]
+  yliko     DrasiExtraYlikoItem[]
+
+  @@index([drasiId, createdAt])
+  @@map("drasi_extra_item")
+}
+
+/// Υπεύθυνος ενός προγραμματικού εκτός ωρολογίου — όπως το `DrasiScheduleAssignee`.
+model DrasiExtraAssignee {
+  extraId String @db.Uuid
+  userId  String @db.Uuid
+
+  extra DrasiExtraItem @relation(fields: [extraId], references: [id], onDelete: Cascade)
+  user  User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([extraId, userId])
+  @@index([userId])
+  @@map("drasi_extra_assignee")
+}
+
+/// Το υλικό ενός προγραμματικού εκτός ωρολογίου — όπως το `DrasiScheduleYlikoItem`.
+model DrasiExtraYlikoItem {
+  id         String    @id @default(uuid()) @db.Uuid
+  extraId    String    @db.Uuid
+  order      Int
+  label      String
+  qty        Int       @default(1)
+  packed     Boolean   @default(false)
+  packedById String?   @db.Uuid
+  packedAt   DateTime?
+
+  extra DrasiExtraItem @relation(fields: [extraId], references: [id], onDelete: Cascade)
+
+  @@index([extraId, order])
+  @@map("drasi_extra_yliko_item")
 }
 
 /// Υπεύθυνος ενός στοιχείου του ωρολογίου. Μόνο στελέχη της δράσης (δικά μας,

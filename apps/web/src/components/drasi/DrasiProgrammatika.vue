@@ -1,23 +1,33 @@
 <template>
   <!--
-    Τα προγραμματικά σε kanban: κάθε στοιχείο του ωρολογίου (εκτός από τα γεύματα,
-    που τα ετοιμάζει το διατροφολόγιο) είναι μια κάρτα σε μία από τρεις στήλες —
-    To Do, In Progress, Done. Τις μετακινούν ο Αρχηγός και το Πρόγραμμα: με
-    σύρσιμο, ή από το μενού της κάρτας (κινητό, πληκτρολόγιο). Οι υπόλοιποι βλέπουν.
-    Η κάρτα ανοίγει το προγραμματικό της, μέσα στη δράση.
+    Τα προγραμματικά σε kanban: κάθε στοιχείο του ωρολογίου με κείμενο να
+    γραφτεί (`isProgrammatiko` — όχι γεύματα, ξεκούραση, υπηρεσίες) είναι μια
+    κάρτα σε μία από τρεις στήλες — To Do, In Progress, Done — και μαζί τα
+    προγραμματικά εκτός ωρολογίου («έξτρα»), που προστίθενται από εδώ. Τις
+    μετακινούν ο Αρχηγός και το Πρόγραμμα: με σύρσιμο, ή από το μενού της κάρτας
+    (κινητό, πληκτρολόγιο). Οι υπόλοιποι βλέπουν. Η κάρτα ανοίγει το
+    προγραμματικό της, μέσα στη δράση.
   -->
   <div>
-    <div class="text-caption text-grey-7 q-mb-md">
-      Η προετοιμασία κάθε στοιχείου του ωρολογίου.
-      <template v-if="canWrite">Σύρε μια κάρτα σε άλλη στήλη — ή άλλαξέ τη από το μενού της.</template>
-      <template v-else>Τις κάρτες τις μετακινούν ο Αρχηγός και το Πρόγραμμα.</template>
+    <div class="row items-center q-col-gutter-sm q-mb-md">
+      <div class="col text-caption text-grey-7">
+        Η προετοιμασία κάθε προγραμματικού — του ωρολογίου και όσων είναι εκτός του.
+        <template v-if="canWrite">Σύρε μια κάρτα σε άλλη στήλη — ή άλλαξέ τη από το μενού της.</template>
+        <template v-else>Τις κάρτες τις μετακινούν ο Αρχηγός και το Πρόγραμμα.</template>
+      </div>
+      <div v-if="canWrite" class="col-auto">
+        <q-btn unelevated no-caps color="klados" icon="add" label="Προγραμματικό" @click="openAdd">
+          <q-tooltip>Νέο προγραμματικό εκτός ωρολογίου — μπαίνει στο ωρολόγιο όποτε θέλεις</q-tooltip>
+        </q-btn>
+      </div>
     </div>
 
     <q-inner-loading :showing="loading && !view" />
 
     <div v-if="view && !total" class="text-center text-grey-6 q-pa-lg">
       <q-icon name="view_kanban" size="40px" class="block q-mx-auto q-mb-sm" />
-      Το ωρολόγιο δεν έχει ακόμη στοιχεία για προετοιμασία.
+      Δεν υπάρχουν ακόμη προγραμματικά για προετοιμασία.
+      <template v-if="canWrite">Πρόσθεσε δραστηριότητες στο ωρολόγιο — ή ένα προγραμματικό εκτός ωρολογίου από εδώ.</template>
     </div>
 
     <div v-else-if="view" ref="board" class="kanban">
@@ -62,7 +72,10 @@
             <q-item clickable class="kanban__item" @click="open(card.id)">
               <q-item-section>
                 <q-item-label class="text-weight-medium">{{ card.title }}</q-item-label>
-                <q-item-label caption>
+                <q-item-label v-if="isExtra(card)" caption class="text-klados">
+                  <q-icon name="event_busy" size="14px" class="q-mr-xs" />Εκτός ωρολογίου
+                </q-item-label>
+                <q-item-label v-else caption>
                   <template v-if="multiDay">{{ dayLabel(card.date) }} · </template>{{ hm(card.startsAt) }}–{{ hm(card.endsAt) }}
                 </q-item-label>
                 <!-- Ποιος την κουνάει τώρα, πριν ακόμα την αφήσει σε άλλη στήλη. -->
@@ -108,24 +121,47 @@
         </div>
       </section>
     </div>
+
+    <!-- Νέο προγραμματικό εκτός ωρολογίου -->
+    <q-dialog v-model="adding">
+      <q-card style="width: 420px; max-width: 92vw">
+        <q-card-section class="text-h6 q-pb-none">Νέο προγραμματικό</q-card-section>
+        <q-card-section class="text-caption text-grey-7 q-pb-sm">
+          Εκτός ωρολογίου: γράφεται, ανατίθεται και εγκρίνεται όπως τα άλλα, και μπαίνει σε μια ημέρα όποτε θέλεις.
+        </q-card-section>
+        <q-form @submit.prevent="add">
+          <q-card-section class="q-gutter-sm q-pt-none">
+            <q-input v-model="draft.title" label="Τίτλος" outlined dense autofocus color="klados" maxlength="200" placeholder="π.χ. Αν βρέξει: παιχνίδια στη σκηνή" />
+            <q-select v-model="draft.kind" :options="kindOptions" label="Είδος" outlined dense emit-value map-options color="klados">
+              <template #prepend><q-icon :name="KIND_ICON[draft.kind]" /></template>
+            </q-select>
+          </q-card-section>
+          <q-card-actions align="right">
+            <q-btn v-close-popup flat no-caps label="Άκυρο" />
+            <q-btn type="submit" unelevated no-caps color="klados" label="Προσθήκη" :loading="saving" :disable="!draft.title.trim()" />
+          </q-card-actions>
+        </q-form>
+      </q-card>
+    </q-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { useQuasar } from 'quasar';
 import { useRouter } from 'vue-router';
 import {
   DRASI_SCHEDULE_KIND_LABEL,
   DRASI_SCHEDULE_STATUS_LABEL,
+  PROGRAMMATIKO_KINDS,
   type CollabPresenceUser,
-  type DrasiScheduleItemView,
+  type DrasiScheduleKind,
   type DrasiScheduleStatus,
   type DrasiScheduleView,
 } from '@trifylli/shared';
-import { ApiError, get, patch } from '../../lib/api';
+import { ApiError, get, patch, post } from '../../lib/api';
 import { flip } from '../../lib/flip';
-import { KANBAN_STATUSES, kanbanColumns, kanbanFocus, kanbanPeers, moveCard } from '../../lib/programmatika';
+import { KANBAN_STATUSES, findCard, isExtra, kanbanColumns, kanbanFocus, kanbanPeers, moveCard, type KanbanCard } from '../../lib/programmatika';
 import { useLiveReload, useRoomFocus } from '../../composables/useLiveChanges';
 import CollabPresence from '../CollabPresence.vue';
 import { SCHEDULE_KIND_ICON as KIND_ICON } from './types';
@@ -179,14 +215,40 @@ function open(itemId: string): void {
 async function move(itemId: string, status: DrasiScheduleStatus): Promise<void> {
   const current = view.value;
   if (!current) return;
-  const before = current.days.flatMap((d) => d.items).find((i) => i.id === itemId)?.status;
-  if (!before || before === status) return;
+  const card = findCard(current, itemId);
+  const before = card?.status;
+  if (!card || !before || before === status) return;
   await flip(board.value, () => moveCard(current, itemId, status));
   try {
-    await patch(`/draseis/${props.drasiId}/schedule/${itemId}`, { status });
+    await patch(`/draseis/${props.drasiId}/schedule/${isExtra(card) ? 'extras/' : ''}${itemId}`, { status });
   } catch (err) {
     await flip(board.value, () => moveCard(current, itemId, before));
     notifyError(err, 'Αποτυχία μετακίνησης.');
+  }
+}
+
+// ── Νέο προγραμματικό εκτός ωρολογίου ──
+const kindOptions = PROGRAMMATIKO_KINDS.map((k) => ({ label: DRASI_SCHEDULE_KIND_LABEL[k], value: k }));
+const adding = ref(false);
+const saving = ref(false);
+const draft = reactive({ title: '', kind: 'DRASTIRIOTITA' as DrasiScheduleKind });
+function openAdd(): void {
+  Object.assign(draft, { title: '', kind: 'DRASTIRIOTITA' });
+  adding.value = true;
+}
+/** Μπαίνει στο To Do· η σελίδα του ανοίγει αμέσως, για να γραφτεί. */
+async function add(): Promise<void> {
+  const title = draft.title.trim();
+  if (!title || saving.value) return;
+  saving.value = true;
+  try {
+    const created = await post<{ id: string }>(`/draseis/${props.drasiId}/schedule/extras`, { title, kind: draft.kind });
+    adding.value = false;
+    open(created.id);
+  } catch (err) {
+    notifyError(err, 'Αποτυχία προσθήκης.');
+  } finally {
+    saving.value = false;
   }
 }
 
@@ -240,8 +302,8 @@ const hm = (iso: string): string => {
 };
 const dayLabel = (date: string): string =>
   new Date(`${date}T12:00:00`).toLocaleDateString('el-GR', { weekday: 'short', day: 'numeric', month: 'numeric' });
-const names = (card: DrasiScheduleItemView): string => card.responsibles.map((r) => `${r.lastName} ${r.firstName}`.trim()).join(', ');
-const packedOf = (card: DrasiScheduleItemView): number => card.yliko.filter((y) => y.packed).length;
+const names = (card: KanbanCard): string => card.responsibles.map((r) => `${r.lastName} ${r.firstName}`.trim()).join(', ');
+const packedOf = (card: KanbanCard): number => card.yliko.filter((y) => y.packed).length;
 
 function notifyError(err: unknown, fallback: string): void {
   $q.notify({ type: 'negative', message: err instanceof ApiError ? err.message : fallback });

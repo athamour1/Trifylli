@@ -92,6 +92,7 @@ export class DraseisDossierService {
         roles: full.roles.map((r) => ({ id: r.id, kind: r.kind, note: r.note, user: r.user })),
       },
       days: schedule.days.filter((d) => d.items.length).map((d) => ({ date: d.date, startTime: d.startTime, items: d.items })),
+      extras: schedule.extras,
       participants: participants.map((p) => ({ ...p, groups: groupsOf.get(p.id) ?? [] })),
       groups: groups.groups,
       health,

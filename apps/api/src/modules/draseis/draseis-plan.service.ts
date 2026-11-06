@@ -27,6 +27,7 @@ import { planResponsibles } from './schedule-assignees';
 import { moveAfter } from './schedule-order';
 import { delaysOf } from './schedule-delays';
 import { ylikoRows } from './schedule-yliko';
+import { extraInclude, toExtraView } from './drasi-extras';
 import type {
   CopyDayDto,
   CreateDrasiSymvoulioDto,
@@ -83,7 +84,12 @@ export class DraseisPlanService {
     const drasi = await this.access.load(user, id, 'read');
     // Προγραμματικά και συνταγές που γράφονται αυτή τη στιγμή: πρώτα στη βάση.
     await this.collab.flushPending(collabDocument.drasiPrefix(id));
-    return { days: await this.days(drasi, await this.timezone(user)), stelexi: await this.stelexi(id) };
+    const [days, extras, stelexi] = await Promise.all([
+      this.days(drasi, await this.timezone(user)),
+      this.prisma.drasiExtraItem.findMany({ where: { drasiId: id }, orderBy: { createdAt: 'asc' }, include: extraInclude }),
+      this.stelexi(id),
+    ]);
+    return { days, extras: extras.map(toExtraView), stelexi };
   }
 
   /**
@@ -376,7 +382,7 @@ export class DraseisPlanService {
    * Οι νέοι υπεύθυνοι πρέπει να είναι στελέχη στους συμμετέχοντες της δράσης.
    * Όσοι ήταν ήδη (από πριν ισχύσει ο κανόνας) μένουν μέχρι να βγουν.
    */
-  private async assertDrasiStelexi(drasiId: string, added: readonly string[]): Promise<void> {
+  async assertDrasiStelexi(drasiId: string, added: readonly string[]): Promise<void> {
     const ids = [...new Set(added)];
     if (!ids.length) return;
     const found = await this.prisma.drasiParticipant.count({ where: { drasiId, kind: MemberKind.STELEXOS, userId: { in: ids } } });
@@ -763,7 +769,7 @@ export function toScheduleView(
 }
 
 /** Η στήλη `@db.Date`: μεσάνυχτα UTC της ημέρας. */
-function dateColumn(yyyyMmDd: string): Date {
+export function dateColumn(yyyyMmDd: string): Date {
   return new Date(`${yyyyMmDd}T00:00:00Z`);
 }
 function dayKey(d: Date): string {

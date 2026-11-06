@@ -698,6 +698,26 @@ export interface DrasiScheduleItemView {
   delayMin: number;
 }
 
+/**
+ * Προγραμματικό εκτός ωρολογίου («έξτρα»): κάρτα του kanban χωρίς ημέρα και
+ * ώρα. Ίδιο κοινό έγγραφο με τα στοιχεία του ωρολογίου (`drasi:<id>:item:<id>`)·
+ * όταν μπει στο ωρολόγιο κρατά το id του.
+ */
+export interface DrasiExtraItemView {
+  id: string;
+  title: string;
+  kind: DrasiScheduleKind;
+  status: DrasiScheduleStatus;
+  /** Πόσο θα κρατήσει όταν μπει στο ωρολόγιο. */
+  durationMin: number;
+  location: string | null;
+  description: string | null;
+  responsibles: { id: string; firstName: string; lastName: string }[];
+  yliko: { id: string; label: string; qty: number; packed: boolean }[];
+  hasProgramma: boolean;
+  createdAt: string;
+}
+
 /** Μια δηλωμένη καθυστέρηση: από ποιο στοιχείο, πόσα λεπτά (αρνητικά = κερδίσαμε), ποιος. */
 export interface DrasiDelayView {
   id: string;
@@ -897,6 +917,8 @@ export interface DrasiDossier {
   };
   /** Το ωρολόγιο ανά ημέρα, με την ώρα έναρξης της ημέρας. */
   days: { date: string; startTime: string; items: DrasiScheduleItemView[] }[];
+  /** Τα προγραμματικά εκτός ωρολογίου. */
+  extras: DrasiExtraItemView[];
   participants: (DrasiParticipantView & { groups: { kind: DrasiGroupKind; name: string }[] })[];
   groups: DrasiGroupView[];
   /** Μόνο όταν ζητηθεί ρητά (`health=1`) — η ανάγνωση καταγράφεται. */
@@ -915,6 +937,8 @@ export interface DrasiDossier {
 /** Το ωρολόγιο όπως το βλέπει η καρτέλα: ημέρες με ώρα έναρξης και στοιχεία. */
 export interface DrasiScheduleView {
   days: { date: string; startTime: string; overridden: boolean; items: DrasiScheduleItemView[]; delays: DrasiDelayView[] }[];
+  /** Τα προγραμματικά εκτός ωρολογίου, με τη σειρά που προστέθηκαν. */
+  extras: DrasiExtraItemView[];
   /** Τα στελέχη της δράσης (δικά μας, φιλοξενούμενα, εξωτερικά) — οι επιλογές για τους υπεύθυνους. */
   stelexi: DrasiScheduleStelexos[];
 }

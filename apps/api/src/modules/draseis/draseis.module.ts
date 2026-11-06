@@ -35,6 +35,8 @@ import { DraseisMythosController } from './draseis-mythos.controller';
 import { DraseisMythosService } from './draseis-mythos.service';
 import { DraseisPharmacyService } from './draseis-pharmacy.service';
 import { DraseisPlanController } from './draseis-plan.controller';
+import { DraseisExtrasController } from './draseis-extras.controller';
+import { DraseisExtrasService } from './draseis-extras.service';
 import { DraseisPlanService } from './draseis-plan.service';
 import { DraseisReviewController, PublicReviewController } from './draseis-review.controller';
 import { DraseisReviewService } from './draseis-review.service';
@@ -53,6 +55,7 @@ import { DraseisService } from './draseis.service';
     DraseisFormsController,
     PublicFormsController,
     DraseisPlanController,
+    DraseisExtrasController,
     DraseisDiatrofologioController,
     DraseisTrofodosiaController,
     DraseisMythosController,
@@ -75,6 +78,7 @@ import { DraseisService } from './draseis.service';
     DraseisFormsService,
     DraseisPharmacyService,
     DraseisPlanService,
+    DraseisExtrasService,
     DraseisDiatrofologioService,
     DraseisTrofodosiaService,
     DraseisMythosService,

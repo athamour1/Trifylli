@@ -66,7 +66,7 @@
     </section>
 
     <!-- ── Πρόγραμμα: ωρολόγιο ανά ημέρα, με το προγραμματικό κάθε στοιχείου ── -->
-    <section v-if="mode === 'full' && d.days.length" class="ds-section">
+    <section v-if="mode === 'full' && (d.days.length || d.extras.length)" class="ds-section">
       <h2 :style="{ color: accent }">Πρόγραμμα</h2>
       <div v-for="(day, i) in d.days" :key="day.date" class="ds-day">
         <h3>Ημέρα {{ i + 1 }} <small>{{ formatDate(day.date) }}</small></h3>
@@ -75,6 +75,25 @@
           <tbody>
             <tr v-for="it in day.items" :key="it.id">
               <td>{{ formatTime(it.startsAt) }}<span v-if="it.endsAt">–{{ formatTime(it.endsAt) }}</span></td>
+              <td>
+                <b>{{ it.title }}</b><span v-if="it.location" class="ds-muted"> · {{ it.location }}</span>
+                <span class="ds-tag">{{ DRASI_SCHEDULE_KIND_LABEL[it.kind] }}</span>
+                <div v-if="it.description" class="markdown-body ds-md" v-html="md(it.description)" />
+              </td>
+              <td>{{ names(it.responsibles) }}</td>
+              <td>{{ it.yliko.map((y) => `${y.label}${y.qty > 1 ? ` ×${y.qty}` : ''}`).join(', ') }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <!-- Τα προγραμματικά εκτός ωρολογίου (π.χ. «αν βρέξει»), χωρίς ώρα. -->
+      <div v-if="d.extras.length" class="ds-day">
+        <h3>Εκτός ωρολογίου</h3>
+        <table class="ds-table">
+          <thead><tr><th style="width: 11%">Διάρκεια</th><th style="width: 40%">Τι γίνεται</th><th style="width: 22%">Υπεύθυνοι</th><th>Υλικό</th></tr></thead>
+          <tbody>
+            <tr v-for="it in d.extras" :key="it.id">
+              <td>{{ it.durationMin }}΄</td>
               <td>
                 <b>{{ it.title }}</b><span v-if="it.location" class="ds-muted"> · {{ it.location }}</span>
                 <span class="ds-tag">{{ DRASI_SCHEDULE_KIND_LABEL[it.kind] }}</span>

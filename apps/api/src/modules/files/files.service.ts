@@ -138,17 +138,18 @@ export class FilesService {
 
   /**
    * Τα κείμενα Markdown των δράσεων που περιέχουν το `needle`: περιγραφή, μύθος,
-   * lore ρόλων, προγραμματικά, συνταγές. Κάθε νέο πεδίο Markdown δράσης μπαίνει
+   * lore ρόλων, προγραμματικά (και εκτός ωρολογίου), συνταγές. Κάθε νέο πεδίο Markdown δράσης μπαίνει
    * εδώ — αλλιώς η νυχτερινή σάρωση θεωρεί τις εικόνες του ορφανές και τις σβήνει.
    */
   private async drasiMarkdownTexts(drasi: Prisma.DrasiWhereInput, needle: string): Promise<(string | null)[]> {
-    const [draseis, characters, items, meals, variants] = await Promise.all([
+    const [draseis, characters, items, extras, meals, variants] = await Promise.all([
       this.prisma.drasi.findMany({
         where: { ...drasi, OR: [{ description: { contains: needle } }, { mythosText: { contains: needle } }] },
         select: { description: true, mythosText: true },
       }),
       this.prisma.drasiCharacter.findMany({ where: { lore: { contains: needle }, drasi }, select: { lore: true } }),
       this.prisma.drasiScheduleItem.findMany({ where: { description: { contains: needle }, drasi }, select: { description: true } }),
+      this.prisma.drasiExtraItem.findMany({ where: { description: { contains: needle }, drasi }, select: { description: true } }),
       this.prisma.drasiMeal.findMany({ where: { recipe: { contains: needle }, item: { drasi } }, select: { recipe: true } }),
       this.prisma.drasiMealVariant.findMany({ where: { recipe: { contains: needle }, item: { drasi } }, select: { recipe: true } }),
     ]);
@@ -156,6 +157,7 @@ export class FilesService {
       ...draseis.flatMap((d) => [d.description, d.mythosText]),
       ...characters.map((c) => c.lore),
       ...items.map((i) => i.description),
+      ...extras.map((i) => i.description),
       ...meals.map((m) => m.recipe),
       ...variants.map((v) => v.recipe),
     ];
@@ -293,13 +295,15 @@ export class FilesService {
   private async documentsReferencing(topikoId: string, fileId: string): Promise<string[]> {
     const needle = { contains: `trifylli:${fileId}` };
     const drasi = { topikoId };
-    const [draseis, characters, items, meals, variants, sections, blocks, symvoulia] = await Promise.all([
+    const [draseis, characters, items, extras, meals, variants, sections, blocks, symvoulia] = await Promise.all([
       this.prisma.drasi.findMany({
         where: { topikoId, OR: [{ description: needle }, { mythosText: needle }] },
         select: { id: true, description: true, mythosText: true },
       }),
       this.prisma.drasiCharacter.findMany({ where: { lore: needle, drasi }, select: { id: true, drasiId: true } }),
       this.prisma.drasiScheduleItem.findMany({ where: { description: needle, drasi }, select: { id: true, drasiId: true } }),
+      // Τα έξτρα έχουν το ίδιο έγγραφο με τα στοιχεία του ωρολογίου.
+      this.prisma.drasiExtraItem.findMany({ where: { description: needle, drasi }, select: { id: true, drasiId: true } }),
       this.prisma.drasiMeal.findMany({ where: { recipe: needle, item: { drasi } }, select: { itemId: true, item: { select: { drasiId: true } } } }),
       this.prisma.drasiMealVariant.findMany({ where: { recipe: needle, item: { drasi } }, select: { id: true, item: { select: { drasiId: true } } } }),
       this.prisma.syggentrwshSection.findMany({ where: { notes: needle, syggentrwsh: { klados: { topikoId } } }, select: { syggentrwshId: true } }),
@@ -312,7 +316,7 @@ export class FilesService {
         ...(d.mythosText?.includes(needle.contains) ? [collabDocument.drasiMythos(d.id)] : []),
       ]),
       ...characters.map((c) => collabDocument.drasiCharacter(c.drasiId, c.id)),
-      ...items.map((i) => collabDocument.drasiItem(i.drasiId, i.id)),
+      ...[...items, ...extras].map((i) => collabDocument.drasiItem(i.drasiId, i.id)),
       ...meals.map((m) => collabDocument.drasiMeal(m.item.drasiId, m.itemId)),
       ...variants.map((v) => collabDocument.drasiMealVariant(v.item.drasiId, v.id)),
       ...[...sections, ...blocks].map((s) => collabDocument.syggentrwsh(s.syggentrwshId)),

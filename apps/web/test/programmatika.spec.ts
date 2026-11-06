@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { DrasiScheduleItemView, DrasiScheduleView } from '@trifylli/shared';
-import { kanbanColumns, kanbanFocus, kanbanPeers, moveCard } from '../src/lib/programmatika';
+import type { DrasiExtraItemView, DrasiScheduleItemView, DrasiScheduleView } from '@trifylli/shared';
+import { isExtra, kanbanColumns, kanbanFocus, kanbanPeers, moveCard } from '../src/lib/programmatika';
 
 function item(id: string, over: Partial<DrasiScheduleItemView> = {}): DrasiScheduleItemView {
   return {
@@ -24,17 +24,62 @@ function item(id: string, over: Partial<DrasiScheduleItemView> = {}): DrasiSched
   };
 }
 
-const view = (items: DrasiScheduleItemView[]): DrasiScheduleView => ({
+function extra(id: string, over: Partial<DrasiExtraItemView> = {}): DrasiExtraItemView {
+  return {
+    id,
+    title: id,
+    kind: 'DRASTIRIOTITA',
+    status: 'TODO',
+    durationMin: 30,
+    location: null,
+    description: null,
+    responsibles: [],
+    yliko: [],
+    hasProgramma: false,
+    createdAt: '2026-11-01T10:00:00.000Z',
+    ...over,
+  };
+}
+
+const view = (items: DrasiScheduleItemView[], extras: DrasiExtraItemView[] = []): DrasiScheduleView => ({
   days: [{ date: '2026-11-14', startTime: '09:00', overridden: false, items, delays: [] }],
+  extras,
   stelexi: [],
 });
 
 describe('kanban προγραμματικών', () => {
-  it('όλα τα στοιχεία εκτός από τα γεύματα — και η δραστηριότητα με δεκατιανό μένει', () => {
+  it('μόνο τα προγραμματικά: όχι γεύματα, ξεκούραση, υπηρεσίες — και η δραστηριότητα με δεκατιανό μένει', () => {
     const columns = kanbanColumns(
-      view([item('a'), item('gevma', { kind: 'GEVMA' }), item('dekatiano', { snack: 'DEKATIANO' }), item('teleti', { kind: 'TELETI' })]),
+      view([
+        item('a'),
+        item('gevma', { kind: 'GEVMA' }),
+        item('dekatiano', { snack: 'DEKATIANO' }),
+        item('teleti', { kind: 'TELETI' }),
+        item('metakinisi', { kind: 'METAKINISI' }),
+        item('allo', { kind: 'ALLO' }),
+        item('ypnos', { kind: 'XEKOURASI' }),
+        item('lantza', { kind: 'YPIRESIA' }),
+      ]),
     );
-    expect(columns.TODO.map((c) => c.id)).toEqual(['a', 'dekatiano', 'teleti']);
+    expect(columns.TODO.map((c) => c.id)).toEqual(['a', 'dekatiano', 'teleti', 'metakinisi', 'allo']);
+  });
+
+  it('ξεκούραση ή υπηρεσία με ήδη γραμμένο προγραμματικό δεν «χάνεται»', () => {
+    const columns = kanbanColumns(view([item('ypnos', { kind: 'XEKOURASI' }), item('lantza', { kind: 'YPIRESIA', description: 'Κανόνες βάρδιας' })]));
+    expect(columns.TODO.map((c) => c.id)).toEqual(['lantza']);
+  });
+
+  it('τα εκτός ωρολογίου μετά, με τη σειρά που προστέθηκαν — και μετακινούνται όπως όλες', () => {
+    const v = view(
+      [item('a')],
+      [extra('later', { createdAt: '2026-11-02T10:00:00.000Z' }), extra('first'), extra('done', { status: 'DONE' })],
+    );
+    const columns = kanbanColumns(v);
+    expect(columns.TODO.map((c) => c.id)).toEqual(['a', 'first', 'later']);
+    expect(columns.TODO.map(isExtra)).toEqual([false, true, true]);
+    expect(columns.DONE.map((c) => c.id)).toEqual(['done']);
+    expect(moveCard(v, 'first', 'IN_PROGRESS')).toBe(true);
+    expect(kanbanColumns(v).IN_PROGRESS.map((c) => c.id)).toEqual(['first']);
   });
 
   it('κάθε στοιχείο στη στήλη της κατάστασής του, με τη σειρά του ωρολογίου', () => {
@@ -49,6 +94,7 @@ describe('kanban προγραμματικών', () => {
           delays: [],
         },
       ],
+      extras: [],
       stelexi: [],
     });
     expect(columns.DONE.map((c) => c.id)).toEqual(['early', 'late', 'next-day']);
