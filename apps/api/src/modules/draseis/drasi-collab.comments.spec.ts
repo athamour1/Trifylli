@@ -29,7 +29,7 @@ function setup() {
     },
   };
   const collab = { registry: { register: (type: CollabDocumentType) => types.set(type.kind, type) } };
-  new DrasiCollab(prisma as never, {} as never, collab as never).onModuleInit();
+  new DrasiCollab(prisma as never, {} as never, collab as never, {} as never).onModuleInit();
   return (kind: string) => types.get(kind)!;
 }
 

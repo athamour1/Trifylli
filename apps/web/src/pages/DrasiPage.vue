@@ -356,6 +356,14 @@
               <DrasiEntypa :drasi-id="id" :can-write="canEdit('entypa')" :can-health="drasiCanReadHealth(data.access)" />
             </q-tab-panel>
 
+            <q-tab-panel name="exartysi" class="q-pa-none">
+              <DrasiExartysi :drasi-id="id" :title="data.title" :can-write="canEdit('exartysi')" />
+            </q-tab-panel>
+
+            <q-tab-panel name="gramma" class="q-pa-none">
+              <DrasiGramma :drasi-id="id" :title="data.title" :organiser="data.klados?.type ?? null" :can-write="canEdit('gramma')" />
+            </q-tab-panel>
+
             <q-tab-panel name="farmakeio" class="q-pa-none">
               <DrasiFarmakeio :drasi-id="id" :can-write="canEdit('farmakeio')" />
             </q-tab-panel>
@@ -483,6 +491,9 @@ import { useAuthStore } from '../stores/auth';
 const DrasiProgrammatiko = defineAsyncComponent(() => import('../components/drasi/DrasiProgrammatiko.vue'));
 const DrasiGevma = defineAsyncComponent(() => import('../components/drasi/DrasiGevma.vue'));
 const SymvoulioView = defineAsyncComponent(() => import('../components/SymvoulioView.vue'));
+// Τα χαρτιά για τους γονείς: φορτώνονται όταν ανοίξει η ενότητα.
+const DrasiGramma = defineAsyncComponent(() => import('../components/drasi/DrasiGramma.vue'));
+const DrasiExartysi = defineAsyncComponent(() => import('../components/drasi/DrasiExartysi.vue'));
 
 const kladosTheme = useKladosThemeStore();
 
@@ -589,6 +600,8 @@ const sections = computed(() => {
     ...(data.value && drasiHasSkines(data.value) ? [{ name: 'skines', label: 'Σκηνές', icon: 'night_shelter', badge: '', group: 'leitourgia' as const }] : []),
     { name: 'ypiresies', label: 'Υπηρεσίες', icon: 'cleaning_services', badge: '', group: 'leitourgia' },
     { name: 'entypa', label: 'Έντυπα', icon: 'assignment', badge: '', group: 'leitourgia' },
+    // Τι παίρνει μαζί του κάθε παιδί — τη γράφουν η Λειτουργία και ο Αρχηγός.
+    { name: 'exartysi', label: 'Εξάρτυση', icon: 'backpack', badge: '', group: 'leitourgia' },
     { name: 'farmakeio', label: 'Φαρμακείο', icon: 'medical_services', badge: '', group: 'leitourgia' },
     { name: 'yliko', label: 'Υλικό', icon: 'inventory_2', badge: '', group: 'leitourgia' },
     { name: 'tamio', label: 'Ταμείο', icon: 'account_balance_wallet', badge: '', group: 'leitourgia' },
@@ -599,6 +612,7 @@ const sections = computed(() => {
     { name: 'programmatika', label: 'Προγραμματικά', icon: 'view_kanban', badge: '', group: 'programma' },
     { name: 'programma', label: 'Ωρολόγιο', icon: 'schedule', badge: '', group: 'programma' },
     { name: 'mythos', label: 'Μύθος', icon: 'auto_stories', badge: '', group: 'programma' },
+    { name: 'gramma', label: 'Γράμμα γονέων', icon: 'mail', badge: '', group: 'programma' },
     // Το όνομα της υποομάδας του κλάδου: Πεντάδες / Φωλιές / Ενωμοτίες — με πολλούς κλάδους, όλες.
     // Οι δράσεις του Τοπικού δεν έχουν τέτοιες ομάδες (μόνο σκηνές, αν έχουν).
     ...(data.value?.klados && data.value.kladoi.length

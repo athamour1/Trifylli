@@ -41,7 +41,7 @@ function setup(options: {
     },
   };
   const collab = { registry: { register: (type: CollabDocumentType) => types.set(type.kind, type) } };
-  new DrasiCollab(prisma as never, access as never, collab as never).onModuleInit();
+  new DrasiCollab(prisma as never, access as never, collab as never, {} as never).onModuleInit();
   return (kind: string, ids: string[]) => types.get(kind)!.access(ME, ids);
 }
 
@@ -76,6 +76,22 @@ describe('κοινά κείμενα της δράσης — ποιος γράφ�
     expect(await setup({ who: { staff: true }, character: { player: 'u-me' } })('drasi:character', [DRASI, ITEM])).toBe('write');
     expect(await setup({ who: { staff: true }, character: { player: 'u-other' } })('drasi:character', [DRASI, ITEM])).toBe('read');
     expect(await setup({ who: { full: true }, character: null })('drasi:character', [DRASI, ITEM])).toBeNull();
+  });
+
+  it('γράμμα προς τους γονείς: Αρχηγός, Πρόγραμμα, Λειτουργία· το βλέπει κάθε στέλεχος', async () => {
+    for (const role of ['ARXIGOS', 'PROGRAMMA', 'LEITOURGIA'] as const) {
+      expect(await setup({ who: { staff: true, roles: [role] } })('drasi:gramma', [DRASI])).toBe('write');
+    }
+    expect(await setup({ who: { staff: true, roles: ['TAMIAS'] } })('drasi:gramma', [DRASI])).toBe('read');
+    expect(await setup({ who: null })('drasi:gramma', [DRASI])).toBeNull();
+  });
+
+  it('εξάρτυση: Αρχηγός και Λειτουργία· το Πρόγραμμα μόνο τη βλέπει', async () => {
+    for (const role of ['ARXIGOS', 'LEITOURGIA'] as const) {
+      expect(await setup({ who: { staff: true, roles: [role] } })('drasi:exartysi', [DRASI])).toBe('write');
+    }
+    expect(await setup({ who: { staff: true, roles: ['PROGRAMMA'] } })('drasi:exartysi', [DRASI])).toBe('read');
+    expect(await setup({ who: { full: true }, status: 'KLEISTI' })('drasi:exartysi', [DRASI])).toBe('read');
   });
 
   it('δωμάτιο της δράσης: μπαίνει όποιος βλέπει τη δράση, και κανείς δεν γράφει', async () => {
@@ -117,7 +133,7 @@ describe('στοιχείο και γεύμα — τι γράφεται στη β
     const types = new Map<string, CollabDocumentType>();
     const prisma = { $transaction: async (fn: (t: typeof tx) => Promise<void>) => fn(tx) };
     const collab = { registry: { register: (type: CollabDocumentType) => types.set(type.kind, type) } };
-    new DrasiCollab(prisma as never, {} as never, collab as never).onModuleInit();
+    new DrasiCollab(prisma as never, {} as never, collab as never, {} as never).onModuleInit();
     return { calls, type: (kind: string) => types.get(kind)! };
   }
 

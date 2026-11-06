@@ -22,11 +22,15 @@ export type DrasiPerm =
   /** Η λίστα αγορών της ημέρας (ενότητα «Τροφοδοσία»): ποιος βλέπει, ποιος προσθέτει. */
   | 'trofodosia'
   | 'mythos'
+  /** Το γράμμα προς τους γονείς (Πρόγραμμα) — αρχηγός, πρόγραμμα, λειτουργία. */
+  | 'gramma'
   | 'participants'
   | 'omades'
   /** Υπηρεσίες: υπεύθυνοι, χρονοδιάγραμμα, ρυθμίσεις. */
   | 'ypiresies'
   | 'entypa'
+  /** Η εξάρτυση — τι παίρνει μαζί του το παιδί (Λειτουργία) — αρχηγός, λειτουργία. */
+  | 'exartysi'
   | 'farmakeio'
   | 'yliko'
   | 'tamio'
@@ -45,8 +49,9 @@ export type DrasiPerm =
   | 'purchase';
 
 export const DRASI_PERMS: readonly DrasiPerm[] = [
-  'episkopisi', 'programma', 'diatrofologio', 'trofodosia', 'mythos', 'participants', 'omades', 'ypiresies', 'entypa', 'farmakeio',
-  'yliko', 'tamio', 'symvoulia', 'axiologisi', 'ektyposi', 'arxigeio', 'rythmiseis', 'payments', 'handover', 'close', 'purchase',
+  'episkopisi', 'programma', 'diatrofologio', 'trofodosia', 'mythos', 'gramma', 'participants', 'omades', 'ypiresies', 'entypa',
+  'exartysi', 'farmakeio', 'yliko', 'tamio', 'symvoulia', 'axiologisi', 'ektyposi', 'arxigeio', 'rythmiseis', 'payments', 'handover',
+  'close', 'purchase',
 ];
 
 export interface DrasiAccess {
@@ -58,8 +63,8 @@ export interface DrasiAccess {
 
 /** Ό,τι βλέπει κάθε στέλεχος της δράσης, χωρίς ρόλο. */
 const STAFF_VIEW: readonly DrasiPerm[] = [
-  'episkopisi', 'programma', 'diatrofologio', 'trofodosia', 'mythos', 'participants', 'omades', 'ypiresies', 'entypa', 'symvoulia',
-  'axiologisi', 'ektyposi', 'arxigeio',
+  'episkopisi', 'programma', 'diatrofologio', 'trofodosia', 'mythos', 'gramma', 'participants', 'omades', 'ypiresies', 'entypa',
+  'exartysi', 'symvoulia', 'axiologisi', 'ektyposi', 'arxigeio',
 ];
 
 /** Τι προσθέτει κάθε ρόλος (πέρα από τα του στελέχους). */
@@ -71,10 +76,14 @@ const ROLE_ACCESS: Partial<Record<DrasiRoleKind, { view: readonly DrasiPerm[]; e
   },
   // Στη λίστα αγορών της Τροφοδοσίας προσθέτουν όσοι ξέρουν τι θα χρειαστεί
   // (λειτουργία, πρόγραμμα, αρχηγός, μαγείρισσα)· «αγοράστηκε» λέει όποιος αγοράζει.
-  PROGRAMMA: { view: [], edit: ['mythos', 'programma', 'trofodosia'] },
+  PROGRAMMA: { view: [], edit: ['mythos', 'programma', 'trofodosia', 'gramma'] },
   // Η λειτουργία τρέχει και τις υπηρεσίες (ποια ομάδα έχει τι, πότε) — και γράφει
-  // το διατροφολόγιο μαζί με τη μαγείρισσα και την τροφοδοσία.
-  LEITOURGIA: { view: ['yliko', 'tamio'], edit: ['omades', 'ypiresies', 'entypa', 'yliko', 'axiologisi', 'diatrofologio', 'trofodosia'] },
+  // το διατροφολόγιο μαζί με τη μαγείρισσα και την τροφοδοσία. Γράφει την
+  // εξάρτυση και, μαζί με το πρόγραμμα, το γράμμα προς τους γονείς.
+  LEITOURGIA: {
+    view: ['yliko', 'tamio'],
+    edit: ['omades', 'ypiresies', 'entypa', 'yliko', 'axiologisi', 'diatrofologio', 'trofodosia', 'exartysi', 'gramma'],
+  },
   // Μόνο ο ταμίας καταχωρεί έσοδα/έξοδα, πληρωμές και παραδόσεις.
   TAMIAS: { view: ['tamio'], edit: ['tamio', 'payments', 'handover'] },
   FARMAKEIO: { view: ['farmakeio'], edit: ['farmakeio', 'entypa'] },

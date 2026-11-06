@@ -94,5 +94,10 @@ const fallbackView = computed(() => ({
 watch(saveState, (value) => emit('state', value), { immediate: true });
 watch(peers, (value) => emit('peers', value), { immediate: true });
 
-defineExpose({ whenSaved });
+/** Το κείμενο όπως είναι τώρα — από το έγγραφο, ή από το `GET` όσο δεν έχει ανοίξει (π.χ. για εκτύπωση). */
+function text(): string {
+  return ready.value ? doc.value.getText(props.field).toString() : (props.fallback ?? '');
+}
+
+defineExpose({ whenSaved, text });
 </script>

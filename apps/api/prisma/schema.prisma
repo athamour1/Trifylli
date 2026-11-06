@@ -580,6 +580,12 @@ model Drasi {
   mythosTitle          String?
   /// Η ιστορία του μύθου — Markdown.
   mythosText           String?
+  /// Το γράμμα προς τους γονείς — Markdown (κοινό έγγραφο `drasi:<id>:gramma`).
+  /// `null` = δεν άνοιξε ακόμα· τότε φαίνεται το πρότυπο (`defaultParentLetter`).
+  parentLetter         String?
+  /// Η εξάρτυση (`DrasiExartysiView`) — η προβολή του κοινού εγγράφου
+  /// `drasi:<id>:exartysi`. `null` = δεν άνοιξε ακόμα· τότε το πρότυπο.
+  exartysi             Json?
   /// Προεπιλογή `ENERGI` ώστε seed και απλές κλήσεις API να φτιάχνουν «κανονική»
   /// δράση· το wizard ζητά ρητά `PROSXEDIO` μέχρι να ολοκληρωθεί.
   status               DrasiStatus       @default(ENERGI)

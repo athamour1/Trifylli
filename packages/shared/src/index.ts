@@ -7,3 +7,4 @@ export * from './leader-roles';
 export * from './drasi-access';
 export * from './privacy';
 export * from './collab';
+export * from './drasi-gonis';

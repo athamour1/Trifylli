@@ -27,6 +27,15 @@ import {
 import { projectedText } from '../collab/collab-fields';
 import { CollabService } from '../collab/collab.service';
 import { DrasiAccessService } from './drasi-access.service';
+import { DraseisGonisService } from './draseis-gonis.service';
+import {
+  exartysiOrDefault,
+  presentExartysi,
+  readExartysi,
+  readExartysiRows,
+  restoreExartysi,
+  seedExartysi,
+} from './drasi-exartysi';
 import { isMeal } from './diatrofologio';
 import {
   normalizeItem,
@@ -56,6 +65,7 @@ export class DrasiCollab implements OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly access: DrasiAccessService,
     private readonly collab: CollabService,
+    private readonly gonis: DraseisGonisService,
   ) {}
 
   onModuleInit(): void {
@@ -233,6 +243,31 @@ export class DrasiCollab implements OnModuleInit {
         people: ([drasiId]) => this.people(drasiId!),
       },
       {
+        // Το γράμμα προς τους γονείς: ξεκινά από το πρότυπο με τα στοιχεία της δράσης.
+        kind: 'drasi:gramma',
+        arity: 1,
+        fields: COLLAB_FIELDS.drasiGramma,
+        labels: { text: 'Γράμμα προς τους γονείς' },
+        access: (user, [drasiId]) => this.scope(user, drasiId!, { view: 'gramma', edit: 'gramma' }),
+        load: async ([drasiId]) => {
+          const drasi = await prisma.drasi.findUnique({ where: { id: drasiId }, select: { parentLetter: true } });
+          if (!drasi) return null;
+          return { text: drasi.parentLetter ?? (await this.gonis.letterTemplate(drasiId!)) ?? '' };
+        },
+        save: async ([drasiId], values) => {
+          // Κενό ⇒ κενό γράμμα (όχι `null`, που θα ξανάφερνε το πρότυπο).
+          await prisma.drasi.updateMany({ where: { id: drasiId }, data: { parentLetter: values.text?.trim() ?? '' } });
+        },
+        about: ([drasiId]) =>
+          this.about(drasiId!, {
+            where: (drasi) => `στο γράμμα προς τους γονείς — δράση ${drasi}`,
+            link: 'gramma',
+            kind: 'gramma',
+            watchers: () => this.holders(drasiId!, [DrasiRoleKind.ARXIGOS, DrasiRoleKind.PROGRAMMA, DrasiRoleKind.LEITOURGIA]),
+          }),
+        people: ([drasiId]) => this.people(drasiId!),
+      },
+      {
         kind: 'drasi:character',
         arity: 2,
         fields: COLLAB_FIELDS.drasiCharacter,
@@ -270,7 +305,40 @@ export class DrasiCollab implements OnModuleInit {
         people: ([drasiId]) => this.people(drasiId!),
       },
     ];
-    return [...specs.map(textDocument), this.itemType(), this.mealType(), this.mealVariantType(), this.roomType()];
+    return [...specs.map(textDocument), this.itemType(), this.mealType(), this.mealVariantType(), this.exartysiType(), this.roomType()];
+  }
+
+  /**
+   * Η εξάρτυση (`EXARTYSI_KEYS`): ενότητες, είδη, σημειώσεις. Ξεκινά από το
+   * πρότυπο· τη γράφουν η Λειτουργία και ο Αρχηγός.
+   */
+  private exartysiType(): CollabDocumentType {
+    const prisma = this.prisma;
+    return {
+      kind: 'drasi:exartysi',
+      arity: 1,
+      access: (user, [drasiId]) => this.scope(user, drasiId!, { view: 'exartysi', edit: 'exartysi' }),
+      seed: async (doc, [drasiId]) => {
+        const drasi = await prisma.drasi.findUnique({ where: { id: drasiId }, select: { exartysi: true } });
+        if (!drasi) return false;
+        seedExartysi(doc, exartysiOrDefault(drasi.exartysi));
+        return true;
+      },
+      project: async (doc, [drasiId]) => {
+        await prisma.drasi.updateMany({ where: { id: drasiId }, data: { exartysi: readExartysi(doc) as object } });
+      },
+      snapshot: (doc) => ({ ...readExartysiRows(doc) }),
+      present: presentExartysi,
+      restore: restoreExartysi,
+      about: ([drasiId]) =>
+        this.about(drasiId!, {
+          where: (drasi) => `στην εξάρτυση — δράση ${drasi}`,
+          link: 'exartysi',
+          kind: 'exartysi',
+          watchers: () => this.holders(drasiId!, [DrasiRoleKind.ARXIGOS, DrasiRoleKind.LEITOURGIA]),
+        }),
+      people: ([drasiId]) => this.people(drasiId!),
+    };
   }
 
   /**

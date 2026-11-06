@@ -79,6 +79,10 @@ export const collabDocument = {
   drasiSettings: (drasiId: string) => `drasi:${drasiId}:settings`,
   /** Δράση: η ιστορία του μύθου. */
   drasiMythos: (drasiId: string) => `drasi:${drasiId}:mythos`,
+  /** Δράση: το γράμμα προς τους γονείς. */
+  drasiGramma: (drasiId: string) => `drasi:${drasiId}:gramma`,
+  /** Δράση: η εξάρτυση (βλ. `EXARTYSI_KEYS`). */
+  drasiExartysi: (drasiId: string) => `drasi:${drasiId}:exartysi`,
   /** Ρόλος του μύθου: το lore. */
   drasiCharacter: (drasiId: string, characterId: string) => `drasi:${drasiId}:character:${characterId}`,
   /** Στοιχείο του ωρολογίου: το προγραμματικό, ο χώρος και το υλικό (βλ. `ITEM_DOC`). */
@@ -136,6 +140,7 @@ export const COLLAB_FIELDS = {
   symvoulio: ['agenda', 'minutes'],
   drasiSettings: ['description'],
   drasiMythos: ['text'],
+  drasiGramma: ['text'],
   drasiCharacter: ['lore'],
   drasiItem: ['description', 'location', 'yliko'],
   drasiMeal: ['recipe', 'menu', 'ingredients'],
