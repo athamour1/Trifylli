@@ -6,6 +6,7 @@
 <script setup lang="ts">
 import { onMounted } from 'vue';
 import { useRoute } from 'vue-router';
+import { clearLocalSession } from '../lib/oidc';
 import { OIDC_AUTHORITY } from '../lib/runtime-config';
 
 /**
@@ -17,11 +18,11 @@ import { OIDC_AUTHORITY } from '../lib/runtime-config';
  * μας αποσυνδέσει. Αλλιώς οποιοδήποτε site με ένα iframe σε αυτή τη διαδρομή θα
  * πετούσε έξω όλους τους χρήστες (βλ. και public/slo.js, που τρέχει πρώτο).
  *
- * Το iframe έχει δικό του, άδειο `sessionStorage` — δεν φτάνει τη συνεδρία OIDC
- * της κύριας καρτέλας (που ζει στο sessionStorage εκείνης). Γι' αυτό σηκώνουμε
- * ένα σήμα στο **localStorage** (κοινό σε όλες τις καρτέλες ίδιας προέλευσης):
- * η κύρια καρτέλα το ακούει με `storage` event και αποσυνδέεται άμεσα
- * (βλ. `stores/session.ts`).
+ * Η συνεδρία OIDC ζει στο `localStorage` (βλ. `lib/oidc.ts`), κοινό με το
+ * iframe: τη σβήνουμε από εδώ — με ανάκληση του refresh token — ώστε να μη
+ * μείνει ζωντανή ακόμα κι αν δεν είναι ανοιχτή καμία καρτέλα. Και σηκώνουμε
+ * ένα σήμα: οι ανοιχτές καρτέλες το ακούν με `storage` event, σβήνουν και τα
+ * δεδομένα τους και αποσυνδέονται άμεσα (βλ. `stores/session.ts`).
  */
 const route = useRoute();
 
@@ -36,5 +37,6 @@ onMounted(() => {
     // Ιδιωτική περιήγηση: δεν μπορούμε να στείλουμε σήμα· η κύρια καρτέλα θα
     // αποσυνδεθεί στην επόμενη αποτυχημένη σιωπηλή ανανέωση.
   }
+  void clearLocalSession().catch(() => undefined);
 });
 </script>

@@ -7,6 +7,7 @@ import { setReportingUser } from '../lib/reporting-user';
 import { disablePush } from '../lib/push';
 import { useOfflineStore } from './offline';
 import {
+  adoptRenewedUser,
   clearLocalSession,
   clearStaleAuthState,
   currentUser,
@@ -92,22 +93,8 @@ export const useSessionStore = defineStore('session', {
         setAccessToken(null);
       });
 
-      // Αν η σιωπηλή ανανέωση αποτύχει, η συνεδρία τελείωσε πραγματικά — δεν
-      // έχει νόημα να κρατάμε ληγμένο token και να τρώμε 401 σε κάθε αίτημα.
-      // Δεν ανακατευθύνουμε αμέσως: μπορεί να γράφει παρουσιολόγιο. Το λέμε, με
-      // κουμπί· το επόμενο αίτημα προς το API θα τον στείλει ούτως ή άλλως.
       manager.events.addSilentRenewError((error) => {
-        this.error = error.message;
-        this.expired = true;
-        void this.signOutLocally();
-        Notify.create({
-          type: 'warning',
-          icon: 'lock_clock',
-          message: 'Η συνεδρία σου έληξε.',
-          caption: 'Συνδέσου ξανά για να συνεχίσεις από εδώ.',
-          timeout: 0,
-          actions: [{ label: 'Σύνδεση', color: 'white', handler: () => goToExpiredPage() }],
-        });
+        void this.onRenewFailed(error);
       });
 
       // 401 από το API ενώ είχαμε token: μία σιωπηλή ανανέωση, αλλιώς σύνδεση.
@@ -133,8 +120,8 @@ export const useSessionStore = defineStore('session', {
           this.user = user;
           setAccessToken(user.access_token);
         } else if (user?.expired) {
-          // Ληγμένο αλλά με refresh token: μια σιωπηλή ανανέωση γλιτώνει
-          // ολόκληρη ανακατεύθυνση στο Authentik.
+          // Ληγμένο (η εφαρμογή ξανανοίγει μετά από ώρες ή μέρες): το refresh
+          // token φέρνει νέο access token — και νέο μήνα ζωής — χωρίς καμία οθόνη.
           const renewed = await manager.signinSilent();
           if (renewed) {
             this.user = renewed;
@@ -150,6 +137,32 @@ export const useSessionStore = defineStore('session', {
       } finally {
         this.ready = true;
       }
+    },
+
+    /**
+     * Η σιωπηλή ανανέωση απέτυχε. Πρώτα: μήπως την έκανε άλλη καρτέλα (κοινό
+     * refresh token που μόλις αντικαταστάθηκε); Αλλιώς η συνεδρία τελείωσε
+     * πραγματικά — δεν έχει νόημα να κρατάμε ληγμένο token και να τρώμε 401 σε
+     * κάθε αίτημα. Δεν ανακατευθύνουμε αμέσως: μπορεί να γράφει παρουσιολόγιο.
+     * Το λέμε, με κουμπί· το επόμενο αίτημα προς το API θα τον στείλει ούτως ή άλλως.
+     */
+    async onRenewFailed(error: Error): Promise<void> {
+      const adopted = await adoptRenewedUser();
+      if (adopted) {
+        this.setUser(adopted);
+        return;
+      }
+      this.error = error.message;
+      this.expired = true;
+      void this.signOutLocally();
+      Notify.create({
+        type: 'warning',
+        icon: 'lock_clock',
+        message: 'Η συνεδρία σου έληξε.',
+        caption: 'Συνδέσου ξανά για να συνεχίσεις από εδώ.',
+        timeout: 0,
+        actions: [{ label: 'Σύνδεση', color: 'white', handler: () => goToExpiredPage() }],
+      });
     },
 
     async signIn(returnTo?: string): Promise<void> {
@@ -171,7 +184,12 @@ export const useSessionStore = defineStore('session', {
           return renewed.access_token;
         }
       } catch {
-        // Η συνεδρία του Authentik δεν υπάρχει πια — πέφτουμε στη σύνδεση.
+        // Ίσως άλλη καρτέλα μόλις αντικατέστησε το refresh token.
+        const adopted = await adoptRenewedUser();
+        if (adopted) {
+          this.setUser(adopted);
+          return adopted.access_token;
+        }
       }
       this.expired = true;
       await this.signOutLocally();

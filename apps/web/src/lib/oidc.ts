@@ -7,10 +7,12 @@ import { Log, User, UserManager, WebStorageStateStore } from 'oidc-client-ts';
  * και ό,τι ενσωματωθεί στο bundle είναι δημόσιο ούτως ή άλλως. Το PKCE είναι
  * αυτό που κάνει τη ροή ασφαλή εδώ.
  *
- * Τα tokens ζουν στο `sessionStorage` και όχι στο `localStorage`: κλείνοντας
- * την καρτέλα η συνεδρία τελειώνει, που είναι το σωστό για κοινόχρηστο
- * υπολογιστή Εστίας. Όσο η καρτέλα είναι ανοιχτή, η ανανέωση γίνεται σιωπηλά
- * μέσω κρυφού iframe προς το Authentik.
+ * Η σύνδεση κρατά **ένα μήνα από την τελευταία χρήση**: τα tokens ζουν στο
+ * `localStorage` (επιβιώνουν το κλείσιμο της καρτέλας και της PWA) μαζί με ένα
+ * refresh token (`offline_access`). Κάθε ανανέωση — όσο η εφαρμογή είναι
+ * ανοιχτή ή μόλις ξανανοίξει — δίνει νέο refresh token με νέο μήνα (βλ.
+ * `infra/authentik/trifylli-oidc.yaml`). Σε κοινόχρηστο υπολογιστή Εστίας το
+ * «Αποσύνδεση» σβήνει τα πάντα και ανακαλεί το refresh token.
  */
 
 import { OIDC_AUTHORITY, OIDC_CLIENT_ID, OIDC_LOGOUT_FLOW } from './runtime-config';
@@ -70,21 +72,17 @@ export function userManager(): UserManager {
     // Το `email` δεν είναι προαιρετικό: είναι το κλειδί που δένει την ταυτότητα
     // του Authentik με τον λογαριασμό της εφαρμογής.
     //
-    // **Χωρίς `offline_access` σκοπίμως.** Το OIDC ορίζει ότι το offline_access
-    // απαιτεί ρητή συγκατάθεση, και το Authentik το επιβάλλει προσθέτοντας
-    // consent stage — δηλαδή μια οθόνη «Continue» στη μέση κάθε σύνδεσης. Η
-    // ανανέωση γίνεται αντ' αυτού σιωπηλά με κρυφό iframe (`prompt=none`) πάνω
-    // στη συνεδρία του Authentik, οπότε ο χρήστης δεν βλέπει ποτέ τίποτα.
-    scope: 'openid profile email',
-    userStore: new WebStorageStateStore({ store: window.sessionStorage }),
-    // Το **state** (και το PKCE verifier) ζει στο `localStorage`, σε αντίθεση με
-    // τα tokens: η επιστροφή από το Authentik δεν προσγειώνεται πάντα στην
-    // καρτέλα που ξεκίνησε τη σύνδεση. Ο σύνδεσμος «ορισμός κωδικού» ανοίγει
-    // από το email, δηλαδή σε ΑΛΛΗ καρτέλα, και το `sessionStorage` είναι ανά
-    // καρτέλα — εκεί το callback έσκαγε με «No matching state found in storage».
-    // Η εγγραφή είναι βραχύβια (σβήνεται μόλις καταναλωθεί, και το
-    // `clearStaleState` καθαρίζει ό,τι έμεινε), και χωρίς τον κωδικό
-    // εξουσιοδότησης δεν αξίζει τίποτα· τα tokens μένουν στο `sessionStorage`.
+    // Το `offline_access` φέρνει το refresh token: η ανανέωση γίνεται με απλό
+    // αίτημα στο token endpoint, χωρίς iframe και χωρίς να χρειάζεται ζωντανό
+    // cookie του Authentik. Δεν προσθέτει οθόνη συγκατάθεσης — η ροή
+    // εξουσιοδότησης είναι κενή και δεν στέλνουμε `prompt=consent`.
+    scope: 'openid profile email offline_access',
+    userStore: new WebStorageStateStore({ store: window.localStorage }),
+    // Το **state** (και το PKCE verifier) ζει κι αυτό στο `localStorage`: η
+    // επιστροφή από το Authentik δεν προσγειώνεται πάντα στην καρτέλα που
+    // ξεκίνησε τη σύνδεση (ο σύνδεσμος «ορισμός κωδικού» ανοίγει από το email,
+    // δηλαδή σε ΑΛΛΗ καρτέλα). Η εγγραφή είναι βραχύβια (σβήνεται μόλις
+    // καταναλωθεί, και το `clearStaleState` καθαρίζει ό,τι έμεινε).
     stateStore: new WebStorageStateStore({ store: window.localStorage }),
     automaticSilentRenew: true,
     // Ανανέωση 60΄΄ πριν τη λήξη, ώστε να μη σκάσει αίτημα στο ενδιάμεσο.
@@ -163,13 +161,49 @@ const LOGOUT_FLOW = OIDC_LOGOUT_FLOW;
  */
 export async function logout(): Promise<void> {
   // Πρώτα τα τοπικά: αν η ανακατεύθυνση αποτύχει, δεν μένει ζωντανό token.
-  await userManager().removeUser();
+  await clearLocalSession();
 
   const authentik = new URL(OIDC_AUTHORITY).origin;
   window.location.assign(`${authentik}/if/flow/${LOGOUT_FLOW}/`);
 }
 
+/**
+ * Σβήνει τη συνεδρία της συσκευής. Το refresh token ανακαλείται πρώτα στο
+ * Authentik: ζει έναν μήνα και επιβιώνει ακόμα και τον τερματισμό της συνεδρίας
+ * εκεί, οπότε ένα αντίγραφό του δεν πρέπει να μένει χρήσιμο.
+ */
 export async function clearLocalSession(): Promise<void> {
   if (!oidcEnabled) return;
-  await userManager().removeUser();
+  const manager = userManager();
+  try {
+    await manager.revokeTokens(['refresh_token']);
+  } catch {
+    // Εκτός δικτύου ή ήδη άκυρο: το τοπικό σβήσιμο γίνεται ούτως ή άλλως.
+  }
+  await manager.removeUser();
+}
+
+/**
+ * Η ανανέωση απέτυχε — μήπως την έκανε ήδη άλλη καρτέλα; Οι καρτέλες μοιράζονται
+ * το ίδιο refresh token και κάθε ανανέωση το αντικαθιστά: όποια φτάσει δεύτερη
+ * κρατά το παλιό, που πια δεν ισχύει. Τότε αρκεί να διαβάσει το νέο.
+ */
+export async function adoptRenewedUser(): Promise<User | null> {
+  if (!oidcEnabled) return null;
+  const manager = userManager();
+  // Η άλλη καρτέλα χρειάζεται μια στιγμή για να γράψει το νέο της token.
+  await new Promise((resolve) => setTimeout(resolve, 1500));
+  const user = await manager.getUser();
+  if (!user) return null;
+  if (!user.expired && (user.expires_in ?? 0) > 60) {
+    await manager.events.load(user);
+    return user;
+  }
+  // Ίσως υπάρχει νεότερο refresh token, αλλά το access token θέλει ανανέωση — μία προσπάθεια.
+  if (!user.refresh_token) return null;
+  try {
+    return await manager.signinSilent();
+  } catch {
+    return null;
+  }
 }

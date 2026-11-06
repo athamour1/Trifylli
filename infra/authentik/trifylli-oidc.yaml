@@ -64,8 +64,8 @@ entries:
   #
   # Η ροή είναι σκόπιμα **κενή**: καμία συγκατάθεση, καμία ενδιάμεση οθόνη. Ο
   # χρήστης που έχει ήδη συνεδρία στο Authentik επιστρέφει στην εφαρμογή χωρίς
-  # να δει τίποτα. Αυτό δουλεύει μόνο επειδή δεν ζητάμε `offline_access` — βλ.
-  # `apps/web/src/lib/oidc.ts`.
+  # να δει τίποτα. Το `offline_access` δεν προσθέτει συγκατάθεση: το Authentik
+  # τη βάζει μόνο με `prompt=consent` ή αν τη ζητά η ίδια η ροή.
   - model: authentik_flows.flow
     id: trifylli-authorization-flow
     identifiers:
@@ -145,8 +145,7 @@ entries:
       # Το Authentik 2026.x απαιτεί ρητή δήλωση των επιτρεπτών grant types (νέο
       # πεδίο· κενή λίστα = κανένα, οπότε το authorize απορρίπτεται ως
       # «malformed»). Η PWA χρησιμοποιεί Authorization Code + PKCE· το
-      # refresh_token μπαίνει ως standard default (δεν εκδίδεται χωρίς
-      # offline_access, αλλά δεν βλάπτει).
+      # refresh_token κρατά τη σύνδεση ζωντανή (βλ. `refresh_token_validity`).
       grant_types:
         - authorization_code
         - refresh_token
@@ -163,6 +162,8 @@ entries:
         - !Find [authentik_providers_oauth2.scopemapping, [managed, 'goauthentik.io/providers/oauth2/scope-openid']]
         - !Find [authentik_providers_oauth2.scopemapping, [managed, 'goauthentik.io/providers/oauth2/scope-profile']]
         - !Find [authentik_providers_oauth2.scopemapping, [managed, 'goauthentik.io/providers/oauth2/scope-email']]
+        # Χωρίς αυτό το Authentik πετά σιωπηλά το `offline_access` και δεν δίνει refresh token.
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, 'goauthentik.io/providers/oauth2/scope-offline_access']]
         - !KeyOf trifylli-account-claim
 
       redirect_uris:
@@ -183,9 +184,15 @@ entries:
           url: http://localhost:9000/
 
       # Ούτε πολύ σύντομο (κάθε λήξη είναι ένα round trip στο Authentik) ούτε
-      # πολύ μακρύ: σε κοινόχρηστο υπολογιστή Εστίας δεν θέλουμε token που ζει
-      # ώρες μετά την αποχώρηση του χρήστη.
+      # πολύ μακρύ: ένα access token που διέρρευσε ζει το πολύ μισή ώρα.
       access_token_validity: minutes=30
+
+      # Η σύνδεση κρατά **ένα μήνα από την τελευταία χρήση**: κάθε ανανέωση
+      # (κάθε ~30΄ όσο η εφαρμογή είναι ανοιχτή, ή μόλις ανοίξει) δίνει νέο
+      # refresh token με νέο μήνα και ακυρώνει το παλιό (`refresh_token_threshold`
+      # = 0, η προεπιλογή: ανανεώνεται πάντα). Δεν εξαρτάται από το cookie του
+      # Authentik. Το logout το ανακαλεί (βλ. `apps/web/src/lib/oidc.ts`).
+      refresh_token_validity: days=30
 
       # ── Single Logout (native front-channel — Authentik 2025.10+) ──
       #

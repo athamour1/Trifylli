@@ -37,6 +37,17 @@ entries:
       password_stage: !Find [authentik_stages_password.passwordstage, [name, default-authentication-password]]
       recovery_flow: !Find [authentik_flows.flow, [slug, trifylli-recovery]]
 
+  # Η συνεδρία του Authentik ζει 30 ημέρες αντί «μέχρι να κλείσει ο browser»
+  # (προεπιλογή `seconds=0`): χωρίς αυτό, κάθε κλείσιμο του browser — στο κινητό
+  # σχεδόν κάθε φορά — ζητούσε ξανά κωδικό. Η ίδια η εφαρμογή μένει συνδεδεμένη
+  # με refresh token (βλ. `trifylli-oidc.yaml`)· αυτή εδώ καλύπτει τις υπόλοιπες
+  # εφαρμογές του SSO (OuchTracker, GlitchTip) και τη νέα σύνδεση μετά από logout.
+  - model: authentik_stages_user_login.userloginstage
+    identifiers:
+      name: default-authentication-login
+    attrs:
+      session_duration: days=30
+
   - model: authentik_flows.flow
     identifiers:
       slug: default-authentication-flow
