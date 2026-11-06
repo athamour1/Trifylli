@@ -91,6 +91,9 @@ echo ""
 # το prod το τραβά με ένα `pull`.
 info "Typecheck & tests..."
 pnpm --filter @trifylli/shared build >/dev/null || error "Shared build failed — no release."
+# Ο Prisma client ζει στο node_modules: μετά από pull/merge με νέο schema μένει
+# παλιός και το typecheck σκάει σε πεδία που υπάρχουν.
+pnpm --filter @trifylli/api exec prisma generate >/dev/null || error "Prisma generate failed — no release."
 pnpm typecheck || error "Typecheck failed — no release."
 pnpm test || error "Tests failed — no release."
 ok "Typecheck & tests passed"
