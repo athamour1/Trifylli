@@ -3,6 +3,7 @@ import {
   Body,
   ConflictException,
   Controller,
+  Delete,
   Get,
   Headers,
   HttpCode,
@@ -28,10 +29,12 @@ import type { RequestUser } from '../../common/auth/types';
 import { AppConfigToken } from '../../common/config/config.module';
 import type { AppConfig } from '../../common/config/configuration';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { EseoAuth } from './eseo.auth';
 import { EseoClient } from './eseo.client';
 import { EseoSyncService } from './eseo-sync.service';
 import { OuchtrackerClient } from './ouchtracker.client';
 import { SetEseoCodeDto } from './dto/eseo-code.dto';
+import { EseoLoginDto } from './dto/eseo-login.dto';
 
 @ApiTags('Ενσωματώσεις')
 @ApiBearerAuth()
@@ -44,6 +47,7 @@ export class IntegrationsController {
     private readonly prisma: PrismaService,
     private readonly eseoSync: EseoSyncService,
     private readonly eseo: EseoClient,
+    private readonly eseoAuth: EseoAuth,
     private readonly ouchtracker: OuchtrackerClient,
     @Inject(AppConfigToken) private readonly config: AppConfig,
     private readonly audit: AuditService,
@@ -65,6 +69,7 @@ export class IntegrationsController {
     return {
       eseo: {
         configured: this.eseo.configured,
+        account: this.eseoAuth.status(),
         topikoCode: topiko?.eseoCode ?? null,
         cron: this.config.ESEO_SYNC_CRON,
         enabled: this.config.SYNC_ENABLED,
@@ -94,6 +99,32 @@ export class IntegrationsController {
     }
     await this.audit.record(user, 'topiko.eseo_code', 'topiko', user.topikoId, { code });
     return { topikoCode: code };
+  }
+
+  /**
+   * Σύνδεση στο e-SEO με όνομα και κωδικό: ελέγχεται αμέσως στο Keycloak και,
+   * αν περάσει, αντικαθιστά τον προηγούμενο λογαριασμό. Ο κωδικός μένει
+   * κρυπτογραφημένος για να ξανασυνδέεται το API μόνο του.
+   */
+  @Put('eseo/account')
+  @SuperAdminOnly()
+  // Κάθε κλήση είναι μια απόπειρα σύνδεσης στο e-SEO: λίγες, για να μην κλειδώσει ο λογαριασμός.
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @ApiOperation({ summary: 'Σύνδεση λογαριασμού e-SEO (όνομα + κωδικός)' })
+  async eseoLogin(@CurrentUser() user: RequestUser, @Body() dto: EseoLoginDto) {
+    const username = dto.username.trim();
+    const account = await this.eseoAuth.login(username, dto.password, user.id);
+    await this.audit.record(user, 'integrations.eseo.login', 'topiko', user.topikoId, { username });
+    return { configured: this.eseo.configured, account };
+  }
+
+  @Delete('eseo/account')
+  @SuperAdminOnly()
+  @ApiOperation({ summary: 'Αποσύνδεση λογαριασμού e-SEO — σβήνει όνομα, κωδικό και token' })
+  async eseoLogout(@CurrentUser() user: RequestUser) {
+    const account = await this.eseoAuth.logout();
+    await this.audit.record(user, 'integrations.eseo.logout', 'topiko', user.topikoId);
+    return { configured: this.eseo.configured, account };
   }
 
   @Post('eseo/sync')

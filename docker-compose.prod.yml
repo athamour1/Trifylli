@@ -339,6 +339,7 @@ services:
       ESEO_REALM: ${ESEO_REALM:-eseo}
       ESEO_CLIENT_ID: ${ESEO_CLIENT_ID:-ssoClient}
       ESEO_REFRESH_TOKEN: ${ESEO_REFRESH_TOKEN:-}
+      SECRETS_KEY: ${SECRETS_KEY:-}
       ESEO_WEBHOOK_SECRET: ${ESEO_WEBHOOK_SECRET:-}
       SYNC_ENABLED: ${SYNC_ENABLED:-true}
       # Error tracking (GlitchTip, profile `errors`): το DSN του project «API».

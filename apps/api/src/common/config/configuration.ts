@@ -145,12 +145,19 @@ const schema = z.object({
   /** Public client του Keycloak (χωρίς secret, PKCE/direct grant). */
   ESEO_CLIENT_ID: z.string().default('ssoClient'),
   /**
-   * Offline refresh token (`scope=offline_access`). Είναι το **μοναδικό**
-   * μυστικό που αποθηκεύουμε — όχι ο κωδικός του στελέχους. Πάρ' το μία φορά με:
-   *   `node apps/api/scripts/eseo-offline-token.mjs`
-   * Με αυτό ο sync engine ανταλλάσσει access tokens χωρίς παρουσία χρήστη.
+   * **Παλιός τρόπος**: offline refresh token στο `.env` (βλ.
+   * `apps/api/scripts/eseo-offline-token.mjs`). Ισχύει μόνο όσο κανείς δεν έχει
+   * συνδεθεί από τις Ενσωματώσεις — η σύνδεση εκεί (όνομα + κωδικός,
+   * κρυπτογραφημένα στη βάση) έχει προτεραιότητα.
    */
   ESEO_REFRESH_TOKEN: blankToUndefined(z.string()),
+  /**
+   * Κλειδί κρυπτογράφησης μυστικών στη βάση (π.χ. ο κωδικός e-SEO): οποιοδήποτε
+   * μακρύ τυχαίο κείμενο (`openssl rand -hex 32`). Χωρίς αυτό το κλειδί παράγεται
+   * από το `DATABASE_URL` — αρκεί για να μη διαβάζονται τα μυστικά από ένα dump
+   * της βάσης, αλλά μια αλλαγή κωδικού της βάσης θέλει νέα σύνδεση στο e-SEO.
+   */
+  SECRETS_KEY: blankToUndefined(z.string().min(16)),
   /** Μυστικό υπογραφής webhook· χωρίς αυτό το endpoint επιστρέφει 503. */
   ESEO_WEBHOOK_SECRET: blankToUndefined(z.string()),
   /** Cron expression για τον περιοδικό συγχρονισμό μητρώου. */

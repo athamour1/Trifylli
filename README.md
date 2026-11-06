@@ -848,8 +848,9 @@ layout + bucket + key (idempotent) στο πρώτο boot.
    **Και τα checks της παρακολούθησης** (heartbeats + έλεγχοι απ' έξω) — ποια και
    με ποιες περιόδους: [`docs/monitoring.md`](docs/monitoring.md).
 4. **Περιστροφή μυστικών**: `AUTHENTIK_API_TOKEN` (νέα τιμή + restart — το
-   blueprint ξαναγράφει το token), `ESEO_REFRESH_TOKEN` όταν ο Keycloak τον
-   περιστρέψει (το log προειδοποιεί), κωδικός OuchTracker.
+   blueprint ξαναγράφει το token), ο λογαριασμός e-SEO όταν αλλάξει
+   ο κωδικός του (Ενσωματώσεις → Αλλαγή — το token το ανανεώνει μόνο του το API),
+   κωδικός OuchTracker.
 5. `pnpm audit --prod` πριν από κάθε release. Δύο advisories μένουν συνειδητά:
    `deepmerge-ts` (μέσω `prisma` CLI, τρέχει μόνο στο `migrate`) και `uuid`
    (μέσω `exceljs`, που καλεί μόνο `v4()` χωρίς buffer — το ευάλωτο σημείο είναι

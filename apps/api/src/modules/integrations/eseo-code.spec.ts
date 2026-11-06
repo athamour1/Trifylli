@@ -20,7 +20,7 @@ function setup(conflict = false) {
     },
   };
   const audit = { record: async (...args: unknown[]) => void audited.push(args) };
-  const controller = new IntegrationsController(prisma as never, {} as never, {} as never, {} as never, {} as never, audit as never);
+  const controller = new IntegrationsController(prisma as never, {} as never, {} as never, {} as never, {} as never, {} as never, audit as never);
   return { controller, topiko, audited };
 }
 

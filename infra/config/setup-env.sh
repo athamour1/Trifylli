@@ -186,9 +186,6 @@ ask_secret SMTP_PASSWORD 'SMTP κωδικός'
 ask_email FROM_EMAIL 'Διεύθυνση αποστολέα (σε domain με SPF/DKIM στον πάροχο)'
 ask FROM_NAME 'Όνομα αποστολέα' 'Trifylli'
 
-say ''
-say '── e-SEO ──'
-ask_secret ESEO_TOKEN 'Refresh token του e-SEO (κενό = χωρίς συγχρονισμό μελών προς το παρόν)'
 
 say ''
 say '── Αντίγραφα εκτός server (restic) ──'
@@ -278,8 +275,6 @@ else
 fi
 set_var SMTP_FROM "$FROM_NAME <$FROM_EMAIL>"
 
-set_var ESEO_REFRESH_TOKEN "$ESEO_TOKEN"
-
 set_var RESTIC_REPOSITORY "$RESTIC_REPO"
 set_var RESTIC_AWS_ACCESS_KEY_ID "$RESTIC_KEY_ID"
 set_var RESTIC_AWS_SECRET_ACCESS_KEY "$RESTIC_SECRET"
@@ -310,7 +305,7 @@ say "  $OUCH → trifylli-ouch:80"
 [ "$ANALYTICS" = yes ] && say "  $ANALYTICS_HOST → trifylli-analytics:3000"
 say ''
 say 'Έμειναν για μετά (στο αρχείο, κενά):'
-[ -n "$ESEO_TOKEN" ] || say '  • ESEO_REFRESH_TOKEN — ο συγχρονισμός μελών με το e-SEO'
+say '  • Σύνδεση στο e-SEO — από την εφαρμογή: Ενσωματώσεις → Σύνδεση στο e-SEO'
 [ -n "$RESTIC_REPO" ] || say '  • RESTIC_REPOSITORY (+ κλειδιά) — αντίγραφα εκτός server'
 [ "$GLITCHTIP" = yes ] && say '  • API_SENTRY_DSN / WEB_SENTRY_DSN — μετά το createsuperuser και τα δύο projects στο GlitchTip'
 [ "$REPLAY" = yes ] && say '  • OPENOBSERVE_RUM_TOKEN — Ingestion → RUM στο OpenObserve (docs/monitoring.md §5)'

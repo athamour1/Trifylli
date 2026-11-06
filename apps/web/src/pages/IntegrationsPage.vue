@@ -59,6 +59,51 @@
 
         <q-separator />
 
+        <!-- Ο λογαριασμός e-SEO με τον οποίο συγχρονίζει ο server. Ο κωδικός μένει πάντα
+             `type=password` (χωρίς «εμφάνιση»): η καταγραφή χρήσης κρύβει μόνο τέτοια πεδία. -->
+        <q-card-section v-if="account?.source === 'account' && !editingAccount" class="row items-center q-gutter-sm">
+          <q-icon name="verified_user" color="positive" size="24px" />
+          <div class="col" style="min-width: 200px">
+            <div class="text-body2">Συνδεδεμένο ως <b>{{ account.username }}</b></div>
+            <div v-if="account.loggedInAt" class="text-caption text-grey-7">
+              Τελευταία σύνδεση {{ formatDateTime(account.loggedInAt) }} — ανανεώνεται μόνο του.
+            </div>
+          </div>
+          <q-btn flat no-caps color="primary" icon="edit" label="Αλλαγή" @click="startAccountEdit" />
+          <q-btn flat no-caps color="negative" icon="logout" label="Αποσύνδεση" :loading="accountBusy === 'logout'" @click="logoutAccount" />
+        </q-card-section>
+        <q-card-section v-else>
+          <div class="text-body2 q-mb-xs">{{ account?.source === 'account' ? 'Αλλαγή λογαριασμού e-SEO' : 'Σύνδεση στο e-SEO' }}</div>
+          <div class="text-caption text-grey-7 q-mb-sm">
+            Ο λογαριασμός ενός στελέχους στο eseo.seo.gr, με πρόσβαση στο Τοπικό. Ο κωδικός μένει κρυπτογραφημένος στον
+            server, ώστε ο συγχρονισμός να ξανασυνδέεται μόνος του — δεν εμφανίζεται ποτέ ξανά.
+            <template v-if="account?.source === 'env'"> Τώρα συγχρονίζει με το παλιό token του <code>.env</code>.</template>
+          </div>
+          <form class="row items-start q-gutter-sm" autocomplete="off" @submit.prevent="loginAccount">
+            <q-input
+              v-model="accountForm.username"
+              dense outlined label="Όνομα χρήστη" class="eseo-field"
+              autocomplete="off" :maxlength="200"
+            />
+            <q-input
+              v-model="accountForm.password"
+              dense outlined label="Κωδικός" class="eseo-field"
+              type="password" autocomplete="new-password" :maxlength="500"
+            />
+            <q-btn
+              type="submit" unelevated color="primary" icon="login" label="Σύνδεση" class="q-mt-xs"
+              :loading="accountBusy === 'login'"
+              :disable="!accountForm.username.trim() || !accountForm.password || !offline.online"
+            />
+            <q-btn v-if="editingAccount" flat no-caps label="Άκυρο" class="q-mt-xs" @click="cancelAccountEdit" />
+          </form>
+        </q-card-section>
+        <q-card-section v-if="account?.lastError" class="bg-red-1 text-red-10 text-body2">
+          <q-icon name="error" class="q-mr-xs" />{{ account.lastError }}
+        </q-card-section>
+
+        <q-separator />
+
         <!-- Ο κωδικός του Τοπικού: με αυτόν ο συγχρονισμός βρίσκει τα μέλη του. -->
         <q-card-section class="row items-start q-gutter-sm">
           <q-input
@@ -79,9 +124,7 @@
         </q-card-section>
 
         <q-card-section v-if="!data?.eseo.configured" class="bg-orange-1 text-orange-10 text-body2">
-          Λείπουν οι ρυθμίσεις e-SEO από τον server (<code>ESEO_BASE_URL</code> και
-          <code>ESEO_REFRESH_TOKEN</code>). Μέχρι να οριστούν, ο συγχρονισμός είναι
-          ανενεργός.
+          Ο συγχρονισμός είναι ανενεργός μέχρι να συνδεθείς στο e-SEO παραπάνω.
         </q-card-section>
 
         <q-card-section v-else-if="!offline.online" class="text-caption text-grey-7">
@@ -173,7 +216,7 @@ import { useQuasar } from 'quasar';
 import PageState from '../components/PageState.vue';
 import { useAsyncData } from '../composables/useAsyncData';
 import { useTopikoReload } from '../composables/useLiveChanges';
-import { ApiError, post, get, put } from '../lib/api';
+import { ApiError, del, post, get, put } from '../lib/api';
 import { formatDateTime } from '../lib/format';
 import { OUCHTRACKER_URL } from '../lib/runtime-config';
 import { useOfflineStore } from '../stores/offline';
@@ -190,8 +233,23 @@ interface SyncRun {
   error: string | null;
 }
 
+interface EseoAccount {
+  /** Λογαριασμός από εδώ, παλιό token στο `.env`, ή τίποτα. */
+  source: 'account' | 'env' | null;
+  username: string | null;
+  loggedInAt: string | null;
+  lastError: string | null;
+}
+
 interface IntegrationsStatus {
-  eseo: { configured: boolean; topikoCode: string | null; cron: string; enabled: boolean; webhookConfigured: boolean };
+  eseo: {
+    configured: boolean;
+    account: EseoAccount;
+    topikoCode: string | null;
+    cron: string;
+    enabled: boolean;
+    webhookConfigured: boolean;
+  };
   ouchtracker: { configured: boolean };
   recentRuns: SyncRun[];
 }
@@ -250,6 +308,58 @@ async function saveCode(): Promise<void> {
   }
 }
 
+// ── Λογαριασμός e-SEO ──
+const account = computed(() => data.value?.eseo.account ?? null);
+const editingAccount = ref(false);
+const accountForm = ref({ username: '', password: '' });
+const accountBusy = ref<'login' | 'logout' | null>(null);
+
+function startAccountEdit(): void {
+  accountForm.value = { username: account.value?.username ?? '', password: '' };
+  editingAccount.value = true;
+}
+function cancelAccountEdit(): void {
+  accountForm.value = { username: '', password: '' };
+  editingAccount.value = false;
+}
+
+async function loginAccount(): Promise<void> {
+  const username = accountForm.value.username.trim();
+  if (!username || !accountForm.value.password) return;
+  accountBusy.value = 'login';
+  try {
+    // Ο server ρωτά το Keycloak πριν αποθηκεύσει — λάθος κωδικός δεν σώζεται.
+    await put('/integrations/eseo/account', { username, password: accountForm.value.password }, { timeout: 30_000 });
+    $q.notify({ type: 'positive', message: `Συνδέθηκες στο e-SEO ως ${username}.` });
+    cancelAccountEdit();
+    await reload();
+  } catch (err) {
+    $q.notify({ type: 'negative', message: err instanceof ApiError ? err.message : 'Αποτυχία σύνδεσης στο e-SEO.' });
+  } finally {
+    accountForm.value.password = '';
+    accountBusy.value = null;
+  }
+}
+
+function logoutAccount(): void {
+  $q.dialog({
+    title: 'Αποσύνδεση από το e-SEO',
+    message: 'Σβήνονται όνομα, κωδικός και token από τον server· ο συγχρονισμός μελών σταματά μέχρι να συνδεθείς ξανά.',
+    cancel: { flat: true, label: 'Άκυρο' },
+    ok: { color: 'negative', label: 'Αποσύνδεση', unelevated: true },
+  }).onOk(async () => {
+    accountBusy.value = 'logout';
+    try {
+      await del('/integrations/eseo/account');
+      await reload();
+    } catch (err) {
+      $q.notify({ type: 'negative', message: err instanceof ApiError ? err.message : 'Αποτυχία αποσύνδεσης.' });
+    } finally {
+      accountBusy.value = null;
+    }
+  });
+}
+
 async function runSync(): Promise<void> {
   syncing.value = true;
   try {
@@ -306,7 +416,8 @@ function describeCron(cron: string | undefined): string {
 .int-head__icon {
   flex: none;
 }
-.eseo-code {
+.eseo-code,
+.eseo-field {
   width: 260px;
   max-width: 100%;
 }

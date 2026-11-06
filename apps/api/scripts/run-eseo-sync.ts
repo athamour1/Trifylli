@@ -21,7 +21,8 @@ async function main(): Promise<void> {
   const prisma = new PrismaService();
   await prisma.$connect();
 
-  const auth = new EseoAuth(http, config);
+  const auth = new EseoAuth(http, config, prisma);
+  await auth.onModuleInit();
   const eseo = new EseoClient(http, auth, config);
   const sync = new EseoSyncService(prisma, eseo, config);
 

@@ -1884,6 +1884,28 @@ model SyncRun {
   @@map("sync_run")
 }
 
+/// Ο λογαριασμός με τον οποίο το API μιλά στο e-SEO — ένας για όλη την
+/// εγκατάσταση. Τον ορίζει ο υπερδιαχειριστής από τις Ενσωματώσεις· κωδικός και
+/// refresh token κρυπτογραφημένα (`SecretBox`). Όταν λήξει το refresh token, το
+/// API ξανασυνδέεται μόνο του με τον κωδικό.
+model EseoCredential {
+  /// Πάντα `eseo` — μία γραμμή.
+  id           String    @id @default("eseo")
+  username     String
+  /// Κρυπτογραφημένος (`SecretBox`).
+  password     String
+  /// Κρυπτογραφημένο (`SecretBox`) — το τελευταίο offline refresh token.
+  refreshToken String?
+  /// Τελευταία επιτυχής σύνδεση με κωδικό.
+  loggedInAt   DateTime?
+  /// Τελευταίο σφάλμα σύνδεσης (χωρίς μυστικά) — `null` όταν όλα πάνε καλά.
+  lastError    String?
+  updatedById  String?   @db.Uuid
+  updatedAt    DateTime  @updatedAt
+
+  @@map("eseo_credential")
+}
+
 /// Ειδοποίηση στο καμπανάκι (συνεργασία, Φ8): τίτλος, σύνδεσμος στο σημείο που
 /// αφορά, «διαβάστηκε». Φτάνει αμέσως αν η εφαρμογή είναι ανοιχτή (δωμάτιο
 /// `user:<id>`) και, αν το θέλει ο χρήστης, ως push στο κινητό.
