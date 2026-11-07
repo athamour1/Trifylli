@@ -81,6 +81,14 @@ export class DraseisFormsController {
     return this.forms.void(user, id, formId);
   }
 
+  @Post('forms/:formId/clear')
+  @HttpCode(200)
+  @RequireDrasi('entypa', 'edit')
+  @ApiOperation({ summary: 'Καθαρισμός συμπληρωμένου εντύπου — σβήνουν απαντήσεις και υπογραφή, ξανά «Δεν στάλθηκε»' })
+  clear(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string, @Param('formId', ParseUUIDPipe) formId: string) {
+    return this.forms.clear(user, id, formId);
+  }
+
   @Get('health')
   @RequireDrasi('farmakeio')
   @ApiOperation({ summary: 'Σύνοψη υγείας για την τσάντα πρώτων βοηθειών (καταγράφεται)' })

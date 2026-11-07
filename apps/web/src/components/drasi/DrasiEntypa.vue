@@ -69,6 +69,7 @@
               <q-btn v-if="canWrite && formOf(p, type)!.id && (formOf(p, type)!.status === 'SENT' || formOf(p, type)!.status === 'OPENED')" flat dense round size="sm" icon="content_copy" color="klados" :loading="copying === `${p.participantId}:${type}`" @click="copyLink(p, type)">
                 <q-tooltip>Αντιγραφή συνδέσμου — εκδίδεται νέος (ο προηγούμενος παύει να ισχύει)</q-tooltip>
               </q-btn>
+              <q-btn v-if="canWrite && formOf(p, type)!.status === 'SUBMITTED'" flat dense round size="sm" icon="cleaning_services" color="negative" @click="clearForm(formOf(p, type)!, p, type)"><q-tooltip>Καθαρισμός — για να συμπληρωθεί ξανά</q-tooltip></q-btn>
               <q-btn v-if="canWrite && formOf(p, type)!.status !== 'SUBMITTED'" flat dense round size="sm" icon="refresh" color="klados" @click="issue({ participantIds: [p.participantId], types: [type], reissue: true })"><q-tooltip>Νέος σύνδεσμος</q-tooltip></q-btn>
             </template>
             <span v-else class="text-grey-5">—</span>
@@ -307,6 +308,26 @@ async function voidForm(f: DrasiFormView): Promise<void> {
   } catch (err) {
     notifyError(err, 'Αποτυχία.');
   }
+}
+
+/**
+ * Καθαρισμός συμπληρωμένου: σβήνουν απαντήσεις και υπογραφή και γυρίζει στο
+ * «Δεν στάλθηκε» — μετά ο ↻ εκδίδει νέο σύνδεσμο για να συμπληρωθεί ξανά.
+ */
+function clearForm(f: DrasiFormView, p: Row, type: DrasiFormType): void {
+  $q.dialog({
+    title: 'Καθαρισμός εντύπου',
+    message: `${DRASI_FORM_TYPE_LABEL[type]} — ${p.user.lastName} ${p.user.firstName}: σβήνουν οι απαντήσεις και η υπογραφή, και το έντυπο γυρίζει στο «Δεν στάλθηκε» για να συμπληρωθεί ξανά με νέο σύνδεσμο. Δεν αναιρείται. Συνέχεια;`,
+    cancel: { label: 'Άκυρο', flat: true },
+    ok: { label: 'Καθαρισμός', color: 'negative' },
+  }).onOk(async () => {
+    try {
+      await post(`/draseis/${props.drasiId}/forms/${f.id}/clear`);
+      await reload();
+    } catch (err) {
+      notifyError(err, 'Αποτυχία καθαρισμού.');
+    }
+  });
 }
 
 // ── Προβολή ──

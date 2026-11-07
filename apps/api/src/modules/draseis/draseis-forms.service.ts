@@ -249,6 +249,42 @@ export class DraseisFormsService {
     return { voided: true };
   }
 
+  /**
+   * Καθαρισμός ενός συμπληρωμένου εντύπου: σβήνονται απαντήσεις, υπογραφή και
+   * υπογράφων, και γυρίζει στο «Δεν στάλθηκε» — για να συμπληρωθεί ξανά με νέο
+   * σύνδεσμο (π.χ. άλλαξε κάτι στην υγεία του παιδιού). Δεν γυρίζει πίσω.
+   */
+  async clear(user: RequestUser, id: string, formId: string): Promise<{ cleared: true }> {
+    await this.access.load(user, id, 'write');
+    const form = await this.prisma.drasiForm.findFirst({ where: { id: formId, drasiId: id }, include: { signatureFile: true } });
+    if (!form) throw new NotFoundException('Το έντυπο δεν βρέθηκε.');
+    if (form.status !== DrasiFormStatus.SUBMITTED) throw new BadRequestException('Καθαρίζεται μόνο συμπληρωμένο έντυπο.');
+    await this.prisma.drasiForm.update({
+      where: { id: formId },
+      data: {
+        status: DrasiFormStatus.PENDING,
+        data: Prisma.DbNull,
+        signerName: null,
+        signerRole: null,
+        signatureFileId: null,
+        submittedAt: null,
+        submittedIp: null,
+        tokenHash: null,
+        expiresAt: null,
+        sentTo: null,
+        sentAt: null,
+        openedAt: null,
+        purgedAt: null,
+      },
+    });
+    if (form.signatureFile) {
+      await this.storage.delete(form.signatureFile.objectKey).catch(() => undefined);
+      await this.prisma.storedFile.delete({ where: { id: form.signatureFile.id } }).catch(() => undefined);
+    }
+    await this.audit.record(user, 'drasi.form.clear', 'drasi_form', formId, { drasiId: id, type: form.type });
+    return { cleared: true };
+  }
+
   /** Οι απαντήσεις ενός εντύπου — κάθε ανάγνωση ιατρικών αφήνει ίχνος. */
   async view(user: RequestUser, id: string, formId: string) {
     await this.access.load(user, id, 'read');
