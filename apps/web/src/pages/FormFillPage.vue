@@ -89,10 +89,10 @@
 
         <q-card-section class="q-gutter-md">
           <div class="text-subtitle2">Υπογραφή</div>
-          <!-- Το όνομα έρχεται από το μητρώο και δεν αλλάζει· αν είναι πάνω από ένας γονέας/κηδεμόνας, διαλέγεις ποιος υπογράφει. -->
+          <!-- Ποιος υπογράφει: από το μητρώο (όπως είναι εκεί, συχνά μόνο το μικρό όνομα) και, αν θέλει,
+               το ονοματεπώνυμο όπως να γραφτεί — το επώνυμο του γονέα δεν είναι πάντα του παιδιού. -->
           <template v-if="form.signers.length">
             <q-select
-              v-if="form.signers.length > 1"
               v-model="signerName"
               :options="form.signers.map((s) => ({ label: `${s.name} (${SIGNER_ROLE_LABEL[s.role]})`, value: s.name }))"
               label="Ποιος υπογράφει *"
@@ -101,10 +101,17 @@
               emit-value
               map-options
             />
-            <q-input v-else :model-value="signerName" :label="form.isMinor ? 'Γονέας/κηδεμόνας' : 'Ονοματεπώνυμο'" outlined dense readonly :hint="form.isMinor ? 'Όπως είναι δηλωμένο στο μητρώο του Σ.Ε.Ο.' : ''" />
+            <q-input
+              v-model="customName"
+              label="Ονοματεπώνυμο (προαιρετικά)"
+              hint="Αν θέλετε να γραφτεί αλλιώς στο έντυπο, π.χ. με το δικό σας επώνυμο"
+              outlined
+              dense
+              :maxlength="120"
+            />
           </template>
           <template v-else>
-            <q-input v-model="signerName" label="Ονοματεπώνυμο υπογράφοντος *" outlined dense />
+            <q-input v-model="customName" label="Ονοματεπώνυμο υπογράφοντος *" outlined dense :maxlength="120" />
             <q-select v-model="signerRole" :options="roleOptions" label="Ιδιότητα *" outlined dense emit-value map-options />
           </template>
           <SignaturePad v-model="signature" />
@@ -166,6 +173,9 @@ const setAnswer = (key: string, v: string | number | null): void => {
   answers[key] = v === null || v === undefined ? '' : String(v);
 };
 const signerName = ref('');
+/** Ονοματεπώνυμο γραμμένο από τον γονέα — αν υπάρχει, αυτό μπαίνει στο έντυπο. */
+const customName = ref('');
+const finalName = computed(() => customName.value.trim() || signerName.value.trim());
 const signerRole = ref<SignerRole | null>(null);
 const signature = ref('');
 const consent = ref(false);
@@ -200,7 +210,9 @@ const roleOptions = computed(() =>
 const effectiveRole = computed<SignerRole | null>(() => form.value?.signers.find((s) => s.name === signerName.value)?.role ?? signerRole.value);
 
 const canSubmit = computed(() => {
-  if (!form.value || !consent.value || !signerName.value.trim() || !effectiveRole.value) return false;
+  if (!form.value || !consent.value || !finalName.value || !effectiveRole.value) return false;
+  // Με μητρώο, πρώτα επιλογή του ποιος υπογράφει (από εκεί η ιδιότητα).
+  if (form.value.signers.length && !signerName.value) return false;
   return visibleFields.value.every((f) => {
     if (!f.required) return true;
     const v = answers[f.key];
@@ -212,7 +224,7 @@ onMounted(async () => {
   try {
     form.value = await get<PublicFormView>(`/forms/${token}`);
     signerRole.value = form.value.isMinor ? 'GONEAS' : 'IDIOS';
-    // Ένας μόνο δυνατός υπογράφων ⇒ προσυμπληρωμένος και κλειδωμένος.
+    // Ένας μόνο δυνατός υπογράφων ⇒ προεπιλεγμένος (το ονοματεπώνυμο αλλάζει από το πεδίο από κάτω).
     if (form.value.signers.length === 1) signerName.value = form.value.signers[0]!.name;
     for (const [k, v] of Object.entries(form.value.prefill ?? {})) answers[k] = v;
   } catch (err) {
@@ -231,7 +243,7 @@ async function submit(): Promise<void> {
     const payload = Object.fromEntries(Object.entries(answers).filter(([k]) => visible.has(k)));
     await post(`/forms/${token}`, {
       answers: payload,
-      signerName: signerName.value.trim(),
+      signerName: finalName.value,
       signerRole: effectiveRole.value,
       consent: consent.value,
       ...(signature.value ? { signatureDataUrl: signature.value } : {}),

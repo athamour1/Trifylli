@@ -555,17 +555,12 @@ export class DraseisFormsService {
       throw new BadRequestException('Η δήλωση συμμετοχής χρειάζεται τη συναίνεση του γονέα/κηδεμόνα.');
     }
 
-    // Ο υπογράφων: από το μητρώο (γονείς/κηδεμόνες του παιδιού ή ο ίδιος ο ενήλικος) όταν υπάρχει εκεί·
-    // ελεύθερο κείμενο μόνο αν το μητρώο δεν ξέρει κανέναν.
-    const signers = allowedSigners(form.participant.user, isMinor);
-    let signerName = dto.signerName.trim();
-    let signerRole = dto.signerRole;
-    if (signers.length) {
-      const match = signers.find((x) => x.name === signerName);
-      if (!match) throw new BadRequestException('Το ονοματεπώνυμο του υπογράφοντος πρέπει να είναι ένα από αυτά του μητρώου.');
-      signerName = match.name;
-      signerRole = match.role;
-    }
+    // Ο υπογράφων: συνήθως ένας από το μητρώο, αλλά ο γονέας μπορεί να γράψει το όνομά του όπως θέλει
+    // (π.χ. με το δικό του επώνυμο, που δεν είναι πάντα του παιδιού). Ιδιότητα από το μητρώο αν ταιριάζει.
+    const signerName = dto.signerName.trim().replace(/\s+/g, ' ');
+    if (!signerName) throw new BadRequestException('Γράψε το ονοματεπώνυμο του υπογράφοντος.');
+    const signerRole = allowedSigners(form.participant.user, isMinor).find((x) => x.name === signerName)?.role ?? dto.signerRole;
+    if (isMinor && signerRole === 'IDIOS') throw new BadRequestException('Για ανήλικο υπογράφει γονέας ή κηδεμόνας.');
 
     const signatureFileId = dto.signatureDataUrl ? await this.storeSignature(form.drasi.topikoId, form.drasi.kladosId, form.id, dto.signatureDataUrl) : null;
 
@@ -706,7 +701,8 @@ function allowedSigners(
   for (const g of u.guardians ?? []) {
     const raw = g.fullName?.trim().replace(/\s+/g, ' ');
     if (!raw) continue;
-    const name = raw.includes(' ') ? raw : `${raw} ${u.lastName}`.trim();
+    // Όπως είναι στο μητρώο — όχι με το επώνυμο του παιδιού, που συχνά δεν είναι του γονέα.
+    const name = raw;
     if (seen.has(name)) continue;
     seen.add(name);
     out.push({ name, role: g.kind === 'FATHER' || g.kind === 'MOTHER' ? 'GONEAS' : 'KIDEMONAS' });
