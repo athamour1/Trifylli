@@ -129,6 +129,11 @@
                   <q-item-section avatar><q-icon :name="KIND_ICON[k.value]" :color="KIND_COLOR[k.value]" /></q-item-section>
                   <q-item-section>{{ k.label }}</q-item-section>
                 </q-item>
+                <q-separator />
+                <q-item clickable class="text-negative" @click="removeRow(row)">
+                  <q-item-section avatar><q-icon name="delete" color="negative" /></q-item-section>
+                  <q-item-section>Διαγραφή</q-item-section>
+                </q-item>
               </q-list>
             </q-menu>
           </q-btn>
@@ -242,7 +247,7 @@ import {
 import CollabPresence from '../CollabPresence.vue';
 import SaveStatus from '../SaveStatus.vue';
 import TimeField from '../TimeField.vue';
-import { ApiError, OfflineError, get, patch, post } from '../../lib/api';
+import { ApiError, OfflineError, del, get, patch, post } from '../../lib/api';
 import { formatDate, formatDuration } from '../../lib/format';
 import { scheduleCaption, SCHEDULE_KIND_COLOR as KIND_COLOR, SCHEDULE_KIND_ICON as KIND_ICON } from './types';
 import type { SaveState } from '../../lib/save-state';
@@ -541,6 +546,26 @@ async function add(): Promise<void> {
   } finally {
     saving.value = false;
   }
+}
+
+// ── Ωρολόγιο: διαγραφή — μαζί φεύγει ό,τι γράφτηκε μέσα (προγραμματικό ή γεύμα) ──
+function removeRow(row: Row): void {
+  const inside = row.kind === 'GEVMA' ? 'το μενού, τη συνταγή και το ποσολόγιο' : 'το προγραμματικό, το υλικό και τους υπευθύνους';
+  $q.dialog({
+    title: 'Διαγραφή από το ωρολόγιο',
+    message: `Το «${row.title.trim() || 'Χωρίς τίτλο'}» φεύγει από το ωρολόγιο μαζί με ${inside}. Δεν αναιρείται.`,
+    cancel: { flat: true, label: 'Άκυρο' },
+    ok: { color: 'negative', label: 'Διαγραφή', unelevated: true },
+  }).onOk(async () => {
+    // Αλλαγές της γραμμής που δεν στάλθηκαν ακόμα δεν έχουν πια πού να πάνε.
+    pending.delete(row.id);
+    try {
+      await del(`/draseis/${props.drasiId}/schedule/${row.id}`);
+      await reload();
+    } catch (err) {
+      notifyError(err, 'Αποτυχία διαγραφής.');
+    }
+  });
 }
 
 // ── Σειρά με σύρσιμο: η γραμμή γίνεται draggable μόνο από τη λαβή, για να
