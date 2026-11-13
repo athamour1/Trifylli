@@ -343,9 +343,9 @@ watch(
 onBeforeUnmount(() => stopWatchingDoc?.());
 
 // Η γραμμή του στοιχείου στο ωρολόγιο (τίτλος, λεπτά, είδος, υπεύθυνοι) αλλάζει
-// και από αλλού — ζωντανά, μέσα από το δωμάτιο της δράσης.
-const room = useCollabDoc(collabDocument.drasiRoom(drasiId), useCollabMe(), { persist: false });
-useLiveReload(['schedule', 'participants', 'roles'], reload, { subscribe: room.onChange, busy: () => dirty.value });
+// και από αλλού — ζωντανά, μέσα από το δωμάτιο της δράσης που ανοίγει ήδη η DrasiPage
+// (provideLiveChanges). Δεύτερο άνοιγμα του ίδιου δωματίου ρίχνει «Cannot attach two providers».
+useLiveReload(['schedule', 'participants', 'roles'], reload, { busy: () => dirty.value });
 
 /** Το προγραμματικό γράφεται όταν γράφεται το στοιχείο **και** ο server το επιτρέπει. */
 const textEditable = computed(() => editable.value && ready.value && writable.value);
