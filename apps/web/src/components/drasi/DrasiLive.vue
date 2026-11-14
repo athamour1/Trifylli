@@ -18,31 +18,32 @@
 
       <!-- Τώρα -->
       <q-card flat class="live-now q-mb-md" :class="{ 'live-now--idle': !live.current }">
-        <q-card-section>
-          <div class="text-overline text-grey-7">{{ live.current ? 'Τώρα' : liveLabel }}</div>
-          <template v-if="live.current">
-            <div class="text-h5 text-weight-medium q-mt-xs">{{ live.current.item.title }}</div>
-            <div class="row items-center q-gutter-sm q-mt-sm text-body2">
-              <span><q-icon name="schedule" size="18px" class="q-mr-xs" />{{ hm(live.current.start) }}–{{ hm(live.current.end) }}</span>
-              <span class="text-weight-medium">μένουν {{ formatDuration(live.remainingMin) }}</span>
-              <span v-if="live.current.delayMin" class="text-orange-9">({{ delayText(live.current.delayMin) }})</span>
-            </div>
-            <div v-if="live.current.item.snack" class="q-mt-sm">
-              <q-chip dense color="orange-7" text-color="white" :icon="snackIcon(live.current.item.snack)" :label="`${DRASI_SNACK_LABEL[live.current.item.snack]} τώρα`" class="q-ml-none" />
-            </div>
-            <div v-if="live.current.item.location" class="text-body2 q-mt-xs"><q-icon name="place" size="18px" class="q-mr-xs" />{{ live.current.item.location }}</div>
-            <div v-if="live.current.item.responsibles.length" class="text-body2 q-mt-xs">
-              <q-icon name="assignment_ind" size="18px" class="q-mr-xs" />{{ names(live.current.item.responsibles) }}
-            </div>
-            <q-linear-progress :value="progress" color="klados" track-color="transparent" rounded class="q-mt-md" size="6px" />
-          </template>
-          <div v-else-if="live.next[0]" class="text-body1 q-mt-xs">
+        <!-- Όλη η κάρτα ανοίγει το προγραμματικό. -->
+        <q-item v-if="live.current" :to="{ name: 'drasi-programmatiko', params: { id: drasiId, itemId: live.current.id } }" class="q-pt-sm q-pb-xs">
+          <q-item-section>
+            <q-item-label caption>
+              Τώρα · {{ hm(live.current.start) }}–{{ hm(live.current.end) }}
+              <span v-if="live.current.delayMin" :class="live.current.delayMin > 0 ? 'text-orange-9' : 'text-positive'">({{ delayText(live.current.delayMin) }})</span>
+            </q-item-label>
+            <q-item-label class="text-subtitle1 text-weight-medium ellipsis">{{ live.current.item.title }}</q-item-label>
+            <q-item-label v-if="live.current.item.snack || live.current.item.responsibles.length || live.current.item.location" caption class="row items-center no-wrap q-gutter-x-xs">
+              <q-badge v-if="live.current.item.snack" color="orange-7" class="q-ml-none"><q-icon :name="snackIcon(live.current.item.snack)" size="14px" class="q-mr-xs" />{{ DRASI_SNACK_LABEL[live.current.item.snack] }}</q-badge>
+              <span class="ellipsis">{{ [names(live.current.item.responsibles), live.current.item.location].filter(Boolean).join(' · ') }}</span>
+            </q-item-label>
+          </q-item-section>
+          <q-item-section side class="text-right">
+            <div class="text-h6 text-weight-medium live-now__left">{{ formatDuration(live.remainingMin) }}</div>
+            <div class="text-caption">μένουν</div>
+          </q-item-section>
+          <q-item-section side class="q-pl-xs"><q-icon name="chevron_right" /></q-item-section>
+        </q-item>
+        <q-linear-progress v-if="live.current" :value="progress" color="klados" track-color="transparent" rounded size="4px" class="q-mx-md q-mb-sm live-now__bar" />
+        <q-card-section v-else>
+          <div class="text-overline text-grey-7">{{ liveLabel }}</div>
+          <div v-if="live.next[0]" class="text-body1 q-mt-xs">
             Επόμενο: <b>{{ live.next[0].item.title }}</b> στις {{ hm(live.next[0].start) }}
           </div>
         </q-card-section>
-        <q-card-actions v-if="live.current" align="right" class="q-pt-none">
-          <q-btn flat dense no-caps color="klados" icon="description" label="Προγραμματικό" :to="{ name: 'drasi-programmatiko', params: { id: drasiId, itemId: live.current.id } }" />
-        </q-card-actions>
       </q-card>
 
       <!--
@@ -239,7 +240,14 @@ async function undo(delayId: string): Promise<void> {
 <style scoped lang="scss">
 .live-now {
   border-radius: 16px;
+  overflow: hidden;
   background: color-mix(in srgb, var(--klados-ink) 12%, var(--surface));
+}
+.live-now__left {
+  line-height: 1.1;
+}
+.live-now__bar {
+  width: auto;
 }
 .live-now--idle {
   background: var(--tint-soft);
