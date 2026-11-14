@@ -1,11 +1,11 @@
 <template>
   <div>
     <!-- Σύνολα + ενέργειες -->
-    <div class="tf-toolbar q-mb-sm">
-      <div class="text-caption text-grey-7">
-        {{ rows.length }} άτομα · {{ counts.melos }} παιδιά · {{ counts.stelexos }} στελέχη
-      </div>
-      <div class="tf-actions">
+    <div class="text-caption text-grey-7 q-mb-xs">
+      {{ rows.length }} άτομα · {{ counts.melos }} παιδιά · {{ counts.stelexos }} στελέχη
+    </div>
+    <!-- Μία γραμμή και στο κινητό: εναλλαγή αριστερά, «Προσθήκη» δεξιά. -->
+    <div class="row items-center no-wrap justify-between q-mb-md" style="gap: 8px">
       <SegmentedToggle
         v-model="view"
         dense
@@ -17,25 +17,18 @@
           { label: 'Ανά υπεύθυνο', value: 'collectors' },
         ]"
       />
-      <q-btn v-if="canSettings && !locked" flat color="klados" icon="euro" label="Κόστη" @click="openCosts">
-        <q-tooltip>Προεπιλογές κόστους της δράσης</q-tooltip>
-      </q-btn>
       <q-btn
         v-if="canWrite"
         color="klados"
         text-color="klados-on"
         unelevated
+        dense
+        no-caps
+        class="q-px-sm"
         icon="person_add"
         label="Προσθήκη"
         @click="addDialog = true"
       />
-      </div>
-    </div>
-
-    <div v-if="rows.length" class="row q-col-gutter-sm q-mb-md">
-      <div class="col-4"><q-card flat bordered class="full-height"><q-card-section class="q-py-sm"><div class="text-caption text-grey-7">Οφειλόμενα</div><div class="text-subtitle1">{{ formatEuro(totals.due) }}</div></q-card-section></q-card></div>
-      <div class="col-4"><q-card flat bordered class="full-height"><q-card-section class="q-py-sm"><div class="text-caption text-grey-7">Εισπραγμένα</div><div class="text-subtitle1 text-positive">{{ formatEuro(totals.paid) }}</div></q-card-section></q-card></div>
-      <div class="col-4"><q-card flat bordered class="full-height"><q-card-section class="q-py-sm"><div class="text-caption text-grey-7">Ανείσπρακτα</div><div class="text-subtitle1" :class="totals.balance > 0 ? 'text-negative' : 'text-positive'">{{ formatEuro(totals.balance) }}</div></q-card-section></q-card></div>
     </div>
 
     <q-inner-loading :showing="loading" />
@@ -198,26 +191,6 @@
       </q-card>
     </q-dialog>
 
-    <!-- ── Προεπιλογές κόστους της δράσης ── -->
-    <q-dialog v-model="costsDialog">
-      <q-card style="min-width: min(420px, 94vw)">
-        <q-card-section class="text-subtitle1 text-weight-medium q-pb-none">Προεπιλογές κόστους</q-card-section>
-        <q-card-section class="text-caption text-grey-7 q-pb-none">
-          Ισχύουν για όλους τους συμμετέχοντες, εκτός όσων έχουν δικό τους ποσό.
-        </q-card-section>
-        <q-card-section class="q-gutter-sm">
-          <q-input v-model.number="costs.costPerPerson" type="number" label="Πλήρης συμμετοχή €" outlined dense step="0.01" :min="0" color="klados" />
-          <q-input v-model.number="costs.costReduced" type="number" label="Μειωμένη συμμετοχή €" outlined dense step="0.01" :min="0" color="klados" />
-          <q-input v-model.number="costs.costStelexos" type="number" label="Συμμετοχή στελέχους €" outlined dense step="0.01" :min="0" color="klados" />
-          <q-input v-model.number="costs.transportCost" type="number" label="Μεταφορικά ανά άτομο €" outlined dense step="0.01" :min="0" color="klados" />
-        </q-card-section>
-        <q-card-actions align="right">
-          <q-btn flat label="Άκυρο" v-close-popup />
-          <q-btn color="klados" text-color="klados-on" label="Αποθήκευση" :loading="saving" @click="submitCosts" />
-        </q-card-actions>
-      </q-card>
-    </q-dialog>
-
     <!-- ── Κόστος & υπεύθυνος ── -->
     <q-dialog v-model="feesDialog">
       <q-card style="min-width: min(420px, 94vw)">
@@ -301,8 +274,6 @@ const props = defineProps<{
   canPay: boolean;
   /** «Παράδοση στο ταμείο» — μόνο ο ταμίας της δράσης (και η εφεδρεία). */
   canHandover: boolean;
-  /** Οι προεπιλογές κόστους ανήκουν στις Ρυθμίσεις. */
-  canSettings: boolean;
   /** Κλειστή δράση: τα οικονομικά δεν αλλάζουν. */
   locked: boolean;
   /** Οι προεπιλογές κόστους της δράσης (Decimal από το API ⇒ string). */
@@ -326,11 +297,6 @@ const addDialog = ref(false);
 const counts = computed(() => ({
   melos: rows.value.filter((r) => r.kind === 'MELOS').length,
   stelexos: rows.value.filter((r) => r.kind === 'STELEXOS').length,
-}));
-const totals = computed(() => ({
-  due: rows.value.reduce((s, r) => s + r.due, 0),
-  paid: rows.value.reduce((s, r) => s + r.paid, 0),
-  balance: rows.value.reduce((s, r) => s + r.balance, 0),
 }));
 
 /** Μετά από προσθήκη/αφαίρεση: ο γονέας ξαναμετρά τους συμμετέχοντες. */
@@ -469,43 +435,14 @@ async function handover(c: DrasiCollectorView): Promise<void> {
   }
 }
 
-// ── Προεπιλογές κόστους της δράσης ──
-const costsDialog = ref(false);
-const costs = reactive({
-  costPerPerson: null as number | null,
-  costReduced: null as number | null,
-  costStelexos: null as number | null,
-  transportCost: null as number | null,
-});
+// ── Προεπιλογές κόστους της δράσης (αλλάζουν στις Ρυθμίσεις) ──
 const toNum = (v: string | number | null): number | null => (v === null || v === '' ? null : Number(v));
-function openCosts(): void {
-  Object.assign(costs, {
-    costPerPerson: toNum(props.costs.costPerPerson),
-    costReduced: toNum(props.costs.costReduced),
-    costStelexos: toNum(props.costs.costStelexos),
-    transportCost: toNum(props.costs.transportCost),
-  });
-  costsDialog.value = true;
-}
-async function submitCosts(): Promise<void> {
-  saving.value = true;
-  try {
-    const clean = (v: number | null) => (v === null || (v as unknown) === '' ? undefined : v);
-    await patch(`/draseis/${props.drasiId}`, {
-      costPerPerson: clean(costs.costPerPerson),
-      costReduced: clean(costs.costReduced),
-      costStelexos: clean(costs.costStelexos),
-      transportCost: clean(costs.transportCost),
-    });
-    costsDialog.value = false;
-    emit('changed');
-    $q.notify({ type: 'positive', message: 'Οι προεπιλογές αποθηκεύτηκαν.' });
-  } catch (err) {
-    notifyError(err, 'Αποτυχία αποθήκευσης.');
-  } finally {
-    saving.value = false;
-  }
-}
+const costs = computed(() => ({
+  costPerPerson: toNum(props.costs.costPerPerson),
+  costReduced: toNum(props.costs.costReduced),
+  costStelexos: toNum(props.costs.costStelexos),
+  transportCost: toNum(props.costs.transportCost),
+}));
 
 // ── Κόστος & υπεύθυνος ──
 const feesDialog = ref(false);
@@ -521,9 +458,9 @@ const fees = reactive({
 /** Η προεπιλογή των Ρυθμίσεων ανά είδος — ό,τι ισχύει όταν το ποσό μείνει κενό. */
 function defaultFeeFor(kind: DrasiFeeKind): number | null {
   if (kind === 'DOREAN') return 0;
-  if (kind === 'MEIOMENI') return costs.costReduced ?? costs.costPerPerson;
-  if (kind === 'STELEXOS') return costs.costStelexos;
-  return costs.costPerPerson;
+  if (kind === 'MEIOMENI') return costs.value.costReduced ?? costs.value.costPerPerson;
+  if (kind === 'STELEXOS') return costs.value.costStelexos;
+  return costs.value.costPerPerson;
 }
 
 function openFees(p: DrasiParticipantView): void {

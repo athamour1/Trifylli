@@ -299,7 +299,6 @@
                 :can-write="canEdit('participants')"
                 :can-pay="canEdit('payments')"
                 :can-handover="canEdit('handover')"
-                :can-settings="canEdit('rythmiseis')"
                 :locked="data.status === 'KLEISTI'"
                 :costs="{
                   costPerPerson: data.costPerPerson,
