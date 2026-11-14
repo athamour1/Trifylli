@@ -27,6 +27,9 @@
               <span class="text-weight-medium">μένουν {{ formatDuration(live.remainingMin) }}</span>
               <span v-if="live.current.delayMin" class="text-orange-9">({{ delayText(live.current.delayMin) }})</span>
             </div>
+            <div v-if="live.current.item.snack" class="q-mt-sm">
+              <q-chip dense color="orange-7" text-color="white" :icon="snackIcon(live.current.item.snack)" :label="`${DRASI_SNACK_LABEL[live.current.item.snack]} τώρα`" class="q-ml-none" />
+            </div>
             <div v-if="live.current.item.location" class="text-body2 q-mt-xs"><q-icon name="place" size="18px" class="q-mr-xs" />{{ live.current.item.location }}</div>
             <div v-if="live.current.item.responsibles.length" class="text-body2 q-mt-xs">
               <q-icon name="assignment_ind" size="18px" class="q-mr-xs" />{{ names(live.current.item.responsibles) }}
@@ -42,20 +45,39 @@
         </q-card-actions>
       </q-card>
 
-      <!-- Καθυστέρηση -->
-      <div v-if="canWrite && delayTarget" class="row items-center q-gutter-xs q-mb-md">
-        <span class="text-caption text-grey-7 q-mr-xs">Καθυστερούμε — όλα από «{{ delayTarget.item.title }}» και μετά:</span>
-        <q-btn v-for="minutes in [5, 10, 15, 30]" :key="minutes" unelevated dense no-caps size="sm" color="orange-8" :label="`+${minutes}΄`" :loading="busy === minutes" @click="delay(minutes)" />
-        <q-btn flat dense no-caps size="sm" color="positive" label="κερδίσαμε 10΄" :loading="busy === -10" @click="delay(-10)" />
+      <!--
+        Πού είμαστε: 0 στη μέση, δεξιά = πίσω από το πρόγραμμα, αριστερά = μπροστά.
+        Η τιμή είναι η μετατόπιση του επόμενου στοιχείου· στο άφημα δηλώνεται η διαφορά.
+      -->
+      <div v-if="canWrite && delayTarget" class="live-shift q-mb-md">
+        <div class="row items-center no-wrap">
+          <span class="text-caption text-grey-7 col ellipsis">Από «{{ delayTarget.item.title }}» και μετά</span>
+          <span class="text-body2 text-weight-medium" :class="shift > 0 ? 'text-orange-9' : shift < 0 ? 'text-positive' : 'text-grey-7'">{{ shiftText(shift) }}</span>
+        </div>
+        <q-slider
+          v-model="shift"
+          :min="shiftMin"
+          :max="shiftMax"
+          :step="5"
+          snap
+          :markers="30"
+          :marker-labels="shiftMarkers"
+          :color="shift > 0 ? 'orange-8' : shift < 0 ? 'positive' : 'grey-6'"
+          selection-color="transparent"
+          class="q-px-md"
+          :disable="busy"
+          aria-label="Καθυστέρηση προγράμματος σε λεπτά"
+          @change="commitShift"
+        />
       </div>
 
       <!-- Μετά -->
       <div v-if="live.next.length" class="text-subtitle2 q-mb-xs">Μετά</div>
       <q-list v-if="live.next.length" separator class="live-next">
-        <q-item v-for="entry in live.next.slice(0, 6)" :key="entry.id" clickable :to="{ name: 'drasi-programmatiko', params: { id: drasiId, itemId: entry.id } }">
+        <q-item v-for="entry in live.next" :key="entry.id" clickable :to="{ name: 'drasi-programmatiko', params: { id: drasiId, itemId: entry.id } }">
           <q-item-section side class="live-next__time">
             <div class="text-weight-medium">{{ hm(entry.start) }}</div>
-            <div v-if="entry.delayMin" class="text-caption text-orange-9">{{ delayText(entry.delayMin) }}</div>
+            <div v-if="entry.delayMin" class="text-caption" :class="entry.delayMin > 0 ? 'text-orange-9' : 'text-positive'">{{ delayText(entry.delayMin) }}</div>
           </q-item-section>
           <q-item-section>
             <q-item-label>{{ entry.item.title }}</q-item-label>
@@ -63,8 +85,12 @@
               {{ formatDuration(entry.item.durationMin) }}<template v-if="entry.item.responsibles.length"> · {{ names(entry.item.responsibles) }}</template>
             </q-item-label>
           </q-item-section>
+          <q-item-section v-if="entry.item.snack" side>
+            <q-badge color="orange-7"><q-icon :name="snackIcon(entry.item.snack)" size="14px" class="q-mr-xs" />{{ DRASI_SNACK_LABEL[entry.item.snack] }}</q-badge>
+          </q-item-section>
         </q-item>
       </q-list>
+      <div v-if="dayEnd" class="text-caption text-grey-7 text-center q-mt-sm">Τέλος ημέρας στις {{ hm(dayEnd) }}</div>
 
       <!-- Οι καθυστερήσεις της ημέρας -->
       <div v-if="day.delays.length" class="q-mt-md">
@@ -86,9 +112,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { useQuasar } from 'quasar';
-import type { DrasiScheduleView } from '@trifylli/shared';
+import { DRASI_SNACK_LABEL, type DrasiScheduleView, type DrasiSnack } from '@trifylli/shared';
 import { del, post } from '../../lib/api';
 import { formatDate, formatDuration } from '../../lib/format';
 import { liveDay } from '../../lib/schedule-live';
@@ -155,18 +181,48 @@ function titleOf(itemId: string): string {
   return day.value?.items.find((item) => item.id === itemId)?.title ?? '—';
 }
 
-const busy = ref<number | null>(null);
-async function delay(minutes: number): Promise<void> {
+function snackIcon(snack: DrasiSnack): string {
+  return snack === 'DEKATIANO' || snack === 'APOGEVMATINO' ? 'bakery_dining' : 'restaurant';
+}
+
+/** Πότε κλείνει η ημέρα (με την καθυστέρηση). */
+const dayEnd = computed(() => (live.value.next.at(-1) ?? live.value.current)?.end ?? null);
+
+/** Η μετατόπιση του επόμενου στοιχείου — αυτή δείχνει το slider. */
+const targetShift = computed(() => delayTarget.value?.delayMin ?? 0);
+/** Ό,τι έχει δεχτεί ο server — μπροστά από το `targetShift` ώσπου να ξαναφορτώσει το ωρολόγιο. */
+const committed = ref(targetShift.value);
+const shift = ref(targetShift.value);
+watch(targetShift, (value) => {
+  committed.value = value;
+  shift.value = value;
+});
+/** Συμμετρικό γύρω από το 0, με χώρο πάνω από όση καθυστέρηση έχουμε ήδη. */
+const shiftSpan = computed(() => Math.max(60, Math.ceil((Math.abs(committed.value) + 30) / 30) * 30));
+/** Το API δέχεται ως ±240΄ ανά δήλωση. */
+const shiftMin = computed(() => Math.max(-shiftSpan.value, committed.value - 240));
+const shiftMax = computed(() => Math.min(shiftSpan.value, committed.value + 240));
+const shiftMarkers = computed(() => [shiftMin.value, 0, shiftMax.value].filter((_, i) => i !== 1 || (shiftMin.value < 0 && shiftMax.value > 0)).map((value) => ({ value, label: value ? delayText(value) : '0' })));
+function shiftText(minutes: number): string {
+  if (!minutes) return 'στην ώρα μας';
+  return minutes > 0 ? `${minutes}΄ πίσω` : `${-minutes}΄ μπροστά`;
+}
+
+const busy = ref(false);
+async function commitShift(value: number): Promise<void> {
   const target = delayTarget.value;
-  if (!target) return;
-  busy.value = minutes;
+  const minutes = value - committed.value;
+  if (!target || !minutes) return;
+  busy.value = true;
   try {
     await post(`/draseis/${props.drasiId}/schedule/delays`, { itemId: target.id, minutes });
+    committed.value = value;
     emit('changed');
   } catch {
+    shift.value = committed.value;
     $q.notify({ type: 'negative', message: 'Δεν δηλώθηκε — δοκίμασε ξανά με δίκτυο.' });
   } finally {
-    busy.value = null;
+    busy.value = false;
   }
 }
 
