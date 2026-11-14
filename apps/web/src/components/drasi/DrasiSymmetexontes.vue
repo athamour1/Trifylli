@@ -181,7 +181,7 @@
             ]"
           />
           <DateField v-model="payment.paidAt" label="Ημερομηνία" />
-          <StelexosPicker v-model="payment.collectedBy" label="Εισέπραξε" :options="stelexiOptions" />
+          <q-select v-model="payment.collectedBy" :options="stelexiOptions" label="Εισέπραξε" emit-value map-options clearable outlined dense options-dense behavior="menu" color="klados" />
           <q-input v-model="payment.note" label="Σημείωση" outlined dense color="klados" />
         </q-card-section>
         <q-card-actions align="right">
@@ -228,7 +228,7 @@
             :hint="costs.transportCost != null ? `Κενό ⇒ ${formatEuro(costs.transportCost)} από τις Ρυθμίσεις` : undefined"
           />
           <q-input v-model="fees.feeNote" label="Σημείωση (γιατί μειωμένη/δωρεάν)" outlined dense color="klados" />
-          <StelexosPicker v-model="fees.collector" label="Υπεύθυνο στέλεχος είσπραξης" :options="stelexiOptions" />
+          <q-select v-model="fees.collector" :options="stelexiOptions" label="Υπεύθυνο στέλεχος είσπραξης" emit-value map-options clearable outlined dense options-dense behavior="menu" color="klados" />
         </q-card-section>
         <q-card-actions align="right">
           <q-btn flat label="Άκυρο" v-close-popup />
@@ -252,12 +252,9 @@ import {
   type DrasiParticipantView,
   type DrasiPaymentView,
   type KladosType,
-  type MemberSummary,
-  type Paginated,
   type PaymentHandlingStatus,
 } from '@trifylli/shared';
 import DateField from '../DateField.vue';
-import StelexosPicker from '../StelexosPicker.vue';
 import AddParticipantsDialog from './AddParticipantsDialog.vue';
 import { ApiError, del, get, patch, post, put } from '../../lib/api';
 import { formatDate, formatEuro, toISODate } from '../../lib/format';
@@ -321,22 +318,18 @@ async function reload(): Promise<void> {
   }
 }
 
-// ── Στελέχη για τους pickers ──
-const stelexi = ref<MemberSummary[]>([]);
-const stelexiOptions = computed(() =>
-  stelexi.value.map((s) => ({ label: `${s.lastName} ${s.firstName}`.trim(), value: s.id, caption: s.leaderTitle ?? '' })),
-);
+// ── Ποιος εισπράττει: μόνο τα στελέχη που είναι δηλωμένα στη δράση ──
+const stelexiOptions = computed(() => {
+  const people: { id: string; firstName: string; lastName: string }[] = rows.value.filter((r) => r.kind === 'STELEXOS').map((r) => r.user);
+  // Παλιός υπεύθυνος που δεν είναι πια στη δράση: να φαίνεται το όνομά του, όχι το id.
+  for (const r of rows.value) if (r.collector && !people.some((u) => u.id === r.collector!.id)) people.push(r.collector);
+  return people.map((u) => ({ label: `${u.lastName} ${u.firstName}`.trim(), value: u.id }));
+});
 
 // Ζωντανά: ό,τι αλλάζουν οι άλλοι εμφανίζεται χωρίς ανανέωση της σελίδας.
 useLiveReload(['participants', 'payments', 'guests', 'forms'], reload);
 onMounted(async () => {
   await reload();
-  try {
-    const page = await get<Paginated<MemberSummary>>('/meloi', { params: { kind: 'STELEXOS', pageSize: 500 } });
-    stelexi.value = page.items;
-  } catch {
-    // Χωρίς λίστα στελεχών οι pickers μένουν άδειοι — οι πληρωμές γράφονται στον συνδεδεμένο.
-  }
 });
 
 // ── Πληρωμή ──
@@ -346,7 +339,7 @@ const payment = reactive({
   amount: 0,
   method: 'CASH' as 'CASH' | 'BANK',
   paidAt: toISODate(new Date()),
-  collectedBy: [] as string[],
+  collectedBy: null as string | null,
   note: '',
 });
 
@@ -356,7 +349,7 @@ function openPayment(p: DrasiParticipantView): void {
     amount: p.balance > 0 ? p.balance : 0,
     method: 'CASH',
     paidAt: toISODate(new Date()),
-    collectedBy: p.collector ? [p.collector.id] : [],
+    collectedBy: p.collector?.id ?? null,
     note: '',
   });
   paymentDialog.value = true;
@@ -373,7 +366,7 @@ async function submitPayment(): Promise<void> {
       amount: payment.amount,
       method: payment.method,
       paidAt: new Date(`${payment.paidAt}T12:00:00`).toISOString(),
-      collectedById: payment.collectedBy[0],
+      collectedById: payment.collectedBy ?? undefined,
       note: payment.note || undefined,
     });
     paymentDialog.value = false;
@@ -452,7 +445,7 @@ const fees = reactive({
   feeAmount: null as number | null,
   transportAmount: null as number | null,
   feeNote: '',
-  collector: [] as string[],
+  collector: null as string | null,
 });
 
 /** Η προεπιλογή των Ρυθμίσεων ανά είδος — ό,τι ισχύει όταν το ποσό μείνει κενό. */
@@ -470,7 +463,7 @@ function openFees(p: DrasiParticipantView): void {
     feeAmount: p.feeAmount,
     transportAmount: p.transportAmount,
     feeNote: p.feeNote ?? '',
-    collector: p.collector ? [p.collector.id] : [],
+    collector: p.collector?.id ?? null,
   });
   feesDialog.value = true;
 }
@@ -484,7 +477,7 @@ async function submitFees(): Promise<void> {
       ...(fees.feeAmount !== null && fees.feeAmount !== ('' as unknown) ? { feeAmount: fees.feeAmount } : {}),
       transportAmount: fees.transportAmount === ('' as unknown) ? null : fees.transportAmount,
       feeNote: fees.feeNote || null,
-      collectorId: fees.collector[0] ?? null,
+      collectorId: fees.collector,
     });
     feesDialog.value = false;
     await reload();
